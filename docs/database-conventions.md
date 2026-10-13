@@ -1,23 +1,134 @@
 # Database Conventions
 
-## Document Authority
+## Document Authority and Scope
 
-This document is the source of truth for PostgreSQL schema, naming, migration, and data-lifecycle conventions.
+This document is the source of truth for PostgreSQL naming, data types, integrity, migration, indexing, JPA, concurrency, and transaction conventions. It does not define a domain schema. Tables, columns, relationships, and business constraints remain **TBD** until their requirements are approved.
 
-## Schema Management
+## PostgreSQL Baseline
 
-- All schema changes use versioned Flyway migrations.
-- Hibernate `ddl-auto=create` and `ddl-auto=update` must not be used in production.
-- **TODO:** Define migration naming and review conventions.
+- PostgreSQL is the production database.
+- Persistence integration tests use PostgreSQL Testcontainers rather than an in-memory substitute.
+- Flyway is the only mechanism for managed schema changes.
+- Application runtime configuration must not use Hibernate `ddl-auto=create` or `ddl-auto=update` in production. Prefer schema validation once persistence is initialized.
 
-## Naming and Types
+## Naming Conventions
 
-> **TODO:** Define table, column, key, index, constraint, enum/status, and timestamp conventions.
+- Use lowercase `snake_case` for schemas, tables, columns, indexes, sequences, and constraints.
+- Use plural nouns for table names and singular names for ordinary columns.
+- Primary-key columns are named `id` unless a documented technical reason requires otherwise.
+- Foreign-key columns use `<referenced_entity>_id`.
+- Timestamp columns use an `_at` suffix, for example `created_at`.
+- Boolean columns use affirmative names such as `active` or `enabled`; avoid inverted names such as `not_disabled`.
+- Avoid quoted identifiers, PostgreSQL reserved words, and abbreviations that are not part of the approved glossary.
 
-## Integrity and Transactions
+Use explicit, readable constraint and index names where practical:
 
-> **TODO:** Define integrity rules, concurrency strategy, and transaction expectations based on confirmed use cases.
+```text
+pk_<table>
+fk_<table>_<referenced_table>
+uq_<table>_<column_or_purpose>
+ck_<table>_<rule>
+idx_<table>_<column_or_purpose>
+```
 
-## Sensitive Data and Retention
+Names must remain within PostgreSQL identifier limits. No domain table names are established by these examples.
 
-> **TODO:** Classify stored data and define retention, deletion, and audit requirements with stakeholders.
+## Identifiers and Business Codes
+
+- Technical primary keys use PostgreSQL `uuid` and Java `UUID`.
+- Generate UUIDs in the application before persistence so identity does not require a database round trip.
+- The UUID version/generation strategy is **TBD** before persistence implementation.
+- A human-readable or externally meaningful business code is a separate column and never replaces the technical primary key.
+- Business codes receive a unique constraint only when uniqueness scope and lifecycle are confirmed.
+- API clients must not infer business meaning, chronology, or authorization from UUID values.
+
+## Data Types
+
+- Store instants as `TIMESTAMPTZ` and map them to `Instant` or an intentionally selected offset-aware Java type.
+- Normalize application-generated instants to UTC. A user's local time zone is a presentation or explicit business concern, not the database server default.
+- Store monetary amounts as `NUMERIC` and use Java `BigDecimal`; never use floating-point types for money.
+- Monetary precision, scale, currency representation, and rounding rules are **TBD** pending business confirmation.
+- Use native `BOOLEAN` for boolean values.
+- Choose bounded `VARCHAR` only when the bound is a real invariant; otherwise prefer `TEXT` over arbitrary limits.
+- Persist business statuses through an explicit stable mapping. Do not rely on Java enum ordinal values or scattered magic strings.
+
+## Constraints and Referential Integrity
+
+- Express required data with `NOT NULL` at the database level as well as application validation.
+- Use foreign keys for confirmed relationships.
+- Use `UNIQUE` constraints for confirmed uniqueness rules.
+- Use `CHECK` constraints for simple row-level invariants that the database can enforce reliably.
+- Give constraints stable names so migration and error translation are predictable.
+- Do not use cascade delete by default. Select `RESTRICT`, `NO ACTION`, `SET NULL`, or `CASCADE` only after lifecycle and retention behavior are confirmed.
+- Domain rules still belong in domain/application code even when a database constraint provides defense in depth.
+
+Actual relationships, optionality, uniqueness scopes, deletion behavior, and business checks are **TBD**.
+
+## Indexing Rules
+
+- Primary keys and unique constraints provide their corresponding indexes.
+- PostgreSQL does not automatically index referencing foreign-key columns; add such indexes when joins, lookups, or parent updates/deletes justify them.
+- Add indexes from demonstrated query and ordering patterns, not speculation.
+- Prefer the smallest index that supports the query. Document the purpose of composite, partial, expression, or covering indexes in the migration.
+- For composite indexes, order columns according to equality, range, and sort usage supported by the target query.
+- Review write cost and storage cost before adding overlapping indexes.
+- Validate performance-sensitive indexes with realistic query plans when those queries exist.
+
+No domain indexes are defined yet.
+
+## Flyway Migration Rules
+
+- Every schema change is a versioned Flyway migration committed with the code that requires it.
+- Use names in the form `V<version>__<lowercase_description>.sql`.
+- Keep each migration focused and deterministic.
+- Never edit or reorder a migration that has been applied to a shared environment. Add a new migration to correct it.
+- Do not use repeatable migrations for core table structure or reference data whose history must be preserved.
+- Avoid environment-specific SQL and hidden dependencies on local database state.
+- Review destructive or long-running changes for backup, locking, compatibility, and rollback/roll-forward strategy before execution.
+- Tests must apply migrations to a clean PostgreSQL Testcontainers instance.
+- Seed data strategy is **TBD**; migrations must not invent business reference data.
+
+## JPA Conventions
+
+- JPA entities and Spring Data repositories are infrastructure concerns.
+- Do not expose JPA entities through REST APIs or pass Spring Data `Page` as an API contract.
+- Keep domain behavior independent of JPA and Spring annotations.
+- Repository adapters implement application/domain ports; controllers never access repositories directly.
+- Map every persisted field intentionally, including nullability, length when meaningful, column name, and status conversion.
+- Prefer lazy loading for associations. Avoid unbounded object graphs and unintended eager loading.
+- Configure cascade and orphan removal only when aggregate ownership and lifecycle rules explicitly require them.
+- Detect and prevent N+1 queries with use-case-specific fetch plans, projections, or explicit queries.
+- Do not include mutable associations in entity equality or hash-code implementations.
+- Keep persistence models internal to their owning feature.
+
+## Optimistic Locking and Concurrency
+
+- Use optimistic locking with a numeric `@Version` column for mutable aggregates where concurrent updates could overwrite valid work.
+- Translate optimistic-lock conflicts to an application-level concurrency result and the API's standard conflict response.
+- Do not add pessimistic locking as a default. It requires a demonstrated concurrency need and documented lock scope.
+- Which aggregates require versioning and any stronger consistency rules are **TBD** until use cases are confirmed.
+
+## Transaction Boundaries
+
+- Transaction boundaries belong in the application/use-case layer.
+- A business operation that must be atomic executes in one explicit transaction.
+- Keep transactions short and do not hold them open across client interaction or external network calls.
+- Mark read-only use cases accordingly when supported, without relying on that flag for authorization or correctness.
+- Do not use controller-level transactions.
+- Disable Open Session in View so persistence access does not leak into web rendering or DTO serialization.
+- Cross-feature atomicity and propagation requirements are **TBD** for each approved use case.
+
+## Remaining Business-Dependent Decisions
+
+The following remain **TBD**:
+
+- domain tables, columns, relationships, schemas, and ownership boundaries;
+- UUID version/generation strategy;
+- business codes and their uniqueness scopes;
+- monetary precision, scale, currencies, and rounding policy;
+- required fields, check constraints, and deletion behavior;
+- query-driven indexes and performance targets;
+- aggregates requiring optimistic locking;
+- cross-feature transaction and consistency requirements;
+- seed/reference data ownership;
+- retention, archival, deletion, encryption, backup, and audit requirements.
