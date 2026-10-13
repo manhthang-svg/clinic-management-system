@@ -20,24 +20,30 @@ Authentication establishes who the caller is. The backend validates credentials 
 ### JWT Access Tokens
 
 - Protect authenticated API calls with a JWT access token sent as `Authorization: Bearer <token>`.
-- Access tokens are signed, short-lived, and validated for signature, issuer, audience, and expiry.
-- Use a stable subject identifier. Include only the minimum claims needed for authentication and coarse authorization.
+- Spring Security OAuth2 Resource Server remains the mechanism for bearer-token extraction, JWT decoding, validation, and authentication-context creation.
+- Do not introduce JJWT or a custom bearer-token authentication filter. Extend the Resource Server configuration through supported decoders, validators, and converters when customization is required.
+- Access tokens are signed and short-lived. Validation must cover the signature, issuer, audience, expiration, and an explicitly configured clock-skew allowance.
+- Use the stable technical account UUID as the JWT subject. Do not use a mutable username, email address, or other login identifier as the subject.
+- Include only the minimum claims needed for authentication and coarse authorization. A JWT ID or other additional claim requires a documented use case.
 - Do not include passwords, refresh tokens, medical data, or unnecessary personally identifiable information in a JWT.
 - Do not accept tokens through query parameters.
-- Token lifetime, signing algorithm, issuer/audience values, key source, and key-rotation procedure are **TBD** before implementation.
+- Access-token lifetime, signing algorithm, issuer, audience, signing-key source, clock-skew allowance, and key-rotation procedure are **TBD** before implementation.
 
 ### Refresh Tokens
 
 At the architectural level, refresh tokens must support revocation and rotation:
 
-- Use a high-entropy opaque refresh token rather than placing long-lived authorization data in a JWT.
-- Store only a cryptographic hash of each active refresh token in durable server-side storage.
+- Generate an opaque, cryptographically random, high-entropy value rather than placing long-lived authorization data in a JWT.
+- Store only the SHA-256 digest of each refresh token. The raw value must never be persisted or logged.
 - Rotate the refresh token after every successful refresh and invalidate the previous token.
-- Detect reuse of an invalidated token and revoke the associated token family/session.
-- Scope refresh tokens to a session and expire them.
-- For the browser client, prefer a `Secure`, `HttpOnly` cookie. The exact `SameSite`, path, and domain settings depend on the deployment topology and are **TBD**.
-- Access-token and refresh-token lifetimes, session limits, revocation events, and persistence schema are **TBD**.
-- Do not introduce Redis solely for token storage; the approved architecture does not require it.
+- Create an independent token family for each successful login or device session so one session can be revoked without invalidating unrelated sessions.
+- Detect reuse of an already-rotated refresh token and revoke the corresponding token family.
+- Apply an absolute family/session expiry that rotation cannot extend. Whether an additional idle timeout applies is **TBD**.
+- Serialize concurrent refresh requests with a database-safe mechanism so the same token cannot be rotated successfully more than once. The exact locking or atomic-update strategy is **TBD** and must be verified against PostgreSQL.
+- Return a generic `401 Unauthorized` response for missing, invalid, expired, revoked, or replayed refresh tokens. Detailed failure reasons belong only in sanitized internal security telemetry and must not reveal token material.
+- For the browser client, prefer a `Secure`, `HttpOnly` cookie. The final `SameSite`, domain, path, expiry, and cross-origin behavior are **TBD** until deployment topology is approved.
+- PostgreSQL is the durable persistence mechanism for refresh-token sessions, rotation, and revocation. Redis is not required for authentication correctness and must not be introduced without a separate concrete requirement.
+- Access-token and refresh-token lifetimes, absolute session lifetime, idle timeout, session limits, revocation events, cleanup/retention policy, and persistence schema are **TBD**.
 
 ## Password Handling
 
@@ -73,6 +79,7 @@ Use role-based access control with explicit permissions:
 - Return `401 Unauthorized` when credentials are missing, malformed, invalid, revoked, or expired. Include the appropriate `WWW-Authenticate` response header for bearer authentication.
 - Return `403 Forbidden` when the caller is authenticated but lacks the required permission or allowed scope.
 - Do not use `403` to represent an unauthenticated request.
+- Do not expose distinct client-visible refresh-token errors for missing, invalid, expired, revoked, or replayed tokens; use the generic `401` contract defined above.
 - A protected resource may return `404` instead of revealing its existence when the approved data-visibility policy requires it; that policy is **TBD**.
 - Security errors use the standard response from [`api-conventions.md`](api-conventions.md) without disclosing policy internals.
 
@@ -83,9 +90,10 @@ The intended client is a React SPA calling the Spring Boot API.
 - Configure an explicit allow-list of frontend origins per environment. Do not use wildcard origins with credentials.
 - Allow only required methods and headers, and keep preflight caching intentional.
 - When access tokens are accepted only from the `Authorization` header and the API does not authenticate through ambient cookies, the stateless API routes may disable CSRF protection.
-- A refresh endpoint using an `HttpOnly` cookie still receives ambient credentials. Protect it with suitable `SameSite` settings plus Origin/Referer validation and, where deployment topology requires it, a CSRF token mechanism.
+- Refresh and logout endpoints that use an `HttpOnly` refresh-token cookie receive ambient credentials and require targeted CSRF protection. Do not impose cookie-oriented CSRF handling on unrelated bearer-only API routes without a demonstrated need.
+- Targeted protection must combine suitable cookie settings with Origin/Referer validation and, where required by the approved deployment topology, a CSRF token mechanism.
 - Do not store refresh tokens in `localStorage` or expose them to JavaScript.
-- Whether frontend and backend are same-origin or cross-origin is **TBD** and determines the final CORS, cookie, and CSRF configuration.
+- Whether frontend and backend are same-origin or cross-origin is **TBD**. Final cookie `SameSite`, domain, and path values and the final CORS and CSRF configuration remain **TBD** until that topology is approved.
 
 ## Secret and Key Handling
 
@@ -94,7 +102,14 @@ The intended client is a React SPA calling the Spring Boot API.
 - Separate secrets by environment and grant the minimum required access.
 - Support rotation without requiring source-code changes.
 - Do not place real secrets in example configuration, tests, logs, command history, or documentation.
-- JWT key storage and rotation infrastructure are **TBD** before implementation.
+- Represent future JWT, cookie, and CORS settings with validated `@ConfigurationProperties` so invalid or missing required configuration fails at startup.
+- JWT signing-key source, storage, and rotation infrastructure are **TBD** before implementation.
+
+## Time-Dependent Authentication Logic
+
+- Inject `java.time.Clock` into authentication components that issue, validate, rotate, expire, revoke, or clean up tokens.
+- Use a fixed clock in tests to verify boundary behavior deterministically; do not use sleeps or the system clock directly in authentication tests.
+- Keep transaction boundaries for refresh rotation and revocation in the application/use-case layer, and verify concurrency and commit behavior with PostgreSQL integration tests.
 
 ## Logging and Audit Restrictions
 
@@ -128,10 +143,13 @@ The following remain **TBD**:
 
 - final roles, permissions, assignments, ownership rules, and exceptional access;
 - login identifiers, password policy, recovery, lockout, session limits, and MFA;
-- access-token and refresh-token lifetimes;
-- JWT signing algorithm, issuer, audience, key storage, and rotation procedure;
-- refresh-token persistence schema and revocation events;
-- same-origin versus cross-origin deployment and final CORS/CSRF/cookie settings;
+- access-token lifetime and refresh-token lifetime;
+- JWT signing algorithm, issuer, audience, signing-key source, clock-skew allowance, key storage, and key-rotation procedure;
+- refresh-token persistence schema, revocation events, cleanup, and retention policy;
+- absolute session/family lifetime and any idle timeout;
+- database serialization strategy for concurrent refresh requests;
+- same-origin versus cross-origin deployment and final CORS/CSRF settings;
+- refresh-cookie `SameSite`, domain, path, expiry, and related browser behavior;
 - resource-concealment policy for `404` versus `403`;
 - audit-event catalog, retention, and access policy;
 - legal, regulatory, encryption, retention, backup, deletion, and incident-response requirements.
