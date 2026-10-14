@@ -34,6 +34,23 @@ describe('ApiClient', () => {
     )
   })
 
+  it('calls the global fetch with the global object as receiver by default', async () => {
+    // Browsers throw "Illegal invocation" when fetch is called on another receiver.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(function (this: unknown) {
+        if (this !== undefined && this !== globalThis) {
+          throw new TypeError('Illegal invocation')
+        }
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }),
+    )
+    const client = new ApiClient({ baseUrl: '/api/v1' })
+
+    await expect(client.request<void>('/status')).resolves.toBeUndefined()
+    vi.unstubAllGlobals()
+  })
+
   it('supports successful responses without a body', async () => {
     const client = new ApiClient({
       baseUrl: '/api/v1',
