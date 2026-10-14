@@ -147,6 +147,16 @@ public final class StaffAccount {
         }
     }
 
+    /**
+     * Replaces the password and clears "password change required" (UC-3). The caller has verified the
+     * current password and the policy.
+     */
+    public void changePassword(String newPasswordHash, Instant now) {
+        passwordHash = requireText(newPasswordHash, "newPasswordHash");
+        passwordChangeRequired = false;
+        updatedAt = now;
+    }
+
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");

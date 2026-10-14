@@ -58,7 +58,8 @@ public class LoginService {
     public AuthenticationResult login(String username, String password) {
         Instant now = clock.instant();
 
-        Optional<StaffAccount> candidate = Username.parse(username).flatMap(accounts::findByUsername);
+        Optional<StaffAccount> candidate = Username.parse(username)
+                .flatMap(accounts::findByUsernameForAuthentication);
         if (candidate.isEmpty()) {
             passwordHasher.simulateMatch(password);
             return new Rejected();

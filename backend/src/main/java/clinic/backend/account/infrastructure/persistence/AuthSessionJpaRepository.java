@@ -22,6 +22,18 @@ interface AuthSessionJpaRepository extends JpaRepository<AuthSessionEntity, UUID
             @Param("reason") SessionRevocationReason reason,
             @Param("now") Instant now);
 
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update AuthSessionEntity s
+               set s.revokedAt = :now, s.revocationReason = :reason
+             where s.staffAccountId = :accountId and s.id <> :keptSessionId and s.revokedAt is null
+            """)
+    int revokeAllForAccountExcept(
+            @Param("accountId") UUID accountId,
+            @Param("keptSessionId") UUID keptSessionId,
+            @Param("reason") SessionRevocationReason reason,
+            @Param("now") Instant now);
+
     // Refresh tokens are removed by ON DELETE CASCADE.
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

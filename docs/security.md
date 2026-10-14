@@ -38,7 +38,7 @@ Decided parameters (14/10/2026):
 | Issuer (`iss`) | Configurable; default `clinic-backend` |
 | Audience (`aud`) | Configurable; default `clinic-web` |
 | Clock skew | 30 seconds |
-| Claims | `sub` (account UUID), `iss`, `aud`, `iat`, `exp`, `role` (single role, BR-02), `pwd_change` (present and `true` only while a password change is required, see [Password Handling](#password-handling)) |
+| Claims | `sub` (account UUID), `iss`, `aud`, `iat`, `exp`, `role` (single role, BR-02), `sid` (login-session ID; UC-3 keeps the caller's own session while revoking the others), `pwd_change` (present and `true` only while a password change is required, see [Password Handling](#password-handling)) |
 | Key rotation | Replace `JWT_SIGNING_KEY` and restart. Outstanding access tokens become invalid and clients obtain new ones through refresh, because refresh tokens are opaque and do not depend on the key. No previous-key validation is kept |
 
 - The `role` claim is acceptable because access tokens live 15 minutes and every refresh re-reads the account from the database, so role, status, and password-change state are re-evaluated at least that often.

@@ -33,6 +33,13 @@ public interface AuthSessionRepository {
     boolean revokeSession(UUID sessionId, SessionRevocationReason reason, Instant now);
 
     /**
+     * Revokes every active session of the account except one.
+     *
+     * @return number of revoked sessions
+     */
+    int revokeAllForAccountExcept(UUID accountId, UUID keptSessionId, SessionRevocationReason reason, Instant now);
+
+    /**
      * Deletes sessions, with their tokens, that expired or were revoked before the cutoff.
      *
      * @return number of deleted sessions

@@ -20,17 +20,20 @@ main {
   max-width: 22rem;
 }
 
-.login-page form {
+.login-page form,
+.password-form form {
   display: grid;
   gap: 0.5rem;
 }
 
-.login-page input {
+.login-page input,
+.password-form input {
   padding: 0.5rem;
   font: inherit;
 }
 
-.login-page button {
+.login-page button,
+.password-form button {
   margin-top: 0.75rem;
   padding: 0.6rem;
   font: inherit;
@@ -38,4 +41,8 @@ main {
 
 [role='alert'] {
   color: #b91c1c;
+}
+
+.password-form {
+  max-width: 22rem;
 }

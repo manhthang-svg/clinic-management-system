@@ -9,6 +9,8 @@ public enum ApiErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid credentials"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "Access denied"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "Concurrent modification"),
+    CURRENT_PASSWORD_INCORRECT(HttpStatus.UNPROCESSABLE_ENTITY, "Current password incorrect"),
+    PASSWORD_POLICY_VIOLATION(HttpStatus.UNPROCESSABLE_ENTITY, "Password policy violation"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;

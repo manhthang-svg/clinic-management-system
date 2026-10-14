@@ -29,6 +29,12 @@ class JpaStaffAccountRepository implements StaffAccountRepository {
     }
 
     @Override
+    public Optional<StaffAccount> findByUsernameForAuthentication(Username username) {
+        return repository.findByUsernameForAuthentication(username.value())
+                .map(JpaStaffAccountRepository::toDomain);
+    }
+
+    @Override
     public boolean existsWithRole(Role role) {
         return repository.existsByRole(role);
     }

@@ -107,6 +107,20 @@ export class SessionManager {
     return this.inFlightRefresh
   }
 
+  /**
+   * UC-2 Logout: ends this session on the server, then forgets it locally even if the server
+   * could not be reached, so the user is never stuck in a session they asked to leave.
+   */
+  public async logout(): Promise<void> {
+    try {
+      await this.api.logout()
+    } catch {
+      // The refresh cookie expires on its own; local state is cleared below regardless.
+    } finally {
+      this.clear()
+    }
+  }
+
   /** Forgets the session locally. */
   public clear(): void {
     this.cancelTimer()

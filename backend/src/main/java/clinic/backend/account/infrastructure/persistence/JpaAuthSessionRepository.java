@@ -76,6 +76,12 @@ class JpaAuthSessionRepository implements AuthSessionRepository {
     }
 
     @Override
+    public int revokeAllForAccountExcept(
+            UUID accountId, UUID keptSessionId, SessionRevocationReason reason, Instant now) {
+        return sessions.revokeAllForAccountExcept(accountId, keptSessionId, reason, now);
+    }
+
+    @Override
     public int deleteSessionsEndedBefore(Instant cutoff) {
         return sessions.deleteEndedBefore(cutoff);
     }
