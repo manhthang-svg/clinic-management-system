@@ -15,6 +15,14 @@ Each specification should cover:
 
 > **TODO:** Add one specification file per use case, starting with the catalog below. Do not infer workflows beyond the catalog and business rules.
 
+## Written Specifications
+
+| Use cases | Files | Status |
+| --- | --- | --- |
+| UC-1 → UC-11 Authentication, own profile, account management | [`staff-account.md`](staff-account.md) (shared model and open questions AQ-01 → AQ-15), [`UC-1`](UC-1-login.md), [`UC-2`](UC-2-logout.md), [`UC-3`](UC-3-change-password.md), [`UC-4`](UC-4-update-profile.md), [`UC-5`](UC-5-view-account-list.md), [`UC-6`](UC-6-view-account-detail.md), [`UC-7`](UC-7-create-account.md), [`UC-8`](UC-8-update-account-information.md), [`UC-9`](UC-9-assign-role.md), [`UC-10`](UC-10-lock-unlock-account.md), [`UC-11`](UC-11-reset-password.md) | Draft — open questions pending team decision |
+
+Proposed API paths in specifications are marked **ASSUMPTION** and become binding only when the use case is implemented.
+
 ## Use-Case Catalog
 
 Transcribed from `docs/source/usecases.xlsx`, sheet `Mới` (authoritative; see [`../business-context.md`](../business-context.md#sources)). The superseded sheet `Cũ` uses different numbers. A specification file for a use case is named `UC-<n>-<short-name>.md` when it is written.
