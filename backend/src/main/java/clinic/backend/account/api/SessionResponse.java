@@ -28,4 +28,15 @@ public record SessionResponse(
                 new AccountSummaryResponse(
                         account.id(), account.username(), account.fullName(), account.role().name()));
     }
+
+    /**
+     * Prevents MVC debug/trace logging from exposing the bearer token.
+     */
+    @Override
+    public String toString() {
+        return "SessionResponse[accessToken=redacted, tokenType=" + tokenType
+                + ", expiresAt=" + expiresAt
+                + ", passwordChangeRequired=" + passwordChangeRequired
+                + ", account=" + account + "]";
+    }
 }

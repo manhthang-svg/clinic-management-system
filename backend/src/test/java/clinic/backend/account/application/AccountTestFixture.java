@@ -117,6 +117,11 @@ final class AccountTestFixture {
         }
 
         @Override
+        public Optional<StaffAccount> findByUsernameForAuthentication(Username username) {
+            return findByUsername(username);
+        }
+
+        @Override
         public boolean existsWithRole(Role role) {
             return byId.values().stream().anyMatch(account -> account.role() == role);
         }

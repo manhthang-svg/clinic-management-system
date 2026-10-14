@@ -139,6 +139,44 @@ class AuthApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void concurrentFailedLoginsAreAllCountedWithoutServerErrors() throws Exception {
+        StaffAccount technician = account(Role.TECHNICIAN, AccountStatus.ACTIVE, false);
+        int parallelRequests = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(parallelRequests);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Callable<Integer> attempt = () -> {
+                start.await();
+                return login(technician.username().value(), "wrong-password")
+                        .andReturn().getResponse().getStatus();
+            };
+            List<Future<Integer>> results = new ArrayList<>();
+            for (int index = 0; index < parallelRequests; index++) {
+                results.add(executor.submit(attempt));
+            }
+            start.countDown();
+
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<Integer> result : results) {
+                statuses.add(result.get(30, TimeUnit.SECONDS));
+            }
+
+            assertThat(statuses).containsOnly(401);
+            StaffAccount stored = accounts.findById(technician.id()).orElseThrow();
+            assertThat(stored.failedLoginAttempts()).isZero();
+            assertThat(stored.loginBlockedUntil()).isAfter(Instant.now().plusSeconds(14 * 60));
+            assertThat(auditEvents(technician.id()))
+                    .filteredOn("LOGIN_FAILED"::equals)
+                    .hasSize(parallelRequests);
+            assertThat(auditEvents(technician.id()))
+                    .filteredOn("LOGIN_THROTTLED"::equals)
+                    .hasSize(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void passwordChangeRequiredIsCarriedInTheToken() throws Exception {
         StaffAccount admin = account(Role.ADMIN, AccountStatus.ACTIVE, true);
 
