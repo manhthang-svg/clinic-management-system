@@ -16,6 +16,25 @@ The intended architecture is a package-by-feature modular monolith backed by Pos
 
 Prerequisites: Java 21, Node.js 24.15+, PostgreSQL 17 (or Docker), and Docker for backend integration tests.
 
+Start the development PostgreSQL instance from the repository root:
+
+```shell
+docker compose up -d postgres
+docker compose ps
+```
+
+Docker Compose automatically reads the local `.env` file. Create it from `.env.example`, replace
+all placeholder secrets, and keep it uncommitted. Spring Boot does not automatically import this
+file: when running the backend from IntelliJ, load the repository-root `.env` through the Run
+Configuration's EnvFile support, or copy the same values into its Environment variables field.
+
+The Compose defaults create database `clinic`, user `clinic`, password `clinic`, and host port `5432`.
+Run the backend with `DB_URL=jdbc:postgresql://localhost:5432/clinic`, `DB_USERNAME=clinic`, and
+`DB_PASSWORD=clinic`. Override `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_PORT`
+in the shell when needed. Data is retained in the named volume `clinic_postgres_data`. Stop the
+container with `docker compose down`; add `--volumes` only when you intentionally want to delete the
+local database.
+
 Backend environment variables:
 
 | Variable | Required | Purpose |
