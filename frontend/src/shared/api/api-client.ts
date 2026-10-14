@@ -48,7 +48,9 @@ export class ApiClient {
     this.baseUrl = configuration.baseUrl.replace(/\/+$/, '')
     this.accessTokenProvider = configuration.accessTokenProvider
     this.credentials = configuration.credentials ?? 'same-origin'
-    this.fetchImplementation = configuration.fetchImplementation ?? fetch
+    // Browsers reject fetch called with a receiver other than the global object ("Illegal invocation").
+    this.fetchImplementation =
+      configuration.fetchImplementation ?? ((input, init) => globalThis.fetch(input, init))
   }
 
   public async request<TResponse, TBody = unknown>(
