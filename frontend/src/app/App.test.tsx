@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../shared/api/api-error'
@@ -11,6 +12,7 @@ function manager(api: Partial<AuthApi>) {
     api: {
       login: vi.fn<AuthApi['login']>(),
       refresh: vi.fn<AuthApi['refresh']>(),
+      logout: vi.fn<AuthApi['logout']>().mockResolvedValue(undefined),
       ...api,
     },
     lock: (_name, callback) => callback(),
@@ -45,5 +47,25 @@ describe('App', () => {
 
     expect(await screen.findByText('Xin chào Administrator (Quản trị viên)')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('mật khẩu tạm')
+  })
+
+  it('returns to the login page after logout', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined)
+    const sessionManager = manager({
+      refresh: vi.fn().mockResolvedValue({
+        accessToken: 'access',
+        tokenType: 'Bearer',
+        expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        passwordChangeRequired: false,
+        account: { id: 'id', username: 'dr.an', fullName: 'Nguyễn An', role: 'DOCTOR' },
+      }),
+      logout,
+    })
+    render(<App sessionManager={sessionManager} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng xuất' }))
+
+    expect(await screen.findByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument()
+    expect(logout).toHaveBeenCalledTimes(1)
   })
 })

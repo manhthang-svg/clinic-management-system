@@ -23,6 +23,7 @@ function setup(api: Partial<AuthApi>, lock?: CrossTabLock) {
     api: {
       login: vi.fn<AuthApi['login']>(),
       refresh: vi.fn<AuthApi['refresh']>(),
+      logout: vi.fn<AuthApi['logout']>().mockResolvedValue(undefined),
       ...api,
     },
     lock: lock ?? ((_name, callback) => callback()),
@@ -98,6 +99,30 @@ describe('SessionManager', () => {
 
     expect(manager.getState()).toEqual({ status: 'anonymous' })
     expect(manager.getAccessToken()).toBeNull()
+  })
+
+  it('ends the session on the server and locally on logout', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined)
+    const { manager } = setup({ login: vi.fn().mockResolvedValue(session()), logout })
+    await manager.login('dr.an', 'secret-password')
+
+    await manager.logout()
+
+    expect(logout).toHaveBeenCalledTimes(1)
+    expect(manager.getState()).toEqual({ status: 'anonymous' })
+    expect(manager.getAccessToken()).toBeNull()
+  })
+
+  it('still forgets the session locally when the server cannot be reached', async () => {
+    const { manager } = setup({
+      login: vi.fn().mockResolvedValue(session()),
+      logout: vi.fn().mockRejectedValue(new ApiError('Unable to reach the API.')),
+    })
+    await manager.login('dr.an', 'secret-password')
+
+    await manager.logout()
+
+    expect(manager.getState()).toEqual({ status: 'anonymous' })
   })
 
   it('reports that a password change is required', async () => {

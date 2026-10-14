@@ -26,6 +26,7 @@ export interface SessionResponse {
 export interface AuthApi {
   login(username: string, password: string): Promise<SessionResponse>
   refresh(): Promise<SessionResponse>
+  logout(): Promise<void>
 }
 
 export function createAuthApi(client: ApiClient): AuthApi {
@@ -37,5 +38,6 @@ export function createAuthApi(client: ApiClient): AuthApi {
       }),
     refresh: () =>
       client.request<SessionResponse>('/auth/refresh', { method: 'POST' }),
+    logout: () => client.request<void>('/auth/logout', { method: 'POST' }),
   }
 }

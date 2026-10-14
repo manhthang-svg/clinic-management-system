@@ -41,6 +41,9 @@ export function App({ sessionManager = defaultSessionManager }: AppProps) {
       <p>
         Xin chào {session.account.fullName} ({ROLE_LABELS[session.account.role]})
       </p>
+      <button type="button" onClick={() => void sessionManager.logout()}>
+        Đăng xuất
+      </button>
       {session.passwordChangeRequired && (
         <p role="alert">
           Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng các chức năng khác.

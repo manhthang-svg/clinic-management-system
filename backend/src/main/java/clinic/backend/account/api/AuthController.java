@@ -4,6 +4,7 @@ import java.net.URI;
 
 import clinic.backend.account.application.AuthenticationResult;
 import clinic.backend.account.application.LoginService;
+import clinic.backend.account.application.LogoutService;
 import clinic.backend.account.application.RefreshSessionService;
 import clinic.backend.account.application.SessionTokens;
 import clinic.backend.shared.api.error.ApiErrorCode;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * UC-1 Login and the supporting session refresh (docs/use-cases/UC-1-login.md).
+ * UC-1 Login with the supporting session refresh, and UC-2 Logout (docs/use-cases/).
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -28,6 +29,7 @@ class AuthController {
 
     private final LoginService loginService;
     private final RefreshSessionService refreshSessionService;
+    private final LogoutService logoutService;
     private final RefreshTokenCookies cookies;
     private final RequestOriginVerifier originVerifier;
     private final ApiProblemFactory problemFactory;
@@ -35,12 +37,14 @@ class AuthController {
     AuthController(
             LoginService loginService,
             RefreshSessionService refreshSessionService,
+            LogoutService logoutService,
             RefreshTokenCookies cookies,
             RequestOriginVerifier originVerifier,
             ApiProblemFactory problemFactory) {
 
         this.loginService = loginService;
         this.refreshSessionService = refreshSessionService;
+        this.logoutService = logoutService;
         this.cookies = cookies;
         this.originVerifier = originVerifier;
         this.problemFactory = problemFactory;
@@ -75,6 +79,18 @@ class AuthController {
                             "The session is no longer valid. Log in again.",
                             URI.create(httpRequest.getRequestURI())));
         };
+    }
+
+    @PostMapping("/logout")
+    ResponseEntity<?> logout(HttpServletRequest httpRequest) {
+        if (!originVerifier.isAllowed(httpRequest)) {
+            return forbiddenOrigin(httpRequest);
+        }
+
+        logoutService.logout(cookies.read(httpRequest).orElse(null));
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookies.clear().toString())
+                .build();
     }
 
     private ResponseEntity<SessionResponse> sessionResponse(SessionTokens tokens) {
