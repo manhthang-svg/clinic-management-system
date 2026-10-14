@@ -19,21 +19,21 @@ Admin locks an account to block sign-in, or unlocks a previously locked account.
 ## Primary Flow — Lock
 
 1. Admin chooses "Lock" on an active account.
-2. The system checks the guards (AQ-07).
+2. The system rejects the lock if the account is the caller's own or the last `ACTIVE` Admin (AQ-07).
 3. The system changes the status to `LOCKED` (A02).
-4. The system applies the session policy (AQ-08).
+4. The system revokes all sessions of the account (AQ-08) and writes `ACCOUNT_LOCKED` to the audit table.
 
 ## Primary Flow — Unlock
 
 1. Admin chooses "Unlock" on a locked account.
-2. The system changes the status to `ACTIVE` (A03).
+2. The system changes the status to `ACTIVE` (A03) and writes `ACCOUNT_UNLOCKED` to the audit table.
 
 ## Alternate and Error Flows
 
 | Case | Result |
 | --- | --- |
 | Lock a `LOCKED` account, or unlock an `ACTIVE` account | `409` invalid transition |
-| Admin locks their own account, or the last active Admin | **TBD** (AQ-07); recommended `409` |
+| Admin locks their own account, or the last `ACTIVE` Admin | `409` (AQ-07) |
 | Account not found | `404` |
 
 ## Business Rules and Permissions
@@ -46,7 +46,7 @@ Admin locks an account to block sign-in, or unlocks a previously locked account.
 ## State Changes and Transaction
 
 - Explicit domain methods `lock()` and `unlock()`.
-- Lock: status change and refresh-token revocation (if AQ-08 confirms it) in one transaction.
+- Lock: status change, revocation of all refresh-token families, and the audit event in one transaction.
 
 ## Inputs and Outputs
 
@@ -67,4 +67,4 @@ Admin locks an account to block sign-in, or unlocks a previously locked account.
 
 ## Open Questions
 
-- AQ-07, AQ-08, AQ-11 in [`staff-account.md`](staff-account.md#open-questions).
+- Decisions applied: AQ-07, AQ-08, AQ-11 in [`staff-account.md`](staff-account.md#decisions).

@@ -28,7 +28,7 @@ A staff member signs out and ends their current working session.
 | Case | Result |
 | --- | --- |
 | Cookie missing, invalid, expired, or already revoked | `204`; the cookie is cleared anyway. **ASSUMPTION:** logout is idempotent so the user can always leave the session |
-| Request fails the CSRF/Origin check | `403`; nothing is revoked |
+| `Origin` header missing or not the configured frontend origin | `403`; nothing is revoked (security.md) |
 
 ## Business Rules and Permissions
 
@@ -43,7 +43,7 @@ A staff member signs out and ends their current working session.
 ## Inputs and Outputs
 
 - Input: refresh-token cookie.
-- Output: `204 No Content` and an expired cookie.
+- Output: `204 No Content` and an expired cookie. Audit `LOGOUT` when a session was revoked.
 - **ASSUMPTION (proposed API):** `POST /api/v1/auth/logout`.
 
 ## Acceptance Criteria
@@ -60,4 +60,4 @@ A staff member signs out and ends their current working session.
 ## Open Questions
 
 - **TBD:** Is a "log out all my sessions" action needed? It is not in the use-case list.
-- AQ-14 in [`staff-account.md`](staff-account.md#open-questions).
+- Session lifetimes are decided (AQ-14 in [`staff-account.md`](staff-account.md#decisions)).

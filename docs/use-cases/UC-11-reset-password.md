@@ -20,9 +20,9 @@ Admin resets the password of a staff account when the user forgets it.
 ## Primary Flow
 
 1. Admin opens the account detail and chooses "Reset password".
-2. The system sets a new password (mechanism **TBD**, AQ-02).
+2. The system generates a 12-character one-time password and marks the account "password change required" (AQ-02).
 3. The system stores only its hash.
-4. The system applies the session policy (AQ-08).
+4. The system revokes all sessions of the account (AQ-08), writes `PASSWORD_RESET` to the audit table, and shows the one-time password to Admin once.
 5. Admin gives the new password to the user through an out-of-band channel.
 
 ## Alternate and Error Flows
@@ -30,9 +30,8 @@ Admin resets the password of a staff account when the user forgets it.
 | Case | Result |
 | --- | --- |
 | Account not found | `404` |
-| Admin-typed password violates the policy | `422` (only if AQ-02 chooses Admin-typed passwords) |
 | Account is `LOCKED` | **ASSUMPTION:** reset is allowed and does not unlock the account |
-| Admin resets their own password | **TBD**; recommended to use UC-3 instead |
+| Admin resets their own password | `409`; Admin uses UC-3 for their own password — **ASSUMPTION**, follows the AQ-07 rule that Admins do not administer their own account |
 
 ## Business Rules and Permissions
 
@@ -41,17 +40,17 @@ Admin resets the password of a staff account when the user forgets it.
 
 ## State Changes and Transaction
 
-- Password hash update and session revocation (if AQ-08 confirms it) in one transaction.
+- Password hash update, flag, session revocation, and audit event in one transaction.
 
 ## Inputs and Outputs
 
-- Input: none, or `newPassword` if Admin types it (AQ-02).
-- Output: the generated one-time password shown once, or `204`.
+- Input: none.
+- Output: `200` with `temporaryPassword`, shown once.
 - **ASSUMPTION (proposed API):** `POST /api/v1/staff-accounts/{id}/commands/reset-password`.
 
 ## Acceptance Criteria
 
-1. After the reset, the old password no longer works and the new one does.
+1. After the reset, the old password no longer works, the one-time password does, and the user must change it at first login.
 2. The new password is not logged and cannot be retrieved again.
 3. Non-Admin roles receive `403`.
 
@@ -62,4 +61,4 @@ Admin resets the password of a staff account when the user forgets it.
 
 ## Open Questions
 
-- AQ-01, AQ-02, AQ-03, AQ-08, AQ-11 in [`staff-account.md`](staff-account.md#open-questions).
+- Decisions applied: AQ-01, AQ-02, AQ-08, AQ-11 in [`staff-account.md`](staff-account.md#decisions).

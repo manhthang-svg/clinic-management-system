@@ -9,7 +9,7 @@ Sources: `usecases.xlsx` sheet `Mới` (UC-1 → UC-11), `Business_flow.xlsx` sh
 | Attribute | Rule | Editable by | Source |
 | --- | --- | --- | --- |
 | Technical ID | UUID; JWT subject ([`security.md`](../security.md#jwt-access-tokens)) | Nobody | security.md |
-| Username | Required, unique (BR-01) | Set at creation; see AQ-05 | BR-01, UC-7 |
+| Username | Required, unique, case-insensitive, immutable (BR-01, AQ-05) | Set at creation only | BR-01, UC-7 |
 | Password | Stored only as an adaptive hash (security.md) | Owner (UC-3), Admin reset (UC-11) | BR-03 |
 | Full name | Required — **ASSUMPTION** | Admin only (BR-04) | UC-7, UC-8 |
 | Academic title (học hàm học vị) | Optional — **ASSUMPTION** | Admin only (BR-04) | UC-8 |
@@ -17,6 +17,7 @@ Sources: `usecases.xlsx` sheet `Mới` (UC-1 → UC-11), `Business_flow.xlsx` sh
 | Email | See AQ-06 | Owner (UC-4) or Admin (UC-8) | BR-04 |
 | Role | Exactly one of `ADMIN`, `RECEPTIONIST`, `DOCTOR`, `TECHNICIAN`, `CASHIER` | Admin only (UC-9) | BR-02 |
 | Status | `ACTIVE` or `LOCKED` | Admin only (UC-10) | BR-01, UC-10 |
+| Password change required | Set by account creation and Admin reset; cleared by UC-3 | System | AQ-01, AQ-02 |
 | Department | Derived from the assigned room; not stored on the account | Via room assignment (UC-15, out of this batch) | BR-05 |
 
 Other "personal details" mentioned by UC-7 are **TBD** (AQ-15). Do not add fields that are not listed here.
@@ -26,7 +27,7 @@ Other "personal details" mentioned by UC-7 are **TBD** (AQ-15). Do not add field
 | ID | From | Event | Guard / effect | To | UC |
 | --- | --- | --- | --- | --- | --- |
 | A01 | — | Admin creates the account | Exactly one role assigned | `ACTIVE` | UC-7 |
-| A02 | `ACTIVE` | Admin locks the account | Account can no longer log in (BR-01). Guards and session effects: AQ-07, AQ-08 | `LOCKED` | UC-10 |
+| A02 | `ACTIVE` | Admin locks the account | Account can no longer log in (BR-01). Not the caller's own account and not the last active Admin (AQ-07). All sessions revoked (AQ-08) | `LOCKED` | UC-10 |
 | A03 | `LOCKED` | Admin unlocks the account | — | `ACTIVE` | UC-10 |
 
 - Status changes are explicit domain behavior (`lock`, `unlock`), not field assignments.
@@ -38,29 +39,38 @@ Other "personal details" mentioned by UC-7 are **TBD** (AQ-15). Do not add field
 
 ## Invariants
 
-1. Username is unique (BR-01). Case handling is **TBD** (AQ-05).
+1. Username is unique, compared case-insensitively (BR-01, AQ-05).
 2. An account has exactly one role at all times (BR-02).
 3. A `LOCKED` account cannot authenticate, whether by password login or token refresh (BR-01). **ASSUMPTION:** the refresh rejection follows from BR-01; otherwise a locked user could continue working.
 4. A password is never stored, logged, or returned in plain text (security.md).
+5. At least one `ACTIVE` account with role `ADMIN` exists once the system has been bootstrapped (AQ-07, AQ-10).
+
+## Decisions
+
+Approved on 14/10/2026: the recommendations for AQ-01, AQ-02, AQ-03, AQ-05, AQ-07, AQ-08, AQ-10, and UQ-1 (UC-1) were accepted by the team. AQ-04, AQ-11, and AQ-14 follow from the security decisions in [`../security.md`](../security.md).
+
+| ID | Decision |
+| --- | --- |
+| AQ-01 | On creation the system generates a 12-character one-time password, shows it to Admin once, and marks the account "password change required". At first login the user must change it (UC-3) before using any other function. |
+| AQ-02 | Admin reset uses the same mechanism as AQ-01. |
+| AQ-03 | Password: 8–64 characters, at most 72 bytes in UTF-8, no composition rules, must differ from the current password. |
+| AQ-04 | 5 consecutive failed logins block password login for that account for 15 minutes. This does not change the status and is not visible as a separate error. |
+| AQ-05 | Username: case-insensitive (stored in lowercase), immutable after creation. Allowed format: 3–50 characters from `a–z`, `0–9`, `.`, `_`, `-` — **ASSUMPTION**: the format was not specified; this keeps usernames typeable and unambiguous. |
+| AQ-07 | Forbidden, rejected with `409`: an Admin locking their own account, an Admin changing their own role, and any lock or role change that would leave no `ACTIVE` Admin. |
+| AQ-08 | Lock, role change, and Admin reset revoke all refresh-token families of the account. Changing one's own password revokes all other families and keeps the current one. Access tokens already issued expire within 15 minutes. |
+| AQ-10 | At startup, if no account with role `ADMIN` exists and `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` are set, the system creates that Admin with "password change required". If an Admin exists, the variables are ignored. Nothing is created by a migration. |
+| AQ-11 | Account events are written to the security audit table (event list in security.md). |
+| AQ-14 | Sessions are bounded only by token lifetimes: 2-hour idle timeout, 12-hour absolute lifetime. |
+| UQ-1 | A locked account receives the same generic `401` as wrong credentials. |
 
 ## Open Questions
 
-These questions apply across UC-1 → UC-11. Each one blocks only the parts listed in "Blocks".
+Still **TBD**; each blocks only the use cases listed.
 
 | ID | Question | Recommendation (not decided) | Blocks |
 | --- | --- | --- | --- |
-| AQ-01 | How is the initial password set when Admin creates an account: typed by Admin or generated by the system? Must the user change it at first login? | System-generated one-time password shown once to Admin; forced change at first login | UC-7, UC-1 |
-| AQ-02 | Same question for password reset. | Same mechanism as AQ-01 | UC-11 |
-| AQ-03 | Password policy: minimum length, character rules, reuse. | Minimum length only (e.g. 8+), no composition rules | UC-3, UC-7, UC-11 |
-| AQ-04 | Is there automatic lockout after repeated failed logins? How is it different from Admin lock? | Temporary throttling, not a status change | UC-1 |
-| AQ-05 | Username format, case sensitivity, and whether it can change after creation. UC-8 does not list it as editable. | Case-insensitive, immutable | UC-1, UC-7 |
 | AQ-06 | Are phone number and email required? Must they be unique? | Optional, not unique | UC-4, UC-7, UC-8 |
-| AQ-07 | May an Admin lock themselves, remove their own Admin role, or lock or demote the last active Admin? | Forbid all three | UC-9, UC-10 |
-| AQ-08 | When an account is locked, its role changes, or its password is reset or changed, what happens to sessions that are already open? | Revoke all refresh-token families of the account; for change password, keep the current session. Open access tokens expire within their short lifetime | UC-3, UC-9, UC-10, UC-11 |
 | AQ-09 | Can the role of a Doctor or Technician who has room assignments or in-progress patients be changed? What happens to the assignments? | Reject while assigned to rooms | UC-9 |
-| AQ-10 | How is the first Admin account created in a new environment? Migrations must not invent business data. | One-time bootstrap from environment configuration at startup | Deployment |
-| AQ-11 | Which account events must be audited (create, lock, role change, reset) and who may read the audit? | Audit all Admin account actions | UC-7 → UC-11 |
 | AQ-12 | How is department shown and filtered for staff with several room assignments, and for roles without rooms (Admin, Receptionist, Cashier)? | List all departments; empty for roles without rooms | UC-5, UC-6 |
 | AQ-13 | Is the academic title free text or chosen from a catalog? | Free text | UC-7, UC-8 |
-| AQ-14 | Is login session length tied to a working shift, or only to token lifetimes? | Token lifetimes only (security.md) | UC-1, UC-2 |
 | AQ-15 | Which other "personal details" does UC-7 require (e.g. date of birth, gender, citizen ID)? | Only the attributes above until confirmed | UC-7, UC-8 |

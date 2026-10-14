@@ -41,7 +41,7 @@ Admin views the detailed information of a selected staff account.
 
 - Output: ID, username, full name, academic title, phone number, email, role, status, assigned rooms and departments (BR-05), and the optimistic-lock version used by UC-8 — **ASSUMPTION**.
 - Never returned: password hash, token data.
-- Creation and last-change information depend on the audit decision (AQ-11).
+- Audit history is not shown: no use case exposes the audit table (security.md).
 - **ASSUMPTION (proposed API):** `GET /api/v1/staff-accounts/{id}`.
 
 ## Acceptance Criteria
@@ -55,4 +55,4 @@ Admin views the detailed information of a selected staff account.
 
 ## Open Questions
 
-- AQ-11, AQ-12 in [`staff-account.md`](staff-account.md#open-questions).
+- AQ-12 in [`staff-account.md`](staff-account.md#open-questions).

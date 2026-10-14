@@ -20,7 +20,7 @@ Admin updates the personal and professional information of a staff account: full
 
 1. Admin opens the account detail (UC-6) and chooses "Edit".
 2. Admin changes full name, academic title, phone number, and/or email.
-3. The system validates and saves the changes.
+3. The system validates and saves the changes and writes `ACCOUNT_UPDATED` to the audit table.
 4. The system returns the updated detail.
 
 ## Alternate and Error Flows
@@ -59,4 +59,4 @@ Admin updates the personal and professional information of a staff account: full
 
 ## Open Questions
 
-- AQ-06, AQ-11, AQ-13 in [`staff-account.md`](staff-account.md#open-questions).
+- AQ-06, AQ-13 in [`staff-account.md`](staff-account.md#open-questions).

@@ -22,7 +22,7 @@ Admin assigns or changes the role of an account.
 2. Admin selects the new role.
 3. The system checks the guards below.
 4. The system replaces the role (exactly one role at all times, BR-02).
-5. The system applies the session policy (AQ-08) and returns the updated detail.
+5. The system revokes all sessions of the account (AQ-08), writes `ROLE_CHANGED` to the audit table, and returns the updated detail.
 
 ## Alternate and Error Flows
 
@@ -30,14 +30,14 @@ Admin assigns or changes the role of an account.
 | --- | --- |
 | Role not one of the five roles | `400` |
 | New role equals the current role | `409` (no change) — **ASSUMPTION** |
-| Admin removes their own Admin role, or the last active Admin is demoted | **TBD** (AQ-07); recommended `409` |
+| Admin changes their own role, or the change would leave no `ACTIVE` Admin | `409` (AQ-07) |
 | Doctor or Technician still has room assignments or in-progress work | **TBD** (AQ-09) |
 | Account not found | `404` |
 
 ## Business Rules and Permissions
 
 - Admin only. BR-02: exactly one role. BR-04: role is Admin-only.
-- The new role takes effect for new tokens. When existing sessions lose the old role is decided by AQ-08.
+- The user must log in again; an access token already issued keeps the old role for at most 15 minutes (AQ-08).
 
 ## State Changes and Transaction
 
@@ -52,15 +52,16 @@ Admin assigns or changes the role of an account.
 
 ## Acceptance Criteria
 
-1. After the change, the user can access only the new role's functions (after AQ-08 takes effect).
+1. After the change, the user's sessions cannot be refreshed, and a new login grants only the new role's functions.
 2. An account never has zero roles or two roles.
 3. Non-Admin roles receive `403`.
 
 ## Test Considerations
 
 - Authorization test: a token issued after the change has only the new role's access.
-- Domain tests for the guards once AQ-07 and AQ-09 are decided.
+- Domain tests for the AQ-07 guards; AQ-09 guards once decided.
 
 ## Open Questions
 
-- AQ-07, AQ-08, AQ-09, AQ-11 in [`staff-account.md`](staff-account.md#open-questions).
+- AQ-09 in [`staff-account.md`](staff-account.md#open-questions).
+- Decisions applied: AQ-07, AQ-08, AQ-11 in [`staff-account.md`](staff-account.md#decisions).

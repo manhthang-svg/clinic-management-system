@@ -8,7 +8,8 @@ This document is the source of truth for confirmed roles and their allowed actio
 
 - Roles and use-case assignments are transcribed from `usecases.xlsx`, sheet `Mới` (see [`business-context.md`](business-context.md#sources)). Scope conditions come from the business rules in the `BR` sheet.
 - Roles: `ADMIN`, `RECEPTIONIST`, `DOCTOR`, `TECHNICIAN`, `CASHIER`. Each account has exactly one role (BR-02).
-- **TBD:** Technical permission names (for `@PreAuthorize`) are not defined yet. They are introduced together with each use-case specification. Use-case IDs below are the stable reference until then.
+- Technical permissions follow the model decided in [`security.md`](security.md#authorization-model): names `<resource>:<action>`, a fixed role-to-permission table in backend code, and the JWT carrying only the role. Each permission name is added to this matrix together with the first use case that implements it; until then the use-case ID is the stable reference.
+- An account whose password must be changed (first login or after an Admin reset) can only change its password, view its own profile, and log out, whatever its role.
 - Anything not listed is denied.
 
 Status values:
