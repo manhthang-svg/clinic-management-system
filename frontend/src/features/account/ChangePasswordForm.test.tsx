@@ -30,11 +30,15 @@ describe('ChangePasswordForm', () => {
 
     await fill('temporary-pass', 'brand-new-password', 'different-value')
     expect(screen.getByRole('alert')).toHaveTextContent('Xác nhận mật khẩu không khớp.')
+    expect(screen.getByLabelText('Nhập lại mật khẩu mới')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Mật khẩu mới')).not.toHaveAttribute('aria-invalid')
 
     await userEvent.clear(screen.getByLabelText('Mật khẩu mới'))
     await userEvent.type(screen.getByLabelText('Mật khẩu mới'), 'short')
     await userEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }))
     expect(screen.getByRole('alert')).toHaveTextContent('ít nhất 8 ký tự')
+    expect(screen.getByLabelText('Mật khẩu mới')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Nhập lại mật khẩu mới')).not.toHaveAttribute('aria-invalid')
 
     expect(onSubmit).not.toHaveBeenCalled()
   })
@@ -55,7 +59,12 @@ describe('ChangePasswordForm', () => {
 
     await fill('wrong-password', 'brand-new-password', 'brand-new-password')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu hiện tại không đúng.')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Mật khẩu hiện tại không đúng.')
+    expect(screen.getByLabelText('Mật khẩu hiện tại')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Mật khẩu hiện tại')).toHaveAccessibleDescription(
+      'Mật khẩu hiện tại không đúng.',
+    )
     expect(onChanged).not.toHaveBeenCalled()
   })
 })
