@@ -6,6 +6,7 @@ package clinic.backend.shared.security;
 public final class AccessTokenClaims {
 
     public static final String ROLE = "role";
+    public static final String SESSION_ID = "sid";
     public static final String PASSWORD_CHANGE_REQUIRED = "pwd_change";
 
     /**

@@ -2,6 +2,7 @@ package clinic.backend.account.infrastructure.security;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import clinic.backend.account.application.port.AccessTokenIssuer;
 import clinic.backend.account.domain.StaffAccount;
@@ -29,7 +30,7 @@ class JwtAccessTokenIssuer implements AccessTokenIssuer {
     }
 
     @Override
-    public IssuedAccessToken issue(StaffAccount account, Instant now) {
+    public IssuedAccessToken issue(StaffAccount account, UUID sessionId, Instant now) {
         Instant expiresAt = now.plus(settings.accessTokenTtl());
 
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
@@ -38,7 +39,8 @@ class JwtAccessTokenIssuer implements AccessTokenIssuer {
                 .audience(List.of(settings.audience()))
                 .issuedAt(now)
                 .expiresAt(expiresAt)
-                .claim(AccessTokenClaims.ROLE, account.role().name());
+                .claim(AccessTokenClaims.ROLE, account.role().name())
+                .claim(AccessTokenClaims.SESSION_ID, sessionId.toString());
         if (account.passwordChangeRequired()) {
             claims.claim(AccessTokenClaims.PASSWORD_CHANGE_REQUIRED, true);
         }

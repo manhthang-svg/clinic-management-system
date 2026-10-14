@@ -46,7 +46,7 @@ class SessionTokenIssuer {
                 now,
                 session.refreshTokenExpiry(now, sessionPolicy.idleTimeout())));
 
-        IssuedAccessToken accessToken = accessTokenIssuer.issue(account, now);
+        IssuedAccessToken accessToken = accessTokenIssuer.issue(account, session.id(), now);
 
         return new SessionTokens(
                 accessToken.value(),

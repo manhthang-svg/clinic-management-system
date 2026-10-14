@@ -52,6 +52,10 @@ final class AccountTestFixture {
                 accounts, sessions, passwordHasher, sessionTokenIssuer, auditLog, ids, SESSION_POLICY, clock);
     }
 
+    ChangePasswordService changePasswordService() {
+        return new ChangePasswordService(accounts, sessions, passwordHasher, auditLog, clock);
+    }
+
     RefreshSessionService refreshSessionService() {
         return new RefreshSessionService(sessions, accounts, refreshTokenCodec, sessionTokenIssuer, auditLog, clock);
     }
@@ -180,6 +184,19 @@ final class AccountTestFixture {
         }
 
         @Override
+        public int revokeAllForAccountExcept(
+                UUID accountId, UUID keptSessionId, SessionRevocationReason reason, Instant now) {
+            List<UUID> revoked = sessions.values().stream()
+                    .filter(session -> session.accountId().equals(accountId)
+                            && !session.id().equals(keptSessionId)
+                            && session.revokedAt() == null)
+                    .map(AuthSession::id)
+                    .toList();
+            revoked.forEach(id -> revokeSession(id, reason, now));
+            return revoked.size();
+        }
+
+        @Override
         public int deleteSessionsEndedBefore(Instant cutoff) {
             List<UUID> ended = sessions.values().stream()
                     .filter(session -> session.absoluteExpiresAt().isBefore(cutoff)
@@ -215,7 +232,7 @@ final class AccountTestFixture {
     static final class FakeAccessTokenIssuer implements AccessTokenIssuer {
 
         @Override
-        public IssuedAccessToken issue(StaffAccount account, Instant now) {
+        public IssuedAccessToken issue(StaffAccount account, UUID sessionId, Instant now) {
             return new IssuedAccessToken(
                     "access:" + account.id() + ":" + account.role() + ":" + account.passwordChangeRequired(),
                     now.plus(Duration.ofMinutes(15)));
