@@ -36,40 +36,58 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   return (
     <main className="login-page">
-      <h1>Đăng nhập</h1>
-      <form onSubmit={handleSubmit} noValidate>
-        <label htmlFor="login-username">Tên đăng nhập</label>
-        <input
-          id="login-username"
-          name="username"
-          autoComplete="username"
-          required
-          maxLength={100}
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-        />
+      <div className="login-panel">
+        <p className="app-name">Clinic Management System</p>
+        <div className="card">
+          <h1>Đăng nhập</h1>
+          <form className="form" onSubmit={handleSubmit} noValidate>
+            <div className="field">
+              <label htmlFor="login-username">Tên đăng nhập</label>
+              <input
+                id="login-username"
+                className="input input--large"
+                name="username"
+                autoComplete="username"
+                required
+                maxLength={100}
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </div>
 
-        <label htmlFor="login-password">Mật khẩu</label>
-        <input
-          id="login-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          maxLength={200}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+            <div className="field">
+              <label htmlFor="login-password">Mật khẩu</label>
+              <input
+                id="login-password"
+                className="input input--large"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                maxLength={200}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
 
-        {error && <p role="alert">{error}</p>}
+            {error && (
+              <p role="alert" className="banner banner--error">
+                {error}
+              </p>
+            )}
 
-        <button
-          type="submit"
-          disabled={submitting || username.trim() === '' || password === ''}
-        >
-          {submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
-        </button>
-      </form>
+            <div className="form-actions">
+              <button
+                type="submit"
+                className="button button--primary button--large button--block"
+                disabled={submitting || username.trim() === '' || password === ''}
+              >
+                {submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </main>
   )
 }

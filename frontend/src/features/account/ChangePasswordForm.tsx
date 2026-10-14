@@ -5,6 +5,15 @@ import { ApiError } from '../../shared/api/api-error'
 const MINIMUM_LENGTH = 8
 const MAXIMUM_LENGTH = 64
 const MAXIMUM_UTF8_BYTES = 72
+const ERROR_ID = 'change-password-error'
+
+type PasswordField = 'current' | 'new' | 'confirmation'
+
+/** A form-level message and the field it refers to, so that field can be marked invalid. */
+interface FormError {
+  readonly message: string
+  readonly field: PasswordField | null
+}
 
 interface ChangePasswordFormProps {
   readonly onSubmit: (currentPassword: string, newPassword: string) => Promise<void>
@@ -23,18 +32,40 @@ function policyError(password: string): string | null {
   return null
 }
 
-function serverError(error: unknown): string {
+function clientError(
+  currentPassword: string,
+  newPassword: string,
+  confirmation: string,
+): FormError | null {
+  const policy = policyError(newPassword)
+  if (policy) {
+    return { message: policy, field: 'new' }
+  }
+  if (newPassword !== confirmation) {
+    return { message: 'Xác nhận mật khẩu không khớp.', field: 'confirmation' }
+  }
+  if (newPassword === currentPassword) {
+    return { message: 'Mật khẩu mới phải khác mật khẩu hiện tại.', field: 'new' }
+  }
+  return null
+}
+
+function serverError(error: unknown): FormError {
   if (error instanceof ApiError) {
     switch (error.problem?.code) {
       case 'CURRENT_PASSWORD_INCORRECT':
-        return 'Mật khẩu hiện tại không đúng.'
+        return { message: 'Mật khẩu hiện tại không đúng.', field: 'current' }
       case 'PASSWORD_POLICY_VIOLATION':
-        return error.problem.errors?.[0]?.code === 'SAME_AS_CURRENT'
-          ? 'Mật khẩu mới phải khác mật khẩu hiện tại.'
-          : 'Mật khẩu mới không đáp ứng yêu cầu (8–64 ký tự).'
+        return {
+          message:
+            error.problem.errors?.[0]?.code === 'SAME_AS_CURRENT'
+              ? 'Mật khẩu mới phải khác mật khẩu hiện tại.'
+              : 'Mật khẩu mới không đáp ứng yêu cầu (8–64 ký tự).',
+          field: 'new',
+        }
     }
   }
-  return 'Không thể đổi mật khẩu lúc này. Vui lòng thử lại.'
+  return { message: 'Không thể đổi mật khẩu lúc này. Vui lòng thử lại.', field: null }
 }
 
 /** UC-3 Change Password. */
@@ -42,15 +73,12 @@ export function ChangePasswordForm({ onSubmit, onChanged }: ChangePasswordFormPr
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<FormError | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const invalid =
-      policyError(newPassword) ??
-      (newPassword !== confirmation ? 'Xác nhận mật khẩu không khớp.' : null) ??
-      (newPassword === currentPassword ? 'Mật khẩu mới phải khác mật khẩu hiện tại.' : null)
+    const invalid = clientError(currentPassword, newPassword, confirmation)
     if (invalid) {
       setError(invalid)
       return
@@ -68,42 +96,69 @@ export function ChangePasswordForm({ onSubmit, onChanged }: ChangePasswordFormPr
     }
   }
 
+  /** Marks the field the current error refers to and links it to the message. */
+  function invalidProps(field: PasswordField) {
+    return error?.field === field ? { 'aria-invalid': true, 'aria-describedby': ERROR_ID } : {}
+  }
+
   return (
-    <section className="password-form">
-      <h2>Đổi mật khẩu</h2>
-      <form onSubmit={handleSubmit} noValidate>
-        <label htmlFor="current-password">Mật khẩu hiện tại</label>
-        <input
-          id="current-password"
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-        />
+    <section className="card password-form" aria-labelledby="change-password-title">
+      <h2 id="change-password-title">Đổi mật khẩu</h2>
+      <form className="form" onSubmit={handleSubmit} noValidate>
+        <div className="field">
+          <label htmlFor="current-password">Mật khẩu hiện tại</label>
+          <input
+            id="current-password"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            {...invalidProps('current')}
+          />
+        </div>
 
-        <label htmlFor="new-password">Mật khẩu mới</label>
-        <input
-          id="new-password"
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
+        <div className="field">
+          <label htmlFor="new-password">Mật khẩu mới</label>
+          <input
+            id="new-password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            {...invalidProps('new')}
+          />
+        </div>
 
-        <label htmlFor="confirm-password">Nhập lại mật khẩu mới</label>
-        <input
-          id="confirm-password"
-          type="password"
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(event) => setConfirmation(event.target.value)}
-        />
+        <div className="field">
+          <label htmlFor="confirm-password">Nhập lại mật khẩu mới</label>
+          <input
+            id="confirm-password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            {...invalidProps('confirmation')}
+          />
+        </div>
 
-        {error && <p role="alert">{error}</p>}
+        {error && (
+          <p id={ERROR_ID} role="alert" className="banner banner--error">
+            {error.message}
+          </p>
+        )}
 
-        <button type="submit" disabled={submitting || currentPassword === ''}>
-          {submitting ? 'Đang lưu…' : 'Đổi mật khẩu'}
-        </button>
+        <div className="form-actions">
+          <button
+            type="submit"
+            className="button button--primary button--block"
+            disabled={submitting || currentPassword === ''}
+          >
+            {submitting ? 'Đang lưu…' : 'Đổi mật khẩu'}
+          </button>
+        </div>
       </form>
     </section>
   )

@@ -1,48 +1,363 @@
+/* Clinical Clarity tokens; names and values come from DESIGN.md. */
 :root {
-  font-family: system-ui, sans-serif;
-  color: #1f2937;
-  background: #ffffff;
+  --color-primary: #2a7fb8;
+  --color-secondary: #dcebf6;
+  --color-tertiary: #cfe1ee;
+  --color-neutral: #16383f;
+  --color-white: #ffffff;
+
+  --color-primary-strong: #236c9d;
+  --color-primary-hover: #1c5880;
+  --color-primary-active: #164766;
+  --color-text-secondary: #4a6670;
+  --color-border-control: #5f7f92;
+  --color-border-subtle: #c9d8e3;
+  --color-surface-hover: #f1f6fa;
+  --color-disabled-bg: #edf2f5;
+  --color-disabled-text: #5e7782;
+  --color-danger: #b91c1c;
+  --color-danger-hover: #a51a1a;
+  --color-danger-bg: #fdecec;
+  --color-success: #19693c;
+  --color-success-bg: #e6f4ec;
+  --color-warning: #8a5a00;
+  --color-warning-bg: #fff4db;
+  --color-info: #236c9d;
+  --color-info-bg: #dcebf6;
+
+  /* Font delivery is TBD (DESIGN.md), so only the fallback stacks apply. */
+  --font-family-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --border-width: 1px;
+  --border-width-focus: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --form-width: 22rem;
+
+  color-scheme: light;
+  font-family: var(--font-family-sans);
+  font-size: 100%;
+  color: var(--color-neutral);
+  background: var(--color-secondary);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
+  margin: 0;
+  min-height: 100vh;
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  background: var(--color-secondary);
+}
+
+h1,
+h2,
+p {
   margin: 0;
 }
 
-main {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 2rem;
+h1 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
 }
+
+h2 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: var(--border-width-focus) solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Product name shown in the shell header and above the login card. */
+.app-name {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--color-white);
+  border: var(--border-width) solid var(--color-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+/* Forms */
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font: inherit;
+  color: var(--color-neutral);
+  background: var(--color-white);
+  border: var(--border-width) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+}
+
+.input:hover {
+  border-color: var(--color-neutral);
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.input:disabled {
+  color: var(--color-disabled-text);
+  background: var(--color-disabled-bg);
+  border-color: var(--color-border-subtle);
+}
+
+.input--large {
+  min-height: 40px;
+}
+
+.form-actions {
+  margin-top: var(--space-2);
+}
+
+/* Buttons. A transparent border keeps filled buttons outlined in forced-colors mode. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.button:disabled {
+  color: var(--color-disabled-text);
+  background: var(--color-disabled-bg);
+  border-color: var(--color-border-subtle);
+  cursor: not-allowed;
+}
+
+.button--large {
+  min-height: 40px;
+  padding: 0 var(--space-5);
+}
+
+.button--block {
+  width: 100%;
+}
+
+.button--primary {
+  color: var(--color-white);
+  background: var(--color-primary-strong);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.button--primary:active:not(:disabled) {
+  background: var(--color-primary-active);
+}
+
+.button--secondary {
+  color: var(--color-primary-strong);
+  background: var(--color-white);
+  border-color: var(--color-primary);
+}
+
+.button--secondary:hover:not(:disabled) {
+  background: var(--color-secondary);
+}
+
+.button--secondary:active:not(:disabled) {
+  color: var(--color-primary-hover);
+  background: var(--color-tertiary);
+}
+
+.button--ghost {
+  color: var(--color-primary-strong);
+  background: transparent;
+}
+
+.button--ghost:hover:not(:disabled) {
+  background: var(--color-secondary);
+}
+
+.button--ghost:active:not(:disabled) {
+  background: var(--color-tertiary);
+}
+
+.button--ghost:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Feedback banners */
+
+.banner {
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid;
+  border-radius: var(--radius-sm);
+}
+
+.banner--error {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-left-color: var(--color-danger);
+}
+
+.banner--warning {
+  color: var(--color-neutral);
+  background: var(--color-warning-bg);
+  border-left-color: var(--color-warning);
+}
+
+.banner--success {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-left-color: var(--color-success);
+}
+
+/* Alerts rendered without a banner, such as the error boundary fallback. */
+p[role='alert']:not(.banner) {
+  padding: var(--space-6);
+  color: var(--color-danger);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button,
+  .input {
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+}
+
+/* Loading */
+
+.app-loading {
+  padding: var(--space-6);
+  color: var(--color-text-secondary);
+}
+
+/* UC-1 Login */
 
 .login-page {
-  max-width: 22rem;
-}
-
-.login-page form,
-.password-form form {
   display: grid;
-  gap: 0.5rem;
+  justify-items: center;
+  align-content: start;
+  min-height: 100vh;
+  padding: clamp(var(--space-6), 12vh, 7.5rem) var(--space-4) var(--space-6);
 }
 
-.login-page input,
-.password-form input {
-  padding: 0.5rem;
-  font: inherit;
+.login-panel {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: calc(var(--form-width) + 2 * var(--space-5));
 }
 
-.login-page button,
-.password-form button {
-  margin-top: 0.75rem;
-  padding: 0.6rem;
-  font: inherit;
+.login-panel .app-name {
+  padding-left: var(--space-1);
 }
 
-[role='alert'] {
-  color: #b91c1c;
+.login-panel h1 {
+  margin-bottom: var(--space-5);
 }
+
+/* Authenticated application shell */
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-white);
+  border-bottom: var(--border-width) solid var(--color-tertiary);
+}
+
+.app-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-main {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  max-width: 40rem;
+  padding: var(--space-6);
+}
+
+/* UC-3 Change Password */
 
 .password-form {
-  max-width: 22rem;
+  max-width: calc(var(--form-width) + 2 * var(--space-5));
+}
+
+.password-form h2 {
+  margin-bottom: var(--space-5);
+}
+
+@media (max-width: 600px) {
+  .app-header,
+  .app-main {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .app-main {
+    padding-top: var(--space-5);
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
 }
