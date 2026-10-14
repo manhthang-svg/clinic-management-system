@@ -8,6 +8,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -79,6 +80,19 @@ public class GlobalApiExceptionHandler {
         ProblemDetail problem = problemFactory.create(
                 ApiErrorCode.MALFORMED_REQUEST,
                 "The request body is missing or malformed.",
+                requestUri(request));
+
+        return response(problem);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException exception,
+            HttpServletRequest request) {
+
+        ProblemDetail problem = problemFactory.create(
+                ApiErrorCode.CONCURRENT_MODIFICATION,
+                "The resource was changed by another request. Reload it and try again.",
                 requestUri(request));
 
         return response(problem);
