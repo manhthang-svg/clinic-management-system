@@ -225,6 +225,55 @@ class AuthApiIT extends PostgresIntegrationTest {
         }
     }
 
+    @Test
+    void logoutRevokesTheSessionAndClearsTheCookie() throws Exception {
+        StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
+        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+
+        logout(token, FRONTEND_ORIGIN)
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
+
+        refresh(token, FRONTEND_ORIGIN).andExpect(status().isUnauthorized());
+        assertThat(auditEvents(doctor.id())).containsExactly("LOGIN_SUCCEEDED", "LOGOUT");
+        assertThat(jdbcTemplate.queryForObject(
+                "select revocation_reason from auth_sessions where staff_account_id = ?",
+                String.class, doctor.id())).isEqualTo("LOGOUT");
+    }
+
+    @Test
+    void logoutIsIdempotentAndKeepsOtherSessions() throws Exception {
+        StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
+        String firstComputer = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String secondComputer = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+
+        logout(firstComputer, FRONTEND_ORIGIN).andExpect(status().isNoContent());
+        logout(firstComputer, FRONTEND_ORIGIN).andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/v1/auth/logout").header(HttpHeaders.ORIGIN, FRONTEND_ORIGIN))
+                .andExpect(status().isNoContent());
+
+        refresh(secondComputer, FRONTEND_ORIGIN).andExpect(status().isOk());
+    }
+
+    @Test
+    void logoutRequiresTheFrontendOrigin() throws Exception {
+        StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
+        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+
+        logout(token, null).andExpect(status().isForbidden());
+        logout(token, "https://evil.example").andExpect(status().isForbidden());
+
+        refresh(token, FRONTEND_ORIGIN).andExpect(status().isOk());
+    }
+
+    private ResultActions logout(String refreshToken, String origin) throws Exception {
+        var request = post("/api/v1/auth/logout").cookie(new Cookie(COOKIE, refreshToken));
+        if (origin != null) {
+            request.header(HttpHeaders.ORIGIN, origin);
+        }
+        return mockMvc.perform(request);
+    }
+
     private StaffAccount account(Role role, AccountStatus status, boolean passwordChangeRequired) {
         String username = role.name().toLowerCase() + "." + UUID.randomUUID().toString().substring(0, 8);
         Instant now = Instant.now();

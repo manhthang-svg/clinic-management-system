@@ -64,7 +64,9 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         // Cookie-based endpoints verify the Origin header themselves (docs/security.md).
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout")
+                        .permitAll()
                         .anyRequest().denyAll())
                 .build();
     }
