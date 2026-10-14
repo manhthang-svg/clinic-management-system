@@ -4,8 +4,8 @@ This repository is the engineering foundation for a small private outpatient cli
 
 ## Monorepo Structure
 
-- `backend/` — Java 21 and Spring Boot backend (not initialized yet).
-- `frontend/` — React, TypeScript, and Vite frontend (not initialized yet).
+- `backend/` — Java 21 and Spring Boot backend.
+- `frontend/` — React, TypeScript, and Vite frontend.
 - `docs/` — source-of-truth documents for business context, architecture, interfaces, data, security, permissions, state transitions, and use cases.
 - `AGENTS.md` — primary engineering instructions for coding agents.
 - `CLAUDE.md` — Claude Code entry point to the shared instructions.
@@ -14,11 +14,24 @@ The intended architecture is a package-by-feature modular monolith backed by Pos
 
 ## Local Development
 
-> **TODO:** Add prerequisites, environment setup, and run commands after the backend and frontend are initialized.
+Prerequisites: Java 21, Node.js 24.15+, PostgreSQL 17 (or Docker), and Docker for backend integration tests.
+
+Backend environment variables:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Yes | PostgreSQL connection (default URL `jdbc:postgresql://localhost:5432/clinic`) |
+| `JWT_SIGNING_KEY` | Yes | Base64-encoded key of at least 256 bits; startup fails without it. Generate one per environment, e.g. `openssl rand -base64 32` |
+| `APP_FRONTEND_ORIGIN` | Deployed environments | Origin allowed to call refresh/logout (default `http://localhost:5173`) |
+| `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
+| `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
+
+Run the backend with `./mvnw spring-boot:run` in `backend/`, and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`).
 
 ## Testing
 
-> **TODO:** Add backend and frontend test commands when build tooling is introduced.
+- Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).
+- Frontend: `npm run verify` in `frontend/` (lint, tests, build).
 
 ## Architecture
 

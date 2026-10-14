@@ -36,6 +36,28 @@ management:
     health:
       show-details: never
 
+clinic:
+  security:
+    frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
+    jwt:
+      signing-key: ${JWT_SIGNING_KEY:}
+      issuer: ${JWT_ISSUER:clinic-backend}
+      audience: ${JWT_AUDIENCE:clinic-web}
+      access-token-ttl: 15m
+      clock-skew: 30s
+    session:
+      idle-timeout: 2h
+      absolute-lifetime: 12h
+      retention-after-end: 30d
+      cookie-name: clinic_refresh
+      cookie-secure: ${REFRESH_COOKIE_SECURE:true}
+    password:
+      bcrypt-strength: ${BCRYPT_STRENGTH:12}
+  bootstrap-admin:
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    full-name: ${BOOTSTRAP_ADMIN_FULL_NAME:Administrator}
+
 springdoc:
   api-docs:
     enabled: ${OPENAPI_ENABLED:false}
