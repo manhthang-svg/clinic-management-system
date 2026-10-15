@@ -168,7 +168,7 @@ Additional rules:
 - Restrict and monitor access to application and audit logs.
 - Decided security audit (14/10/2026): security and account-administration events are stored in a PostgreSQL audit table, separate from application logs. Fields: ID, time, actor account ID (empty when unauthenticated), event type, target account ID, outcome, correlation ID. Never stored: passwords, tokens, the submitted username of a failed login for an unknown account, medical data.
 - Event types: `LOGIN_SUCCEEDED`, `LOGIN_FAILED` (existing account only), `LOGIN_THROTTLED`, `LOGOUT`, `REFRESH_TOKEN_REUSE_DETECTED`, `PASSWORD_CHANGED`, `ACCOUNT_CREATED`, `ACCOUNT_UPDATED`, `ROLE_CHANGED`, `ACCOUNT_LOCKED`, `ACCOUNT_UNLOCKED`, `PASSWORD_RESET`. Audit events for clinical data are defined with the clinical use cases.
-- Audit records are append-only. No use case exposes them through the API yet, so only operators with database access can read them. They are not deleted until a retention period is set by legal review.
+- Audit records are append-only and are not deleted until a retention period is set by legal review. The only API read is UC-6 (decided 15/10/2026, AQ-18): Admin sees the 10 latest `LOGIN_SUCCEEDED`, `LOGOUT`, and `LOGIN_FAILED` events of one account, with time and event type. All other audit records are readable only by operators with database access.
 - An Admin action and its audit event are written in the same transaction. Failed-login events and throttling counters are committed even though the login fails.
 
 ## Sensitive Data Handling
@@ -180,6 +180,10 @@ Additional rules:
 - Use parameterized queries and framework binding; never construct SQL from untrusted input.
 - Decided technical baseline (14/10/2026): database storage and backups must be encrypted at rest by the hosting platform; database backups follow the same access restrictions as the database. No field-level encryption is applied now, because no current use case justifies the key-management cost; this is revisited after legal review.
 - **TBD (legal review):** retention and deletion periods for medical records and personal data, data-export rights, and breach response. The review must cover at least Vietnam's personal-data protection decree (Nghị định 13/2023/NĐ-CP) and the Ministry of Health rules on electronic medical records (Thông tư 46/2018/TT-BYT). These are legal decisions and are not made by the engineering team.
+
+## Admin Recovery
+
+The bootstrap Admin is the only Admin (AQ-17). If that Admin forgets the password or leaves, an operator with shell access to the server runs a maintenance command that resets the Admin password; there is no API for it. The command follows the temporary-password rule above, revokes all sessions, and writes `PASSWORD_RESET` with an empty actor. Details: AQ-19 in [`use-cases/staff-account.md`](use-cases/staff-account.md#decisions).
 
 ## Remaining Decisions
 

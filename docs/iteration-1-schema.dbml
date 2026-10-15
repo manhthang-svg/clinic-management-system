@@ -27,12 +27,25 @@ Table staff_accounts {
   created_at timestamptz [not null]
   updated_at timestamptz [not null]
   version bigint [not null]
+  date_of_birth date [note: 'Planned: optional, in the past (AQ-15)']
+  gender varchar(20) [note: 'Planned: MALE, FEMALE, OTHER; optional (AQ-15)']
+  address text [note: 'Planned: optional, at most 255 characters (AQ-15)']
+  created_by_account_id uuid [note: 'Planned: creating Admin; null for the bootstrap Admin']
+  last_login_at timestamptz [note: 'Planned: last successful login']
+  password_changed_at timestamptz [note: 'Planned: last UC-3 change or UC-11 reset']
+  lock_reason text [note: 'Planned: required while LOCKED, at most 500 characters (UC-10)']
+  locked_at timestamptz [note: 'Planned: set while LOCKED']
+  locked_by_account_id uuid [note: 'Planned: locking Admin, set while LOCKED']
 
   indexes {
     (role, status) [name: 'idx_staff_accounts_role_status']
   }
 
-  Note: 'Existing table. CHECK constraints enforce lowercase username, allowed role/status values, and non-negative failed-login attempts.'
+  Note: '''
+    Existing table. CHECK constraints enforce lowercase username, allowed role/status values, and non-negative failed-login attempts.
+    Planned additions (docs/use-cases/staff-account.md, Report 3): the columns marked "Planned", a unique index on lower(email), and a CHECK that lock_reason, locked_at, and locked_by_account_id are set exactly when status = LOCKED.
+    phone_number and email stay nullable because the bootstrap Admin is created without them; UC-4, UC-7, and UC-8 require them (AQ-06).
+  '''
 }
 
 Table auth_sessions {
@@ -71,6 +84,10 @@ Table security_audit_events {
   target_account_id uuid
   outcome varchar(10) [not null, note: 'SUCCESS or FAILURE']
   correlation_id varchar(64)
+
+  indexes {
+    (target_account_id, occurred_at) [name: 'idx_security_audit_events_target_occurred', note: 'Planned: UC-6 recent activity (AQ-18)']
+  }
 
   Note: 'Existing append-only security audit. Never stores passwords, tokens, or medical data.'
 }
@@ -175,7 +192,7 @@ Table staff_room_assignments {
     room_id [name: 'idx_staff_room_assignments_room_id']
   }
 
-  Note: 'Flyway must add a partial unique index on (staff_account_id, room_id) WHERE removed_at IS NULL. Shift scheduling is out of scope.'
+  Note: 'Flyway must add a partial unique index on (staff_account_id) WHERE removed_at IS NULL: a Doctor or Technician has at most one active room (BR-05, AQ-12, Report 3 UC-15). Shift scheduling is out of scope.'
 }
 
 // Patient profiles and reception

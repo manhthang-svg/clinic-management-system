@@ -19,7 +19,7 @@ Each specification should cover:
 
 | Use cases | Files | Status |
 | --- | --- | --- |
-| UC-1 → UC-11 Authentication, own profile, account management | [`staff-account.md`](staff-account.md) (shared model and open questions AQ-01 → AQ-15), [`UC-1`](UC-1-login.md), [`UC-2`](UC-2-logout.md), [`UC-3`](UC-3-change-password.md), [`UC-4`](UC-4-update-profile.md), [`UC-5`](UC-5-view-account-list.md), [`UC-6`](UC-6-view-account-detail.md), [`UC-7`](UC-7-create-account.md), [`UC-8`](UC-8-update-account-information.md), [`UC-9`](UC-9-assign-role.md), [`UC-10`](UC-10-lock-unlock-account.md), [`UC-11`](UC-11-reset-password.md) | Draft — open questions pending team decision |
+| UC-1 → UC-11 Authentication, own profile, account management | [`staff-account.md`](staff-account.md) (shared model, decisions AQ-01 → AQ-19, Report 3 differences), [`UC-1`](UC-1-login.md), [`UC-2`](UC-2-logout.md), [`UC-3`](UC-3-change-password.md), [`UC-4`](UC-4-update-profile.md), [`UC-5`](UC-5-view-account-list.md), [`UC-6`](UC-6-view-account-detail.md), [`UC-7`](UC-7-create-account.md), [`UC-8`](UC-8-update-account-information.md), [`UC-9`](UC-9-assign-role.md), [`UC-10`](UC-10-lock-unlock-account.md), [`UC-11`](UC-11-reset-password.md) | Draft — all open questions closed on 15/10/2026 (AQ-06 → AQ-19) |
 
 Proposed API paths in specifications are marked **ASSUMPTION** and become binding only when the use case is implemented.
 
