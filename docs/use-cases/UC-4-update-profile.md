@@ -4,7 +4,7 @@
 | --- | --- |
 | Feature | Profile Management |
 | Actors | Admin, Receptionist, Doctor, Technician, Cashier |
-| Source | `usecases.xlsx` sheet `Mới`; BR-04 |
+| Source | `usecases.xlsx` sheet `Mới`; BR-04; Report 3 UC-04 |
 | Shared model | [`staff-account.md`](staff-account.md) |
 
 ## Goal
@@ -18,18 +18,19 @@ A staff member views their own profile and updates their own contact information
 ## Primary Flow
 
 1. The user opens "My profile".
-2. The system shows username, full name, academic title, role, department (derived, BR-05), phone number, and email.
+2. The system shows, read-only: username, role, room and department (Doctor, Technician; AQ-12), status, created date, last sign-in time, full name, academic title, date of birth, gender, address. Editable: phone number and email.
 3. The user edits phone number and/or email and saves.
-4. The system validates the formats and saves the changes.
+4. The system validates the fields (AQ-06): both required, phone 10 digits starting with `0`, email valid, at most 100 characters, and not used by another account. It saves the changes and writes `ACCOUNT_UPDATED` to the audit table.
 5. The system shows the updated profile.
 
 ## Alternate and Error Flows
 
 | Case | Result |
 | --- | --- |
-| Invalid email or phone format | `400 REQUEST_VALIDATION_FAILED` |
+| Phone or email missing, invalid format, or too long | `400 REQUEST_VALIDATION_FAILED` |
 | Request tries to change any other field (name, title, role, username, status) | `400`; the field is not accepted. **ASSUMPTION:** reject instead of silently ignoring (api-conventions) |
-| Email or phone already used by another account | Only if uniqueness is confirmed (AQ-06) |
+| Email already used by another account | `409`. **ASSUMPTION:** code `EMAIL_ALREADY_EXISTS`. A duplicate phone number is allowed (AQ-06) |
+| No field changed | `200` with the unchanged profile; no audit event — **ASSUMPTION** |
 
 ## Business Rules and Permissions
 
@@ -50,8 +51,9 @@ A staff member views their own profile and updates their own contact information
 ## Acceptance Criteria
 
 1. A user can change their own phone number and email.
-2. A user cannot change their own name, title, role, username, or status through this use case.
-3. A user cannot view or change another account's profile through this use case.
+2. An email already used by another account is rejected and nothing changes.
+3. A user cannot change their own name, title, date of birth, gender, address, role, username, or status through this use case.
+4. A user cannot view or change another account's profile through this use case.
 
 ## Test Considerations
 
@@ -60,5 +62,5 @@ A staff member views their own profile and updates their own contact information
 
 ## Open Questions
 
-- AQ-06, AQ-12 in [`staff-account.md`](staff-account.md#open-questions).
-- **TBD:** Must a changed email be verified? No email-verification flow appears in the sources.
+- None. Decisions applied: AQ-06, AQ-12, AQ-15 in [`staff-account.md`](staff-account.md#decisions).
+- A changed email is not verified: neither the workbooks nor Report 3 define a verification flow.

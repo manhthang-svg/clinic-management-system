@@ -4,7 +4,7 @@
 | --- | --- |
 | Feature | Account Management |
 | Actors | Admin |
-| Source | `usecases.xlsx` sheet `Mới`; BR-03 |
+| Source | `usecases.xlsx` sheet `Mới`; BR-03; Report 3 UC-11 |
 | Shared model | [`staff-account.md`](staff-account.md) |
 
 ## Goal
@@ -20,7 +20,7 @@ Admin resets the password of a staff account when the user forgets it.
 ## Primary Flow
 
 1. Admin opens the account detail and chooses "Reset password".
-2. The system generates a 12-character one-time password and marks the account "password change required" (AQ-02).
+2. The system generates a 12-character one-time password and marks the account "password change required" (AQ-02). It resets the failed-login counter and clears any login throttle (Report 3 UC-11 step 5, AF-02).
 3. The system stores only its hash.
 4. The system revokes all sessions of the account (AQ-08), writes `PASSWORD_RESET` to the audit table, and shows the one-time password to Admin once.
 5. Admin gives the new password to the user through an out-of-band channel.
@@ -30,8 +30,8 @@ Admin resets the password of a staff account when the user forgets it.
 | Case | Result |
 | --- | --- |
 | Account not found | `404` |
-| Account is `LOCKED` | **ASSUMPTION:** reset is allowed and does not unlock the account |
-| Admin resets their own password | `409`; Admin uses UC-3 for their own password — **ASSUMPTION**, follows the AQ-07 rule that Admins do not administer their own account |
+| Account is `LOCKED` | Reset is allowed and does not unlock the account; the user cannot sign in until Admin unlocks it (Report 3 UC-11 AF-03) |
+| Admin resets their own password | `409`; Admin uses UC-3 for their own password (Report 3 UC-11 EF-01, AQ-07) |
 
 ## Business Rules and Permissions
 
@@ -40,7 +40,7 @@ Admin resets the password of a staff account when the user forgets it.
 
 ## State Changes and Transaction
 
-- Password hash update, flag, session revocation, and audit event in one transaction.
+- Password hash update, flag, counter and throttle reset, session revocation, and audit event in one transaction.
 
 ## Inputs and Outputs
 
@@ -52,7 +52,8 @@ Admin resets the password of a staff account when the user forgets it.
 
 1. After the reset, the old password no longer works, the one-time password does, and the user must change it at first login.
 2. The new password is not logged and cannot be retrieved again.
-3. Non-Admin roles receive `403`.
+3. A throttled account can log in with the one-time password right after the reset; a `LOCKED` account stays locked.
+4. Non-Admin roles receive `403`.
 
 ## Test Considerations
 

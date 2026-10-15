@@ -36,7 +36,7 @@ A staff member changes their own password after entering the current password.
 
 - BR-03: the correct current password is required.
 - Own account only. The account ID comes from the authenticated token, never from the request.
-- Repeated wrong current passwords: **ASSUMPTION** — they count toward the same failed-login counter as UC-1 (AQ-04), so an unattended session cannot be used to guess the password.
+- Repeated wrong current passwords count toward the same failed-login counter as UC-1 (AQ-04; confirmed by Report 3 UC-03 EF-02), so an unattended session cannot be used to guess the password. Report 3 also ends the session on the fifth failure; this is not adopted (see [`staff-account.md`](staff-account.md#report-3-differences-not-adopted)).
 
 ## State Changes and Transaction
 
