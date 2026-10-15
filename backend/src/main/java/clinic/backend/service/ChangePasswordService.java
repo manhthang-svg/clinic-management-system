@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.model.PasswordPolicy;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.repository.AuthSessionRepository;
 import clinic.backend.repository.SecurityAuditLog.EventType;
@@ -85,7 +85,7 @@ public class ChangePasswordService {
             return new PolicyViolated(Violation.SAME_AS_CURRENT);
         }
 
-        account.registerSuccessfulLogin(now);
+        account.clearFailedLoginAttempts(now);
         account.changePassword(passwordHasher.hash(newPassword), now);
         accounts.save(account);
         sessions.revokeAllForAccountExcept(accountId, currentSessionId, SessionRevocationReason.PASSWORD_CHANGED, now);

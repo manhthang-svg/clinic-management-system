@@ -1,10 +1,11 @@
 package clinic.backend.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.entity.StaffAccountEntity;
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -20,4 +21,6 @@ interface StaffAccountJpaRepository extends JpaRepository<StaffAccountEntity, UU
     Optional<StaffAccountEntity> findByUsernameForAuthentication(@Param("username") String username);
 
     boolean existsByRole(Role role);
+
+    List<StaffAccountEntity> findAllByPasswordHash(String passwordHash);
 }

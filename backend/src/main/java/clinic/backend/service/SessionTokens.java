@@ -3,7 +3,7 @@ package clinic.backend.service;
 import java.time.Instant;
 import java.util.UUID;
 
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 
 /**
  * Tokens handed to the client after a successful login or refresh.

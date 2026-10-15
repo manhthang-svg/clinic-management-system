@@ -12,8 +12,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import clinic.backend.dto.LoginRequest;
-import clinic.backend.model.AccountStatus;
-import clinic.backend.model.Role;
+import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.Role;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.model.Username;
 import clinic.backend.repository.StaffAccountRepository;

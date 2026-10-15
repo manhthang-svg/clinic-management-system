@@ -47,7 +47,7 @@ Names must remain within PostgreSQL identifier limits. No domain table names are
 - Store instants as `TIMESTAMPTZ` and map them to `Instant` or an intentionally selected offset-aware Java type.
 - Normalize application-generated instants to UTC. A user's local time zone is a presentation or explicit business concern, not the database server default.
 - Store monetary amounts as `NUMERIC` and use Java `BigDecimal`; never use floating-point types for money.
-- Monetary precision, scale, currency representation, and rounding rules are **TBD** pending business confirmation.
+- Money is whole VND (I1-D22). Proposed type `numeric(15,0)` (I1-D22a); rounding is still **TBD** (I1-D23). See [`iteration-1-decisions.md`](iteration-1-decisions.md).
 - Use native `BOOLEAN` for boolean values.
 - Choose bounded `VARCHAR` only when the bound is a real invariant; otherwise prefer `TEXT` over arbitrary limits.
 - Persist business statuses through an explicit stable mapping. Do not rely on Java enum ordinal values or scattered magic strings.
@@ -86,7 +86,7 @@ No domain indexes are defined yet.
 - Avoid environment-specific SQL and hidden dependencies on local database state.
 - Review destructive or long-running changes for backup, locking, compatibility, and rollback/roll-forward strategy before execution.
 - Tests must apply migrations to a clean PostgreSQL Testcontainers instance.
-- Seed data strategy is **TBD**; migrations must not invent business reference data.
+- Production migrations must not invent business reference data. Demo data for development lives in a separate Flyway location enabled only by the development profile (I1-D01, I1-D03); production reference data waits for an owner (I1-D02).
 
 ## JPA Conventions
 

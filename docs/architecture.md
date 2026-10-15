@@ -41,6 +41,7 @@ clinic.backend/
 ├── service/       # Use-case orchestration, transaction boundary, use-case results
 ├── repository/    # Repository interfaces and their JPA/Spring Data implementations
 ├── model/         # Domain models: business behavior, invariants, value objects, state transitions
+├── enums/         # Shared domain enum types and stable persistence/API codes
 ├── entity/        # JPA entities (persistence models)
 ├── config/        # Spring configuration, configuration properties, beans, runners, schedulers, filters
 ├── security/      # Security contracts and adapters (password hashing, token issuing, auth handlers)
@@ -54,12 +55,13 @@ Business capabilities (for example, account management) are not separate top-lev
 
 | Layer | Responsibility | May depend on |
 | --- | --- | --- |
-| `controller` | HTTP transport, request validation, DTO mapping, and response/error translation | `dto`, `service`, `model`, `security`, `exception` |
-| `dto` | Explicit request and response contracts | `service` results, `model` |
-| `service` | Use-case orchestration, authorization boundary, and transaction boundary | `model`, `repository` interfaces, `security` contracts, `util` |
-| `repository` | Repository contracts used by services and their JPA/Spring Data implementations | `model`, `entity`, frameworks |
-| `model` | Business behavior, invariants, value objects, and explicit state transitions | Model code and Java standard library |
-| `entity` | JPA mapping of persistence tables | `model` types, `repository` contract types, JPA |
+| `controller` | HTTP transport, request validation, DTO mapping, and response/error translation | `dto`, `service`, `model`, `enums`, `security`, `exception` |
+| `dto` | Explicit request and response contracts | `service` results, `model`, `enums` |
+| `service` | Use-case orchestration, authorization boundary, and transaction boundary | `model`, `enums`, `repository` interfaces, `security` contracts, `util` |
+| `repository` | Repository contracts used by services and their JPA/Spring Data implementations | `model`, `enums`, `entity`, frameworks |
+| `model` | Business behavior, invariants, value objects, and explicit state transitions | `enums`, model code, and Java standard library |
+| `enums` | Reusable domain classifications, roles, statuses, types, and stable codes | Java standard library only |
+| `entity` | JPA mapping of persistence tables | `model` and `enums` types, `repository` contract types, JPA |
 | `config` / `security` / `exception` | Cross-cutting technical concerns | Any layer they wire, plus frameworks |
 
 The required dependency direction is:
@@ -68,11 +70,13 @@ The required dependency direction is:
 Controller -> Service -> Repository (interface) -> Model
                  \-> Model
 Repository implementation -> Entity
+Model / Service / Repository / Entity -> Enums
 ```
 
 Additional rules:
 
-- Model code must not depend on Spring, HTTP, JPA, or any other layer.
+- Model code may depend on `enums`, but must not depend on Spring, HTTP, JPA, or any other layer.
+- Enum code must not depend on frameworks or any application layer.
 - Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
 - Controllers remain thin and never call repositories or touch JPA entities directly.
 - JPA entities are never exposed through REST APIs; DTOs must not reference entities.

@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import clinic.backend.model.PasswordPolicy;
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.model.Username;
 import clinic.backend.repository.SecurityAuditLog.EventType;

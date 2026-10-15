@@ -1,9 +1,10 @@
 package clinic.backend.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.model.Username;
 
@@ -22,6 +23,8 @@ public interface StaffAccountRepository {
     Optional<StaffAccount> findByUsernameForAuthentication(Username username);
 
     boolean existsWithRole(Role role);
+
+    List<StaffAccount> findAllByPasswordHash(String passwordHash);
 
     StaffAccount save(StaffAccount account);
 }

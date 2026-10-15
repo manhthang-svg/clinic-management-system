@@ -1,10 +1,12 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
-import clinic.backend.model.AccountStatus;
-import clinic.backend.model.Role;
+import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.Gender;
+import clinic.backend.enums.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -33,11 +35,21 @@ public class StaffAccountEntity {
     @Column(name = "academic_title")
     private String academicTitle;
 
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 20)
+    private Gender gender;
+
     @Column(name = "phone_number")
     private String phoneNumber;
 
     @Column(name = "email")
     private String email;
+
+    @Column(name = "address")
+    private String address;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 20)
@@ -55,6 +67,24 @@ public class StaffAccountEntity {
 
     @Column(name = "login_blocked_until")
     private Instant loginBlockedUntil;
+
+    @Column(name = "created_by_account_id", updatable = false)
+    private UUID createdByAccountId;
+
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
+    @Column(name = "lock_reason")
+    private String lockReason;
+
+    @Column(name = "locked_at")
+    private Instant lockedAt;
+
+    @Column(name = "locked_by_account_id")
+    private UUID lockedByAccountId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -76,13 +106,22 @@ public class StaffAccountEntity {
             String passwordHash,
             String fullName,
             String academicTitle,
+            LocalDate dateOfBirth,
+            Gender gender,
             String phoneNumber,
             String email,
+            String address,
             Role role,
             AccountStatus status,
             boolean passwordChangeRequired,
             int failedLoginAttempts,
             Instant loginBlockedUntil,
+            UUID createdByAccountId,
+            Instant lastLoginAt,
+            Instant passwordChangedAt,
+            String lockReason,
+            Instant lockedAt,
+            UUID lockedByAccountId,
             Instant createdAt,
             Instant updatedAt,
             Long version) {
@@ -92,13 +131,22 @@ public class StaffAccountEntity {
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.academicTitle = academicTitle;
+        this.dateOfBirth = dateOfBirth;
+        this.gender = gender;
         this.phoneNumber = phoneNumber;
         this.email = email;
+        this.address = address;
         this.role = role;
         this.status = status;
         this.passwordChangeRequired = passwordChangeRequired;
         this.failedLoginAttempts = failedLoginAttempts;
         this.loginBlockedUntil = loginBlockedUntil;
+        this.createdByAccountId = createdByAccountId;
+        this.lastLoginAt = lastLoginAt;
+        this.passwordChangedAt = passwordChangedAt;
+        this.lockReason = lockReason;
+        this.lockedAt = lockedAt;
+        this.lockedByAccountId = lockedByAccountId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -124,12 +172,24 @@ public class StaffAccountEntity {
         return academicTitle;
     }
 
+    public LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
     public String getPhoneNumber() {
         return phoneNumber;
     }
 
     public String getEmail() {
         return email;
+    }
+
+    public String getAddress() {
+        return address;
     }
 
     public Role getRole() {
@@ -150,6 +210,30 @@ public class StaffAccountEntity {
 
     public Instant getLoginBlockedUntil() {
         return loginBlockedUntil;
+    }
+
+    public UUID getCreatedByAccountId() {
+        return createdByAccountId;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public Instant getPasswordChangedAt() {
+        return passwordChangedAt;
+    }
+
+    public String getLockReason() {
+        return lockReason;
+    }
+
+    public Instant getLockedAt() {
+        return lockedAt;
+    }
+
+    public UUID getLockedByAccountId() {
+        return lockedByAccountId;
     }
 
     public Instant getCreatedAt() {

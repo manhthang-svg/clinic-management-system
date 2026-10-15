@@ -8,7 +8,7 @@ import clinic.backend.entity.AuthSessionEntity;
 import clinic.backend.entity.RefreshTokenEntity;
 import clinic.backend.model.AuthSession;
 import clinic.backend.model.RefreshToken;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.repository.AuthSessionRepository;
 import org.springframework.stereotype.Repository;
 

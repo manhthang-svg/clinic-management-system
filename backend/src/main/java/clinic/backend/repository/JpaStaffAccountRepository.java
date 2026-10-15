@@ -1,10 +1,11 @@
 package clinic.backend.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.entity.StaffAccountEntity;
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.model.Username;
 import clinic.backend.repository.StaffAccountRepository;
@@ -41,6 +42,13 @@ class JpaStaffAccountRepository implements StaffAccountRepository {
     }
 
     @Override
+    public List<StaffAccount> findAllByPasswordHash(String passwordHash) {
+        return repository.findAllByPasswordHash(passwordHash).stream()
+                .map(JpaStaffAccountRepository::toDomain)
+                .toList();
+    }
+
+    @Override
     public StaffAccount save(StaffAccount account) {
         return toDomain(repository.saveAndFlush(toEntity(account)));
     }
@@ -52,13 +60,22 @@ class JpaStaffAccountRepository implements StaffAccountRepository {
                 account.passwordHash(),
                 account.fullName(),
                 account.academicTitle(),
+                account.dateOfBirth(),
+                account.gender(),
                 account.phoneNumber(),
                 account.email(),
+                account.address(),
                 account.role(),
                 account.status(),
                 account.passwordChangeRequired(),
                 account.failedLoginAttempts(),
                 account.loginBlockedUntil(),
+                account.createdByAccountId(),
+                account.lastLoginAt(),
+                account.passwordChangedAt(),
+                account.lockReason(),
+                account.lockedAt(),
+                account.lockedByAccountId(),
                 account.createdAt(),
                 account.updatedAt(),
                 account.version());
@@ -71,13 +88,22 @@ class JpaStaffAccountRepository implements StaffAccountRepository {
                 entity.getPasswordHash(),
                 entity.getFullName(),
                 entity.getAcademicTitle(),
+                entity.getDateOfBirth(),
+                entity.getGender(),
                 entity.getPhoneNumber(),
                 entity.getEmail(),
+                entity.getAddress(),
                 entity.getRole(),
                 entity.getStatus(),
                 entity.isPasswordChangeRequired(),
                 entity.getFailedLoginAttempts(),
                 entity.getLoginBlockedUntil(),
+                entity.getCreatedByAccountId(),
+                entity.getLastLoginAt(),
+                entity.getPasswordChangedAt(),
+                entity.getLockReason(),
+                entity.getLockedAt(),
+                entity.getLockedByAccountId(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion());

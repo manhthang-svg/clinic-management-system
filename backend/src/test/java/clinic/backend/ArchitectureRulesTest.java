@@ -17,6 +17,7 @@ class ArchitectureRulesTest {
     private static final String SERVICE = "clinic.backend.service..";
     private static final String REPOSITORY = "clinic.backend.repository..";
     private static final String MODEL = "clinic.backend.model..";
+    private static final String ENUMS = "clinic.backend.enums..";
     private static final String ENTITY = "clinic.backend.entity..";
     private static final String CONFIG = "clinic.backend.config..";
     private static final String SECURITY = "clinic.backend.security..";
@@ -30,6 +31,15 @@ class ArchitectureRulesTest {
                     "jakarta.persistence..",
                     CONTROLLER, DTO, SERVICE, REPOSITORY, ENTITY, CONFIG, SECURITY, EXCEPTION)
             .because("domain models must remain independent from frameworks and other layers");
+
+    @ArchTest
+    static final ArchRule enums_must_not_depend_on_framework_or_application_layers = noClasses()
+            .that().resideInAPackage(ENUMS)
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.springframework..",
+                    "jakarta.persistence..",
+                    CONTROLLER, DTO, SERVICE, REPOSITORY, MODEL, ENTITY, CONFIG, SECURITY, EXCEPTION)
+            .because("shared domain enums must remain dependency-free stable types");
 
     @ArchTest
     static final ArchRule services_must_not_depend_on_web_or_persistence_details = noClasses()

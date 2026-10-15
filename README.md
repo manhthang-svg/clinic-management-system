@@ -44,8 +44,9 @@ Backend environment variables:
 | `APP_FRONTEND_ORIGIN` | Deployed environments | Origin allowed to call refresh/logout (default `http://localhost:5173`) |
 | `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
 | `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
+| `DEV_SEED_PASSWORD` | `dev` profile | Password given to the seeded demo accounts at startup (8–64 characters); without it they cannot log in |
 
-Run the backend with `./mvnw spring-boot:run` in `backend/`, and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`).
+Run the backend with `./mvnw spring-boot:run` in `backend/` (add `-Dspring-boot.run.profiles=dev` to load the demo master data from [`docs/demo-master-data.md`](docs/demo-master-data.md); never use the `dev` profile against a shared or production database), and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`).
 
 ## Testing
 
