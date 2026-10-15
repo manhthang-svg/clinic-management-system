@@ -4,7 +4,7 @@
 
 This document is the source of truth for the system's technical structure, dependency rules, and architecture boundaries. Confirmed business capabilities, actors, workflows, permissions, and state transitions belong in their respective documents and must not be inferred here.
 
-The system is a modular monolith. It is deployed as one backend application unless a later, evidenced requirement changes that decision.
+The system is a monolith organized by technical layer. It is deployed as one backend application unless a later, evidenced requirement changes that decision.
 
 ## Technology Baseline
 
@@ -32,52 +32,54 @@ The backend and frontend have independent build systems and dependency graphs. N
 
 ## Backend Organization
 
-Use package-by-feature. A future feature should follow this conceptual structure; `<base-package>` and `<feature>` are placeholders, not approved package or business-module names.
+Use package-by-layer. All backend code lives under the base package `clinic.backend`, grouped by technical layer:
 
 ```text
-<base-package>/
-├── <feature>/
-│   ├── api/
-│   ├── application/
-│   ├── domain/
-│   └── infrastructure/
-└── shared/        # Small, technical building blocks with proven cross-feature use
+clinic.backend/
+├── controller/    # REST controllers and HTTP-only helpers (e.g., cookies)
+├── dto/           # API contracts: request and response models
+├── service/       # Use-case orchestration, transaction boundary, use-case results
+├── repository/    # Repository interfaces and their JPA/Spring Data implementations
+├── model/         # Domain models: business behavior, invariants, value objects, state transitions
+├── entity/        # JPA entities (persistence models)
+├── config/        # Spring configuration, configuration properties, beans, runners, schedulers, filters
+├── security/      # Security contracts and adapters (password hashing, token issuing, auth handlers)
+├── exception/     # Global error handling and the standard API error model
+└── util/          # Small technical helpers with proven reuse
 ```
 
-Do not create feature packages until the corresponding business capability is confirmed. Do not use `shared` as a dumping ground for feature-specific models or behavior.
+Business capabilities (for example, account management) are not separate top-level packages; their classes live in the layer packages above. Use clear, capability-specific class names (for example, `LoginService`, `StaffAccountRepository`) so that each layer stays navigable as it grows. Do not use `util` as a dumping ground for business behavior.
 
 ### Layer Responsibilities
 
 | Layer | Responsibility | May depend on |
 | --- | --- | --- |
-| `api` | HTTP transport, request validation, DTO mapping, and response/error translation | `application` |
-| `application` | Use-case orchestration, authorization boundary, transaction boundary, and port definitions | `domain` |
-| `domain` | Business behavior, invariants, value objects, and explicit state transitions | Domain code and Java standard library |
-| `infrastructure` | JPA persistence, external integrations, security adapters, and implementations of required ports | `application`, `domain`, and frameworks |
+| `controller` | HTTP transport, request validation, DTO mapping, and response/error translation | `dto`, `service`, `model`, `security`, `exception` |
+| `dto` | Explicit request and response contracts | `service` results, `model` |
+| `service` | Use-case orchestration, authorization boundary, and transaction boundary | `model`, `repository` interfaces, `security` contracts, `util` |
+| `repository` | Repository contracts used by services and their JPA/Spring Data implementations | `model`, `entity`, frameworks |
+| `model` | Business behavior, invariants, value objects, and explicit state transitions | Model code and Java standard library |
+| `entity` | JPA mapping of persistence tables | `model` types, `repository` contract types, JPA |
+| `config` / `security` / `exception` | Cross-cutting technical concerns | Any layer they wire, plus frameworks |
 
 The required dependency direction is:
 
 ```text
-API -> Application -> Domain
-Infrastructure -> Application/Domain ports
+Controller -> Service -> Repository (interface) -> Model
+                 \-> Model
+Repository implementation -> Entity
 ```
 
 Additional rules:
 
-- Domain code must not depend on Spring, HTTP, JPA, or infrastructure implementations.
-- Infrastructure implements ports required by the application or domain layers.
-- Controllers remain thin and never call repositories directly.
-- REST DTOs and persistence models do not cross into the domain as transport or storage concerns.
-- Transaction boundaries belong to application/use-case operations, not controllers.
-- Important state changes are explicit domain behavior; they are not arbitrary field assignments.
+- Model code must not depend on Spring, HTTP, JPA, or any other layer.
+- Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
+- Controllers remain thin and never call repositories or touch JPA entities directly.
+- JPA entities are never exposed through REST APIs; DTOs must not reference entities.
+- Transaction boundaries belong to service operations, not controllers.
+- Important state changes are explicit model behavior; they are not arbitrary field assignments.
 
-## Feature and Module Boundaries
-
-A feature owns its internal API, application, domain, and infrastructure packages. Code in one feature must not import another feature's internal packages.
-
-Cross-feature collaboration must use a small, explicit application-level contract. The exact synchronous or asynchronous collaboration pattern is **TBD** until concrete use cases demonstrate the need. An in-process contract is the default for this modular monolith; no message broker is implied.
-
-Package visibility and architecture tests should enforce boundaries once backend code exists. This structure describes logical modules and does not require Java Platform Module System modules.
+These rules are enforced by `ArchitectureRulesTest` (ArchUnit).
 
 ## Frontend and Backend Separation
 
@@ -101,12 +103,12 @@ Cross-cutting technical concerns should be implemented consistently without leak
 - database migrations;
 - health and operational observability.
 
-Cross-cutting code must not become a route around feature boundaries.
+Cross-cutting code must not become a route around layer boundaries.
 
 ## Testing Boundaries
 
-- Domain tests are fast unit tests without Spring or a database.
-- Application tests exercise use cases with controlled test doubles for ports where appropriate.
+- Model tests are fast unit tests without Spring or a database.
+- Service tests exercise use cases with controlled test doubles for repository and security contracts where appropriate.
 - API tests verify HTTP contracts, validation, status codes, and authorization behavior.
 - Persistence and database integration tests use PostgreSQL Testcontainers and apply Flyway migrations.
 - Architecture tests may enforce package dependencies after the backend is initialized.

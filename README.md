@@ -10,7 +10,7 @@ This repository is the engineering foundation for a small private outpatient cli
 - `AGENTS.md` — primary engineering instructions for coding agents.
 - `CLAUDE.md` — Claude Code entry point to the shared instructions.
 
-The intended architecture is a package-by-feature modular monolith backed by PostgreSQL.
+The intended architecture is a package-by-layer monolith backed by PostgreSQL.
 
 ## Local Development
 
