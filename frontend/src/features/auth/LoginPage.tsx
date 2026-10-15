@@ -104,23 +104,24 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </div>
 
             {/* Quick Role Hint Pills */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
-              <span className="text-xs text-slate-400 font-medium mr-1">Vai trò:</span>
+            {/* Quick Role Hint Pills */}
+            <div className="flex items-center gap-1.5 mb-6 overflow-x-auto no-scrollbar">
+              <span className="text-xs text-slate-400 font-medium shrink-0 mr-0.5">Vai trò:</span>
               {[
-                { name: 'Bác sĩ', user: 'dr.an' },
+                { name: 'Bác sĩ', user: 'docter' },
                 { name: 'Lễ tân', user: 'receptionist' },
                 { name: 'Thu ngân', user: 'cashier' },
+                { name: 'Kỹ thuật viên', user: 'technician' },
                 { name: 'Quản trị', user: 'admin' },
               ].map((role) => (
                 <button
                   key={role.name}
                   type="button"
                   onClick={() => setUsername(role.user)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                    username === role.user
+                  className={`px-2 py-0.5 rounded-full text-[12px] font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${username === role.user
                       ? 'bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0] shadow-xs'
                       : 'bg-slate-100/90 text-slate-600 border border-slate-200/80 hover:bg-slate-200/80 hover:text-slate-800'
-                  }`}
+                    }`}
                   title={`Chọn tài khoản ${role.name}`}
                 >
                   {role.name}
