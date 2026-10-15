@@ -4,9 +4,9 @@ import { ApiClient } from './api-client'
 import { ApiError } from './api-error'
 
 describe('ApiClient', () => {
-  it('returns JSON and obtains authentication through an abstraction', async () => {
+  it('unwraps the ApiResponse envelope and obtains authentication through an abstraction', async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({ ready: true }), {
+      new Response(JSON.stringify({ success: true, message: 'Operation successful', data: { ready: true } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -62,21 +62,20 @@ describe('ApiClient', () => {
     await expect(client.request<void>('/status')).resolves.toBeUndefined()
   })
 
-  it('preserves standard Problem Details errors', async () => {
+  it('preserves the standard error response', async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
-          type: 'about:blank',
-          title: 'Request validation failed',
-          status: 400,
-          detail: 'One or more request fields are invalid.',
           code: 'REQUEST_VALIDATION_FAILED',
-          traceId: 'trace-id',
-          errors: [],
+          message: 'One or more request fields are invalid.',
+          details: { username: 'must not be blank' },
+          path: '/api/v1/resources',
+          requestId: 'request-id',
+          timestamp: '2026-10-15T07:00:00Z',
         }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/problem+json' },
+          headers: { 'Content-Type': 'application/json' },
         },
       ),
     )
@@ -89,10 +88,12 @@ describe('ApiClient', () => {
 
     expect(error).toBeInstanceOf(ApiError)
     expect(error).toMatchObject({
+      message: 'One or more request fields are invalid.',
       status: 400,
-      problem: {
+      errorResponse: {
         code: 'REQUEST_VALIDATION_FAILED',
-        traceId: 'trace-id',
+        details: { username: 'must not be blank' },
+        requestId: 'request-id',
       },
     })
   })
@@ -103,7 +104,7 @@ describe('ApiClient', () => {
       fetchImplementation: vi.fn<typeof fetch>().mockResolvedValue(
         new Response('not-json', {
           status: 500,
-          headers: { 'Content-Type': 'application/problem+json' },
+          headers: { 'Content-Type': 'application/json' },
         }),
       ),
     })

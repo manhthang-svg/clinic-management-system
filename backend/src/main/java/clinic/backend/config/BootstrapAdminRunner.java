@@ -1,8 +1,9 @@
 package clinic.backend.config;
 
-import clinic.backend.service.AdminBootstrapService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import clinic.backend.config.properties.BootstrapAdminProperties;
+import clinic.backend.service.StaffAccountService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -10,28 +11,23 @@ import org.springframework.stereotype.Component;
 /**
  * Creates the first Admin at startup when none exists and bootstrap settings are present (AQ-10).
  */
+@Slf4j
 @Component
-class BootstrapAdminRunner implements ApplicationRunner {
+@RequiredArgsConstructor
+public class BootstrapAdminRunner implements ApplicationRunner {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(BootstrapAdminRunner.class);
-
-    private final AdminBootstrapService bootstrapService;
+    private final StaffAccountService staffAccountService;
     private final BootstrapAdminProperties properties;
-
-    BootstrapAdminRunner(AdminBootstrapService bootstrapService, BootstrapAdminProperties properties) {
-        this.bootstrapService = bootstrapService;
-        this.properties = properties;
-    }
 
     @Override
     public void run(ApplicationArguments arguments) {
         if (!properties.isConfigured()) {
             return;
         }
-        bootstrapService
+        staffAccountService
                 .createFirstAdminIfMissing(properties.username(), properties.password(), properties.fullName())
-                .ifPresent(admin -> LOGGER.info(
+                .ifPresent(admin -> log.info(
                         "Bootstrap Admin account created [accountId={}]; its password must be changed at first login",
-                        admin.id()));
+                        admin.getId()));
     }
 }

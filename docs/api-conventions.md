@@ -8,7 +8,7 @@ This document is the source of truth for HTTP API design and contract convention
 
 - All version 1 endpoints use the `/api/v1` prefix.
 - JSON is the default request and response representation.
-- Use `application/json` for successful JSON payloads and `application/problem+json` for errors.
+- Use `application/json` for both successful payloads and errors. Bodies follow the standard success and error shapes below.
 - JSON property names use `camelCase`.
 - Dates and times use ISO 8601 strings. Instants include an offset and should normally be returned in UTC with `Z`.
 - UUIDs are represented as canonical strings.
@@ -118,34 +118,47 @@ POST /api/v1/{resources}/{id}/commands/{command-name}
 - Invalid transitions use the standard error format and an endpoint-documented `409` or `422` mapping.
 - No concrete command names are defined until state transitions and use cases are approved.
 
-## Standard Error Response
+## Standard Success Response
 
-Errors follow RFC 9457 Problem Details and may add stable extension fields:
+Every successful response that has a body wraps it in the `ApiResponse` envelope:
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Request validation failed",
-  "status": 400,
-  "detail": "One or more request fields are invalid.",
-  "instance": "/api/v1/{resources}",
-  "code": "REQUEST_VALIDATION_FAILED",
-  "traceId": "correlation-id",
-  "errors": [
-    {
-      "field": "fieldName",
-      "code": "INVALID_VALUE",
-      "message": "The value is invalid."
-    }
-  ]
+  "success": true,
+  "message": "Operation successful",
+  "data": {},
+  "timestamp": "2026-10-15T07:00:00Z"
 }
 ```
 
 Rules:
 
-- `code` is stable and machine-readable; business-specific codes are **TBD**.
-- `traceId` supports operational correlation and contains no sensitive data.
-- `errors` is included for field or request validation failures and omitted otherwise.
+- `data` holds the endpoint's response DTO; clients read the contract from `data`.
+- `204 No Content` responses have no body and no envelope.
+
+## Standard Error Response
+
+Errors use the `ErrorResponse` body:
+
+```json
+{
+  "code": "REQUEST_VALIDATION_FAILED",
+  "message": "One or more request fields are invalid.",
+  "details": {
+    "fieldName": "must not be blank"
+  },
+  "path": "/api/v1/{resources}",
+  "requestId": "request-id",
+  "timestamp": "2026-10-15T07:00:00Z"
+}
+```
+
+Rules:
+
+- `code` is stable and machine-readable. Codes are defined in the backend `ErrorCode` enum; several entries may share a code when only the message differs. Business-specific codes are added with the use case that needs them.
+- `details` maps a field to a human-readable message for request validation, and to a stable reason code for business-rule violations (for example `"newPassword": "SAME_AS_CURRENT"`). It is omitted when empty.
+- `requestId` equals the `X-Request-ID` response header, supports operational correlation, and contains no sensitive data. A client may send a safe `X-Request-ID` (`[A-Za-z0-9._-]{1,64}`); otherwise the server generates one.
+- `401` responses also carry `WWW-Authenticate: Bearer`.
 - Messages must not reveal stack traces, SQL, class names, secrets, authorization internals, or sensitive medical data.
 - Do not echo rejected sensitive values.
 

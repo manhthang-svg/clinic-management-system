@@ -1,21 +1,13 @@
 package clinic.backend.controller;
 
-import java.net.URI;
-import java.util.List;
-import java.util.UUID;
-
-import clinic.backend.dto.ChangePasswordRequest;
-import clinic.backend.exception.ApiErrorCode;
-import clinic.backend.exception.ApiFieldError;
-import clinic.backend.exception.ApiProblemFactory;
-import clinic.backend.security.AccessTokenClaims;
-import clinic.backend.service.ChangePasswordResult;
-import clinic.backend.service.ChangePasswordService;
-import jakarta.servlet.http.HttpServletRequest;
+import clinic.backend.dto.request.ChangePasswordRequest;
+import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.StaffAccountService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ProblemDetail;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,68 +16,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
+
 /**
  * Self-service operations on the caller's own account. The account always comes from the token.
  */
 @RestController
 @RequestMapping("/api/v1/me")
-class MeController {
+@RequiredArgsConstructor
+@Tag(name = "My account", description = "Self-service operations on the caller's own account")
+@SecurityRequirement(name = BEARER_SECURITY_SCHEME)
+public class MeController {
 
-    private final ChangePasswordService changePasswordService;
-    private final ApiProblemFactory problemFactory;
+    private final StaffAccountService staffAccountService;
 
-    MeController(ChangePasswordService changePasswordService, ApiProblemFactory problemFactory) {
-        this.changePasswordService = changePasswordService;
-        this.problemFactory = problemFactory;
-    }
-
-    /**
-     * UC-3 Change Password.
-     */
+    @Operation(summary = "UC-3 Change password")
     @PostMapping("/commands/change-password")
-    ResponseEntity<?> changePassword(
-            @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody ChangePasswordRequest request,
-            HttpServletRequest httpRequest) {
-
-        ChangePasswordResult result = changePasswordService.changePassword(
-                UUID.fromString(jwt.getSubject()),
-                UUID.fromString(jwt.getClaimAsString(AccessTokenClaims.SESSION_ID)),
-                request.currentPassword(),
-                request.newPassword());
-
-        URI instance = URI.create(httpRequest.getRequestURI());
-        return switch (result) {
-            case ChangePasswordResult.Changed changed -> ResponseEntity.noContent().build();
-            case ChangePasswordResult.CurrentPasswordIncorrect incorrect -> problem(problemFactory.create(
-                    ApiErrorCode.CURRENT_PASSWORD_INCORRECT,
-                    "The current password is incorrect.",
-                    instance));
-            case ChangePasswordResult.PolicyViolated violated -> problem(problemFactory.create(
-                    ApiErrorCode.PASSWORD_POLICY_VIOLATION,
-                    "The new password does not satisfy the password policy.",
-                    instance,
-                    List.of(new ApiFieldError("newPassword", violated.violation().name(), policyMessage(violated)))));
-            case ChangePasswordResult.AccountUnavailable unavailable -> ResponseEntity
-                    .status(ApiErrorCode.UNAUTHORIZED.status())
-                    .header(HttpHeaders.WWW_AUTHENTICATE, "Bearer")
-                    .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                    .body(problemFactory.create(
-                            ApiErrorCode.UNAUTHORIZED, "Authentication is required to access this resource.", instance));
-        };
-    }
-
-    private static String policyMessage(ChangePasswordResult.PolicyViolated violated) {
-        return switch (violated.violation()) {
-            case TOO_SHORT -> "The password must contain at least 8 characters.";
-            case TOO_LONG -> "The password must contain at most 64 characters and 72 bytes.";
-            case SAME_AS_CURRENT -> "The new password must differ from the current password.";
-        };
-    }
-
-    private static ResponseEntity<ProblemDetail> problem(ProblemDetail problem) {
-        return ResponseEntity.status(problem.getStatus())
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(problem);
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest request) {
+        staffAccountService.changePassword(StaffPrincipal.from(jwt), request);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -3,6 +3,7 @@ package clinic.backend;
 import clinic.backend.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,14 +22,14 @@ class ClinicManagementApplicationIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void deniesUnauthenticatedRequestsWithStandardProblemDetails() throws Exception {
+    void deniesUnauthenticatedRequestsWithTheStandardErrorResponse() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().contentType("application/problem+json"))
-                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(header().exists("X-Request-ID"))
                 .andExpect(header().string("WWW-Authenticate", "Bearer"))
-                .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.traceId").isNotEmpty());
+                .andExpect(jsonPath("$.path").value("/actuator/health"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 }

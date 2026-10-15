@@ -11,16 +11,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import clinic.backend.dto.LoginRequest;
+import clinic.backend.dto.request.LoginRequest;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
-import clinic.backend.model.StaffAccount;
-import clinic.backend.model.Username;
 import clinic.backend.repository.StaffAccountRepository;
-import clinic.backend.security.AccessTokenClaims;
 import clinic.backend.security.PasswordHasher;
+import clinic.backend.security.jwt.AccessTokenClaims;
 import clinic.backend.support.PostgresIntegrationTest;
-import clinic.backend.util.UuidV7Generator;
+import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -73,14 +72,15 @@ class AuthApiIT extends PostgresIntegrationTest {
     void loginReturnsAnAccessTokenAndAStrictHttpOnlyRefreshCookie() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
 
-        MockHttpServletResponse response = login(doctor.username().value().toUpperCase(), PASSWORD)
+        MockHttpServletResponse response = login(doctor.getUsername().toUpperCase(), PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.passwordChangeRequired").value(false))
-                .andExpect(jsonPath("$.account.id").value(doctor.id().toString()))
-                .andExpect(jsonPath("$.account.role").value("DOCTOR"))
-                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.data.passwordChangeRequired").value(false))
+                .andExpect(jsonPath("$.data.account.id").value(doctor.getId().toString()))
+                .andExpect(jsonPath("$.data.account.role").value("DOCTOR"))
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
                 .andReturn().getResponse();
 
         String setCookie = response.getHeader(HttpHeaders.SET_COOKIE);
@@ -90,19 +90,19 @@ class AuthApiIT extends PostgresIntegrationTest {
                 // 12-hour absolute session lifetime, allowing for the time the request took.
                 .containsPattern("Max-Age=43(1[89]\\d|200);");
 
-        Jwt jwt = jwtDecoder.decode(body(response).get("accessToken").asText());
-        assertThat(jwt.getSubject()).isEqualTo(doctor.id().toString());
+        Jwt jwt = jwtDecoder.decode(body(response).get("data").get("accessToken").asText());
+        assertThat(jwt.getSubject()).isEqualTo(doctor.getId().toString());
         assertThat(jwt.getClaimAsString(AccessTokenClaims.ROLE)).isEqualTo("DOCTOR");
         assertThat(jwt.getClaims()).doesNotContainKey(AccessTokenClaims.PASSWORD_CHANGE_REQUIRED);
         assertThat(jwt.getExpiresAt()).isEqualTo(jwt.getIssuedAt().plusSeconds(15 * 60));
-        assertThat(auditEvents(doctor.id())).containsExactly("LOGIN_SUCCEEDED");
+        assertThat(auditEvents(doctor.getId())).containsExactly("LOGIN_SUCCEEDED");
     }
 
     @Test
     void wrongPasswordAndUnknownUsernameProduceTheSameResponse() throws Exception {
         StaffAccount cashier = account(Role.CASHIER, AccountStatus.ACTIVE, false);
 
-        JsonNode wrongPassword = body(login(cashier.username().value(), "wrong-password")
+        JsonNode wrongPassword = body(login(cashier.getUsername(), "wrong-password")
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
                 .andReturn().getResponse());
@@ -111,15 +111,16 @@ class AuthApiIT extends PostgresIntegrationTest {
                 .andReturn().getResponse());
 
         assertThat(wrongPassword.get("code").asText()).isEqualTo("INVALID_CREDENTIALS");
-        assertThat(withoutTraceId(wrongPassword)).isEqualTo(withoutTraceId(unknownUser));
-        assertThat(auditEvents(cashier.id())).containsExactly("LOGIN_FAILED");
+        assertThat(withoutRequestSpecificFields(wrongPassword))
+                .isEqualTo(withoutRequestSpecificFields(unknownUser));
+        assertThat(auditEvents(cashier.getId())).containsExactly("LOGIN_FAILED");
     }
 
     @Test
     void lockedAccountCannotLogInWithTheCorrectPassword() throws Exception {
         StaffAccount locked = account(Role.RECEPTIONIST, AccountStatus.LOCKED, false);
 
-        login(locked.username().value(), PASSWORD)
+        login(locked.getUsername(), PASSWORD)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
@@ -128,15 +129,15 @@ class AuthApiIT extends PostgresIntegrationTest {
     void fiveFailedLoginsBlockTheAccountTemporarilyAndAreAudited() throws Exception {
         StaffAccount technician = account(Role.TECHNICIAN, AccountStatus.ACTIVE, false);
         for (int attempt = 0; attempt < 5; attempt++) {
-            login(technician.username().value(), "wrong-password").andExpect(status().isUnauthorized());
+            login(technician.getUsername(), "wrong-password").andExpect(status().isUnauthorized());
         }
 
-        login(technician.username().value(), PASSWORD).andExpect(status().isUnauthorized());
+        login(technician.getUsername(), PASSWORD).andExpect(status().isUnauthorized());
 
-        StaffAccount stored = accounts.findById(technician.id()).orElseThrow();
-        assertThat(stored.status()).isEqualTo(AccountStatus.ACTIVE);
-        assertThat(stored.loginBlockedUntil()).isAfter(Instant.now().plusSeconds(14 * 60));
-        assertThat(auditEvents(technician.id())).contains("LOGIN_THROTTLED");
+        StaffAccount stored = accounts.findById(technician.getId()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(stored.getLoginBlockedUntil()).isAfter(Instant.now().plusSeconds(14 * 60));
+        assertThat(auditEvents(technician.getId())).contains("LOGIN_THROTTLED");
     }
 
     @Test
@@ -148,7 +149,7 @@ class AuthApiIT extends PostgresIntegrationTest {
         try {
             Callable<Integer> attempt = () -> {
                 start.await();
-                return login(technician.username().value(), "wrong-password")
+                return login(technician.getUsername(), "wrong-password")
                         .andReturn().getResponse().getStatus();
             };
             List<Future<Integer>> results = new ArrayList<>();
@@ -163,13 +164,13 @@ class AuthApiIT extends PostgresIntegrationTest {
             }
 
             assertThat(statuses).containsOnly(401);
-            StaffAccount stored = accounts.findById(technician.id()).orElseThrow();
-            assertThat(stored.failedLoginAttempts()).isZero();
-            assertThat(stored.loginBlockedUntil()).isAfter(Instant.now().plusSeconds(14 * 60));
-            assertThat(auditEvents(technician.id()))
+            StaffAccount stored = accounts.findById(technician.getId()).orElseThrow();
+            assertThat(stored.getFailedLoginAttempts()).isZero();
+            assertThat(stored.getLoginBlockedUntil()).isAfter(Instant.now().plusSeconds(14 * 60));
+            assertThat(auditEvents(technician.getId()))
                     .filteredOn("LOGIN_FAILED"::equals)
                     .hasSize(parallelRequests);
-            assertThat(auditEvents(technician.id()))
+            assertThat(auditEvents(technician.getId()))
                     .filteredOn("LOGIN_THROTTLED"::equals)
                     .hasSize(1);
         } finally {
@@ -181,23 +182,23 @@ class AuthApiIT extends PostgresIntegrationTest {
     void passwordChangeRequiredIsCarriedInTheToken() throws Exception {
         StaffAccount admin = account(Role.ADMIN, AccountStatus.ACTIVE, true);
 
-        MockHttpServletResponse response = login(admin.username().value(), PASSWORD)
+        MockHttpServletResponse response = login(admin.getUsername(), PASSWORD)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.passwordChangeRequired").value(true))
+                .andExpect(jsonPath("$.data.passwordChangeRequired").value(true))
                 .andReturn().getResponse();
 
-        Jwt jwt = jwtDecoder.decode(body(response).get("accessToken").asText());
+        Jwt jwt = jwtDecoder.decode(body(response).get("data").get("accessToken").asText());
         assertThat(jwt.getClaimAsBoolean(AccessTokenClaims.PASSWORD_CHANGE_REQUIRED)).isTrue();
     }
 
     @Test
     void refreshRotatesTheCookieAndDetectsReuse() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String firstToken = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String firstToken = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         MockHttpServletResponse refreshed = refresh(firstToken, FRONTEND_ORIGIN)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.account.id").value(doctor.id().toString()))
+                .andExpect(jsonPath("$.data.account.id").value(doctor.getId().toString()))
                 .andReturn().getResponse();
         String secondToken = refreshCookie(refreshed);
         assertThat(secondToken).isNotEqualTo(firstToken);
@@ -208,16 +209,16 @@ class AuthApiIT extends PostgresIntegrationTest {
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
         refresh(secondToken, FRONTEND_ORIGIN).andExpect(status().isUnauthorized());
 
-        assertThat(auditEvents(doctor.id())).contains("REFRESH_TOKEN_REUSE_DETECTED");
+        assertThat(auditEvents(doctor.getId())).contains("REFRESH_TOKEN_REUSE_DETECTED");
         assertThat(jdbcTemplate.queryForObject(
                 "select revocation_reason from auth_sessions where staff_account_id = ?",
-                String.class, doctor.id())).isEqualTo("REUSE_DETECTED");
+                String.class, doctor.getId())).isEqualTo("REUSE_DETECTED");
     }
 
     @Test
     void refreshRequiresTheFrontendOrigin() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String token = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         refresh(token, null).andExpect(status().isForbidden());
         refresh(token, "https://evil.example").andExpect(status().isForbidden());
@@ -228,8 +229,8 @@ class AuthApiIT extends PostgresIntegrationTest {
     @Test
     void refreshFailsAfterTheAccountIsLocked() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST, AccountStatus.ACTIVE, false);
-        String token = refreshCookie(login(receptionist.username().value(), PASSWORD).andReturn().getResponse());
-        jdbcTemplate.update("update staff_accounts set status = 'LOCKED' where id = ?", receptionist.id());
+        String token = refreshCookie(login(receptionist.getUsername(), PASSWORD).andReturn().getResponse());
+        jdbcTemplate.update("update staff_accounts set status = 'LOCKED' where id = ?", receptionist.getId());
 
         refresh(token, FRONTEND_ORIGIN).andExpect(status().isUnauthorized());
     }
@@ -237,7 +238,7 @@ class AuthApiIT extends PostgresIntegrationTest {
     @Test
     void concurrentRefreshesWithTheSameTokenSucceedAtMostOnce() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String token = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         int parallelRequests = 4;
         ExecutorService executor = Executors.newFixedThreadPool(parallelRequests);
@@ -267,24 +268,24 @@ class AuthApiIT extends PostgresIntegrationTest {
     @Test
     void logoutRevokesTheSessionAndClearsTheCookie() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String token = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         logout(token, FRONTEND_ORIGIN)
                 .andExpect(status().isNoContent())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
 
         refresh(token, FRONTEND_ORIGIN).andExpect(status().isUnauthorized());
-        assertThat(auditEvents(doctor.id())).containsExactly("LOGIN_SUCCEEDED", "LOGOUT");
+        assertThat(auditEvents(doctor.getId())).containsExactly("LOGIN_SUCCEEDED", "LOGOUT");
         assertThat(jdbcTemplate.queryForObject(
                 "select revocation_reason from auth_sessions where staff_account_id = ?",
-                String.class, doctor.id())).isEqualTo("LOGOUT");
+                String.class, doctor.getId())).isEqualTo("LOGOUT");
     }
 
     @Test
     void logoutIsIdempotentAndKeepsOtherSessions() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String firstComputer = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
-        String secondComputer = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String firstComputer = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
+        String secondComputer = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         logout(firstComputer, FRONTEND_ORIGIN).andExpect(status().isNoContent());
         logout(firstComputer, FRONTEND_ORIGIN).andExpect(status().isNoContent());
@@ -297,7 +298,7 @@ class AuthApiIT extends PostgresIntegrationTest {
     @Test
     void logoutRequiresTheFrontendOrigin() throws Exception {
         StaffAccount doctor = account(Role.DOCTOR, AccountStatus.ACTIVE, false);
-        String token = refreshCookie(login(doctor.username().value(), PASSWORD).andReturn().getResponse());
+        String token = refreshCookie(login(doctor.getUsername(), PASSWORD).andReturn().getResponse());
 
         logout(token, null).andExpect(status().isForbidden());
         logout(token, "https://evil.example").andExpect(status().isForbidden());
@@ -316,9 +317,17 @@ class AuthApiIT extends PostgresIntegrationTest {
     private StaffAccount account(Role role, AccountStatus status, boolean passwordChangeRequired) {
         String username = role.name().toLowerCase() + "." + UUID.randomUUID().toString().substring(0, 8);
         Instant now = Instant.now();
-        return accounts.save(StaffAccount.restore(
-                ids.next(), new Username(username), passwordHasher.hash(PASSWORD), "Test " + role,
-                null, null, null, role, status, passwordChangeRequired, 0, null, now, now, null));
+        return accounts.save(StaffAccount.builder()
+                .id(ids.next())
+                .username(username)
+                .passwordHash(passwordHasher.hash(PASSWORD))
+                .fullName("Test " + role)
+                .role(role)
+                .status(status)
+                .passwordChangeRequired(passwordChangeRequired)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
     }
 
     private ResultActions login(String username, String password) throws Exception {
@@ -345,9 +354,10 @@ class AuthApiIT extends PostgresIntegrationTest {
         return objectMapper.readTree(response.getContentAsString());
     }
 
-    private static JsonNode withoutTraceId(JsonNode problem) {
-        ObjectNode copy = problem.deepCopy();
-        copy.remove("traceId");
+    private static JsonNode withoutRequestSpecificFields(JsonNode error) {
+        ObjectNode copy = error.deepCopy();
+        copy.remove("requestId");
+        copy.remove("timestamp");
         return copy;
     }
 

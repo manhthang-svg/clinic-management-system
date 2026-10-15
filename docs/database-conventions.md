@@ -90,10 +90,10 @@ No domain indexes are defined yet.
 
 ## JPA Conventions
 
-- JPA entities live in `entity`; Spring Data repositories and their adapters live in `repository`.
+- JPA entities live in `entity`; Spring Data repositories live in `repository`.
 - Do not expose JPA entities through REST APIs or pass Spring Data `Page` as an API contract.
-- Keep domain behavior independent of JPA and Spring annotations.
-- Repository implementations implement the repository interfaces used by services; controllers never access repositories directly.
+- Business rules and state transitions are entity methods; do not change governed state through setters.
+- Only services use repositories; controllers never access repositories directly. Conditional updates that must be atomic (for example refresh-token rotation) are explicit `@Modifying` queries.
 - Map every persisted field intentionally, including nullability, length when meaningful, column name, and status conversion.
 - Prefer lazy loading for associations. Avoid unbounded object graphs and unintended eager loading.
 - Configure cascade and orphan removal only when aggregate ownership and lifecycle rules explicitly require them.

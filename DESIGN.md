@@ -262,7 +262,7 @@ Placeholders are examples, never a replacement for the label.
 - Field-level errors appear under the field; a summary at the top is added only when a form has more than one invalid field.
 - Every banner includes text. An icon is optional and decorative (`aria-hidden="true"`).
 - Messages are short, specific Vietnamese sentences that say what happened and what to do, matching the existing tone (`Mật khẩu hiện tại không đúng.`).
-- Never show raw API messages, stack traces, correlation IDs as primary content, tokens, or medical data in error messages. A support reference (`traceId`) may be shown as secondary, monospaced text if a use case asks for it.
+- Never show raw API messages, stack traces, correlation IDs as primary content, tokens, or medical data in error messages. A support reference (`requestId`) may be shown as secondary, monospaced text if a use case asks for it.
 - The forced password change notice (UC-3) is a blocking warning.
 
 ## Layout

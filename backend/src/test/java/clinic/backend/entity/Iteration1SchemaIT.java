@@ -8,7 +8,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
-import clinic.backend.dto.LoginRequest;
+import clinic.backend.dto.request.LoginRequest;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditOutcome;
 import clinic.backend.enums.AuditedEntityType;
@@ -19,8 +19,6 @@ import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
 import clinic.backend.enums.SimulatedInsuranceCardStatus;
-import clinic.backend.model.StaffAccount;
-import clinic.backend.model.Username;
 import clinic.backend.repository.StaffAccountRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -115,7 +113,7 @@ class Iteration1SchemaIT {
     }
 
     @Test
-    void mapsAllStaffAccountFieldsBetweenTheDomainAndDatabase() {
+    void mapsAllStaffAccountFieldsToTheDatabase() {
         UUID id = UUID.randomUUID();
         UUID actorId = jdbcTemplate.queryForObject(
                 "select id from staff_accounts order by username limit 1", UUID.class);
@@ -124,65 +122,62 @@ class Iteration1SchemaIT {
         Instant passwordChangedAt = createdAt.plusSeconds(120);
         Instant lockedAt = createdAt.plusSeconds(180);
 
-        StaffAccount account = StaffAccount.restore(
-                id,
-                new Username("mapped.account"),
-                "{bcrypt}mapped-hash",
-                "Mapped Account",
-                "BSCKI",
-                LocalDate.of(1990, 5, 20),
-                Gender.FEMALE,
-                "0912345678",
-                "mapped.account@example.com",
-                "1 Nguyen Trai",
-                Role.DOCTOR,
-                AccountStatus.LOCKED,
-                false,
-                0,
-                null,
-                actorId,
-                lastLoginAt,
-                passwordChangedAt,
-                "Temporary lock",
-                lockedAt,
-                actorId,
-                createdAt,
-                lockedAt,
-                null);
+        StaffAccount account = StaffAccount.builder()
+                .id(id)
+                .username("mapped_account")
+                .passwordHash("{bcrypt}mapped-hash")
+                .fullName("Mapped Account")
+                .academicTitle("BSCKI")
+                .dateOfBirth(LocalDate.of(1990, 5, 20))
+                .gender(Gender.FEMALE)
+                .phoneNumber("0912345678")
+                .email("mapped.account@example.com")
+                .address("1 Nguyen Trai")
+                .role(Role.DOCTOR)
+                .status(AccountStatus.LOCKED)
+                .createdByAccountId(actorId)
+                .lastLoginAt(lastLoginAt)
+                .passwordChangedAt(passwordChangedAt)
+                .lockReason("Temporary lock")
+                .lockedAt(lockedAt)
+                .lockedByAccountId(actorId)
+                .createdAt(createdAt)
+                .updatedAt(lockedAt)
+                .build();
 
         staffAccounts.save(account);
         StaffAccount restored = staffAccounts.findById(id).orElseThrow();
 
-        assertThat(restored.dateOfBirth()).isEqualTo(LocalDate.of(1990, 5, 20));
-        assertThat(restored.gender()).isEqualTo(Gender.FEMALE);
-        assertThat(restored.address()).isEqualTo("1 Nguyen Trai");
-        assertThat(restored.createdByAccountId()).isEqualTo(actorId);
-        assertThat(restored.lastLoginAt()).isEqualTo(lastLoginAt);
-        assertThat(restored.passwordChangedAt()).isEqualTo(passwordChangedAt);
-        assertThat(restored.lockReason()).isEqualTo("Temporary lock");
-        assertThat(restored.lockedAt()).isEqualTo(lockedAt);
-        assertThat(restored.lockedByAccountId()).isEqualTo(actorId);
+        assertThat(restored.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 5, 20));
+        assertThat(restored.getGender()).isEqualTo(Gender.FEMALE);
+        assertThat(restored.getAddress()).isEqualTo("1 Nguyen Trai");
+        assertThat(restored.getCreatedByAccountId()).isEqualTo(actorId);
+        assertThat(restored.getLastLoginAt()).isEqualTo(lastLoginAt);
+        assertThat(restored.getPasswordChangedAt()).isEqualTo(passwordChangedAt);
+        assertThat(restored.getLockReason()).isEqualTo("Temporary lock");
+        assertThat(restored.getLockedAt()).isEqualTo(lockedAt);
+        assertThat(restored.getLockedByAccountId()).isEqualTo(actorId);
     }
 
     @Test
     void mapsCatalogEntitiesWithTheirEnums() {
-        List<RoomEntity> rooms = entityManager
-                .createQuery("select room from RoomEntity room where room.code = 'XN-SH'", RoomEntity.class)
+        List<Room> rooms = entityManager
+                .createQuery("select room from Room room where room.code = 'XN-SH'", Room.class)
                 .getResultList();
         assertThat(rooms).singleElement().satisfies(room -> {
             assertThat(room.getType()).isEqualTo(RoomType.PARACLINICAL);
             assertThat(room.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
         });
 
-        MedicalServiceEntity examination = entityManager.createQuery(
-                        "select service from MedicalServiceEntity service where service.type = :type",
-                        MedicalServiceEntity.class)
+        MedicalService examination = entityManager.createQuery(
+                        "select service from MedicalService service where service.type = :type",
+                        MedicalService.class)
                 .setParameter("type", MedicalServiceType.EXAMINATION)
                 .getSingleResult();
         assertThat(examination.getClinicPrice()).isEqualByComparingTo("150000");
         assertThat(examination.getDepartmentId()).isNull();
 
-        SimulatedInsuranceCardEntity card = entityManager.find(SimulatedInsuranceCardEntity.class, "HT3790000000003");
+        SimulatedInsuranceCard card = entityManager.find(SimulatedInsuranceCard.class, "HT3790000000003");
         assertThat(card.getCoverageRate()).isEqualTo((short) 95);
         assertThat(card.getStatus()).isEqualTo(SimulatedInsuranceCardStatus.VALID);
     }
@@ -194,13 +189,13 @@ class Iteration1SchemaIT {
                 "select id from staff_accounts where username = 'lt.nguyenthihong'", UUID.class);
         UUID room = jdbcTemplate.queryForObject("select id from rooms where code = 'PK-NGOAI'", UUID.class);
 
-        transactionTemplate.executeWithoutResult(status -> entityManager.persist(new BusinessAuditEventEntity(
+        transactionTemplate.executeWithoutResult(status -> entityManager.persist(new BusinessAuditEvent(
                 id, Instant.now(), actor, BusinessAuditEventType.ROOM_UPDATED, AuditedEntityType.ROOM, room,
                 AuditOutcome.SUCCESS, new String[] {"name"},
                 "{\"name\": {\"old\": \"A\", \"new\": \"B\"}}", null)));
 
-        BusinessAuditEventEntity stored = transactionTemplate.execute(
-                status -> entityManager.find(BusinessAuditEventEntity.class, id));
+        BusinessAuditEvent stored = transactionTemplate.execute(
+                status -> entityManager.find(BusinessAuditEvent.class, id));
         assertThat(stored.getChangedFields()).containsExactly("name");
         assertThat(stored.getChanges()).contains("\"old\"");
     }
