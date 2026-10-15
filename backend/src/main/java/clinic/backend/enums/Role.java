@@ -1,4 +1,4 @@
-package clinic.backend.model;
+package clinic.backend.enums;
 
 /**
  * The five staff roles; each account has exactly one (BR-02).

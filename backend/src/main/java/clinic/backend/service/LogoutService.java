@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import clinic.backend.model.AuthSession;
 import clinic.backend.model.RefreshToken;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.repository.AuthSessionRepository;
 import clinic.backend.repository.SecurityAuditLog.EventType;
 import clinic.backend.repository.SecurityAuditLog.Outcome;

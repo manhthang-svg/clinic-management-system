@@ -2,8 +2,13 @@ package clinic.backend.model;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+
+import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.Gender;
+import clinic.backend.enums.Role;
 
 /**
  * Staff account aggregate (docs/use-cases/staff-account.md).
@@ -20,13 +25,22 @@ public final class StaffAccount {
     private String passwordHash;
     private String fullName;
     private String academicTitle;
+    private LocalDate dateOfBirth;
+    private Gender gender;
     private String phoneNumber;
     private String email;
+    private String address;
     private Role role;
     private AccountStatus status;
     private boolean passwordChangeRequired;
     private int failedLoginAttempts;
     private Instant loginBlockedUntil;
+    private final UUID createdByAccountId;
+    private Instant lastLoginAt;
+    private Instant passwordChangedAt;
+    private String lockReason;
+    private Instant lockedAt;
+    private UUID lockedByAccountId;
     private final Instant createdAt;
     private Instant updatedAt;
     private final Long version;
@@ -37,13 +51,22 @@ public final class StaffAccount {
             String passwordHash,
             String fullName,
             String academicTitle,
+            LocalDate dateOfBirth,
+            Gender gender,
             String phoneNumber,
             String email,
+            String address,
             Role role,
             AccountStatus status,
             boolean passwordChangeRequired,
             int failedLoginAttempts,
             Instant loginBlockedUntil,
+            UUID createdByAccountId,
+            Instant lastLoginAt,
+            Instant passwordChangedAt,
+            String lockReason,
+            Instant lockedAt,
+            UUID lockedByAccountId,
             Instant createdAt,
             Instant updatedAt,
             Long version) {
@@ -53,8 +76,11 @@ public final class StaffAccount {
         this.passwordHash = requireText(passwordHash, "passwordHash");
         this.fullName = requireText(fullName, "fullName");
         this.academicTitle = academicTitle;
+        this.dateOfBirth = dateOfBirth;
+        this.gender = gender;
         this.phoneNumber = phoneNumber;
         this.email = email;
+        this.address = address;
         this.role = Objects.requireNonNull(role, "role");
         this.status = Objects.requireNonNull(status, "status");
         this.passwordChangeRequired = passwordChangeRequired;
@@ -63,6 +89,12 @@ public final class StaffAccount {
         }
         this.failedLoginAttempts = failedLoginAttempts;
         this.loginBlockedUntil = loginBlockedUntil;
+        this.createdByAccountId = createdByAccountId;
+        this.lastLoginAt = lastLoginAt;
+        this.passwordChangedAt = passwordChangedAt;
+        this.lockReason = lockReason;
+        this.lockedAt = lockedAt;
+        this.lockedByAccountId = lockedByAccountId;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
         this.version = version;
@@ -82,9 +114,30 @@ public final class StaffAccount {
             Role role,
             Instant now) {
 
+        return create(
+                id, username, temporaryPasswordHash, fullName, academicTitle, null, null, phoneNumber, email, null,
+                role, null, now);
+    }
+
+    public static StaffAccount create(
+            UUID id,
+            Username username,
+            String temporaryPasswordHash,
+            String fullName,
+            String academicTitle,
+            LocalDate dateOfBirth,
+            Gender gender,
+            String phoneNumber,
+            String email,
+            String address,
+            Role role,
+            UUID createdByAccountId,
+            Instant now) {
+
         return new StaffAccount(
-                id, username, temporaryPasswordHash, fullName, academicTitle, phoneNumber, email, role,
-                AccountStatus.ACTIVE, true, 0, null, now, now, null);
+                id, username, temporaryPasswordHash, fullName, academicTitle, dateOfBirth, gender, phoneNumber, email,
+                address, role, AccountStatus.ACTIVE, true, 0, null, createdByAccountId, null, null, null, null, null,
+                now, now, null);
     }
 
     public static StaffAccount restore(
@@ -105,8 +158,41 @@ public final class StaffAccount {
             Long version) {
 
         return new StaffAccount(
-                id, username, passwordHash, fullName, academicTitle, phoneNumber, email, role, status,
-                passwordChangeRequired, failedLoginAttempts, loginBlockedUntil, createdAt, updatedAt, version);
+                id, username, passwordHash, fullName, academicTitle, null, null, phoneNumber, email, null, role, status,
+                passwordChangeRequired, failedLoginAttempts, loginBlockedUntil, null, null, null, null, null, null,
+                createdAt, updatedAt, version);
+    }
+
+    public static StaffAccount restore(
+            UUID id,
+            Username username,
+            String passwordHash,
+            String fullName,
+            String academicTitle,
+            LocalDate dateOfBirth,
+            Gender gender,
+            String phoneNumber,
+            String email,
+            String address,
+            Role role,
+            AccountStatus status,
+            boolean passwordChangeRequired,
+            int failedLoginAttempts,
+            Instant loginBlockedUntil,
+            UUID createdByAccountId,
+            Instant lastLoginAt,
+            Instant passwordChangedAt,
+            String lockReason,
+            Instant lockedAt,
+            UUID lockedByAccountId,
+            Instant createdAt,
+            Instant updatedAt,
+            Long version) {
+
+        return new StaffAccount(
+                id, username, passwordHash, fullName, academicTitle, dateOfBirth, gender, phoneNumber, email, address,
+                role, status, passwordChangeRequired, failedLoginAttempts, loginBlockedUntil, createdByAccountId,
+                lastLoginAt, passwordChangedAt, lockReason, lockedAt, lockedByAccountId, createdAt, updatedAt, version);
     }
 
     /**
@@ -140,11 +226,15 @@ public final class StaffAccount {
     }
 
     public void registerSuccessfulLogin(Instant now) {
-        if (failedLoginAttempts != 0 || loginBlockedUntil != null) {
-            failedLoginAttempts = 0;
-            loginBlockedUntil = null;
-            updatedAt = now;
-        }
+        clearFailedLoginAttempts(now);
+        lastLoginAt = now;
+        updatedAt = now;
+    }
+
+    public void clearFailedLoginAttempts(Instant now) {
+        failedLoginAttempts = 0;
+        loginBlockedUntil = null;
+        updatedAt = now;
     }
 
     /**
@@ -154,6 +244,7 @@ public final class StaffAccount {
     public void changePassword(String newPasswordHash, Instant now) {
         passwordHash = requireText(newPasswordHash, "newPasswordHash");
         passwordChangeRequired = false;
+        passwordChangedAt = now;
         updatedAt = now;
     }
 
@@ -184,12 +275,24 @@ public final class StaffAccount {
         return academicTitle;
     }
 
+    public LocalDate dateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public Gender gender() {
+        return gender;
+    }
+
     public String phoneNumber() {
         return phoneNumber;
     }
 
     public String email() {
         return email;
+    }
+
+    public String address() {
+        return address;
     }
 
     public Role role() {
@@ -210,6 +313,30 @@ public final class StaffAccount {
 
     public Instant loginBlockedUntil() {
         return loginBlockedUntil;
+    }
+
+    public UUID createdByAccountId() {
+        return createdByAccountId;
+    }
+
+    public Instant lastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public Instant passwordChangedAt() {
+        return passwordChangedAt;
+    }
+
+    public String lockReason() {
+        return lockReason;
+    }
+
+    public Instant lockedAt() {
+        return lockedAt;
+    }
+
+    public UUID lockedByAccountId() {
+        return lockedByAccountId;
     }
 
     public Instant createdAt() {

@@ -14,11 +14,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import clinic.backend.model.AccountStatus;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.model.AuthSession;
 import clinic.backend.model.RefreshToken;
-import clinic.backend.model.Role;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.Role;
+import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.model.Username;
 import clinic.backend.repository.AuthSessionRepository;
@@ -127,13 +127,23 @@ final class AccountTestFixture {
         }
 
         @Override
+        public List<StaffAccount> findAllByPasswordHash(String passwordHash) {
+            return byId.values().stream()
+                    .filter(account -> account.passwordHash().equals(passwordHash))
+                    .toList();
+        }
+
+        @Override
         public StaffAccount save(StaffAccount account) {
             long version = account.version() == null ? 0 : account.version() + 1;
             StaffAccount saved = StaffAccount.restore(
                     account.id(), account.username(), account.passwordHash(), account.fullName(),
-                    account.academicTitle(), account.phoneNumber(), account.email(), account.role(),
-                    account.status(), account.passwordChangeRequired(), account.failedLoginAttempts(),
-                    account.loginBlockedUntil(), account.createdAt(), account.updatedAt(), version);
+                    account.academicTitle(), account.dateOfBirth(), account.gender(), account.phoneNumber(),
+                    account.email(), account.address(), account.role(), account.status(),
+                    account.passwordChangeRequired(), account.failedLoginAttempts(), account.loginBlockedUntil(),
+                    account.createdByAccountId(), account.lastLoginAt(), account.passwordChangedAt(),
+                    account.lockReason(), account.lockedAt(), account.lockedByAccountId(), account.createdAt(),
+                    account.updatedAt(), version);
             byId.put(saved.id(), saved);
             return saved;
         }

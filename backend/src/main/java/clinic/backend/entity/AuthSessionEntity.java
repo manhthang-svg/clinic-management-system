@@ -3,7 +3,7 @@ package clinic.backend.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.SessionRevocationReason;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

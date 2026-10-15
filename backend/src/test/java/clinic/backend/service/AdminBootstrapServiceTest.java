@@ -1,6 +1,6 @@
 package clinic.backend.service;
 
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.repository.SecurityAuditLog.EventType;
 import org.junit.jupiter.api.Test;

@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import clinic.backend.enums.SessionRevocationReason;
+
 /**
  * One login session: the family of refresh tokens created by a single successful login.
  *

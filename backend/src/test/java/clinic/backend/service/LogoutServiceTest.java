@@ -1,6 +1,6 @@
 package clinic.backend.service;
 
-import clinic.backend.model.Role;
+import clinic.backend.enums.Role;
 import clinic.backend.repository.SecurityAuditLog.EventType;
 import clinic.backend.service.AuthenticationResult.Authenticated;
 import clinic.backend.service.AuthenticationResult.Rejected;

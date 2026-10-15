@@ -25,16 +25,16 @@ Never weaken, delete, or bypass tests merely to make a build pass.
 
 ## Architecture Rules
 
-- Build a monolith organized package-by-layer under `clinic.backend`: `controller`, `dto`, `service`, `repository`, `model`, `entity`, `config`, `security`, `exception`, `util` (see `docs/architecture.md`).
-- Dependencies flow **Controller -> Service -> Repository interface -> Model**.
-- The `model` package must not depend on Spring, JPA, or any other layer.
+- Build a monolith organized package-by-layer under `clinic.backend`: `controller`, `dto`, `service`, `repository`, `model`, `enums`, `entity`, `config`, `security`, `exception`, `util` (see `docs/architecture.md`).
+- Dependencies flow **Controller -> Service -> Repository interface -> Model**, with shared domain enum types in `enums`.
+- The `model` package may depend on `enums`, but neither package may depend on Spring, JPA, or any other layer.
 - Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
 - Keep controllers thin: translate transport concerns, invoke services, and translate results.
 - Controllers must never access repositories or JPA entities directly.
 - Do not expose JPA entities through REST APIs; use explicit request and response models.
 - Business rules belong in `model` or `service`, according to whether they are domain invariants or use-case orchestration.
 - Important state transitions must be explicit model behavior, not scattered field assignments.
-- Do not use magic strings for business statuses; use typed enums or value objects with intentional mappings.
+- Do not use magic strings for business statuses; put reusable business enum types in `clinic.backend.enums` and use value objects in `model` when behavior or validation is required.
 - Transaction boundaries belong in the `service` layer.
 - Keep layer boundaries explicit; `ArchitectureRulesTest` enforces them and must not be weakened.
 

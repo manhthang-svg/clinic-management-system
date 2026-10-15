@@ -1,4 +1,4 @@
-package clinic.backend.model;
+package clinic.backend.enums;
 
 /**
  * Account lifecycle status (docs/use-cases/staff-account.md, transitions A01–A03).

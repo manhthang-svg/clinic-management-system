@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import clinic.backend.entity.AuthSessionEntity;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.SessionRevocationReason;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

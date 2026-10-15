@@ -3,10 +3,10 @@ package clinic.backend.service;
 import java.time.Duration;
 import java.util.UUID;
 
-import clinic.backend.model.AccountStatus;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.model.AuthSession;
-import clinic.backend.model.Role;
-import clinic.backend.model.SessionRevocationReason;
+import clinic.backend.enums.Role;
+import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.model.StaffAccount;
 import clinic.backend.repository.SecurityAuditLog.EventType;
 import clinic.backend.service.AuthenticationResult.Authenticated;
