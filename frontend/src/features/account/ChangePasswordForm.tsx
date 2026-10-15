@@ -52,13 +52,13 @@ function clientError(
 
 function serverError(error: unknown): FormError {
   if (error instanceof ApiError) {
-    switch (error.problem?.code) {
+    switch (error.errorResponse?.code) {
       case 'CURRENT_PASSWORD_INCORRECT':
         return { message: 'Mật khẩu hiện tại không đúng.', field: 'current' }
       case 'PASSWORD_POLICY_VIOLATION':
         return {
           message:
-            error.problem.errors?.[0]?.code === 'SAME_AS_CURRENT'
+            error.errorResponse.details?.newPassword === 'SAME_AS_CURRENT'
               ? 'Mật khẩu mới phải khác mật khẩu hiện tại.'
               : 'Mật khẩu mới không đáp ứng yêu cầu (8–64 ký tự).',
           field: 'new',

@@ -3,16 +3,15 @@ package clinic.backend.controller;
 import java.time.Instant;
 import java.util.UUID;
 
-import clinic.backend.dto.ChangePasswordRequest;
-import clinic.backend.dto.LoginRequest;
+import clinic.backend.dto.request.ChangePasswordRequest;
+import clinic.backend.dto.request.LoginRequest;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
-import clinic.backend.model.StaffAccount;
-import clinic.backend.model.Username;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.security.PasswordHasher;
 import clinic.backend.support.PostgresIntegrationTest;
-import clinic.backend.util.UuidV7Generator;
+import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -60,23 +59,23 @@ class ChangePasswordApiIT extends PostgresIntegrationTest {
         StaffAccount admin = account(Role.ADMIN, true);
         MockHttpServletResponse otherComputer = login(admin, CURRENT);
         MockHttpServletResponse thisComputer = login(admin, CURRENT);
-        assertThat(body(thisComputer).get("passwordChangeRequired").asBoolean()).isTrue();
+        assertThat(body(thisComputer).get("data").get("passwordChangeRequired").asBoolean()).isTrue();
 
         changePassword(accessToken(thisComputer), CURRENT, NEW).andExpect(status().isNoContent());
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new LoginRequest(admin.username().value(), CURRENT))))
+                        .content(objectMapper.writeValueAsString(new LoginRequest(admin.getUsername(), CURRENT))))
                 .andExpect(status().isUnauthorized());
         refresh(refreshCookie(otherComputer)).andExpect(status().isUnauthorized());
         refresh(refreshCookie(thisComputer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.passwordChangeRequired").value(false));
+                .andExpect(jsonPath("$.data.passwordChangeRequired").value(false));
         assertThat(login(admin, NEW).getStatus()).isEqualTo(200);
 
         assertThat(jdbcTemplate.queryForList(
                 "select event_type from security_audit_events where target_account_id = ?",
-                String.class, admin.id())).contains("PASSWORD_CHANGED");
+                String.class, admin.getId())).contains("PASSWORD_CHANGED");
     }
 
     @Test
@@ -108,11 +107,10 @@ class ChangePasswordApiIT extends PostgresIntegrationTest {
         changePassword(token, CURRENT, "short")
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PASSWORD_POLICY_VIOLATION"))
-                .andExpect(jsonPath("$.errors[0].field").value("newPassword"))
-                .andExpect(jsonPath("$.errors[0].code").value("TOO_SHORT"));
+                .andExpect(jsonPath("$.details.newPassword").value("TOO_SHORT"));
         changePassword(token, CURRENT, CURRENT)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].code").value("SAME_AS_CURRENT"));
+                .andExpect(jsonPath("$.details.newPassword").value("SAME_AS_CURRENT"));
     }
 
     @Test
@@ -137,16 +135,24 @@ class ChangePasswordApiIT extends PostgresIntegrationTest {
     private StaffAccount account(Role role, boolean passwordChangeRequired) {
         String username = role.name().toLowerCase() + "." + UUID.randomUUID().toString().substring(0, 8);
         Instant now = Instant.now();
-        return accounts.save(StaffAccount.restore(
-                ids.next(), new Username(username), passwordHasher.hash(CURRENT), "Test " + role, null, null, null,
-                role, AccountStatus.ACTIVE, passwordChangeRequired, 0, null, now, now, null));
+        return accounts.save(StaffAccount.builder()
+                .id(ids.next())
+                .username(username)
+                .passwordHash(passwordHasher.hash(CURRENT))
+                .fullName("Test " + role)
+                .role(role)
+                .status(AccountStatus.ACTIVE)
+                .passwordChangeRequired(passwordChangeRequired)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
     }
 
     private MockHttpServletResponse login(StaffAccount account, String password) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new LoginRequest(account.username().value(), password))))
+                                new LoginRequest(account.getUsername(), password))))
                 .andReturn().getResponse();
     }
 
@@ -164,7 +170,7 @@ class ChangePasswordApiIT extends PostgresIntegrationTest {
     }
 
     private String accessToken(MockHttpServletResponse response) throws Exception {
-        return body(response).get("accessToken").asText();
+        return body(response).get("data").get("accessToken").asText();
     }
 
     private static String refreshCookie(MockHttpServletResponse response) {

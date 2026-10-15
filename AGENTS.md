@@ -25,17 +25,17 @@ Never weaken, delete, or bypass tests merely to make a build pass.
 
 ## Architecture Rules
 
-- Build a monolith organized package-by-layer under `clinic.backend`: `controller`, `dto`, `service`, `repository`, `model`, `enums`, `entity`, `config`, `security`, `exception`, `util` (see `docs/architecture.md`).
-- Dependencies flow **Controller -> Service -> Repository interface -> Model**, with shared domain enum types in `enums`.
-- The `model` package may depend on `enums`, but neither package may depend on Spring, JPA, or any other layer.
-- Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
-- Keep controllers thin: translate transport concerns, invoke services, and translate results.
-- Controllers must never access repositories or JPA entities directly.
-- Do not expose JPA entities through REST APIs; use explicit request and response models.
-- Business rules belong in `model` or `service`, according to whether they are domain invariants or use-case orchestration.
-- Important state transitions must be explicit model behavior, not scattered field assignments.
-- Do not use magic strings for business statuses; put reusable business enum types in `clinic.backend.enums` and use value objects in `model` when behavior or validation is required.
-- Transaction boundaries belong in the `service` layer.
+- Build a monolith organized package-by-layer under `clinic.backend`: `config` (+ `config/properties`), `controller`, `dto/request`, `dto/response`, `entity`, `enums`, `exceptions`, `mapper`, `repository`, `security` (+ `security/jwt`, `security/user`), `service` (interfaces) with `service/impl`, and `utils` (see `docs/architecture.md`).
+- Dependencies flow **Controller -> Service interface <- Service implementation -> Repository -> Entity**, with mappers producing DTOs and shared enum types in `enums`.
+- Controllers depend on service interfaces only, never on `service.impl`, repositories, or JPA entities. Keep them thin: map HTTP, validate with `@Valid`, invoke a service, and wrap results in `ApiResponse`.
+- Only services use Spring Data repositories. Repositories know only entities and enums.
+- Do not expose JPA entities through REST APIs; use explicit request and response DTOs, produced by MapStruct mappers.
+- Business rules belong in `entity` methods (invariants and state transitions) or `service.impl` (use-case orchestration).
+- Important state transitions must be explicit entity behavior, not setters or scattered field assignments.
+- Do not use magic strings for business statuses or error codes; put reusable enum types, including `ErrorCode`, in `clinic.backend.enums`.
+- Report business rejections by throwing `AppException(ErrorCode)`; `GlobalException` turns them into the standard `ErrorResponse`.
+- Transaction boundaries belong in `service.impl`. When a rejection must still commit state (failed-attempt counters, audit events), use `@Transactional(noRollbackFor = AppException.class)`.
+- Use Lombok for boilerplate and MapStruct for DTO mapping; do not add other code-generation frameworks without a demonstrated need.
 - Keep layer boundaries explicit; `ArchitectureRulesTest` enforces them and must not be weakened.
 
 ## Persistence and Database

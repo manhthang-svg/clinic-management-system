@@ -26,13 +26,13 @@ This file adds Claude-specific orientation. It does not override `AGENTS.md` or 
 ```text
 backend/    Java 21, Spring Boot, Maven wrapper, Flyway, PostgreSQL
   src/main/java/clinic/backend/
-    <feature>/api|application|domain|infrastructure   e.g. account/
-    shared/   api/error, configuration, id, security
+    config/ (+properties/)  controller/  dto/request|response/  entity/  enums/
+    exceptions/  mapper/  repository/  security/ (+jwt/, user/)  service/ (+impl/)  utils/
   src/main/resources/db/migration/                    Flyway V<n>__*.sql
 frontend/   React 19, TypeScript (strict), Vite, Vitest, Testing Library
   src/app/        App shell, ErrorBoundary
   src/features/   <feature>/ components, *-api.ts adapters, tests (e.g. auth/, account/)
-  src/shared/     api/ (ApiClient, ApiError, ProblemDetails), config/ (environment)
+  src/shared/     api/ (ApiClient, ApiError, ApiResponse/ErrorResponse types), config/ (environment)
   src/styles/     global.css — the only stylesheet
   src/test/       Vitest setup
 docs/       Source-of-truth documents
@@ -54,7 +54,7 @@ These describe the existing code. Follow them unless a documented decision chang
 
 - **Feature folders.** Code for a capability lives in `src/features/<feature>/`. Cross-feature, purely technical code goes in `src/shared/`. Do not put feature logic in `shared/`.
 - **API access.** Each feature exposes an interface plus a factory, e.g. `createAccountApi(client: ApiClient): AccountApi`. Components never call `fetch` directly. Paths are relative to `VITE_API_BASE_URL` (default `/api/v1`).
-- **Errors.** `ApiClient` throws `ApiError` with `status` and parsed `problem` (RFC 9457 Problem Details). Components map `problem.code` / `status` to Vietnamese user messages; never show raw backend messages.
+- **Responses and errors.** `ApiClient` unwraps the backend `ApiResponse` envelope and returns its `data`. On failure it throws `ApiError` with `status` and the parsed `errorResponse` (`code`, `message`, `details`, `requestId`). Components map `errorResponse.code` / `status` to Vietnamese user messages; never show raw backend messages.
 - **Dependency injection for tests.** Components and the app accept collaborators as props with production defaults (`App({ sessionManager, accountApi })`, `LoginPage({ onLogin })`).
 - **Session.** `SessionManager` keeps the access token in memory only; the refresh token is an HttpOnly cookie. Never store tokens, patient data, or medical data in `localStorage`, `sessionStorage`, IndexedDB, or URLs (`docs/security.md`).
 - **Components.** Function components, named exports, `readonly` props interfaces, a short doc comment naming the use case (`/** UC-3 Change Password. */`).

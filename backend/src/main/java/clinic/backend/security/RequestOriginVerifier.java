@@ -1,6 +1,6 @@
 package clinic.backend.security;
 
-import clinic.backend.config.ClinicSecurityProperties;
+import clinic.backend.config.properties.ClinicSecurityProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;

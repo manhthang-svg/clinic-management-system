@@ -1,5 +1,5 @@
 import { ApiError } from './api-error'
-import { isProblemDetails, type ProblemDetails } from './problem-details'
+import { isApiResponse, isErrorResponse, type ErrorResponse } from './api-response'
 
 export type AccessTokenProvider = () => Promise<string | null> | string | null
 
@@ -24,7 +24,7 @@ function assertRelativeApiPath(path: string): void {
   }
 }
 
-async function parseProblem(response: Response): Promise<ProblemDetails | undefined> {
+async function parseErrorResponse(response: Response): Promise<ErrorResponse | undefined> {
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('json')) {
     return undefined
@@ -32,7 +32,7 @@ async function parseProblem(response: Response): Promise<ProblemDetails | undefi
 
   try {
     const body: unknown = await response.json()
-    return isProblemDetails(body) ? body : undefined
+    return isErrorResponse(body) ? body : undefined
   } catch {
     return undefined
   }
@@ -60,7 +60,7 @@ export class ApiClient {
     assertRelativeApiPath(path)
 
     const headers = new Headers(options.headers)
-    headers.set('Accept', 'application/json, application/problem+json')
+    headers.set('Accept', 'application/json')
 
     let body: string | undefined
     if (options.body !== undefined) {
@@ -87,14 +87,11 @@ export class ApiClient {
     }
 
     if (!response.ok) {
-      const problem = await parseProblem(response)
-      throw new ApiError(
-        problem?.detail || problem?.title || 'The API request failed.',
-        {
-          status: response.status,
-          problem,
-        },
-      )
+      const errorResponse = await parseErrorResponse(response)
+      throw new ApiError(errorResponse?.message || 'The API request failed.', {
+        status: response.status,
+        errorResponse,
+      })
     }
 
     if (response.status === 204) {
@@ -108,13 +105,16 @@ export class ApiClient {
       })
     }
 
+    let responseBody: unknown
     try {
-      return (await response.json()) as TResponse
+      responseBody = await response.json()
     } catch (cause) {
       throw new ApiError('The API returned an invalid JSON response.', {
         status: response.status,
         cause,
       })
     }
+    // Successful bodies arrive in the backend's ApiResponse envelope; callers receive only its data.
+    return (isApiResponse(responseBody) ? responseBody.data : responseBody) as TResponse
   }
 }

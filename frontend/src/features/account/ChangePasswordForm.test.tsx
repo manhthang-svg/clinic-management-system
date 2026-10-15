@@ -47,10 +47,9 @@ describe('ChangePasswordForm', () => {
     const onSubmit = vi.fn().mockRejectedValue(
       new ApiError('The current password is incorrect.', {
         status: 422,
-        problem: {
-          title: 'Current password incorrect',
-          status: 422,
+        errorResponse: {
           code: 'CURRENT_PASSWORD_INCORRECT',
+          message: 'The current password is incorrect.',
         },
       }),
     )

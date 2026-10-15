@@ -36,52 +36,58 @@ Use package-by-layer. All backend code lives under the base package `clinic.back
 
 ```text
 clinic.backend/
-├── controller/    # REST controllers and HTTP-only helpers (e.g., cookies)
-├── dto/           # API contracts: request and response models
-├── service/       # Use-case orchestration, transaction boundary, use-case results
-├── repository/    # Repository interfaces and their JPA/Spring Data implementations
-├── model/         # Domain models: business behavior, invariants, value objects, state transitions
-├── enums/         # Shared domain enum types and stable persistence/API codes
-├── entity/        # JPA entities (persistence models)
-├── config/        # Spring configuration, configuration properties, beans, runners, schedulers, filters
-├── security/      # Security contracts and adapters (password hashing, token issuing, auth handlers)
-├── exception/     # Global error handling and the standard API error model
-└── util/          # Small technical helpers with proven reuse
+├── config/          # Spring configuration, filters, startup runners
+│   └── properties/  # @ConfigurationProperties records
+├── controller/      # REST controllers; thin, call service interfaces only
+├── dto/
+│   ├── request/     # Request bodies with transport validation
+│   └── response/    # Response bodies, ApiResponse envelope, ErrorResponse
+├── entity/          # JPA entities: persistent state, business rules, explicit state transitions
+├── enums/           # Shared enum types, including ErrorCode
+├── exceptions/      # AppException and the global exception handler
+├── mapper/          # MapStruct mappers between entities/service results and DTOs
+├── repository/      # Spring Data JPA repositories
+├── security/        # Password hashing, origin check, REST auth handlers
+│   ├── jwt/         # Access-token issuing, claims, authority conversion
+│   └── user/        # The authenticated principal of a request
+├── service/         # Service interfaces and service result types
+│   └── impl/        # Service implementations and scheduled jobs; transaction boundary
+└── utils/           # Small technical helpers with proven reuse (cookies, tokens, IDs)
 ```
 
-Business capabilities (for example, account management) are not separate top-level packages; their classes live in the layer packages above. Use clear, capability-specific class names (for example, `LoginService`, `StaffAccountRepository`) so that each layer stays navigable as it grows. Do not use `util` as a dumping ground for business behavior.
+Business capabilities (for example, account management) are not separate top-level packages; their classes live in the layer packages above. Use clear, capability-specific class names (for example, `AuthService`, `StaffAccountRepository`) so that each layer stays navigable as it grows. Do not use `utils` as a dumping ground for business behavior.
 
 ### Layer Responsibilities
 
 | Layer | Responsibility | May depend on |
 | --- | --- | --- |
-| `controller` | HTTP transport, request validation, DTO mapping, and response/error translation | `dto`, `service`, `model`, `enums`, `security`, `exception` |
-| `dto` | Explicit request and response contracts | `service` results, `model`, `enums` |
-| `service` | Use-case orchestration, authorization boundary, and transaction boundary | `model`, `enums`, `repository` interfaces, `security` contracts, `util` |
-| `repository` | Repository contracts used by services and their JPA/Spring Data implementations | `model`, `enums`, `entity`, frameworks |
-| `model` | Business behavior, invariants, value objects, and explicit state transitions | `enums`, model code, and Java standard library |
-| `enums` | Reusable domain classifications, roles, statuses, types, and stable codes | Java standard library only |
-| `entity` | JPA mapping of persistence tables | `model` and `enums` types, `repository` contract types, JPA |
-| `config` / `security` / `exception` | Cross-cutting technical concerns | Any layer they wire, plus frameworks |
+| `controller` | HTTP mapping, `@Valid` request validation, wrapping results in `ApiResponse` | `dto`, `service` interfaces, `security.user`, `config` constants |
+| `dto` | Explicit request and response contracts | `enums`, Java and Jackson/validation annotations |
+| `service` | Service interfaces and the result types they return | `dto`, `entity`, `enums`, `security.user` |
+| `service.impl` | Use-case orchestration, authorization boundary, transaction boundary, business rejections as `AppException` | `repository`, `entity`, `enums`, `mapper`, `dto`, `security`, `utils`, `exceptions`, `config` |
+| `repository` | Spring Data JPA repositories and their queries | `entity`, `enums`, Spring Data |
+| `entity` | JPA mapping of persistence tables, invariants, and explicit state transitions | `enums`, JPA, Lombok |
+| `enums` | Reusable classifications, roles, statuses, types, and error codes | Java standard library, `org.springframework.http` for `ErrorCode` |
+| `mapper` | Conversion to response DTOs | `dto`, `entity`, `service` result types, `enums` |
+| `config` / `security` / `exceptions` / `utils` | Cross-cutting technical concerns | Any layer they wire, plus frameworks, within the rules below |
 
 The required dependency direction is:
 
 ```text
-Controller -> Service -> Repository (interface) -> Model
-                 \-> Model
-Repository implementation -> Entity
-Model / Service / Repository / Entity -> Enums
+Controller -> Service (interface) <- Service implementation -> Repository -> Entity
+                                          \-> Mapper -> DTO
+Entity / Repository / Service / DTO -> Enums
 ```
 
 Additional rules:
 
-- Model code may depend on `enums`, but must not depend on Spring, HTTP, JPA, or any other layer.
-- Enum code must not depend on frameworks or any application layer.
-- Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
-- Controllers remain thin and never call repositories or touch JPA entities directly.
-- JPA entities are never exposed through REST APIs; DTOs must not reference entities.
-- Transaction boundaries belong to service operations, not controllers.
-- Important state changes are explicit model behavior; they are not arbitrary field assignments.
+- Controllers remain thin, depend on service interfaces (never on `service.impl`), and never call repositories or touch JPA entities directly.
+- Only services use repositories. Repositories know only entities and enums.
+- Entities keep business rules and state transitions as methods (for example `StaffAccount.registerFailedLogin`); they have no setters for state that a rule governs, and they must not depend on services, repositories, DTOs, or web code.
+- Enums must not depend on JPA or any application layer.
+- JPA entities are never exposed through REST APIs; DTOs must not reference entities. Mappers produce response DTOs.
+- Transaction boundaries belong to service implementations, not controllers. A business rejection is an `AppException` carrying an `ErrorCode`; when a rejection must still commit state (failed-login counters, audit events, refresh-token reuse revocation), the method declares `@Transactional(noRollbackFor = AppException.class)`.
+- Lombok is used for boilerplate (`@Getter`, `@Builder`, `@RequiredArgsConstructor`, `@Slf4j`); MapStruct for DTO mapping.
 
 These rules are enforced by `ArchitectureRulesTest` (ArchUnit).
 
@@ -111,8 +117,8 @@ Cross-cutting code must not become a route around layer boundaries.
 
 ## Testing Boundaries
 
-- Model tests are fast unit tests without Spring or a database.
-- Service tests exercise use cases with controlled test doubles for repository and security contracts where appropriate.
+- Entity tests are fast unit tests of business rules without Spring or a database.
+- Service tests exercise use cases with controlled test doubles (Mockito) for repositories and security collaborators where appropriate.
 - API tests verify HTTP contracts, validation, status codes, and authorization behavior.
 - Persistence and database integration tests use PostgreSQL Testcontainers and apply Flyway migrations.
 - Architecture tests may enforce package dependencies after the backend is initialized.
