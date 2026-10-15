@@ -90,16 +90,16 @@ No domain indexes are defined yet.
 
 ## JPA Conventions
 
-- JPA entities and Spring Data repositories are infrastructure concerns.
+- JPA entities live in `entity`; Spring Data repositories and their adapters live in `repository`.
 - Do not expose JPA entities through REST APIs or pass Spring Data `Page` as an API contract.
 - Keep domain behavior independent of JPA and Spring annotations.
-- Repository adapters implement application/domain ports; controllers never access repositories directly.
+- Repository implementations implement the repository interfaces used by services; controllers never access repositories directly.
 - Map every persisted field intentionally, including nullability, length when meaningful, column name, and status conversion.
 - Prefer lazy loading for associations. Avoid unbounded object graphs and unintended eager loading.
 - Configure cascade and orphan removal only when aggregate ownership and lifecycle rules explicitly require them.
 - Detect and prevent N+1 queries with use-case-specific fetch plans, projections, or explicit queries.
 - Do not include mutable associations in entity equality or hash-code implementations.
-- Keep persistence models internal to their owning feature.
+- Keep persistence models internal to the `repository` and `entity` layers.
 
 ## Optimistic Locking and Concurrency
 

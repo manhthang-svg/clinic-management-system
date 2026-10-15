@@ -9,6 +9,7 @@ frontend/dist/
 .idea/
 .vscode/
 *.iml
+**/.claude/settings.local.json
 
 # Local environment and secrets
 .env

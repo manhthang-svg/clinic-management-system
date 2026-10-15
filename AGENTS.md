@@ -25,18 +25,18 @@ Never weaken, delete, or bypass tests merely to make a build pass.
 
 ## Architecture Rules
 
-- Build a modular monolith organized package-by-feature.
-- Within each feature, dependencies flow **API -> Application -> Domain**.
-- The domain must not depend on API or infrastructure concerns.
-- Infrastructure implements the ports/adapters required by the application or domain layers.
-- Keep controllers thin: translate transport concerns, invoke application use cases, and translate results.
-- Controllers must never access repositories directly.
+- Build a monolith organized package-by-layer under `clinic.backend`: `controller`, `dto`, `service`, `repository`, `model`, `entity`, `config`, `security`, `exception`, `util` (see `docs/architecture.md`).
+- Dependencies flow **Controller -> Service -> Repository interface -> Model**.
+- The `model` package must not depend on Spring, JPA, or any other layer.
+- Services depend on repository interfaces and security contracts, never on JPA implementations, entities, controllers, or DTOs.
+- Keep controllers thin: translate transport concerns, invoke services, and translate results.
+- Controllers must never access repositories or JPA entities directly.
 - Do not expose JPA entities through REST APIs; use explicit request and response models.
-- Business rules belong in domain or application layers, according to whether they are domain invariants or use-case orchestration.
-- Important state transitions must be explicit domain behavior, not scattered field assignments.
+- Business rules belong in `model` or `service`, according to whether they are domain invariants or use-case orchestration.
+- Important state transitions must be explicit model behavior, not scattered field assignments.
 - Do not use magic strings for business statuses; use typed enums or value objects with intentional mappings.
-- Transaction boundaries belong in the application/use-case layer.
-- Keep module boundaries explicit. Do not reach into another module's internals.
+- Transaction boundaries belong in the `service` layer.
+- Keep layer boundaries explicit; `ArchitectureRulesTest` enforces them and must not be weakened.
 
 ## Persistence and Database
 
