@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createAccountApi } from '../features/account/account-api';
 import { ChangePasswordForm } from '../features/account/ChangePasswordForm';
+import { AccountManagementPage } from '../features/account/AccountManagementPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { apiClient, sessionManager as defaultSessionManager, useSession, } from '../features/auth/session';
 const ROLE_LABELS = {
@@ -43,6 +44,16 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
         await sessionManager.refresh();
     }
     const showPasswordForm = session.passwordChangeRequired || changingPassword;
+    if (session.account.role === 'ADMIN' && !showPasswordForm) {
+      return (
+        <AccountManagementPage
+          currentAdmin={session.account}
+          notice={notice}
+          onLogout={() => void sessionManager.logout()}
+          onChangePassword={() => setChangingPassword(true)}
+        />
+      );
+    }
     return (<>
       <header className="app-header">
         <p className="app-name">Clinic Management System</p>
