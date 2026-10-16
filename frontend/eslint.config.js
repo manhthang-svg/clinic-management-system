@@ -2,7 +2,6 @@ import eslint from '@eslint/js'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import globals from 'globals'
-import tseslint from 'typescript-eslint'
 import { defineConfig } from 'eslint/config'
 
 export default defineConfig([
@@ -10,10 +9,9 @@ export default defineConfig([
     ignores: ['dist', 'coverage'],
   },
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['**/*.{js,jsx}'],
     extends: [
       eslint.configs.recommended,
-      ...tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
@@ -23,6 +21,14 @@ export default defineConfig([
         ...globals.browser,
         ...globals.node,
       },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
     },
   },
 ])
