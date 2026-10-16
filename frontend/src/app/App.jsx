@@ -24,7 +24,17 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
       </main>);
     }
     if (session.status === 'anonymous') {
-        return <LoginPage onLogin={(username, password) => sessionManager.login(username, password)}/>;
+        return (
+            <LoginPage
+                onLogin={async (username, password, expectedRole) => {
+                    const sessionData = await sessionManager.login(username, password);
+                    if (expectedRole && sessionData?.account?.role && sessionData.account.role !== expectedRole) {
+                        sessionManager.clear();
+                        throw new Error(`Tài khoản không thuộc vai trò ${ROLE_LABELS[expectedRole] || expectedRole}. Vui lòng chọn đúng vai trò.`);
+                    }
+                }}
+            />
+        );
     }
     async function handlePasswordChanged() {
         setChangingPassword(false);
