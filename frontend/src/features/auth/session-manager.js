@@ -43,7 +43,9 @@ export class SessionManager {
     getAccessToken = () => this.accessToken;
     /** Throws {@link ApiError} when the credentials are rejected or the API is unreachable. */
     async login(username, password) {
-        this.accept(await this.api.login(username, password));
+        const session = await this.api.login(username, password);
+        this.accept(session);
+        return session;
     }
     /** Restores a session from the refresh cookie after a page load. */
     async restore() {
