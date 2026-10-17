@@ -11,17 +11,7 @@ function errorMessage(error) {
     }
     return 'Không thể đăng nhập lúc này. Vui lòng thử lại.';
 }
-/** UC-1 Login with Hospital Management Design System matching reference design. */
-const ROLES = [
-    { name: 'Bác sĩ', user: 'bs.tranvanan', role: 'DOCTOR' },
-    { name: 'Lễ tân', user: 'lt.nguyenthihong', role: 'RECEPTIONIST' },
-    { name: 'Thu ngân', user: 'tn.phamthithu', role: 'CASHIER' },
-    { name: 'Kỹ thuật viên', user: 'ktv.nguyenvanbao', role: 'TECHNICIAN' },
-    { name: 'Quản trị', user: 'admin', role: 'ADMIN' },
-];
-
 export function LoginPage({ onLogin }) {
-    const [selectedRole, setSelectedRole] = useState(null);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -29,21 +19,12 @@ export function LoginPage({ onLogin }) {
     const [submitting, setSubmitting] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
 
-    function handleSelectRole(r) {
-        setSelectedRole(r);
-        setError(null);
-    }
-
     async function handleSubmit(event) {
         event.preventDefault();
         setSubmitting(true);
         setError(null);
         try {
-            if (selectedRole?.role) {
-                await onLogin(username.trim(), password, selectedRole.role);
-            } else {
-                await onLogin(username.trim(), password);
-            }
+            await onLogin(username.trim(), password);
         }
         catch (cause) {
             setError(errorMessage(cause));
@@ -89,28 +70,8 @@ export function LoginPage({ onLogin }) {
                 Đăng nhập
               </h1>
               <p className="text-sm text-slate-500 leading-relaxed">
-                Vui lòng chọn đúng vai trò và nhập thông tin nhân viên để tiếp tục làm việc.
+                Vui lòng nhập thông tin nhân viên để tiếp tục làm việc.
               </p>
-            </div>
-
-            {/* Quick Role Select Pills */}
-            <div className="flex items-center gap-1.5 mb-6 overflow-x-auto no-scrollbar">
-              <span className="text-xs text-slate-400 font-medium shrink-0 mr-0.5">Vai trò:</span>
-              {ROLES.map((role) => (
-                <button
-                  key={role.name}
-                  type="button"
-                  onClick={() => handleSelectRole(role)}
-                  className={`px-2.5 py-1 rounded-full text-[12px] font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                    selectedRole?.role === role.role
-                      ? 'bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0] shadow-xs font-semibold'
-                      : 'bg-slate-100/90 text-slate-600 border border-slate-200/80 hover:bg-slate-200/80 hover:text-slate-800'
-                  }`}
-                  title={`Đăng nhập với vai trò ${role.name}`}
-                >
-                  {role.name}
-                </button>
-              ))}
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
