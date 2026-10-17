@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../utils/utils'
 
 /**
  * Reusable Badge component matching WellNest pill tags.
