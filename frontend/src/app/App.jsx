@@ -27,12 +27,8 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
     if (session.status === 'anonymous') {
         return (
             <LoginPage
-                onLogin={async (username, password, expectedRole) => {
-                    const sessionData = await sessionManager.login(username, password);
-                    if (expectedRole && sessionData?.account?.role && sessionData.account.role !== expectedRole) {
-                        sessionManager.clear();
-                        throw new Error(`Tài khoản không thuộc vai trò ${ROLE_LABELS[expectedRole] || expectedRole}. Vui lòng chọn đúng vai trò.`);
-                    }
+                onLogin={async (username, password) => {
+                    await sessionManager.login(username, password);
                 }}
             />
         );
