@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../utils/utils'
 
 /**
  * Reusable Input component following shadcn/ui patterns and WellNest styling.
