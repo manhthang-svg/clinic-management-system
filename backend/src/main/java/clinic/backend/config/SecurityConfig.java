@@ -1,43 +1,27 @@
 package clinic.backend.config;
 
-import java.util.Base64;
-import java.util.List;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import jakarta.servlet.DispatcherType;
-import clinic.backend.config.properties.ClinicSecurityProperties;
 import clinic.backend.security.RestAccessDeniedHandler;
 import clinic.backend.security.RestAuthenticationEntryPoint;
 import clinic.backend.security.jwt.RoleAuthoritiesConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtClaimNames;
-import org.springframework.security.oauth2.jwt.JwtClaimValidator;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * HTTP security; only in the web application. The JWT beans it uses are in {@link JwtConfig}.
+ */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableMethodSecurity
 public class SecurityConfig {
-
-    private static final int MINIMUM_SIGNING_KEY_BYTES = 32;
 
     @Bean
     SecurityFilterChain securityFilterChain(
@@ -63,6 +47,8 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // Generated API documentation is absent unless explicitly enabled (dev by default).
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         // Cookie-based endpoints verify the Origin header themselves (docs/security.md).
                         .requestMatchers(
                                 HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout")
@@ -72,42 +58,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
                         .anyRequest().denyAll())
                 .build();
-    }
-
-    @Bean
-    SecretKey jwtSigningKey(ClinicSecurityProperties properties) {
-        byte[] keyBytes;
-        try {
-            keyBytes = Base64.getDecoder().decode(properties.jwt().signingKey());
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("clinic.security.jwt.signing-key must be base64-encoded");
-        }
-        if (keyBytes.length < MINIMUM_SIGNING_KEY_BYTES) {
-            throw new IllegalStateException("clinic.security.jwt.signing-key must contain at least 256 bits");
-        }
-        return new SecretKeySpec(keyBytes, "HmacSHA256");
-    }
-
-    @Bean
-    JwtEncoder jwtEncoder(SecretKey jwtSigningKey) {
-        return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSigningKey));
-    }
-
-    @Bean
-    JwtDecoder jwtDecoder(SecretKey jwtSigningKey, ClinicSecurityProperties properties) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSigningKey)
-                .macAlgorithm(MacAlgorithm.HS256)
-                .build();
-
-        String audience = properties.jwt().audience();
-        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                new JwtTimestampValidator(properties.jwt().clockSkew()),
-                new JwtIssuerValidator(properties.jwt().issuer()),
-                new JwtClaimValidator<List<String>>(
-                        JwtClaimNames.AUD,
-                        tokenAudience -> tokenAudience != null && tokenAudience.contains(audience)));
-        decoder.setJwtValidator(validator);
-        return decoder;
     }
 
     @Bean

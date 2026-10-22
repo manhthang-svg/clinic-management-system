@@ -8,3 +8,9 @@ spring:
 clinic:
   dev-seed:
     password: ${DEV_SEED_PASSWORD:}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

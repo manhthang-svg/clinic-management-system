@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.ChangePasswordRequest;
 import clinic.backend.dto.request.LoginRequest;
+import clinic.backend.dto.request.UpdateProfileRequest;
+import clinic.backend.dto.response.ProfileResponse;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ErrorCode;
@@ -29,6 +31,138 @@ class StaffAccountServiceImplTest {
 
     private final AccountTestFixture fixture = new AccountTestFixture();
     private final StaffAccountServiceImpl service = fixture.staffAccountService();
+
+    @Nested
+    class AdminRecovery {
+
+        @Test
+        void resetsPasswordClearsThrottleRevokesSessionsAndAuditsWithoutActor() {
+            StaffAccount admin = fixture.activeAccount("admin", "forgotten-password", Role.ADMIN);
+            SessionTokens firstSession = fixture.login(admin);
+            SessionTokens secondSession = fixture.login(admin);
+            for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
+                admin.registerFailedLogin(AccountTestFixture.START);
+            }
+
+            var result = service.recoverAdmin();
+
+            assertThat(result.accountId()).isEqualTo(admin.getId());
+            assertThat(result.username()).isEqualTo("admin");
+            assertThat(result.temporaryPassword()).hasSize(12);
+            assertThat(fixture.passwordHasher.matches(result.temporaryPassword(), admin.getPasswordHash())).isTrue();
+            assertThat(admin.isPasswordChangeRequired()).isTrue();
+            assertThat(admin.getFailedLoginAttempts()).isZero();
+            assertThat(admin.getLoginBlockedUntil()).isNull();
+            assertThat(fixture.refreshTokenService.rotate(firstSession.refreshToken())).isEmpty();
+            assertThat(fixture.refreshTokenService.rotate(secondSession.refreshToken())).isEmpty();
+            assertThat(fixture.sessionOf(firstSession).getRevocationReason())
+                    .isEqualTo(SessionRevocationReason.PASSWORD_RESET);
+            assertThat(fixture.auditTypes()).containsExactly(SecurityAuditEventType.PASSWORD_RESET);
+            assertThat(fixture.auditEvents.getFirst().getActorAccountId()).isNull();
+        }
+
+        @Test
+        void doesNotUnlockALockedAdmin() {
+            StaffAccount admin = fixture.account(
+                    "locked.admin", "forgotten-password", Role.ADMIN, AccountStatus.LOCKED, false);
+
+            service.recoverAdmin();
+
+            assertThat(admin.getStatus()).isEqualTo(AccountStatus.LOCKED);
+            assertThat(admin.canAuthenticate()).isFalse();
+        }
+
+        @Test
+        void failsWhenNoAdminExists() {
+            assertThatIllegalStateException().isThrownBy(service::recoverAdmin)
+                    .withMessage("No Admin account exists to recover");
+        }
+    }
+
+    @Nested
+    class Profile {
+
+        @Test
+        void returnsOnlyTheAuthenticatedAccountsProfile() {
+            StaffAccount doctor = accountWithContact("dr.profile", "0901234567", "doctor@clinic.test");
+
+            ProfileResponse response = service.getOwnProfile(principal(doctor));
+
+            assertThat(response.username()).isEqualTo("dr.profile");
+            assertThat(response.fullName()).isEqualTo("Test dr.profile");
+            assertThat(response.phoneNumber()).isEqualTo("0901234567");
+            assertThat(response.email()).isEqualTo("doctor@clinic.test");
+            assertThat(response.roomName()).isNull();
+            assertThat(response.departmentName()).isNull();
+        }
+
+        @Test
+        void updatesContactNormalizesEmailAndWritesOneAuditEvent() {
+            StaffAccount doctor = accountWithContact("dr.update", "0901234567", "old@clinic.test");
+
+            ProfileResponse response = service.updateOwnProfile(
+                    principal(doctor), new UpdateProfileRequest("0987654321", "NEW@Clinic.Test"));
+
+            assertThat(response.phoneNumber()).isEqualTo("0987654321");
+            assertThat(response.email()).isEqualTo("new@clinic.test");
+            assertThat(fixture.auditTypes()).containsExactly(SecurityAuditEventType.ACCOUNT_UPDATED);
+            assertThat(fixture.businessAuditLogs).singleElement().satisfies(audit -> {
+                assertThat(audit.getActorAccountId()).isEqualTo(doctor.getId());
+                assertThat(audit.getEntityId()).isEqualTo(doctor.getId());
+                assertThat(audit.getChangedFields()).containsExactly("phoneNumber", "email");
+                assertThat(audit.getOldValue()).isEqualTo(
+                        "{\"phoneNumber\":\"0901234567\",\"email\":\"old@clinic.test\"}");
+                assertThat(audit.getNewValue()).isEqualTo(
+                        "{\"phoneNumber\":\"0987654321\",\"email\":\"new@clinic.test\"}");
+            });
+        }
+
+        @Test
+        void duplicateEmailIsRejectedWithoutChangingContact() {
+            accountWithContact("existing.user", "0900000000", "used@clinic.test");
+            StaffAccount doctor = accountWithContact("dr.duplicate", "0911111111", "old@clinic.test");
+
+            assertRejectedWith(ErrorCode.EMAIL_ALREADY_EXISTS, () -> service.updateOwnProfile(
+                    principal(doctor), new UpdateProfileRequest("0922222222", "USED@clinic.test")));
+
+            assertThat(doctor.getPhoneNumber()).isEqualTo("0911111111");
+            assertThat(doctor.getEmail()).isEqualTo("old@clinic.test");
+            assertThat(fixture.auditTypes()).isEmpty();
+            assertThat(fixture.businessAuditLogs).isEmpty();
+        }
+
+        @Test
+        void unchangedContactIsANoOpWithoutAudit() {
+            StaffAccount doctor = accountWithContact("dr.noop", "0901234567", "same@clinic.test");
+
+            service.updateOwnProfile(
+                    principal(doctor), new UpdateProfileRequest("0901234567", "SAME@clinic.test"));
+
+            assertThat(fixture.auditTypes()).isEmpty();
+            assertThat(fixture.businessAuditLogs).isEmpty();
+            assertThat(doctor.getUpdatedAt()).isEqualTo(AccountTestFixture.START);
+        }
+
+        @Test
+        void lockedAccountCannotReadOrUpdateProfile() {
+            StaffAccount locked = fixture.account(
+                    "locked.profile", "some-password", Role.CASHIER, AccountStatus.LOCKED, false);
+
+            assertRejectedWith(ErrorCode.UNAUTHORIZED, () -> service.getOwnProfile(principal(locked)));
+            assertRejectedWith(ErrorCode.UNAUTHORIZED, () -> service.updateOwnProfile(
+                    principal(locked), new UpdateProfileRequest("0901234567", "locked@clinic.test")));
+        }
+
+        private StaffAccount accountWithContact(String username, String phone, String email) {
+            StaffAccount account = fixture.activeAccount(username, "some-password", Role.DOCTOR);
+            account.updateContact(phone, email, AccountTestFixture.START);
+            return account;
+        }
+
+        private StaffPrincipal principal(StaffAccount account) {
+            return new StaffPrincipal(account.getId(), UUID.randomUUID());
+        }
+    }
 
     @Nested
     class ChangePassword {

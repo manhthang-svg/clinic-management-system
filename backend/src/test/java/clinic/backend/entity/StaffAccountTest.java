@@ -87,6 +87,37 @@ class StaffAccountTest {
     }
 
     @Test
+    void updatingContactChangesOnlyOwnerEditableFieldsAndTimestamp() {
+        StaffAccount account = newAccount();
+        Instant changedAt = NOW.plusSeconds(60);
+
+        account.updateContact("0901234567", "staff@clinic.test", changedAt);
+
+        assertThat(account.getPhoneNumber()).isEqualTo("0901234567");
+        assertThat(account.getEmail()).isEqualTo("staff@clinic.test");
+        assertThat(account.getFullName()).isEqualTo("New User");
+        assertThat(account.getUpdatedAt()).isEqualTo(changedAt);
+    }
+
+    @Test
+    void recoveryResetRequiresPasswordChangeClearsThrottleAndKeepsStatus() {
+        StaffAccount account = newAccount().toBuilder().status(AccountStatus.LOCKED).build();
+        for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
+            account.registerFailedLogin(NOW);
+        }
+        Instant resetAt = NOW.plusSeconds(60);
+
+        account.resetPasswordForRecovery("{bcrypt}temporary-hash", resetAt);
+
+        assertThat(account.getPasswordHash()).isEqualTo("{bcrypt}temporary-hash");
+        assertThat(account.isPasswordChangeRequired()).isTrue();
+        assertThat(account.getFailedLoginAttempts()).isZero();
+        assertThat(account.getLoginBlockedUntil()).isNull();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
+        assertThat(account.getPasswordChangedAt()).isEqualTo(resetAt);
+    }
+
+    @Test
     void lockedAccountsCannotAuthenticate() {
         StaffAccount locked = newAccount().toBuilder().status(AccountStatus.LOCKED).build();
 

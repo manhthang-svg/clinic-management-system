@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import clinic.backend.config.properties.ClinicSecurityProperties;
 import clinic.backend.entity.AuthSession;
+import clinic.backend.entity.AuditLog;
 import clinic.backend.entity.RefreshToken;
 import clinic.backend.entity.SecurityAuditEvent;
 import clinic.backend.entity.StaffAccount;
@@ -24,18 +25,25 @@ import clinic.backend.enums.Role;
 import clinic.backend.enums.SecurityAuditEventType;
 import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.mapper.SessionMapper;
+import clinic.backend.mapper.ProfileMapper;
 import clinic.backend.repository.AuthSessionRepository;
+import clinic.backend.repository.AuditLogRepository;
+import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RefreshTokenRepository;
+import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.security.PasswordHasher;
 import clinic.backend.security.RequestOriginVerifier;
+import clinic.backend.security.TemporaryPasswordGenerator;
 import clinic.backend.security.jwt.JwtUtils;
 import clinic.backend.security.jwt.JwtUtils.IssuedAccessToken;
 import clinic.backend.service.SessionTokens;
 import clinic.backend.utils.CookieUtils;
 import clinic.backend.utils.TokenUtils;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.factory.Mappers;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -68,15 +76,22 @@ final class AccountTestFixture {
     final Map<UUID, AuthSession> sessions = new HashMap<>();
     final List<RefreshToken> tokens = new ArrayList<>();
     final List<SecurityAuditEvent> auditEvents = new ArrayList<>();
+    final List<AuditLog> businessAuditLogs = new ArrayList<>();
 
     final StaffAccountRepository staffAccountRepository = staffAccountRepository();
+    final StaffRoomAssignmentRepository staffRoomAssignmentRepository = mock(StaffRoomAssignmentRepository.class);
+    final RoomRepository roomRepository = mock(RoomRepository.class);
+    final DepartmentRepository departmentRepository = mock(DepartmentRepository.class);
     final AuthSessionRepository authSessionRepository = authSessionRepository();
+    final AuditLogRepository auditLogRepository = auditLogRepository();
     final RefreshTokenRepository refreshTokenRepository = refreshTokenRepository();
     final SecurityAuditEventRepository securityAuditEventRepository = securityAuditEventRepository();
 
     final PasswordHasher passwordHasher = spy(new PasswordHasher(PROPERTIES));
+    final TemporaryPasswordGenerator temporaryPasswordGenerator = new TemporaryPasswordGenerator(new SecureRandom());
     final SecurityAuditServiceImpl securityAuditService =
             new SecurityAuditServiceImpl(securityAuditEventRepository, ids);
+    final AuditLogServiceImpl auditLogService = new AuditLogServiceImpl(auditLogRepository, new ObjectMapper(), ids);
     final RefreshTokenServiceImpl refreshTokenService = new RefreshTokenServiceImpl(
             refreshTokenRepository, authSessionRepository, staffAccountRepository, securityAuditService,
             jwtUtils(), ids, PROPERTIES, clock);
@@ -90,7 +105,9 @@ final class AccountTestFixture {
 
     StaffAccountServiceImpl staffAccountService() {
         return new StaffAccountServiceImpl(
-                staffAccountRepository, authSessionRepository, securityAuditService, passwordHasher, ids, clock);
+                staffAccountRepository, staffRoomAssignmentRepository, roomRepository, departmentRepository,
+                authSessionRepository, auditLogService, securityAuditService, Mappers.getMapper(ProfileMapper.class),
+                passwordHasher, temporaryPasswordGenerator, ids, clock);
     }
 
     StaffAccount activeAccount(String username, String password, Role role) {
@@ -162,6 +179,15 @@ final class AccountTestFixture {
                 findByUsername(invocation.getArgument(0)));
         when(repository.existsByRole(any())).thenAnswer(invocation ->
                 accounts.values().stream().anyMatch(account -> account.getRole() == invocation.getArgument(0)));
+        when(repository.findByRole(any())).thenAnswer(invocation ->
+                accounts.values().stream().filter(account -> account.getRole() == invocation.getArgument(0)).findFirst());
+        when(repository.existsByEmailIgnoreCaseAndIdNot(anyString(), any())).thenAnswer(invocation -> {
+            String email = invocation.getArgument(0);
+            UUID excludedId = invocation.getArgument(1);
+            return accounts.values().stream().anyMatch(account -> account.getEmail() != null
+                    && !account.getId().equals(excludedId)
+                    && account.getEmail().equalsIgnoreCase(email));
+        });
         when(repository.findAllByPasswordHash(anyString())).thenAnswer(invocation ->
                 accounts.values().stream()
                         .filter(account -> account.getPasswordHash().equals(invocation.getArgument(0)))
@@ -197,6 +223,15 @@ final class AccountTestFixture {
             return (int) sessions.values().stream()
                     .filter(session -> session.getStaffAccountId().equals(accountId)
                             && !session.getId().equals(keptSessionId))
+                    .filter(session -> session.revoke(reason, now))
+                    .count();
+        });
+        when(repository.revokeAllForAccount(any(), any(), any())).thenAnswer(invocation -> {
+            UUID accountId = invocation.getArgument(0);
+            SessionRevocationReason reason = invocation.getArgument(1);
+            Instant now = invocation.getArgument(2);
+            return (int) sessions.values().stream()
+                    .filter(session -> session.getStaffAccountId().equals(accountId))
                     .filter(session -> session.revoke(reason, now))
                     .count();
         });
@@ -239,6 +274,16 @@ final class AccountTestFixture {
             SecurityAuditEvent event = invocation.getArgument(0);
             auditEvents.add(event);
             return event;
+        });
+        return repository;
+    }
+
+    private AuditLogRepository auditLogRepository() {
+        AuditLogRepository repository = mock(AuditLogRepository.class);
+        when(repository.save(any(AuditLog.class))).thenAnswer(invocation -> {
+            AuditLog auditLog = invocation.getArgument(0);
+            businessAuditLogs.add(auditLog);
+            return auditLog;
         });
         return repository;
     }

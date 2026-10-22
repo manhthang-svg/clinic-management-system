@@ -22,6 +22,8 @@ public enum ErrorCode {
     NOT_FOUND("NOT_FOUND", "The requested resource does not exist.", HttpStatus.NOT_FOUND),
     METHOD_NOT_ALLOWED("METHOD_NOT_ALLOWED", "The request method is not supported for this resource.",
             HttpStatus.METHOD_NOT_ALLOWED),
+    EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "The email is already used by another account.",
+            HttpStatus.CONFLICT),
     CONCURRENT_MODIFICATION("CONCURRENT_MODIFICATION",
             "The resource was changed by another request. Reload it and try again.", HttpStatus.CONFLICT),
     CURRENT_PASSWORD_INCORRECT("CURRENT_PASSWORD_INCORRECT", "The current password is incorrect.",

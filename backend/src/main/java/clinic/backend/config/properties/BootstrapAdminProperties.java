@@ -3,7 +3,7 @@ package clinic.backend.config.properties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * First-Admin bootstrap settings (AQ-10). Both username and password must be set for bootstrap to run.
+ * First-Admin bootstrap settings. Both username and password must be set for bootstrap to run.
  */
 @ConfigurationProperties(prefix = "clinic.bootstrap-admin")
 public record BootstrapAdminProperties(String username, String password, String fullName) {

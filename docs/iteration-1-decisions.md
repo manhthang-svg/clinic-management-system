@@ -4,7 +4,7 @@
 
 This document records the business and technical decisions that the Iteration 1 schema ([`iteration-1-schema.dbml`](iteration-1-schema.dbml)), Flyway migrations, and entities depend on. It started as the team's draft register of 36 questions (I1-D01 → I1-D36, reviewed 15/10/2026) and records how each one was resolved.
 
-Source order follows [`business-context.md`](business-context.md#sources). Report 3 is cited as "R3" with its section or use case. Account questions are tracked separately in [`use-cases/staff-account.md`](use-cases/staff-account.md#decisions).
+Source order follows [`business-context.md`](business-context.md#sources). Report 3 is cited as "R3" with its section or use case. Account-related technical decisions are recorded in this register or in [`security.md`](security.md); Report 3 remains authoritative for use-case behavior.
 
 Status values:
 
@@ -40,7 +40,7 @@ These four resolve contradictions inside Report 3.
 | I1-D04 | Department identity | Name unique, at most 100 characters; description at most 500. No department code. The type cannot change once the department has a room. | Decided (R3) | R3 UC-14, Entity Department |
 | I1-D05 | Room code | Unique across all rooms, including inactive ones; at most 20 characters of letters, digits, and hyphen. | Decided (R3) | BR-06, R3 UC-17 |
 | I1-D06 | Examination service model | See the decisions above. | Decided (team) | — |
-| I1-D07 | Role change with work in progress | See AQ-09, AQ-16, AQ-17. | Decided (R3, team) | R3 UC-09 |
+| I1-D07 | Role change with work in progress | Reject a Doctor/Technician role change while assigned work is in progress. Any accepted role change removes the active room assignment. The current deployment does not allow assigning or changing the `ADMIN` role. | Decided (R3, team) | R3 UC-09; security.md |
 | I1-D08 | Lock with work in progress | Allowed with a warning; work stays in the room's lists. | Decided (R3) | R3 UC-10 AF-04 |
 | I1-D09 | Staff per room | A Doctor or Technician has at most one active room; a room can have several staff. Partial unique index on `staff_account_id` for active assignments. | Decided (R3) | BR-05, R3 UC-15 |
 | I1-D10 | Shifts | Managed in the HR spreadsheet; out of scope. | Decided (R3) | R3 UC-15 |
@@ -73,7 +73,7 @@ These four resolve contradictions inside Report 3.
 | I1-D33 | Ticket printing | HTML and print CSS; reprint marked "Reprint" and audited. | Proposed | R3 UC-41 |
 | I1-D34 | Ticket content | Hospital name, registration code, patient code, full name, year of birth, gender, queue number, room name and location, the room's doctors, visit type, coverage rate, priority mark, registration time; the amount to pay or "Fee covered – go to the waiting area". No QR code, logo, or signature required. | Decided (R3) | BR-16, R3 UC-41 |
 | I1-D35 | Business audit for Iteration 1 | A `business_audit_events` table, separate from `security_audit_events`, append-only, written in the same transaction as the change. Each row: time, actor, event type, entity type and ID, correlation ID, the names of changed fields, and old/new values **only for departments and rooms** (non-personal data, required by R3 UC-14 and UC-18). Patient rows record field names only, never values. Events: `PATIENT_CREATED`, `PATIENT_UPDATED`, `VISIT_REGISTERED`, `TICKET_REPRINTED`, `INSURANCE_VERIFIED` (outcome only, no card data), `PAYMENT_CREATED`, `DEPARTMENT_UPDATED`, `ROOM_CREATED`, `ROOM_UPDATED`, `ROOM_ACTIVATED`, `ROOM_DEACTIVATED`, `STAFF_ASSIGNED_TO_ROOM`, `STAFF_REMOVED_FROM_ROOM`. Reading a patient profile (UC-35, UC-36) is not audited: R3 requires audit of medical-record access, which starts with UC-51. No API reads this table in Iteration 1; retention follows security.md. | Proposed | R3 §IV.2.3 Audit trail, security.md |
-| I1-D36 | Audit retention and viewers | Append-only until legal review; only UC-6 reads sign-in events (AQ-18). | Decided (team) | security.md |
+| I1-D36 | Audit retention and viewers | Append-only until legal review; only UC-06 reads the limited sign-in-event view defined in security.md. | Decided (team) | security.md |
 | I1-D37 | Iteration 1 WBS | `Project_Tracking.xlsx` assigns UC-1 → UC-19, UC-35 → UC-38, and UC-40 → UC-42 to Iteration 1. The team explicitly extends that scope with UC-74 (I1-D38). | Decided (team) | Project_Tracking.xlsx, team decision |
 | I1-D38 | Insurance verification in Iteration 1 | **UC-74 is in Iteration 1.** The simulated portal is a separate adapter behind a port interface, backed by its own `simulated_insurance_cards` table that domain code never reads directly. It returns card status, full name, date of birth, benefit code, coverage rate, valid from, valid to, and primary-care facility; a configurable response delay lets tests cover the 10-second timeout (R3 UC-74 EF-04). The visit stores the verified card data and `insurance_verified_at`. Demo cards come from the development seed; how the cards are loaded outside development is part of I1-D02. | Decided (team) | BR-13, R3 UC-74 |
 | I1-D39 | Priority reason | A priority visit stores its reason: `ELDERLY` or `FRAIL_DISABLED`. | Decided (R3) | R3 UC-40 step 4 |

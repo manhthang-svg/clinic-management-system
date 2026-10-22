@@ -47,6 +47,18 @@ public interface AuthSessionRepository extends JpaRepository<AuthSession, UUID> 
             @Param("reason") SessionRevocationReason reason,
             @Param("now") Instant now);
 
+    /** Revokes every active session of an account after an operator Admin recovery. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update AuthSession s
+               set s.revokedAt = :now, s.revocationReason = :reason
+             where s.staffAccountId = :accountId and s.revokedAt is null
+            """)
+    int revokeAllForAccount(
+            @Param("accountId") UUID accountId,
+            @Param("reason") SessionRevocationReason reason,
+            @Param("now") Instant now);
+
     /**
      * Deletes sessions that expired or were revoked before the cutoff. Refresh tokens are removed by
      * ON DELETE CASCADE.

@@ -1,0 +1,11 @@
+# Operator-only Admin recovery mode defined in docs/security.md. It performs one recovery and exits without opening an HTTP port.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

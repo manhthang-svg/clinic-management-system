@@ -1,7 +1,7 @@
 package clinic.backend.enums;
 
 /**
- * Account lifecycle status (docs/use-cases/staff-account.md, transitions A01–A03).
+ * Account lifecycle status (Report 3 and docs/state-transitions.md, transitions A01–A03).
  */
 public enum AccountStatus {
     ACTIVE,

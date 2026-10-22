@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * UC-1 Login with the supporting session refresh, and UC-2 Logout (docs/use-cases/).
+ * UC-01 Login with supporting session refresh, and UC-02 Logout (Report 3).
  *
  * <p>The refresh token travels only in an HttpOnly cookie, which these operations read and write.
  */

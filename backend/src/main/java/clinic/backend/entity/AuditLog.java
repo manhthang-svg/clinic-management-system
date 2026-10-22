@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.enums.AuditLogAction;
@@ -26,6 +27,8 @@ import org.hibernate.type.SqlTypes;
 @Immutable
 @Table(name = "audit_logs")
 public class AuditLog extends UuidEntity {
+
+    private static final String STAFF_ACCOUNT_ENTITY = "staff_accounts";
 
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private Instant occurredAt;
@@ -70,4 +73,32 @@ public class AuditLog extends UuidEntity {
 
     @Column(name = "correlation_id", updatable = false, length = 64)
     private String correlationId;
+
+    private AuditLog(UUID id) {
+        super(id);
+    }
+
+    /** Creates the detailed, append-only audit row required by Report 3 UC-04. */
+    public static AuditLog accountUpdated(
+            UUID id,
+            UUID accountId,
+            Instant occurredAt,
+            String[] changedFields,
+            String oldValue,
+            String newValue,
+            String correlationId) {
+
+        AuditLog auditLog = new AuditLog(id);
+        auditLog.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
+        auditLog.actorAccountId = Objects.requireNonNull(accountId, "accountId");
+        auditLog.action = AuditLogAction.UPDATE;
+        auditLog.entityType = STAFF_ACCOUNT_ENTITY;
+        auditLog.entityId = accountId;
+        auditLog.outcome = AuditOutcome.SUCCESS;
+        auditLog.changedFields = Objects.requireNonNull(changedFields, "changedFields").clone();
+        auditLog.oldValue = Objects.requireNonNull(oldValue, "oldValue");
+        auditLog.newValue = Objects.requireNonNull(newValue, "newValue");
+        auditLog.correlationId = correlationId;
+        return auditLog;
+    }
 }

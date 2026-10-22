@@ -48,6 +48,28 @@ Backend environment variables:
 
 Run the backend with `./mvnw spring-boot:run` in `backend/` (add `-Dspring-boot.run.profiles=dev` to load the demo master data from [`docs/demo-master-data.md`](docs/demo-master-data.md); never use the `dev` profile against a shared or production database), and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`).
 
+With the `dev` profile, the backend API contract is available at `http://localhost:8080/swagger-ui.html`,
+`http://localhost:8080/v3/api-docs`, and `http://localhost:8080/v3/api-docs.yaml`. OpenAPI remains disabled by
+default outside development; set `OPENAPI_ENABLED=true` and `SWAGGER_UI_ENABLED=true` only in an environment where
+the documentation should be exposed.
+
+### Recover the bootstrap Admin
+
+When the only Admin password is lost, stop the normal backend instance, then run it once in the operator-only recovery profile using the same environment variables:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=admin-recovery"
+```
+
+For a packaged deployment:
+
+```text
+java -jar clinic-backend-<version>.jar --spring.profiles.active=admin-recovery
+```
+
+The command opens no HTTP port. It generates and displays one temporary password, requires that password to be changed at the next login, clears login throttling, revokes every Admin session, writes `PASSWORD_RESET`, and exits. Do not redirect or retain its console output. It does not unlock a `LOCKED` Admin.
+
 ## Testing
 
 - Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).
