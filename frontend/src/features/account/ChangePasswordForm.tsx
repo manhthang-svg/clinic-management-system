@@ -20,7 +20,7 @@ interface ChangePasswordFormProps {
   readonly onChanged: () => void
 }
 
-/** Mirrors the backend policy (AQ-03) for early feedback; the backend remains authoritative. */
+/** Mirrors the password policy in docs/security.md for early feedback; the backend remains authoritative. */
 function policyError(password: string): string | null {
   const length = [...password].length
   if (length < MINIMUM_LENGTH) {

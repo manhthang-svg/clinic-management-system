@@ -36,10 +36,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   return (
     <main className="login-page">
+      <aside className="login-brand">
+        <div className="brand">
+          <span className="brand__mark" aria-hidden="true" />
+          <p className="app-name">Clinic Management System</p>
+        </div>
+        <p className="login-brand__headline">
+          Tiếp đón, khám và thu ngân <span className="login-brand__accent">trên một hệ thống</span>.
+        </p>
+        <p className="login-brand__caption">Hệ thống quản lý phòng khám ngoại trú</p>
+      </aside>
       <div className="login-panel">
-        <p className="app-name">Clinic Management System</p>
-        <div className="card">
+        <div className="card login-card">
           <h1>Đăng nhập</h1>
+          <p className="login-card__intro">Dùng tài khoản nhân viên do quản trị viên cấp.</p>
           <form className="form" onSubmit={handleSubmit} noValidate>
             <div className="field">
               <label htmlFor="login-username">Tên đăng nhập</label>

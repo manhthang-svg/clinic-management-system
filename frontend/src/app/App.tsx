@@ -18,6 +18,11 @@ const ROLE_LABELS = {
   CASHIER: 'Thu ngân',
 } as const
 
+/** The first letter of the full name, shown in the account avatar. */
+function initial(fullName: string): string {
+  return fullName.trim().charAt(0).toUpperCase()
+}
+
 interface AppProps {
   readonly sessionManager?: SessionManager
   readonly accountApi?: AccountApi
@@ -54,33 +59,52 @@ export function App({ sessionManager = defaultSessionManager, accountApi }: AppP
 
   const showPasswordForm = session.passwordChangeRequired || changingPassword
 
+  const roleLabel = ROLE_LABELS[session.account.role]
+
   return (
-    <>
-      <header className="app-header">
-        <p className="app-name">Clinic Management System</p>
-        <div className="app-header__actions">
-          {!showPasswordForm && (
+    <div className="app-shell">
+      <header className="app-sidebar">
+        <div className="brand">
+          <span className="brand__mark" aria-hidden="true" />
+          <p className="app-name">Clinic Management System</p>
+        </div>
+        <div className="app-sidebar__spacer" />
+        <div className="account-card">
+          <div className="account-card__identity">
+            <span className="avatar" aria-hidden="true">
+              {initial(session.account.fullName)}
+            </span>
+            <div>
+              <p className="account-card__name">{session.account.fullName}</p>
+              <p className="account-card__role">{roleLabel}</p>
+            </div>
+          </div>
+          <div className="account-card__actions">
+            {!showPasswordForm && (
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setChangingPassword(true)}
+              >
+                Đổi mật khẩu
+              </button>
+            )}
             <button
               type="button"
-              className="button button--ghost"
-              onClick={() => setChangingPassword(true)}
+              className="button button--secondary"
+              onClick={() => void sessionManager.logout()}
             >
-              Đổi mật khẩu
+              Đăng xuất
             </button>
-          )}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void sessionManager.logout()}
-          >
-            Đăng xuất
-          </button>
+          </div>
         </div>
       </header>
       <main className="app-main">
-        <h1>
-          Xin chào {session.account.fullName} ({ROLE_LABELS[session.account.role]})
-        </h1>
+        <div className="page-header">
+          <h1>
+            Xin chào {session.account.fullName} ({roleLabel})
+          </h1>
+        </div>
         {notice && (
           <p role="status" className="banner banner--success">
             {notice}
@@ -100,6 +124,6 @@ export function App({ sessionManager = defaultSessionManager, accountApi }: AppP
           />
         )}
       </main>
-    </>
+    </div>
   )
 }
