@@ -14,18 +14,16 @@ Every rule carries one of these labels:
 | **Proposed** | The approved target design. Not implemented yet; apply it only in a change that intentionally adopts it. |
 | **TBD** | Depends on an open business or technical decision. Do not implement until the decision is recorded. |
 
-**Adoption status.** The Mint & Navy tokens (adopted 2026-10-15, replacing Clinical Clarity), palette, typography fallbacks, focus treatment, form controls, buttons, banners, split login screen, password-change screen, and sidebar shell are implemented in `frontend/src`. Font delivery and proposed components not required by those screens remain unimplemented; see the [Adoption Plan](#adoption-plan).
+**Adoption status.** The Clinical Clarity tokens, palette, typography fallbacks, focus treatment, form controls, buttons, banners, login screen, password-change screen, and signed-in shell are implemented in `frontend/src`. Font delivery and proposed components not required by those screens remain unimplemented; see the [Adoption Plan](#adoption-plan).
 
 ## Design Direction
 
 **Existing.** A professional, calm, minimal tool for clinic staff working long shifts at desktop workstations.
 
 - **Readable first.** Dark text on light surfaces, generous line height for Vietnamese diacritics, no low-contrast "aesthetic" grays.
-- **Soft mint canvas, white work surfaces, navy ink.** The page background is a pale gray-mint; tables, forms, and panels sit on white rounded cards; text and primary actions are deep navy; a light mint accent marks the brand, avatars, and selection.
-- **Soft and rounded.** Generous radii (8px controls, 16px cards) and one subtle card shadow give a calm, modern feel without decoration.
+- **Light blue canvas, white work surfaces.** The page background is Secondary blue; tables, forms, and panels sit on white.
 - **Dense but orderly.** Optimized for patient tables, waiting queues, and clinical forms during the 07:00–09:00 reception peak (200–300 patients per day, `docs/business-context.md`). Density comes from tight, consistent spacing, never from smaller-than-legible text.
-- **Color carries meaning, not decoration.** Navy marks the main action, teal marks focus, mint marks brand and selection. No gradients, glassmorphism, background images, or decorative illustrations; the only shadows are `--shadow-card` and `--shadow-dialog`.
-- **Provenance.** The direction takes only a general color family (mint, gray-mint, navy) and a soft-card feel from healthcare dashboards the team reviewed. Layouts, components, and assets are original to this project; no third-party template files, layouts, or artwork are copied.
+- **Color carries meaning, not decoration.** Primary blue marks interaction and selection. No gradients, glassmorphism, background images, decorative illustrations, or ornamental shadows.
 - **Desktop-first enterprise application.** Mouse and keyboard are the primary inputs.
 
 ## Current Implementation Baseline
@@ -36,11 +34,10 @@ Every rule carries one of these labels:
 | --- | --- |
 | Styling approach | One global stylesheet, `src/styles/global.css`; plain CSS, no UI or CSS framework, no CSS modules |
 | Font | Be Vietnam Pro fallback stack; font delivery remains TBD |
-| Text color | Neutral (navy) token `#1E3550` |
-| Page background | Secondary token `#E8F0EF` |
+| Text color | Neutral token `#16383F` |
+| Page background | Secondary token `#DCEBF6` |
 | Feedback | Tokenized error, warning, and success banners with text and a left border |
-| Application shell | White left sidebar (brand, account card, account actions) and a canvas content region; collapses to a top bar below 900px |
-| Login | Navy brand panel beside a centered sign-in card; the panel collapses to a strip below 900px |
+| Application shell | White header and a responsive content region |
 | Narrow forms | Tokenized white cards constrained by `--form-width` |
 | Form layout | `.form` and `.field` grids with spacing tokens; labels remain above inputs |
 | Inputs | Explicit size, padding, border, radius, focus, invalid, and disabled states |
@@ -62,53 +59,52 @@ Existing component conventions that remain valid under the new design:
 
 ### Brand Palette — Official Tokens
 
-**Existing.** Mint & Navy. These values are the official brand colors; derive states from the derived tokens below. Token names are kept from the previous palette so components did not change.
+**Proposed.** These five values are the official brand colors. Do not alter them; derive states from the derived tokens below.
 
 | Token | Value | Name | Intended use |
 | --- | --- | --- | --- |
-| `--color-primary` | `#0F7C72` | Teal | Focus rings, input border on focus, info banner bar, meaningful icons. Not a fill behind body text. |
-| `--color-secondary` | `#E8F0EF` | Canvas | Application canvas; account card background in the sidebar. |
-| `--color-tertiary` | `#D4E5E2` | Tertiary | Table header background, selected table row. |
-| `--color-neutral` | `#1E3550` | Navy | Primary text and headings; login brand panel; brand-mark glyph; tooltip background. |
-| `--color-white` | `#FFFFFF` | White | Cards, panels, tables, form fields, dialogs, sidebar; text on navy. |
-| `--color-accent` | `#A6EBE0` | Mint | Brand mark, avatar, active navigation item, pressed secondary/ghost buttons, accent text on navy. Always with navy text on it; never as text on light surfaces. |
-| `--color-accent-soft` | `#E0F5F1` | Mint soft | Hover background for secondary/ghost buttons; info banner background; caption text on navy. |
+| `--color-primary` | `#2A7FB8` | Primary | Brand and interaction accent: focus rings, selected-row indicator bar, active navigation indicator, checked checkbox/radio, input border on focus, outline-button border, icons, large headings (≥ 24px) if a brand accent is wanted. **Not** for body-size text or as a fill behind body-size white text — see contrast note. |
+| `--color-secondary` | `#DCEBF6` | Secondary | Application canvas (page background behind white surfaces); hover background for secondary/ghost buttons and navigation items. |
+| `--color-tertiary` | `#CFE1EE` | Tertiary | Selected table row and selected navigation item background; table header background; border of white cards placed on the canvas; pressed background for secondary/ghost buttons. |
+| `--color-neutral` | `#16383F` | Neutral | Primary text and headings; strong icons; tooltip background (with white text). |
+| `--color-white` | `#FFFFFF` | White | Content surfaces: cards, panels, tables, form fields, dialogs; text on filled buttons. |
+
+**Contrast note.** `#2A7FB8` reaches **4.35:1** on white — below WCAG 2.2 AA (4.5:1) for normal text, though above the 3:1 required for large text and for UI component boundaries and focus indicators. Therefore filled buttons and links use the darker derived `--color-primary-strong`, and Primary itself is reserved for non-text indicators and large text.
 
 ### Derived Tokens
 
-**Existing.** Ratios are WCAG 2.x contrast against the listed background.
+**Proposed.** Computed to satisfy contrast requirements while staying in the Clinical Clarity hue family. Ratios are WCAG 2.x contrast against the listed background.
 
 | Token | Value | Use | Contrast |
 | --- | --- | --- | --- |
-| `--color-primary-strong` | `#1E3550` | Primary button fill | White on it 12.50 |
-| `--color-primary-hover` | `#15283E` | Primary button hover | White on it 14.95 |
-| `--color-primary-active` | `#0D1B2B` | Primary button pressed | — |
-| `--color-link` | `#0B665E` | Link text | On white 6.83; Canvas 5.90 |
-| `--color-text-secondary` | `#46616A` | Helper text, captions, metadata, placeholder | On white ≥ 6; Canvas ≥ 5; Tertiary ≥ 4.5 |
-| `--color-border-control` | `#6A8587` | Input borders, secondary button border | On white 3.95; Canvas 3.41 |
-| `--color-border-subtle` | `#DBE7E5` | Card borders, dividers (decorative) | Not required to meet 3:1 |
-| `--color-surface-hover` | `#F2F8F7` | Table row hover | Navy on it 11.63 |
-| `--color-disabled-bg` | `#EDF2F2` | Disabled control background | — |
-| `--color-disabled-text` | `#5D7374` | Disabled control text | 4.46 on disabled bg |
-| `--color-danger` | `#B91C1C` | Error text, invalid border, destructive fill | On white 6.47; Canvas 5.59 |
+| `--color-primary-strong` | `#236C9D` | Primary button fill; link text; text-color for outline/ghost buttons | White on it 5.67; on white 5.67; on Secondary 4.66 |
+| `--color-primary-hover` | `#1C5880` | Primary button hover fill; link hover | White on it 7.62; on Tertiary 5.68 |
+| `--color-primary-active` | `#164766` | Primary button pressed fill | White on it 9.87 |
+| `--color-text-secondary` | `#4A6670` | Helper text, captions, table metadata, placeholder | On white 6.13; Secondary 5.04; Tertiary 4.57 |
+| `--color-border-control` | `#5F7F92` | Input, select, checkbox borders (boundary needed to identify the control) | On white 4.25; Secondary 3.50 (≥ 3:1) |
+| `--color-border-subtle` | `#C9D8E3` | Table row dividers, section separators (decorative only) | Not required to meet 3:1 |
+| `--color-surface-hover` | `#F1F6FA` | Table row hover on white surfaces | Neutral on it 11.55 |
+| `--color-disabled-bg` | `#EDF2F5` | Disabled control background | — |
+| `--color-disabled-text` | `#5E7782` | Disabled control text | 4.20 on disabled bg |
+| `--color-danger` | `#B91C1C` | Error text, invalid-field border, destructive button fill. **Existing** value, kept. | On white 6.47; Secondary 5.32; white on it 6.47 |
 | `--color-danger-hover` | `#A51A1A` | Destructive button hover | White on it 7.60 |
-| `--color-danger-bg` | `#FDECEC` | Error banner background | — |
-| `--color-success` | `#19693C` | Success text and icon | On white 6.72; Canvas 5.80 |
+| `--color-danger-bg` | `#FDECEC` | Error banner background | Danger on it 5.66 |
+| `--color-success` | `#19693C` | Success text and icon | On white 6.72; Secondary 5.52; on success bg 5.92 |
 | `--color-success-bg` | `#E6F4EC` | Success banner background | — |
-| `--color-warning` | `#8A5A00` | Warning text and icon | On white 5.93; Canvas 5.12 |
+| `--color-warning` | `#8A5A00` | Warning text and icon | On white 5.93; Secondary 4.87; on warning bg 5.42 |
 | `--color-warning-bg` | `#FFF4DB` | Warning banner background | — |
-| `--color-info` | `#0B665E` | Informational text | See `link` |
-| `--color-info-bg` | `#E0F5F1` | Informational banner background | — |
+| `--color-info` | `#236C9D` | Informational text and icon (same as `primary-strong`) | See `primary-strong` |
+| `--color-info-bg` | `#DCEBF6` | Informational banner background (same as Secondary) | — |
 
-Navy `#1E3550` text contrast: 12.50 on white, 10.80 on Canvas, 9.58 on Tertiary, 9.27 on Mint — AAA everywhere it is used. Teal focus ring: 5.06 on white, 4.38 on Canvas, 3.88 on Tertiary — all ≥ 3:1.
+Neutral `#16383F` text contrast: 12.56 on white, 10.32 on Secondary, 9.37 on Tertiary — AAA everywhere it is used.
 
 ### Color Rules
 
 **Proposed.**
 
-1. Body-size text (< 24px regular, < 18.66px bold) must be at least 4.5:1 against its background. On light surfaces use only `neutral`, `text-secondary`, `link`, `danger`, `success`, or `warning`; on navy use `white`, `accent`, or `accent-soft`.
+1. Body-size text (< 24px regular, < 18.66px bold) must be at least 4.5:1 against its background. Use only `neutral`, `text-secondary`, `primary-strong`, `primary-hover`, `danger`, `success`, or `warning` for text.
 2. Control boundaries, focus indicators, and meaningful icons must be at least 3:1 against adjacent colors.
-3. Never use Secondary, Tertiary, Accent, or Accent soft as text on light surfaces or as the only boundary of a control.
+3. Never use Secondary or Tertiary as text or as the only boundary of a control; they are 1.2–1.3:1 against white.
 4. Never convey state by color alone. Errors have text; selection has a bar plus background; priority has a text label; statuses have a text label.
 5. Dark mode is **TBD** and not designed. Do not add dark-mode styles until requested.
 
@@ -183,8 +179,8 @@ Do not use monospace for names, labels, prose, or amounts of money. Do not displ
 | Size | Height | Horizontal padding | Use |
 | --- | --- | --- | --- |
 | Compact | 32px | 12px | Row actions inside tables, toolbars |
-| Default | 40px | 16px | Forms, page actions |
-| Large | 44px | 24px | Login and other single-task screens |
+| Default | 36px | 16px | Forms, page actions |
+| Large | 40px | 20px | Login and other single-task screens |
 
 All interactive targets are at least 24×24 CSS px (WCAG 2.5.8); icon-only buttons are at least 32×32.
 
@@ -196,13 +192,11 @@ All interactive targets are at least 24×24 CSS px (WCAG 2.5.8); icon-only butto
 | --- | --- | --- |
 | `--border-width` | 1px | All borders |
 | `--border-width-focus` | 2px | Focus outline |
-| `--radius-sm` | 8px | Inputs, buttons, banners |
-| `--radius-md` | 16px | Cards, panels, dialogs, account card |
-| `--radius-pill` | 999px | Avatars, status badges |
-| `--shadow-card` | `0 1px 2px rgb(30 53 80 / 0.04), 0 4px 16px rgb(30 53 80 / 0.06)` | Cards on the canvas |
-| `--shadow-dialog` | `0 12px 32px rgb(30 53 80 / 0.18)` | Dialogs and popovers |
+| `--radius-sm` | 4px | Inputs, buttons, badges |
+| `--radius-md` | 8px | Cards, panels, dialogs |
+| `--shadow-dialog` | `0 8px 24px rgb(22 56 63 / 0.16)` | Dialogs and popovers only |
 
-Cards use a 1px `border-subtle` border plus `--shadow-card`. No other shadows.
+Cards and panels use a 1px Tertiary border on the canvas, not a shadow. No other shadows.
 
 ## Interactive States
 
@@ -212,16 +206,16 @@ Cards use a 1px `border-subtle` border plus `--shadow-card`. No other shadows.
 
 - Use `:focus-visible`, never remove focus outlines without a replacement.
 - Style: `outline: 2px solid var(--color-primary); outline-offset: 2px;`
-- Ring color `primary` (teal); contrast 5.06:1 on white, 4.38:1 on Canvas, 3.88:1 on Tertiary — all ≥ 3:1. The 2px offset places the ring against the surrounding surface, so it stays visible around filled buttons.
+- Contrast of the ring: 4.35:1 on white, 3.58:1 on Secondary, 3.24:1 on Tertiary — all ≥ 3:1. The 2px offset places the ring against the surrounding surface, so it stays visible around filled buttons.
 - Inputs additionally switch their border to `--color-primary` on focus.
 
 ### Buttons
 
 | Variant | Default | Hover | Active (pressed) | Disabled |
 | --- | --- | --- | --- | --- |
-| Primary | Navy `primary-strong` fill, white text | `primary-hover` fill | `primary-active` fill | `disabled-bg` fill, `disabled-text`, `border-subtle` border |
-| Secondary (outline) | White fill, `border-control` 1px border, `neutral` text | `accent-soft` fill | `accent` fill | `disabled-bg` fill, `disabled-text`, `border-subtle` border |
-| Ghost | Transparent, `neutral` text | `accent-soft` fill | `accent` fill | `disabled-text`, no fill |
+| Primary | `primary-strong` fill, white text | `primary-hover` fill | `primary-active` fill | `disabled-bg` fill, `disabled-text`, `border-subtle` border |
+| Secondary (outline) | White fill, `primary` 1px border, `primary-strong` text | `secondary` fill | `tertiary` fill, `primary-hover` text | `disabled-bg` fill, `disabled-text`, `border-subtle` border |
+| Ghost | Transparent, `primary-strong` text | `secondary` fill | `tertiary` fill | `disabled-text`, no fill |
 | Danger | `danger` fill, white text | `danger-hover` fill | `danger-hover` fill | As Primary disabled |
 
 Rules:
@@ -246,7 +240,7 @@ Placeholders are examples, never a replacement for the label.
 
 ### Links
 
-`link` text, underlined. Hover: `neutral`. Visited links are not styled differently.
+`primary-strong` text, underlined. Hover: `primary-hover`. Visited links are not styled differently.
 
 ## Feedback and Messages
 
@@ -284,17 +278,11 @@ Placeholders are examples, never a replacement for the label.
 
 ### Application Shell
 
-**Existing.**
+**TBD — routing and navigation are undecided** (`docs/architecture.md`). When decided, the proposed shape is:
 
-- Left sidebar (`header.app-sidebar`, 248px, white, sticky): brand (mint tile with a navy plus mark, product name) at the top; account card at the bottom on a Canvas background with a mint initial avatar, full name, role label, `Đổi mật khẩu` (ghost) and `Đăng xuất` (secondary).
-- Main region (`main.app-main`, canvas, max 64rem): page header with the `h1`, then banners and cards.
-- Below 900px the sidebar becomes a top bar and the account card flattens into a row.
-
-**TBD — navigation items.** Routing is undecided (`docs/architecture.md`). When decided, navigation goes in the sidebar between the brand and the account card, showing only the signed-in role's functions (BR-02, `docs/permission-matrix.md`). Proposed item style: 40px row, `--radius-sm`, navy text; hover `accent-soft`; active `accent` background, 600 weight, `aria-current="page"`.
-
-### Login Screen
-
-**Existing.** Two columns: a navy brand panel (`aside.login-brand`: brand, headline with a mint accent phrase, caption) and a centered white sign-in card. Below 900px the panel collapses to a brand strip above the card.
+- top bar: application name, signed-in user's full name and role label, logout;
+- left navigation: only the functions of the signed-in role (BR-02, `docs/permission-matrix.md`); active item uses `tertiary` background and a 3px `primary` left bar;
+- main region: canvas with page content.
 
 The UI hides functions a role cannot use, but the backend remains the authority for authorization.
 
@@ -329,7 +317,7 @@ For examination, conclusion, and paraclinical waiting lists (BR-18).
 
 ### Status Badge
 
-- Inline pill: `--radius-pill`, 12px text, 600 weight, `--space-1` vertical and `--space-2` horizontal padding, always with a text label.
+- Inline pill: `--radius-sm`, 12px text, 600 weight, `--space-1` vertical and `--space-2` horizontal padding, always with a text label.
 - Available tones: neutral (`neutral` on `tertiary`), info, success, warning, danger (each token pair from [Feedback and Messages](#feedback-and-messages)).
 - **TBD — status-to-tone mapping.** Visit, order, receipt, and account statuses are defined only in approved source-of-truth documents (`docs/state-transitions.md` is currently being rewritten). Assign tones per status when its labels are approved; do not create statuses or labels in the UI.
 
@@ -400,7 +388,7 @@ No UI component library, CSS framework, or CSS-in-JS library is currently adopte
 1. **Explicit approval.** The project team explicitly approves adopting the specific tool for a stated, current need (`AGENTS.md`: no dependencies without a demonstrated need). Installing a package, generating components, or adding configuration does not count as approval.
 2. **Compatibility evaluation**, recorded before any production code depends on the tool. It must confirm:
    - compatibility with the project's React, TypeScript (strict, `verbatimModuleSyntax`), Vite, ESLint, and Vitest versions in `frontend/package.json`;
-   - that the Mint & Navy tokens in this document can be expressed exactly in the tool's theme or configuration, without changing any token value;
+   - that the Clinical Clarity tokens in this document can be expressed exactly in the tool's theme or configuration, without changing any token value;
    - that WCAG 2.2 AA requirements in this document, including the contrast ratios and focus, disabled, and error states, are met or exceeded by the generated components;
    - coexistence with, or a migration path from, `src/styles/global.css` without unintended visual changes to existing screens;
    - that existing tests, which query by role and Vietnamese label, keep passing without being weakened;
@@ -416,9 +404,8 @@ Adoption proceeds incrementally:
 
 1. **Completed:** add the tokens as CSS custom properties.
 2. **Completed:** switch existing screens to tokens and apply the palette, typography fallbacks, focus, and button/input states; verify the login, change-password, and signed-in screens.
-3. **Completed 2026-10-15:** replace Clinical Clarity with Mint & Navy; adopt the split login screen and sidebar shell.
-4. Decide font delivery (TBD above), then load Be Vietnam Pro and JetBrains Mono.
-5. Build new proposed components only as use cases require them.
+3. Decide font delivery (TBD above), then load Be Vietnam Pro and JetBrains Mono.
+4. Build new proposed components only as use cases require them.
 
 ## Open Design Decisions
 
@@ -426,7 +413,7 @@ Adoption proceeds incrementally:
 | --- | --- |
 | Font delivery (self-hosted package vs external service) | **TBD** |
 | UI framework (for example Tailwind CSS, shadcn/ui) | **None adopted**; possible after approval and evaluation ([UI Framework Adoption](#ui-framework-adoption)) |
-| Routing and navigation items | **TBD** (`docs/architecture.md`); shell layout adopted |
+| Routing, navigation structure, application shell | **TBD** (`docs/architecture.md`) |
 | Status labels and badge tone mapping | **TBD** (pending approved state documents) |
 | Required-field wording | **TBD** |
 | Date, time zone, and currency formats | **TBD** |

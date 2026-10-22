@@ -1,37 +1,101 @@
-/* Mint & Navy tokens; names and values come from DESIGN.md. */
+@import "tailwindcss";
+
+/* ==========================================================================
+   WellNest Hospital Management Design Tokens (Centralized CSS System)
+   ========================================================================== */
 :root {
-  --color-primary: #0f7c72;
-  --color-secondary: #e8f0ef;
-  --color-tertiary: #d4e5e2;
-  --color-neutral: #1e3550;
+  /* Canvas & Surface Colors */
+  --color-page-bg: #f4f8f7;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-hover: #edf5f3;
+
+  /* Primary Brand Action (WellNest Deep Slate Navy) */
+  --color-primary: #142534;
+  --color-primary-strong: #0d9488;
+  --color-primary-hover: #0f1d2a;
+  --color-primary-active: #09131c;
+  --color-primary-foreground: #ffffff;
+
+  /* Accent & Mint Highlights (WellNest Cyan & Medical Mint) */
+  --color-accent-mint: #7de5d8;
+  --color-accent-mint-strong: #0d9488;
+  --color-accent-mint-hover: #0f766e;
+  --color-accent-mint-light: #e8faf6;
+  --color-accent-mint-foreground: #0c7a6d;
+
+  /* Secondary & Backgrounds */
+  --color-secondary: #f4f8f7;
+  --color-secondary-mint: #e8faf6;
+  --color-tertiary: #e3ece9;
+
+  /* Main & Muted Typography */
+  --color-neutral: #142534;
+  --color-neutral-dark: #0f1d2a;
+  --color-neutral-deep: #142230;
+  --color-text-main: #142534;
+  --color-text-secondary: #60737d;
+  --color-text-muted: #8c9da6;
+  --color-disabled-text: #94a3b8;
+  --color-disabled-bg: #f1f5f9;
   --color-white: #ffffff;
-  --color-accent: #a6ebe0;
-  --color-accent-soft: #e0f5f1;
 
-  --color-primary-strong: #1e3550;
-  --color-primary-hover: #15283e;
-  --color-primary-active: #0d1b2b;
-  --color-link: #0b665e;
-  --color-text-secondary: #46616a;
-  --color-border-control: #6a8587;
-  --color-border-subtle: #dbe7e5;
-  --color-surface-hover: #f2f8f7;
-  --color-disabled-bg: #edf2f2;
-  --color-disabled-text: #5d7374;
-  --color-danger: #b91c1c;
-  --color-danger-hover: #a51a1a;
-  --color-danger-bg: #fdecec;
-  --color-success: #19693c;
-  --color-success-bg: #e6f4ec;
-  --color-warning: #8a5a00;
-  --color-warning-bg: #fff4db;
-  --color-info: #0b665e;
-  --color-info-bg: #e0f5f1;
+  /* Borders & Focus Rings */
+  --color-border: #e3ece9;
+  --color-border-subtle: #edf2f0;
+  --color-border-control: #d5e0dc;
+  --color-border-focus: #14b8a6;
+  --color-focus-ring: rgba(20, 184, 166, 0.2);
 
-  /* Font delivery is TBD (DESIGN.md), so only the fallback stacks apply. */
-  --font-family-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-family-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Status Colors */
+  --color-success: #0d9488;
+  --color-success-bg: #d8f8f3;
+  --color-success-border: #a7f3e5;
+  --color-success-text: #0c7a6d;
 
+  --color-warning: #d98a1e;
+  --color-warning-bg: #fef6e4;
+  --color-warning-border: #fde68a;
+  --color-warning-text: #b45309;
+
+  --color-danger: #e05a47;
+  --color-danger-hover: #c94634;
+  --color-danger-bg: #fdece8;
+  --color-danger-border: #fbc9c0;
+  --color-danger-text: #d9534f;
+
+  --color-info: #0284c7;
+  --color-info-bg: #e0f2fe;
+  --color-info-border: #bae6fd;
+  --color-info-text: #0369a1;
+
+  /* shadcn/ui Standard Compatibility Variables */
+  --background: 160 20% 97%;
+  --foreground: 208 44% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 208 44% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 208 44% 14%;
+  --primary: 208 44% 14%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 168 55% 95%;
+  --secondary-foreground: 172 82% 26%;
+  --muted: 165 20% 94%;
+  --muted-foreground: 202 13% 43%;
+  --accent: 172 66% 69%;
+  --accent-foreground: 172 82% 26%;
+  --destructive: 8 72% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 164 16% 91%;
+  --input: 164 12% 86%;
+  --ring: 172 80% 40%;
+  --radius: 0.75rem;
+
+  /* Typography Stacks */
+  --font-family-sans: 'Plus Jakarta Sans', 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -40,22 +104,26 @@
   --space-6: 32px;
   --space-7: 48px;
 
+  /* Border & Radii */
   --border-width: 1px;
   --border-width-focus: 2px;
-  --radius-sm: 8px;
-  --radius-md: 16px;
-  --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgb(30 53 80 / 0.04), 0 4px 16px rgb(30 53 80 / 0.06);
-  --shadow-dialog: 0 12px 32px rgb(30 53 80 / 0.18);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
 
-  --form-width: 22rem;
-  --sidebar-width: 248px;
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(20, 37, 52, 0.04);
+  --shadow-md: 0 4px 16px -2px rgba(20, 37, 52, 0.05);
+  --shadow-lg: 0 12px 32px -4px rgba(20, 37, 52, 0.08);
+
+  --form-width: 24rem;
 
   color-scheme: light;
   font-family: var(--font-family-sans);
   font-size: 100%;
   color: var(--color-neutral);
-  background: var(--color-secondary);
+  background: var(--color-page-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -92,57 +160,12 @@ h2 {
   font-weight: 600;
 }
 
-a {
-  color: var(--color-link);
-}
-
-a:hover {
-  color: var(--color-neutral);
-}
-
 :focus-visible {
   outline: var(--border-width-focus) solid var(--color-primary);
   outline-offset: 2px;
 }
 
-/* Brand: a mint tile with a plus mark, followed by the product name. */
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.brand__mark {
-  position: relative;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  background: var(--color-accent);
-  border-radius: 10px;
-}
-
-.brand__mark::before,
-.brand__mark::after {
-  content: '';
-  position: absolute;
-  inset: 50% auto auto 50%;
-  background: var(--color-neutral);
-  border-radius: 2px;
-  transform: translate(-50%, -50%);
-}
-
-.brand__mark::before {
-  width: 16px;
-  height: 4px;
-}
-
-.brand__mark::after {
-  width: 4px;
-  height: 16px;
-}
-
-/* Product name shown beside the brand mark. */
+/* Product name shown in the shell header and above the login card. */
 .app-name {
   font-size: 1rem;
   line-height: 1.5rem;
@@ -151,9 +174,8 @@ a:hover {
 
 .card {
   background: var(--color-white);
-  border: var(--border-width) solid var(--color-border-subtle);
+  border: var(--border-width) solid var(--color-tertiary);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
   padding: var(--space-5);
 }
 
@@ -175,7 +197,7 @@ a:hover {
 
 .input {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 var(--space-3);
   font: inherit;
   color: var(--color-neutral);
@@ -203,7 +225,7 @@ a:hover {
 }
 
 .input--large {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .form-actions {
@@ -216,8 +238,7 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 var(--space-4);
   font: inherit;
   font-weight: 600;
@@ -234,7 +255,7 @@ a:hover {
 }
 
 .button--large {
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 var(--space-5);
 }
 
@@ -256,30 +277,31 @@ a:hover {
 }
 
 .button--secondary {
-  color: var(--color-neutral);
+  color: var(--color-primary-strong);
   background: var(--color-white);
-  border-color: var(--color-border-control);
+  border-color: var(--color-primary);
 }
 
 .button--secondary:hover:not(:disabled) {
-  background: var(--color-accent-soft);
+  background: var(--color-secondary);
 }
 
 .button--secondary:active:not(:disabled) {
-  background: var(--color-accent);
+  color: var(--color-primary-hover);
+  background: var(--color-tertiary);
 }
 
 .button--ghost {
-  color: var(--color-neutral);
+  color: var(--color-primary-strong);
   background: transparent;
 }
 
 .button--ghost:hover:not(:disabled) {
-  background: var(--color-accent-soft);
+  background: var(--color-secondary);
 }
 
 .button--ghost:active:not(:disabled) {
-  background: var(--color-accent);
+  background: var(--color-tertiary);
 }
 
 .button--ghost:disabled {
@@ -313,12 +335,6 @@ a:hover {
   border-left-color: var(--color-success);
 }
 
-.banner--info {
-  color: var(--color-info);
-  background: var(--color-info-bg);
-  border-left-color: var(--color-primary);
-}
-
 /* Alerts rendered without a banner, such as the error boundary fallback. */
 p[role='alert']:not(.banner) {
   padding: var(--space-6);
@@ -342,128 +358,353 @@ p[role='alert']:not(.banner) {
   color: var(--color-text-secondary);
 }
 
-/* UC-1 Login: a navy brand panel beside the sign-in card. */
+/* UC-1 Login - Professional clinical split layout (design-taste-frontend skill) */
 
 .login-page {
-  display: grid;
-  grid-template-columns: minmax(20rem, 2fr) 3fr;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  background: var(--color-white);
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-family-sans);
+}
+
+.login-container {
+  display: flex;
+  width: 100%;
   min-height: 100vh;
 }
 
-.login-brand {
+/* Left Form Section */
+.login-form-section {
+  flex: 1.1;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: var(--space-6);
-  padding: var(--space-6);
-  color: var(--color-white);
-  background: var(--color-neutral);
-}
-
-.login-brand__headline {
-  max-width: 22rem;
-  font-size: 1.75rem;
-  line-height: 2.375rem;
-  font-weight: 600;
-}
-
-.login-brand__accent {
-  color: var(--color-accent);
-}
-
-.login-brand__caption {
-  color: var(--color-accent-soft);
-}
-
-.login-panel {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  padding: var(--space-6) var(--space-4);
-}
-
-.login-card {
-  width: 100%;
-  max-width: calc(var(--form-width) + 2 * var(--space-6));
-  padding: var(--space-6);
-}
-
-.login-card h1 {
-  margin-bottom: var(--space-1);
-}
-
-.login-card__intro {
-  margin-bottom: var(--space-5);
-  color: var(--color-text-secondary);
-}
-
-/* Authenticated application shell: white sidebar and a canvas content region. */
-
-.app-shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
-  min-height: 100vh;
-}
-
-.app-sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  height: 100vh;
-  padding: var(--space-5) var(--space-4);
+  padding: clamp(2rem, 5vw, 4.5rem);
   background: var(--color-white);
-  border-right: var(--border-width) solid var(--color-border-subtle);
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
-/* Navigation is TBD (DESIGN.md); the sidebar holds the brand and account only. */
-.app-sidebar__spacer {
-  flex: 1;
-}
-
-.account-card {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-secondary);
-  border-radius: var(--radius-md);
-}
-
-.account-card__identity {
+.login-brand-header {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
+  gap: 0.875rem;
 }
 
-.avatar {
-  display: grid;
-  place-items: center;
-  flex: none;
+.brand-logo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary-strong);
+}
+
+.brand-title-wrap {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand-title-wrap .brand-name {
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-neutral);
+}
+
+.brand-title-wrap .brand-sub {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.login-form-wrapper {
+  max-width: 400px;
+  width: 100%;
+  margin: 2.5rem 0;
+}
+
+.login-heading-group {
+  margin-bottom: 2.25rem;
+}
+
+.login-title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-neutral);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.5rem;
+}
+
+.login-subtitle {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.login-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.login-form .field label {
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-neutral);
-  background: var(--color-accent);
-  border-radius: var(--radius-pill);
 }
 
-.account-card__name {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
-.account-card__role {
-  font-size: 0.75rem;
-  line-height: 1.125rem;
+.input-icon {
+  position: absolute;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--color-text-secondary);
+  pointer-events: none;
 }
 
-.account-card__actions {
-  display: grid;
+.input.has-leading-icon {
+  padding-left: 2.75rem;
+}
+
+.input.has-trailing-icon {
+  padding-right: 2.75rem;
+}
+
+.login-form .input {
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-border-control);
+  padding-right: 1rem;
+  font-size: 0.9375rem;
+  color: var(--color-neutral);
+  background: #fbfdfe;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login-form .input::placeholder {
+  color: var(--color-disabled-text);
+  font-size: 0.875rem;
+}
+
+.login-form .input:focus {
+  border-color: var(--color-primary-strong);
+  background: var(--color-white);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+  outline: none;
+}
+
+.input-trailing-action {
+  position: absolute;
+  right: 0.875rem;
+  background: none;
+  border: none;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease;
+}
+
+.input-trailing-action:hover {
+  color: var(--color-neutral);
+}
+
+.login-form .button--primary {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: #0d9488;
+  color: var(--color-white);
+  border: 1px solid #0f766e;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.login-form .button--primary:hover:not(:disabled) {
+  background: #0f766e;
+  border-color: #115e59;
+}
+
+.login-form .button--primary:active:not(:disabled) {
+  background: #115e59;
+}
+
+.login-form .button--primary:disabled {
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+  border-color: var(--color-border-subtle);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.login-footer-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Right Hero / Branding section (WellNest aesthetic: Deep Navy / Slate with balanced teal accent) */
+.login-hero-section {
+  flex: 1.2;
+  background: #142230;
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(2.5rem, 6vw, 5rem);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-hero-wrapper {
+  position: relative;
+  z-index: 2;
+  max-width: 520px;
+  width: 100%;
+}
+
+.hero-emblem-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(20, 184, 166, 0.15);
+  color: #2dd4bf;
+  border-radius: var(--radius-md);
+  margin-bottom: 2rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.login-hero-title {
+  font-size: clamp(2.25rem, 3.8vw, 3.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.25rem;
+}
+
+.login-hero-title span {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.login-hero-brand {
+  font-size: clamp(2.75rem, 4.5vw, 4rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin-top: 0.25rem;
+}
+
+.login-hero-desc {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: #94a3b8;
+  font-weight: 400;
+  margin-bottom: 2.5rem;
+}
+
+.hero-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hero-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  font-size: 0.9375rem;
+  color: #e2e8f0;
+}
+
+.hero-feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(20, 184, 166, 0.2);
+  color: #2dd4bf;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .login-container {
+    flex-direction: column;
+  }
+
+  .login-hero-section {
+    display: none;
+  }
+
+  .login-form-section {
+    min-height: 100vh;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+  }
+
+  .login-form-wrapper {
+    margin: 2rem auto;
+  }
+}
+
+/* Authenticated application shell */
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-white);
+  border-bottom: var(--border-width) solid var(--color-tertiary);
+}
+
+.app-header__actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -471,14 +712,8 @@ p[role='alert']:not(.banner) {
   display: grid;
   gap: var(--space-5);
   align-content: start;
-  width: 100%;
-  max-width: 64rem;
+  max-width: 40rem;
   padding: var(--space-6);
-}
-
-.page-header {
-  display: grid;
-  gap: var(--space-1);
 }
 
 /* UC-3 Change Password */
@@ -491,62 +726,18 @@ p[role='alert']:not(.banner) {
   margin-bottom: var(--space-5);
 }
 
-@media (max-width: 900px) {
-  .login-page {
-    grid-template-columns: 1fr;
-  }
-
-  .login-brand {
-    padding: var(--space-5) var(--space-4);
-  }
-
-  .login-brand__headline,
-  .login-brand__caption {
-    display: none;
-  }
-
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .app-sidebar {
-    position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    height: auto;
-    padding: var(--space-3) var(--space-4);
-    border-right: 0;
-    border-bottom: var(--border-width) solid var(--color-border-subtle);
-  }
-
-  .app-sidebar__spacer {
-    display: none;
-  }
-
-  .account-card {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    padding: 0;
-    background: transparent;
-  }
-
-  .account-card__actions {
-    display: flex;
-    flex-wrap: wrap;
-  }
-}
-
 @media (max-width: 600px) {
+  .app-header,
   .app-main {
-    padding: var(--space-5) var(--space-4);
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
   }
 
-  .card,
-  .login-card {
+  .app-main {
+    padding-top: var(--space-5);
+  }
+
+  .card {
     padding: var(--space-4);
   }
 }
