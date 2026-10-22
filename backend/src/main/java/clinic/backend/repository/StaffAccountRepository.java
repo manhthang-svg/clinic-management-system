@@ -18,6 +18,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
 
     Optional<StaffAccount> findByUsername(String username);
 
+    boolean existsByEmailIgnoreCaseAndIdNot(String email, UUID id);
+
     /**
      * Finds and locks an account for the duration of an authentication transaction.
      *
@@ -29,6 +31,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
     Optional<StaffAccount> findByUsernameForAuthentication(@Param("username") String username);
 
     boolean existsByRole(Role role);
+
+    Optional<StaffAccount> findByRole(Role role);
 
     List<StaffAccount> findAllByPasswordHash(String passwordHash);
 }
