@@ -32,7 +32,7 @@ const ITEM_CLASS = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl tran
 const ACTIVE_CLASS = 'bg-[#d3ebe7] text-[#127e7a] font-semibold';
 const IDLE_CLASS = 'hover:bg-white hover:text-slate-800';
 
-export function AdminSidebar({ activeKey = 'accounts' }) {
+export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
   const [openGroups, setOpenGroups] = useState(() =>
     NAV_ITEMS.filter((item) => item.children?.some((child) => child.id === activeKey)).map((item) => item.id)
   );
@@ -80,6 +80,7 @@ export function AdminSidebar({ activeKey = 'accounts' }) {
                           key={child.id}
                           type="button"
                           aria-current={active ? 'page' : undefined}
+                          onClick={() => onNavigate?.(child.id)}
                           className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all cursor-pointer ${
                             active ? ACTIVE_CLASS : IDLE_CLASS
                           }`}
@@ -100,6 +101,7 @@ export function AdminSidebar({ activeKey = 'accounts' }) {
               key={item.id}
               type="button"
               aria-current={active ? 'page' : undefined}
+              onClick={() => onNavigate?.(item.id)}
               className={`${ITEM_CLASS} ${active ? ACTIVE_CLASS : IDLE_CLASS}`}
             >
               <Icon className="w-4 h-4" />
