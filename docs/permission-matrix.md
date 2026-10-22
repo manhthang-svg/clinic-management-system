@@ -42,8 +42,8 @@ Status values:
 | All roles | Session | Log in, log out | UC-1, UC-2 | Locked accounts cannot log in (BR-01). | Source |
 | All roles | Own account | Change password | UC-3 | Current password required (BR-03). | Source |
 | All roles | Own account | View profile; update phone number and email | UC-4 | Own account only; other fields are Admin-only (BR-04). | Source |
-| Admin | Staff account | List, search, view detail | UC-5, UC-6 | All accounts. Detail includes the 10 latest sign-in events (AQ-18). | Source |
-| Admin | Staff account | Create; update name, academic title, phone, email | UC-7, UC-8 | Username unique (BR-01). Role `ADMIN` cannot be assigned; the only Admin is the bootstrap account (AQ-17). | Source |
+| Admin | Staff account | List, search, view detail | UC-5, UC-6 | All accounts. Detail includes the 10 latest sign-in events, as specified in `security.md`. | Source |
+| Admin | Staff account | Create; update name, academic title, phone, email | UC-7, UC-8 | Username unique (BR-01). The current deployment provisions its Admin through bootstrap configuration. | Source |
 | Admin | Staff account | Assign or change role | UC-9 | Exactly one role per account (BR-02). | Source |
 | Admin | Staff account | Lock, unlock | UC-10 | — | Source |
 | Admin | Staff account | Reset password | UC-11 | Only Admin may reset (BR-03). | Source |

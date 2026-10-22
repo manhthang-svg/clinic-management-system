@@ -239,7 +239,7 @@ tables:
         proposal: keep
         standard: Không
         description: Ngày sinh nhân viên
-        note: Đã code (AQ-15)
+        note: Đã code theo Report 3
       gender:
         field: gender
         sql_type: varchar(20)
@@ -258,7 +258,7 @@ tables:
         proposal: keep
         standard: Không
         description: MALE, FEMALE, OTHER
-        note: Đã code (AQ-15)
+        note: Đã code theo Report 3
       address:
         field: address
         sql_type: text
@@ -268,7 +268,7 @@ tables:
         proposal: keep
         standard: Không
         description: Địa chỉ nhân viên
-        note: Đã code (AQ-15)
+        note: Đã code theo Report 3
       created_by_account_id:
         field: createdByAccountId
         sql_type: uuid

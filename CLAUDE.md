@@ -13,9 +13,9 @@ This file adds Claude-specific orientation. It does not override `AGENTS.md` or 
 | Engineering rules for all agents | [`AGENTS.md`](AGENTS.md) |
 | Architecture, layers, module boundaries | [`docs/architecture.md`](docs/architecture.md) |
 | Business scope, actors, glossary, business rules (BR-xx) | [`docs/business-context.md`](docs/business-context.md) |
-| Use cases (UC-xx) | [`docs/use-cases/`](docs/use-cases/) |
+| Use cases (UC-xx) | [`docs/source/Report-3_Software_Requirement_Specification.docx`](docs/source/Report-3_Software_Requirement_Specification.docx) |
 | Roles and permissions | [`docs/permission-matrix.md`](docs/permission-matrix.md) |
-| Statuses and transitions | [`docs/state-transitions.md`](docs/state-transitions.md), [`docs/use-cases/staff-account.md`](docs/use-cases/staff-account.md) |
+| Statuses and transitions | [`docs/state-transitions.md`](docs/state-transitions.md) |
 | HTTP API contracts and errors | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Database and migrations | [`docs/database-conventions.md`](docs/database-conventions.md) |
 | Authentication, tokens, logging, privacy | [`docs/security.md`](docs/security.md) |

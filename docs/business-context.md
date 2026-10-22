@@ -11,9 +11,9 @@ The content below is transcribed from the team's analysis workbooks in [`source/
 1. `usecases.xlsx`, sheet **`Mới`** — use-case catalog UC-1 → UC-74 and role assignments.
 2. `Business_flow.xlsx`, sheet **`BR`** — business rules BR-01 → BR-39 (English/Vietnamese).
 3. `Business_flow.xlsx`, sheet **`01 - Scope`** — functional areas and out-of-scope items.
-4. `Report-3_Software_Requirement_Specification.docx` (Report 3, Aug 2026) — detailed use-case flows, entity attributes, data rules, and validation formats. It is used to close questions the workbooks leave open (team decision, 15/10/2026).
+4. [`Report-3_Software_Requirement_Specification.docx`](source/Report-3_Software_Requirement_Specification.docx) (Report 3, Aug 2026) — the source of truth for detailed use-case flows, entity attributes, data rules, and validation formats.
 
-Team decisions recorded in [`security.md`](security.md) and in the decision table of [`use-cases/staff-account.md`](use-cases/staff-account.md#decisions) take precedence over Report 3. Where Report 3 differs from them, the difference is listed in that document's "Report 3 differences not adopted" section rather than silently applied. Any other conflict between Report 3 and the workbooks is recorded as an open question.
+Report 3 is authoritative for use-case behavior. The workbooks remain the source for the use-case catalog, role assignments, business rules, and scope identified above. Technical documents such as [`security.md`](security.md) and [`iteration-1-decisions.md`](iteration-1-decisions.md) may refine implementation details that Report 3 does not specify, but must not silently override a Report 3 use case. Any conflict is recorded as an open question before implementation.
 
 Superseded and kept only for history: `usecases.xlsx` sheet `Cũ` (UC-01 → UC-67, old numbering), `Business_flow.xlsx` sheets `02` → `09` (process steps, BR v9 numbering, change log). UC and BR codes in superseded sheets **do not** match the codes used in this repository.
 
@@ -83,7 +83,7 @@ Additional actor facts:
 | Payment | Payment | UC-69 → UC-73 |
 | End-of-day job (system) | — | No UC; defined by BR-22 |
 
-The full catalog is in [`use-cases/README.md`](use-cases/README.md).
+The detailed use-case catalog is in [Report 3](source/Report-3_Software_Requirement_Specification%20%281%29.docx).
 
 ## Out of Scope
 

@@ -85,7 +85,7 @@ Prices in VND. "—" in the insurance price means not covered by insurance (I1-D
 
 ## Staff Accounts
 
-Three accounts per role. The bootstrap Admin is **not** seeded; it is created by the bootstrap (AQ-10, AQ-17). Every account has a fictitious phone number and the email `<username>@clinic.example` (reserved domain).
+Three accounts per role. The bootstrap Admin is **not** seeded; it is created separately from environment configuration. Every account has a fictitious phone number and the email `<username>@clinic.example` (reserved domain).
 
 | Username | Full name | Role | Academic title | Gender | Room | Purpose |
 | --- | --- | --- | --- | --- | --- | --- |
