@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Navigate, Route, Routes } from 'react-router';
+import { ROUTES } from './routes/routes';
 import { createAccountApi } from './apis/accountApi';
 import { ChangePasswordForm } from './pages/auth/ChangePasswordForm';
 import { AccountManagementPage } from './pages/admin/AccountManagementPage';
@@ -46,12 +48,20 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
 
     if (session.account.role === 'ADMIN' && !showPasswordForm) {
       return (
-        <AccountManagementPage
-          currentAdmin={session.account}
-          notice={notice}
-          onLogout={() => void sessionManager.logout()}
-          onChangePassword={() => setChangingPassword(true)}
-        />
+        <Routes>
+          <Route
+            path="/admin/*"
+            element={
+              <AccountManagementPage
+                currentAdmin={session.account}
+                notice={notice}
+                onLogout={() => void sessionManager.logout()}
+                onChangePassword={() => setChangingPassword(true)}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to={ROUTES.ADMIN.ACCOUNTS} replace />} />
+        </Routes>
       );
     }
 

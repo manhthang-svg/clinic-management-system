@@ -4,6 +4,10 @@ export const ROUTES = {
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
     ACCOUNTS: '/admin/accounts',
+    ACCOUNT_CREATE: '/admin/accounts/new',
+    ACCOUNT_DETAIL: '/admin/accounts/:id',
+    ACCOUNT_EDIT: '/admin/accounts/:id/edit',
+    PROFILE: '/admin/profile',
     PATIENTS: '/admin/patients',
     APPOINTMENTS: '/admin/appointments',
     EXAMINATIONS: '/admin/examinations',
