@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Applies V2 and the development seed to a fresh PostgreSQL with the real dev profile, then checks the
+ * Applies V2 to V4 and the development seed to a fresh PostgreSQL with the real dev profile, then checks the
  * seed, the entity mappings, and key database constraints of the Iteration 1 schema.
  *
  * <p>Uses its own container so the seed never leaks into other integration tests.
@@ -121,6 +121,7 @@ class Iteration1SchemaIT {
         Instant lastLoginAt = createdAt.plusSeconds(60);
         Instant passwordChangedAt = createdAt.plusSeconds(120);
         Instant lockedAt = createdAt.plusSeconds(180);
+        Instant expiresAt = createdAt.plusSeconds(86_400);
 
         StaffAccount account = StaffAccount.builder()
                 .id(id)
@@ -128,6 +129,7 @@ class Iteration1SchemaIT {
                 .passwordHash("{bcrypt}mapped-hash")
                 .fullName("Mapped Account")
                 .academicTitle("BSCKI")
+                .practiceLicenseNo("000123/HCM-CCHN")
                 .dateOfBirth(LocalDate.of(1990, 5, 20))
                 .gender(Gender.FEMALE)
                 .phoneNumber("0912345678")
@@ -141,6 +143,8 @@ class Iteration1SchemaIT {
                 .lockReason("Temporary lock")
                 .lockedAt(lockedAt)
                 .lockedByAccountId(actorId)
+                .accountExpiresAt(expiresAt)
+                .accessSchedule("{\"days\": [1, 2, 3, 4, 5, 6], \"from\": \"06:30\", \"to\": \"18:00\"}")
                 .createdAt(createdAt)
                 .updatedAt(lockedAt)
                 .build();
@@ -157,17 +161,37 @@ class Iteration1SchemaIT {
         assertThat(restored.getLockReason()).isEqualTo("Temporary lock");
         assertThat(restored.getLockedAt()).isEqualTo(lockedAt);
         assertThat(restored.getLockedByAccountId()).isEqualTo(actorId);
+        assertThat(restored.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
+        assertThat(restored.getAccountExpiresAt()).isEqualTo(expiresAt);
+        assertThat(jdbcTemplate.queryForObject(
+                "select access_schedule ->> 'from' from staff_accounts where id = ?", String.class, id))
+                .isEqualTo("06:30");
     }
 
     @Test
     void mapsCatalogEntitiesWithTheirEnums() {
         List<Room> rooms = entityManager
-                .createQuery("select room from Room room where room.code = 'XN-SH'", Room.class)
+                .createQuery("select room from Room room where room.maphongkham = 'XN-SH'", Room.class)
                 .getResultList();
         assertThat(rooms).singleElement().satisfies(room -> {
             assertThat(room.getType()).isEqualTo(RoomType.PARACLINICAL);
             assertThat(room.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
+            assertThat(room.getPhongkham()).isEqualTo("Phòng Xét nghiệm Sinh hóa");
+            assertThat(room.isNew()).isFalse();
         });
+
+        Department department = entityManager
+                .createQuery("select department from Department department where department.makhoa = 'DEMO-XN'",
+                        Department.class)
+                .getSingleResult();
+        assertThat(department.getTenkhoa()).isEqualTo("Khoa Xét nghiệm");
+        assertThat(department.isActive()).isTrue();
+
+        ServiceGroup group = entityManager
+                .createQuery("select serviceGroup from ServiceGroup serviceGroup"
+                        + " where serviceGroup.loaimachidinh = 'MRI'", ServiceGroup.class)
+                .getSingleResult();
+        assertThat(group.getLoaichidinh()).isEqualTo("Chụp cộng hưởng từ (MRI)");
 
         MedicalService examination = entityManager.createQuery(
                         "select service from MedicalService service where service.type = :type",
@@ -176,6 +200,7 @@ class Iteration1SchemaIT {
                 .getSingleResult();
         assertThat(examination.getClinicPrice()).isEqualByComparingTo("150000");
         assertThat(examination.getDepartmentId()).isNull();
+        assertThat(examination.getTenchidinh()).isEqualTo("Khám bệnh");
 
         SimulatedInsuranceCard card = entityManager.find(SimulatedInsuranceCard.class, "HT3790000000003");
         assertThat(card.getCoverageRate()).isEqualTo((short) 95);
@@ -187,7 +212,7 @@ class Iteration1SchemaIT {
         UUID id = UUID.randomUUID();
         UUID actor = jdbcTemplate.queryForObject(
                 "select id from staff_accounts where username = 'lt.nguyenthihong'", UUID.class);
-        UUID room = jdbcTemplate.queryForObject("select id from rooms where code = 'PK-NGOAI'", UUID.class);
+        UUID room = jdbcTemplate.queryForObject("select id from rooms where maphongkham = 'PK-NGOAI'", UUID.class);
 
         transactionTemplate.executeWithoutResult(status -> entityManager.persist(new BusinessAuditEvent(
                 id, Instant.now(), actor, BusinessAuditEventType.ROOM_UPDATED, AuditedEntityType.ROOM, room,
@@ -203,9 +228,31 @@ class Iteration1SchemaIT {
     @Test
     void allowsOnlyOneActiveExaminationService() {
         assertThatThrownBy(() -> jdbcTemplate.update("""
-                insert into services (id, code, name, type, clinic_price, status, created_at, updated_at, version)
+                insert into services (id, code, tenchidinh, type, clinic_price, status, created_at, updated_at, version)
                 values (?, 'KB-002', 'Khám bệnh 2', 'EXAMINATION', 100000, 'ACTIVE', now(), now(), 0)
                 """, UUID.randomUUID()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void keepsDepartmentCodesAndNamesUnique() {
+        String insert = """
+                insert into departments (id, makhoa, tenkhoa, type, created_at, updated_at, version)
+                values (?, ?, ?, 'CLINICAL', now(), now(), 0)
+                """;
+
+        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "DEMO-NOI", "Khoa Mới"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "DEMO-MOI", "khoa nội"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void keepsPracticeLicenseNumbersUnique() {
+        String setLicense = "update staff_accounts set practice_license_no = '000999/HCM-CCHN' where username = ?";
+        jdbcTemplate.update(setLicense, "bs.tranvanan");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(setLicense, "bs.lethibinh"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -213,7 +260,7 @@ class Iteration1SchemaIT {
     void allowsOnlyOneActiveRoomPerStaffAccount() {
         UUID doctor = jdbcTemplate.queryForObject(
                 "select id from staff_accounts where username = 'bs.tranvanan'", UUID.class);
-        UUID otherRoom = jdbcTemplate.queryForObject("select id from rooms where code = 'PK-NGOAI'", UUID.class);
+        UUID otherRoom = jdbcTemplate.queryForObject("select id from rooms where maphongkham = 'PK-NGOAI'", UUID.class);
 
         assertThatThrownBy(() -> jdbcTemplate.update("""
                 insert into staff_room_assignments (id, staff_account_id, room_id, assigned_at, version)

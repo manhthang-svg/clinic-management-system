@@ -37,7 +37,7 @@ public class PaymentItem implements Persistable<UUID> {
     @Column(name = "service_id", nullable = false, updatable = false)
     private UUID serviceId;
 
-    @Column(name = "service_code_snapshot", nullable = false, updatable = false, length = 20)
+    @Column(name = "service_code_snapshot", nullable = false, updatable = false, length = 50)
     private String serviceCodeSnapshot;
 
     @Column(name = "service_name_snapshot", nullable = false, updatable = false, length = 200)

@@ -1,7 +1,6 @@
 package clinic.backend.entity;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 
 import clinic.backend.enums.ActivationStatus;
@@ -10,11 +9,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -23,34 +20,35 @@ import lombok.NoArgsConstructor;
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
 @Entity
-@Table(name = "services")
-public class MedicalService {
+@Table(name = "services", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_services_code", columnNames = "code")
+})
+public class MedicalService extends VersionedEntity {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
-    private UUID id;
-
-    @Column(name = "code", nullable = false, updatable = false, length = 20)
+    /** Technical-service code from the Ministry of Health list (I1-D40). */
+    @Column(name = "code", nullable = false, updatable = false, length = 50)
     private String code;
 
-    @Column(name = "name", nullable = false, length = 200)
-    private String name;
+    @Column(name = "tenchidinh", nullable = false, length = 255)
+    private String tenchidinh;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private MedicalServiceType type;
 
+    /** Null for the shared examination service (I1-D06). */
     @Column(name = "department_id")
     private UUID departmentId;
 
+    /** Null for the shared examination service (I1-D06). */
     @Column(name = "service_group_id")
     private UUID serviceGroupId;
 
     @Column(name = "clinic_price", nullable = false, precision = 15, scale = 0)
     private BigDecimal clinicPrice;
 
+    /** Null when the service is not covered by insurance (I1-D22). */
     @Column(name = "insurance_price", precision = 15, scale = 0)
     private BigDecimal insurancePrice;
 
@@ -60,15 +58,4 @@ public class MedicalService {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ActivationStatus status;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    // A null version marks a new entity for Spring Data.
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
 }

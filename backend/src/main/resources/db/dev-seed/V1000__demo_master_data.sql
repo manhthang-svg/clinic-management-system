@@ -5,14 +5,14 @@
 -- No password is committed: accounts get a placeholder hash that never matches, and the dev profile
 -- replaces it from DEV_SEED_PASSWORD at startup (DemoAccountPasswordService).
 
-INSERT INTO departments (id, name, type, description, created_at, updated_at, version) VALUES
-    ('0192a000-0001-7000-8000-000000000001', 'Khoa Nội', 'CLINICAL', 'Khám và điều trị nội khoa: cơ xương khớp, nội tiết, tiêu hóa, nội tổng quát', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
-    ('0192a000-0001-7000-8000-000000000002', 'Khoa Ngoại', 'CLINICAL', 'Khám ngoại khoa tổng quát', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
-    ('0192a000-0001-7000-8000-000000000003', 'Khoa Xét nghiệm', 'PARACLINICAL', 'Xét nghiệm huyết học, sinh hóa, vi sinh', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
-    ('0192a000-0001-7000-8000-000000000004', 'Khoa Chẩn đoán hình ảnh', 'PARACLINICAL', 'Siêu âm, X-quang, CT, MRI', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
-    ('0192a000-0001-7000-8000-000000000005', 'Khoa Thăm dò chức năng', 'PARACLINICAL', 'Nội soi, điện tim', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0);
+INSERT INTO departments (id, makhoa, tenkhoa, type, description, created_at, updated_at, version) VALUES
+    ('0192a000-0001-7000-8000-000000000001', 'DEMO-NOI', 'Khoa Nội', 'CLINICAL', 'Khám và điều trị nội khoa: cơ xương khớp, nội tiết, tiêu hóa, nội tổng quát', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
+    ('0192a000-0001-7000-8000-000000000002', 'DEMO-NGOAI', 'Khoa Ngoại', 'CLINICAL', 'Khám ngoại khoa tổng quát', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
+    ('0192a000-0001-7000-8000-000000000003', 'DEMO-XN', 'Khoa Xét nghiệm', 'PARACLINICAL', 'Xét nghiệm huyết học, sinh hóa, vi sinh', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
+    ('0192a000-0001-7000-8000-000000000004', 'DEMO-CDHA', 'Khoa Chẩn đoán hình ảnh', 'PARACLINICAL', 'Siêu âm, X-quang, CT, MRI', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
+    ('0192a000-0001-7000-8000-000000000005', 'DEMO-TDCN', 'Khoa Thăm dò chức năng', 'PARACLINICAL', 'Nội soi, điện tim', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0);
 
-INSERT INTO service_groups (id, code, name, type, created_at, updated_at, version) VALUES
+INSERT INTO service_groups (id, loaimachidinh, loaichidinh, type, created_at, updated_at, version) VALUES
     ('0192a000-0002-7000-8000-000000000001', 'HEMATOLOGY', 'Huyết học', 'LAB', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0002-7000-8000-000000000002', 'BIOCHEMISTRY', 'Sinh hóa', 'LAB', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0002-7000-8000-000000000003', 'MICROBIOLOGY', 'Vi sinh', 'LAB', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
@@ -23,7 +23,7 @@ INSERT INTO service_groups (id, code, name, type, created_at, updated_at, versio
     ('0192a000-0002-7000-8000-000000000008', 'ENDOSCOPY', 'Nội soi', 'FUNCTIONAL', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0002-7000-8000-000000000009', 'ECG', 'Điện tim', 'FUNCTIONAL', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0);
 
-INSERT INTO services (id, code, name, type, department_id, service_group_id, clinic_price, insurance_price, status, created_at, updated_at, version) VALUES
+INSERT INTO services (id, code, tenchidinh, type, department_id, service_group_id, clinic_price, insurance_price, status, created_at, updated_at, version) VALUES
     ('0192a000-0003-7000-8000-000000000001', 'KB-001', 'Khám bệnh', 'EXAMINATION', NULL, NULL, 150000, 50600, 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0003-7000-8000-000000000002', 'XN-HH-001', 'Tổng phân tích tế bào máu ngoại vi', 'LAB', '0192a000-0001-7000-8000-000000000003', '0192a000-0002-7000-8000-000000000001', 90000, 46200, 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0003-7000-8000-000000000003', 'XN-HH-002', 'Đông máu cơ bản (PT, APTT)', 'LAB', '0192a000-0001-7000-8000-000000000003', '0192a000-0002-7000-8000-000000000001', 120000, 63000, 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
@@ -42,7 +42,7 @@ INSERT INTO services (id, code, name, type, department_id, service_group_id, cli
     ('0192a000-0003-7000-8000-000000000010', 'TDCN-NS-001', 'Nội soi dạ dày - tá tràng', 'FUNCTIONAL', '0192a000-0001-7000-8000-000000000005', '0192a000-0002-7000-8000-000000000008', 500000, 244000, 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0003-7000-8000-000000000011', 'TDCN-DT-001', 'Điện tâm đồ', 'FUNCTIONAL', '0192a000-0001-7000-8000-000000000005', '0192a000-0002-7000-8000-000000000009', 80000, 32800, 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0);
 
-INSERT INTO rooms (id, department_id, service_group_id, code, name, location, type, status, created_at, updated_at, version) VALUES
+INSERT INTO rooms (id, department_id, service_group_id, maphongkham, phongkham, location, type, status, created_at, updated_at, version) VALUES
     ('0192a000-0004-7000-8000-000000000001', '0192a000-0001-7000-8000-000000000001', NULL, 'PK-NOI-CXK', 'Phòng khám Cơ xương khớp', 'Tòa A - Tầng 1 - P.101', 'EXAMINATION', 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0004-7000-8000-000000000002', '0192a000-0001-7000-8000-000000000001', NULL, 'PK-NOI-NT', 'Phòng khám Nội tiết', 'Tòa A - Tầng 1 - P.102', 'EXAMINATION', 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),
     ('0192a000-0004-7000-8000-000000000003', '0192a000-0001-7000-8000-000000000001', NULL, 'PK-NOI-TH', 'Phòng khám Tiêu hóa', 'Tòa A - Tầng 1 - P.103', 'EXAMINATION', 'ACTIVE', TIMESTAMPTZ '2026-10-15 00:00:00+00', TIMESTAMPTZ '2026-10-15 00:00:00+00', 0),

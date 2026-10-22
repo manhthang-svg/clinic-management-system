@@ -14,13 +14,15 @@ Demo hospital name (printed on tickets, R3 UC-41): **Bệnh viện Đa khoa Tư 
 
 ## Departments
 
-| # | Name | Type | Description |
-| --- | --- | --- | --- |
-| D1 | Khoa Nội | CLINICAL | Khám và điều trị nội khoa: cơ xương khớp, nội tiết, tiêu hóa, nội tổng quát |
-| D2 | Khoa Ngoại | CLINICAL | Khám ngoại khoa tổng quát |
-| D3 | Khoa Xét nghiệm | PARACLINICAL | Xét nghiệm huyết học, sinh hóa, vi sinh |
-| D4 | Khoa Chẩn đoán hình ảnh | PARACLINICAL | Siêu âm, X-quang, CT, MRI |
-| D5 | Khoa Thăm dò chức năng | PARACLINICAL | Nội soi, điện tim |
+Department codes are demo values, not codes from the official department code list; real codes come with the production data (I1-D02, I1-D40).
+
+| # | Code (makhoa) | Name | Type | Description |
+| --- | --- | --- | --- | --- |
+| D1 | DEMO-NOI | Khoa Nội | CLINICAL | Khám và điều trị nội khoa: cơ xương khớp, nội tiết, tiêu hóa, nội tổng quát |
+| D2 | DEMO-NGOAI | Khoa Ngoại | CLINICAL | Khám ngoại khoa tổng quát |
+| D3 | DEMO-XN | Khoa Xét nghiệm | PARACLINICAL | Xét nghiệm huyết học, sinh hóa, vi sinh |
+| D4 | DEMO-CDHA | Khoa Chẩn đoán hình ảnh | PARACLINICAL | Siêu âm, X-quang, CT, MRI |
+| D5 | DEMO-TDCN | Khoa Thăm dò chức năng | PARACLINICAL | Nội soi, điện tim |
 
 ## Service Groups
 
