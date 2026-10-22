@@ -145,4 +145,4 @@ Patients are not master data, but a few profiles make search and registration te
 
 To trigger the duplicate warning (I1-D19), create "Nguyễn Văn Bình", born 1950-03-12, without a citizen ID, in UC-37.
 
-All patients live at the fictitious address "12 Đường Số 1, Phường Bến Thành, TP. Hồ Chí Minh". Ethnicity `Kinh`, nationality `Viet Nam`. Citizen IDs are fictitious and follow the 12-digit format only.
+All patients live at the fictitious address "12 Đường Số 1, Phường Bến Thành, TP. Hồ Chí Minh". Ethnicity `Kinh` (code `01`); `ngoaikieu` is empty because all are Vietnamese. Gender is stored as the export code (`gioitinh`: 1 male, 2 female). Citizen IDs are fictitious and follow the 12-digit format only.

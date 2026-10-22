@@ -16,9 +16,13 @@ import clinic.backend.enums.BusinessAuditEventType;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Gender;
 import clinic.backend.enums.MedicalServiceType;
+import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.PriceType;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
 import clinic.backend.enums.SimulatedInsuranceCardStatus;
+import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.StaffAccountRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -95,7 +99,7 @@ class Iteration1SchemaIT {
         assertThat(count("staff_accounts where username like '%.%' and role <> 'ADMIN'")).isEqualTo(12);
         assertThat(count("staff_room_assignments")).isEqualTo(5);
         assertThat(count("simulated_insurance_cards")).isEqualTo(9);
-        assertThat(jdbcTemplate.queryForList("select patient_code from patients order by patient_code", String.class))
+        assertThat(jdbcTemplate.queryForList("select mabenhnhan from patients order by mabenhnhan", String.class))
                 .containsExactly("BN00000001", "BN00000002", "BN00000003", "BN00000004",
                         "BN00000005", "BN00000006", "BN00000007", "BN00000008");
     }
@@ -270,65 +274,97 @@ class Iteration1SchemaIT {
     }
 
     @Test
+    void mapsVisitsPaymentsAndTheirLines() {
+        UUID payment = insertPendingPayment();
+        UUID service = jdbcTemplate.queryForObject("select id from services where code = 'KB-001'", UUID.class);
+        jdbcTemplate.update("""
+                insert into payment_items (id, payment_id, service_id, service_code_snapshot, tenchidinh, price_type,
+                    dongia, coverage_rate, thanhtien, bhyt_chitra, benhnhanphaitra, created_at)
+                values (?, ?, ?, 'KB-001', 'Khám bệnh', 'INSURANCE', 50600, 95, 50600, 48070, 2530, now())
+                """, UUID.randomUUID(), payment, service);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            Payment stored = entityManager.find(Payment.class, payment);
+            assertThat(stored.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(stored.getItems()).singleElement().satisfies(line -> {
+                assertThat(line.getPriceType()).isEqualTo(PriceType.INSURANCE);
+                assertThat(line.getBenhnhanphaitra()).isEqualByComparingTo("2530");
+                assertThat(line.isCancelled()).isFalse();
+            });
+
+            Visit visit = entityManager.find(Visit.class, stored.getVisitId());
+            assertThat(visit.getDoituongbnLoai()).isEqualTo(VisitDoituongbnLoai.BHYT);
+            assertThat(visit.getStatus()).isEqualTo(VisitStatus.COMPLETED);
+            assertThat(visit.getInsuranceCoverageRate()).isEqualTo((short) 95);
+        });
+    }
+
+    @Test
     void rejectsPaymentLinesThatDoNotReconcile() {
         UUID payment = insertPendingPayment();
         UUID service = jdbcTemplate.queryForObject("select id from services where code = 'KB-001'", UUID.class);
         String insertLine = """
-                insert into payment_items (id, payment_id, service_id, service_code_snapshot, service_name_snapshot,
-                    price_type, applied_price, coverage_rate, insurance_amount, patient_amount)
-                values (?, ?, ?, 'KB-001', 'Khám bệnh', ?, ?, ?, ?, ?)
+                insert into payment_items (id, payment_id, service_id, service_code_snapshot, tenchidinh, price_type,
+                    dongia, coverage_rate, thanhtien, bhyt_chitra, benhnhanphaitra, created_at)
+                values (?, ?, ?, 'KB-001', 'Khám bệnh', ?, ?, ?, ?, ?, ?, now())
                 """;
 
-        jdbcTemplate.update(insertLine, UUID.randomUUID(), payment, service, "INSURANCE",
-                new BigDecimal("50600"), 95, new BigDecimal("48070"), new BigDecimal("2530"));
-
         assertThatThrownBy(() -> jdbcTemplate.update(insertLine, UUID.randomUUID(), payment, service, "INSURANCE",
-                new BigDecimal("50600"), 95, new BigDecimal("48070"), new BigDecimal("2000")))
+                new BigDecimal("50600"), 95, new BigDecimal("50600"), new BigDecimal("48070"), new BigDecimal("2000")))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbcTemplate.update(insertLine, UUID.randomUUID(), payment, service, "CLINIC",
-                new BigDecimal("150000"), null, new BigDecimal("1000"), new BigDecimal("149000")))
+                new BigDecimal("150000"), null, new BigDecimal("150000"), new BigDecimal("1000"),
+                new BigDecimal("149000")))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbcTemplate.update(insertLine, UUID.randomUUID(), payment, service, "INSURANCE",
-                new BigDecimal("50600"), null, new BigDecimal("0"), new BigDecimal("50600")))
+                new BigDecimal("50600"), null, new BigDecimal("50600"), new BigDecimal("0"), new BigDecimal("50600")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void rejectsAPriorityVisitWithoutAReason() {
-        UUID patient = jdbcTemplate.queryForObject(
-                "select id from patients where patient_code = 'BN00000008'", UUID.class);
-        UUID receptionist = jdbcTemplate.queryForObject(
-                "select id from staff_accounts where username = 'lt.tranvanquang'", UUID.class);
+        assertThatThrownBy(() -> insertVisit("DK-TEST-1", "BN00000008", "DV", true, null, null, null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
 
-        assertThatThrownBy(() -> jdbcTemplate.update("""
-                insert into visits (id, registration_code, patient_id, registered_by_account_id, visit_type, priority,
-                    reason_for_visit, status, registered_at, created_at, updated_at, version)
-                values (?, 'DK-TEST-1', ?, ?, 'SELF_PAID', true, 'Đau đầu', 'WAITING', now(), now(), now(), 0)
-                """, UUID.randomUUID(), patient, receptionist))
+    @Test
+    void rejectsAnInsuranceCardWhoseBenefitCodeDoesNotMatch() {
+        assertThatThrownBy(() -> insertVisit("DK-TEST-3", "BN00000004", "BHYT", false, "DN4790000000004", 3, 80))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private UUID insertPendingPayment() {
-        UUID patient = jdbcTemplate.queryForObject(
-                "select id from patients where patient_code = 'BN00000003'", UUID.class);
-        UUID receptionist = jdbcTemplate.queryForObject(
-                "select id from staff_accounts where username = 'lt.nguyenthihong'", UUID.class);
-        UUID visit = UUID.randomUUID();
-        jdbcTemplate.update("""
-                insert into visits (id, registration_code, patient_id, registered_by_account_id, visit_type, priority,
-                    reason_for_visit, insurance_card_number, insurance_benefit_code, insurance_expiry_date,
-                    insurance_coverage_rate, insurance_verified_at, status, registered_at, created_at, updated_at,
-                    version)
-                values (?, 'DK-TEST-2', ?, ?, 'INSURANCE', false, 'Khám định kỳ', 'HT3790000000003', 3,
-                    date '2026-12-31', 95, now(), 'WAITING_FEE_PAYMENT', now(), now(), now(), 0)
-                """, visit, patient, receptionist);
+        String code = "DK-" + UUID.randomUUID();
+        UUID visit = insertVisit(code, "BN00000003", "BHYT", false, "HT3790000000003", 3, 95);
         UUID payment = UUID.randomUUID();
         jdbcTemplate.update("""
-                insert into payments (id, invoice_number, visit_id, type, status, total_amount,
+                insert into payments (id, payment_code, visit_id, type, status, total_amount,
                     insurance_total_amount, patient_total_amount, created_at, updated_at, version)
-                values (?, 'HD-TEST-1', ?, 'EXAMINATION_FEE', 'PENDING', 50600, 48070, 2530, now(), now(), 0)
-                """, payment, visit);
+                values (?, ?, ?, 'PARACLINICAL_FEE', 'PENDING', 50600, 48070, 2530, now(), now(), 0)
+                """, payment, "HD-" + code.substring(3, 20), visit);
         return payment;
+    }
+
+    private UUID insertVisit(String sovaovien, String mabenhnhan, String doituongbnLoai, boolean priority,
+            String mabhyt, Integer benefitCode, Integer coverageRate) {
+        UUID patient = jdbcTemplate.queryForObject(
+                "select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
+        UUID receptionist = jdbcTemplate.queryForObject(
+                "select id from staff_accounts where username = 'lt.nguyenthihong'", UUID.class);
+        UUID room = jdbcTemplate.queryForObject("select id from rooms where maphongkham = 'PK-NOI-TQ'", UUID.class);
+        int queueNumber = jdbcTemplate.queryForObject(
+                "select coalesce(max(queue_number), 0) + 1 from visits", Integer.class);
+        UUID visit = UUID.randomUUID();
+        // Completed, so the one-active-visit-per-patient index (BR-17) does not couple the tests.
+        jdbcTemplate.update("""
+                insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
+                    doituongbn_loai, mabhyt, insurance_benefit_code, insurance_coverage_rate, lydovaovien,
+                    is_priority, queue_date, queue_number, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, now(), ?, ?, ?, ?, 'Khám định kỳ', ?, current_date, ?,
+                    'COMPLETED', now(), now(), 0)
+                """, visit, sovaovien, patient, room, receptionist, doituongbnLoai, mabhyt, benefitCode,
+                coverageRate, priority, queueNumber);
+        return visit;
     }
 
     private int count(String tableAndCondition) {

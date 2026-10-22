@@ -1,8 +1,9 @@
 package clinic.backend.enums;
 
 /**
- * What a payment charges; PARACLINICAL is added with UC-49.
+ * What a payment charges: the examination fee, or the services of one paraclinical order.
  */
 public enum PaymentType {
-    EXAMINATION_FEE
+    EXAMINATION_FEE,
+    PARACLINICAL_FEE
 }
