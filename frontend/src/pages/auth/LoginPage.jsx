@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { User, Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, Users, Stethoscope, Building2, ArrowRight, Activity } from 'lucide-react';
 import { ApiError } from '../../apis/apiError';
 import { Alert, AlertDescription, Badge, Button, Input, Label } from '../../components/ui';
+import { toast } from 'sonner';
 
 function errorMessage(error) {
     if (error instanceof ApiError && error.status === 401) {
@@ -93,7 +94,9 @@ export function LoginPage({ onLogin }) {
                     </Label>
                     <a href="#forgot" onClick={(e) => {
                       e.preventDefault();
-                      alert('Vui lòng liên hệ phòng Công nghệ Thông tin (IT) Bệnh viện để được hỗ trợ cấp lại mật khẩu.');
+                      toast.info('Vui lòng liên hệ phòng Công nghệ Thông tin (IT) Bệnh viện để được hỗ trợ cấp lại mật khẩu.', {
+                        duration: 5000,
+                      });
                     }} className="text-xs font-medium text-[#0d9488] hover:text-[#0f766e] hover:underline transition-colors cursor-pointer">
                       Quên mật khẩu?
                     </a>
