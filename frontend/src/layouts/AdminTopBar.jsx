@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Bell, ChevronDown, KeyRound, LogOut } from 'lucide-react';
+import { Search, Bell, ChevronDown, KeyRound, LogOut, UserRound } from 'lucide-react';
 import { ROLE_LABELS } from '../constants/accountData';
 
 function initials(fullName = '') {
@@ -8,7 +8,7 @@ function initials(fullName = '') {
   return ((words[0][0] || '') + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
 }
 
-export function AdminTopBar({ currentAdmin, onChangePassword, onLogout }) {
+export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -72,6 +72,20 @@ export function AdminTopBar({ currentAdmin, onChangePassword, onLogout }) {
 
           {menuOpen && (
             <div role="menu" className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 text-xs">
+              {onOpenProfile && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenProfile();
+                  }}
+                  className="w-full px-3.5 py-2 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                >
+                  <UserRound className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Hồ sơ cá nhân</span>
+                </button>
+              )}
               {onChangePassword && (
                 <button
                   type="button"
