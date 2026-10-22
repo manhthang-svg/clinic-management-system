@@ -4,6 +4,9 @@ export const ROUTES = {
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
     ACCOUNTS: '/admin/accounts',
+    ROOMS: '/admin/rooms',
+    CREATE_ROOM: '/admin/rooms/create',
+    CREATE_TOUR: '/admin/rooms/create-tour',
     PATIENTS: '/admin/patients',
     APPOINTMENTS: '/admin/appointments',
     EXAMINATIONS: '/admin/examinations',

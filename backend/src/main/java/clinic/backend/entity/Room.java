@@ -1,5 +1,6 @@
 package clinic.backend.entity;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import clinic.backend.enums.ActivationStatus;
@@ -14,29 +15,31 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * An examination or paraclinical room (BR-06, I1-D05, I1-D40). Its behavior methods arrive with UC-17 to UC-19.
- */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "rooms", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_rooms_maphongkham", columnNames = "maphongkham")
-})
+@Table(
+        name = "rooms",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uq_rooms_room_code",
+                        columnNames = "room_code"
+                )
+        }
+)
 public class Room extends VersionedEntity {
 
     @Column(name = "department_id", nullable = false, updatable = false)
     private UUID departmentId;
 
-    /** The service group a paraclinical room performs; null for an examination room (BR-06). */
     @Column(name = "service_group_id")
     private UUID serviceGroupId;
 
-    @Column(name = "maphongkham", nullable = false, updatable = false, length = 255)
-    private String maphongkham;
+    @Column(name = "room_code", nullable = false, updatable = false, length = 20)
+    private String roomCode;
 
-    @Column(name = "phongkham", nullable = false, length = 255)
-    private String phongkham;
+    @Column(name = "room_name", nullable = false, length = 100)
+    private String roomName;
 
     @Column(name = "location", nullable = false, length = 255)
     private String location;
@@ -48,4 +51,26 @@ public class Room extends VersionedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ActivationStatus status;
+
+    public Room(
+            UUID id,
+            Instant createdAt,
+            UUID departmentId,
+            UUID serviceGroupId,
+            String roomCode,
+            String roomName,
+            String location,
+            RoomType type,
+            ActivationStatus status
+    ) {
+        super(id, createdAt);
+
+        this.departmentId = departmentId;
+        this.serviceGroupId = serviceGroupId;
+        this.roomCode = roomCode;
+        this.roomName = roomName;
+        this.location = location;
+        this.type = type;
+        this.status = status;
+    }
 }

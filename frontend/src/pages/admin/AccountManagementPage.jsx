@@ -13,12 +13,16 @@ import {
 import { normalizeSearch, percentOf } from '../../components/accounts/accountFormat';
 import { MOCK_ACCOUNTS, MOCK_ACCOUNT_ACTIVITIES, PAGE_SIZE_OPTIONS } from '../../constants';
 
+<<<<<<< Updated upstream
 const EMPTY_FORM = { username: '', fullName: '', title: '', email: '', phone: '', role: 'DOCTOR' };
 
 /** UC-5..UC-11 account management screen. Works on mock data until the account API exists. */
 export function AccountManagementPage({ currentAdmin, onLogout, onChangePassword, notice }) {
   const [accounts, setAccounts] = useState(MOCK_ACCOUNTS);
   const [activities, setActivities] = useState(MOCK_ACCOUNT_ACTIVITIES);
+=======
+export function AccountManagementPage({ currentAdmin, onLogout, onChangePassword, notice, onSelectNav }) {
+>>>>>>> Stashed changes
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -152,8 +156,19 @@ export function AccountManagementPage({ currentAdmin, onLogout, onChangePassword
   };
 
   return (
+<<<<<<< Updated upstream
     <AdminLayout currentAdmin={currentAdmin} onLogout={onLogout} onChangePassword={onChangePassword} activeKey="accounts">
       <div className="px-6 pb-8 space-y-6">
+=======
+    <AdminLayout
+      currentAdmin={currentAdmin}
+      onLogout={onLogout}
+      onChangePassword={onChangePassword}
+      activeKey="accounts"
+      onSelectNav={onSelectNav}
+    >
+      <div className="p-6 md:p-8 space-y-6">
+>>>>>>> Stashed changes
         {notice && (
           <div role="status" className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[#127e7a]" />

@@ -63,14 +63,22 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        // Cookie-based endpoints verify the Origin header themselves (docs/security.md).
+
                         .requestMatchers(
-                                HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout")
-                        .permitAll()
-                        // Self-service endpoints need authentication only, so a token that still requires
-                        // a password change is accepted here and nowhere else (RoleAuthoritiesConverter).
-                        .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
-                        .anyRequest().denyAll())
+                                HttpMethod.POST,
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/logout"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                "/api/v1/me",
+                                "/api/v1/me/**"
+                        ).authenticated()
+
+                        // Mặc định từ chối các endpoint chưa được khai báo
+                        .anyRequest().authenticated()
+                )
                 .build();
     }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createAccountApi } from './apis/accountApi';
 import { ChangePasswordForm } from './pages/auth/ChangePasswordForm';
-import { AccountManagementPage } from './pages/admin/AccountManagementPage';
+import { AccountManagementPage, RoomManagementPage } from './pages/admin';
 import { LoginPage } from './pages/auth/LoginPage';
 import { apiClient, sessionManager as defaultSessionManager } from './services/session';
 import { useSession } from './hooks/useSession';
@@ -12,6 +12,7 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
     const account = useMemo(() => accountApi ?? createAccountApi(apiClient), [accountApi]);
     const [changingPassword, setChangingPassword] = useState(false);
     const [notice, setNotice] = useState(null);
+    const [adminNav, setAdminNav] = useState('accounts');
 
     useEffect(() => {
         sessionManager.restore().catch(() => sessionManager.clear());
@@ -45,12 +46,24 @@ export function App({ sessionManager = defaultSessionManager, accountApi }) {
     const showPasswordForm = session.passwordChangeRequired || changingPassword;
 
     if (session.account.role === 'ADMIN' && !showPasswordForm) {
+      if (adminNav === 'rooms') {
+        return (
+          <RoomManagementPage
+            currentAdmin={session.account}
+            onLogout={() => void sessionManager.logout()}
+            onChangePassword={() => setChangingPassword(true)}
+            onSelectNav={setAdminNav}
+          />
+        );
+      }
+
       return (
         <AccountManagementPage
           currentAdmin={session.account}
           notice={notice}
           onLogout={() => void sessionManager.logout()}
           onChangePassword={() => setChangingPassword(true)}
+          onSelectNav={setAdminNav}
         />
       );
     }
