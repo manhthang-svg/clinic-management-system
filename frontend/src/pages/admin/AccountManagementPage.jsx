@@ -1,226 +1,276 @@
 import { useState, useMemo } from 'react';
-import { Users2, CheckCircle2, Lock, CreditCard } from 'lucide-react';
+import { Users, UserCheck, Lock, KeyRound, Plus, House, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { AdminLayout } from '../../layouts';
-import { PageHeader, MetricCard } from '../../components/shared';
-import { AccountFilterBar, AccountTable, AccountFormModal } from '../../components/accounts';
-import { MOCK_ACCOUNTS, ROLE_MAP } from '../../constants';
+import {
+  AccountFilterBar,
+  AccountTable,
+  AccountFormModal,
+  AccountDetailModal,
+  AccountStatCard,
+  AccountOverviewCard,
+  AccountActivityCard,
+} from '../../components/accounts';
+import { normalizeSearch, percentOf } from '../../components/accounts/accountFormat';
+import { MOCK_ACCOUNTS, MOCK_ACCOUNT_ACTIVITIES, PAGE_SIZE_OPTIONS } from '../../constants';
 
+const EMPTY_FORM = { username: '', fullName: '', title: '', email: '', phone: '', role: 'DOCTOR' };
+
+/** UC-5..UC-11 account management screen. Works on mock data until the account API exists. */
 export function AccountManagementPage({ currentAdmin, onLogout, onChangePassword, notice }) {
+  const [accounts, setAccounts] = useState(MOCK_ACCOUNTS);
+  const [activities, setActivities] = useState(MOCK_ACCOUNT_ACTIVITIES);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [deptFilter, setDeptFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [activeMenuId, setActiveMenuId] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-
-  // New account form state
-  const [newAccount, setNewAccount] = useState({
-    username: '',
-    fullName: '',
-    email: '',
-    phone: '',
-    role: 'DOCTOR',
-    department: 'Khoa Nội',
-    password: '',
-  });
-
-  const [accounts, setAccounts] = useState(MOCK_ACCOUNTS);
+  const [formMode, setFormMode] = useState(null); // 'create' | 'edit' | null
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [viewing, setViewing] = useState(null);
 
   const filteredAccounts = useMemo(() => {
+    const term = normalizeSearch(searchQuery);
     return accounts.filter((acc) => {
       const matchSearch =
-        searchQuery === '' ||
-        acc.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        acc.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        acc.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        acc.phone.includes(searchQuery) ||
-        acc.code.toLowerCase().includes(searchQuery.toLowerCase());
-
+        term === '' ||
+        [acc.username, acc.fullName, acc.email, acc.phone].some((field) => normalizeSearch(field || '').includes(term));
       const matchRole = roleFilter === 'ALL' || acc.role === roleFilter;
       const matchStatus = statusFilter === 'ALL' || acc.status === statusFilter;
-      const matchDept = deptFilter === 'ALL' || acc.department.includes(deptFilter);
-
-      return matchSearch && matchRole && matchStatus && matchDept;
+      return matchSearch && matchRole && matchStatus;
     });
-  }, [accounts, searchQuery, roleFilter, statusFilter, deptFilter]);
+  }, [accounts, searchQuery, roleFilter, statusFilter]);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredAccounts.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredAccounts.map((a) => a.id));
-    }
-  };
+  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageAccounts = filteredAccounts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const toggleSelectOne = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  const stats = useMemo(() => {
+    const total = accounts.length;
+    const active = accounts.filter((a) => a.status === 'ACTIVE').length;
+    const locked = accounts.filter((a) => a.status === 'LOCKED').length;
+    const pending = accounts.filter((a) => a.passwordChangeRequired).length;
+    return { total, active, locked, pending };
+  }, [accounts]);
+
+  // Filters change the result set, so go back to the first page.
+  const withFirstPage = (setter) => (value) => {
+    setter(value);
+    setPage(1);
   };
 
   const resetFilters = () => {
     setSearchQuery('');
     setRoleFilter('ALL');
     setStatusFilter('ALL');
-    setDeptFilter('ALL');
+    setPage(1);
   };
 
-  const handleAddAccountSubmit = (e) => {
-    e.preventDefault();
-    if (!newAccount.username || !newAccount.fullName) return;
+  const logActivity = (type, title, account) => {
+    setActivities((prev) => [
+      { id: `${Date.now()}-${prev.length}`, type, title, detail: `${account.fullName} (${account.username})`, time: 'Vừa xong' },
+      ...prev,
+    ]);
+  };
 
-    const added = {
-      id: String(accounts.length + 1).padStart(2, '0'),
-      code: `NV${String(accounts.length + 1).padStart(3, '0')}`,
-      username: newAccount.username,
-      fullName: newAccount.fullName,
-      staffId: `ID: 04${Math.floor(100000 + Math.random() * 900000)}`,
-      position: ROLE_MAP[newAccount.role]?.label || 'Nhân viên',
-      initials: newAccount.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
-      email: newAccount.email || `${newAccount.username}@metph.vn`,
-      phone: newAccount.phone || '0900 000 000',
-      role: newAccount.role,
-      roleLabel: ROLE_MAP[newAccount.role]?.label || newAccount.role,
-      roleColor: ROLE_MAP[newAccount.role]?.color || 'bg-slate-100 text-slate-700 border-slate-200',
-      department: newAccount.department,
-      status: 'ACTIVE',
-      createdAt: 'Hôm nay',
+  const toggleSelectAll = () => {
+    const ids = pageAccounts.map((a) => a.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    setSelectedIds((prev) => (allSelected ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]));
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormMode('create');
+  };
+
+  const openEdit = (account) => {
+    setForm({
+      username: account.username,
+      fullName: account.fullName,
+      title: account.title || '',
+      email: account.email || '',
+      phone: account.phone || '',
+      role: account.role,
+    });
+    setEditingId(account.id);
+    setFormMode('edit');
+  };
+
+  const closeForm = () => setFormMode(null);
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    const username = form.username.trim().toLowerCase();
+    const fullName = form.fullName.trim();
+    if (!username || !fullName) return;
+    const details = {
+      fullName,
+      title: form.title.trim() || undefined,
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      role: form.role,
     };
 
-    setAccounts([added, ...accounts]);
-    setShowAddModal(false);
-    setNewAccount({
-      username: '',
-      fullName: '',
-      email: '',
-      phone: '',
-      role: 'DOCTOR',
-      department: 'Khoa Nội',
-      password: '',
-    });
+    if (formMode === 'edit') {
+      const current = accounts.find((a) => a.id === editingId);
+      setAccounts((prev) => prev.map((a) => (a.id === editingId ? { ...a, ...details } : a)));
+      logActivity('UPDATED', 'Cập nhật thông tin', { ...current, ...details });
+    } else {
+      const created = {
+        id: `new-${Date.now()}`,
+        username,
+        ...details,
+        status: 'ACTIVE',
+        passwordChangeRequired: true,
+        lastLoginAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      setAccounts((prev) => [created, ...prev]);
+      logActivity('CREATED', 'Tạo tài khoản mới', created);
+      setPage(1);
+    }
+    closeForm();
   };
 
-  const toggleLockStatus = (id) => {
-    setAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === id
-          ? { ...acc, status: acc.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE' }
-          : acc
-      )
-    );
-    setActiveMenuId(null);
+  const toggleLock = (account) => {
+    const locking = account.status === 'ACTIVE';
+    setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, status: locking ? 'LOCKED' : 'ACTIVE' } : a)));
+    logActivity(locking ? 'LOCKED' : 'UNLOCKED', locking ? 'Khóa tài khoản' : 'Mở khóa tài khoản', account);
+  };
+
+  const resetPassword = (account) => {
+    if (!window.confirm(`Đặt lại mật khẩu cho tài khoản ${account.username}?`)) return;
+    setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, passwordChangeRequired: true } : a)));
+    logActivity('PASSWORD_RESET', 'Đặt lại mật khẩu', account);
   };
 
   return (
-    <AdminLayout
-      currentAdmin={currentAdmin}
-      onLogout={onLogout}
-      onChangePassword={onChangePassword}
-      activeKey="accounts"
-    >
-      <div className="p-6 md:p-8 space-y-6">
+    <AdminLayout currentAdmin={currentAdmin} onLogout={onLogout} onChangePassword={onChangePassword} activeKey="accounts">
+      <div className="px-6 pb-8 space-y-6">
         {notice && (
           <div role="status" className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[#0d9488]" />
+            <CheckCircle2 className="w-4 h-4 text-[#127e7a]" />
             <span>{notice}</span>
           </div>
         )}
 
-        {/* Page Title & Top Actions */}
-        <PageHeader
-          title="Quản lý tài khoản"
-          badge="KM Enterprise"
-          subtitle="Quản lý tài khoản nhân viên, vai trò và quyền truy cập hệ thống bệnh viện METPH."
-          onExport={() => alert('Xuất file danh sách tài khoản Excel/CSV thành công!')}
-          onAdd={() => setShowAddModal(true)}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">Quản lý tài khoản</h1>
+            <p className="text-sm text-slate-500 mt-1">Quản lý tài khoản người dùng, vai trò và quyền truy cập hệ thống</p>
+          </div>
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
+            <House className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <span>Quản trị hệ thống</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-700 font-medium">Quản lý tài khoản</span>
+          </nav>
+        </div>
 
-        {/* 4 SUMMARY STAT CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <AccountStatCard
             title="Tổng tài khoản"
-            value="128"
-            icon={Users2}
-            iconBg="bg-teal-50 text-[#0d9488]"
-            valueColor="text-slate-900"
-            subtitle="Tất cả nhân viên"
-            dotColor="bg-teal-500"
-            footerLabel="Khả năng hệ thống"
-            footerValue="100% Quy định danh"
-            footerValueColor="text-teal-700"
+            value={stats.total}
+            icon={Users}
+            iconTone="bg-[#e7f0fd] text-[#3b7be0]"
+            note="Tất cả tài khoản nhân viên"
           />
-          <MetricCard
+          <AccountStatCard
             title="Đang hoạt động"
-            value="116"
-            icon={CheckCircle2}
-            iconBg="bg-emerald-50 text-emerald-600"
-            valueColor="text-emerald-600"
-            subtitle="Có thể đăng nhập"
-            dotColor="bg-emerald-500"
-            footerLabel="Tỷ lệ khả dụng"
-            footerValue="90.6% chuẩn hóa"
-            footerValueColor="text-emerald-700"
+            value={stats.active}
+            icon={UserCheck}
+            iconTone="bg-[#e2f5ee] text-[#1f9d70]"
+            highlight={percentOf(stats.active, stats.total)}
+            highlightTone="text-[#1f9d70]"
+            note="trên tổng số tài khoản"
           />
-          <MetricCard
-            title="Đang bị khóa"
-            value="8"
+          <AccountStatCard
+            title="Đã khóa"
+            value={stats.locked}
             icon={Lock}
-            iconBg="bg-rose-50 text-rose-600"
-            valueColor="text-rose-600"
-            subtitle="Không thể đăng nhập"
-            dotColor="bg-rose-500"
-            footerLabel="Yêu cầu bảo mật"
-            footerValue="6.25% Đóng băng"
-            footerValueColor="text-rose-600"
+            iconTone="bg-[#fde9eb] text-[#e5484d]"
+            highlight={percentOf(stats.locked, stats.total)}
+            highlightTone="text-[#e5484d]"
+            note="trên tổng số tài khoản"
           />
-          <MetricCard
-            title="Tài khoản mới"
-            value="4"
-            icon={CreditCard}
-            iconBg="bg-sky-50 text-sky-600"
-            valueColor="text-sky-600"
-            subtitle="Tạo gần đây (7 ngày)"
-            dotColor="bg-sky-500"
-            footerLabel="Đã kích hoạt 2FA"
-            footerValue="4/4 Khởi tạo"
-            footerValueColor="text-sky-700"
+          <AccountStatCard
+            title="Chờ đổi mật khẩu"
+            value={stats.pending}
+            icon={KeyRound}
+            iconTone="bg-[#fdf1dc] text-[#e9a23b]"
+            highlight={percentOf(stats.pending, stats.total)}
+            highlightTone="text-slate-600"
+            note="cần đổi khi đăng nhập"
           />
         </div>
 
-        {/* FILTER BAR */}
-        <AccountFilterBar
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          deptFilter={deptFilter}
-          setDeptFilter={setDeptFilter}
-          onReset={resetFilters}
-        />
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_248px] gap-5 items-start">
+          <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">Danh sách tài khoản</h2>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tạo tài khoản</span>
+              </button>
+            </div>
 
-        {/* MAIN TABLE */}
-        <AccountTable
-          accounts={filteredAccounts}
-          selectedIds={selectedIds}
-          onToggleSelectAll={toggleSelectAll}
-          onToggleSelectOne={toggleSelectOne}
-          activeMenuId={activeMenuId}
-          setActiveMenuId={setActiveMenuId}
-          onToggleLock={toggleLockStatus}
-          totalCount={128}
-        />
+            <AccountFilterBar
+              searchQuery={searchQuery}
+              setSearchQuery={withFirstPage(setSearchQuery)}
+              roleFilter={roleFilter}
+              setRoleFilter={withFirstPage(setRoleFilter)}
+              statusFilter={statusFilter}
+              setStatusFilter={withFirstPage(setStatusFilter)}
+              onReset={resetFilters}
+            />
 
-        {/* MODAL THÊM TÀI KHOẢN MỚI */}
+            <AccountTable
+              accounts={pageAccounts}
+              totalCount={filteredAccounts.length}
+              page={currentPage}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              selectedIds={selectedIds}
+              onToggleSelectAll={toggleSelectAll}
+              onToggleSelectOne={toggleSelectOne}
+              onView={setViewing}
+              onEdit={openEdit}
+              onToggleLock={toggleLock}
+              onResetPassword={resetPassword}
+            />
+          </section>
+
+          <aside className="space-y-5">
+            <AccountOverviewCard accounts={accounts} />
+            <AccountActivityCard activities={activities} />
+          </aside>
+        </div>
+
         <AccountFormModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSubmit={handleAddAccountSubmit}
-          form={newAccount}
-          setForm={setNewAccount}
+          isOpen={formMode !== null}
+          mode={formMode || 'create'}
+          onClose={closeForm}
+          onSubmit={handleFormSubmit}
+          form={form}
+          setForm={setForm}
         />
+        <AccountDetailModal account={viewing} onClose={() => setViewing(null)} />
       </div>
     </AdminLayout>
   );
