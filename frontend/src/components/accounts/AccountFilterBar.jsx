@@ -1,5 +1,10 @@
 import { Search, ChevronDown, RotateCcw } from 'lucide-react';
+import { ROLE_MAP, STATUS_LABELS } from '../../constants/accountData';
 
+const SELECT_CLASS =
+  'appearance-none w-full pl-3.5 pr-9 py-2.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 cursor-pointer';
+
+/** UC-5 search and filters: search term, role, and status combine with AND. */
 export function AccountFilterBar({
   searchQuery,
   setSearchQuery,
@@ -7,83 +12,60 @@ export function AccountFilterBar({
   setRoleFilter,
   statusFilter,
   setStatusFilter,
-  deptFilter,
-  setDeptFilter,
   onReset,
 }) {
   return (
-    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-      {/* Search Input */}
-      <div className="relative flex-1 min-w-[260px]">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="relative flex-1 min-w-[240px]">
         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
-          type="text"
+          type="search"
+          aria-label="Tìm kiếm tài khoản"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Tìm theo mã NV, tên, email hoặc số điện thoại..."
-          className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0d9488] focus:bg-white transition-all placeholder:text-slate-400"
+          placeholder="Tìm theo tên đăng nhập, họ tên hoặc email..."
+          className="w-full pl-10 pr-4 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all placeholder:text-slate-400"
         />
       </div>
 
-      {/* Filter Dropdowns */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        {/* Role filter */}
-        <div className="relative">
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0d9488] cursor-pointer"
-          >
-            <option value="ALL">Tất cả vai trò</option>
-            <option value="DOCTOR">Bác sĩ</option>
-            <option value="RECEPTIONIST">Lễ tân</option>
-            <option value="CASHIER">Thu ngân</option>
-            <option value="TECHNICIAN">Kỹ thuật viên</option>
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Status filter */}
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0d9488] cursor-pointer"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="ACTIVE">Hoạt động</option>
-            <option value="LOCKED">Bị khóa</option>
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Department filter */}
-        <div className="relative">
-          <select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0d9488] cursor-pointer"
-          >
-            <option value="ALL">Tất cả khoa / phòng</option>
-            <option value="Khoa Nội">Khoa Nội</option>
-            <option value="Khoa Ngoại">Khoa Ngoại</option>
-            <option value="Phòng Xét nghiệm">Phòng Xét nghiệm</option>
-            <option value="Lễ tân">Bộ phận Lễ tân</option>
-            <option value="Thu ngân">Phòng Thu ngân</option>
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Reset filter */}
-        <button
-          type="button"
-          onClick={onReset}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+      <div className="relative w-44">
+        <select
+          aria-label="Lọc theo vai trò"
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className={SELECT_CLASS}
         >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Đặt lại bộ lọc</span>
-        </button>
+          <option value="ALL">Tất cả vai trò</option>
+          {Object.entries(ROLE_MAP).map(([value, role]) => (
+            <option key={value} value={value}>{role.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
+
+      <div className="relative w-44">
+        <select
+          aria-label="Lọc theo trạng thái"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="ALL">Tất cả trạng thái</option>
+          {Object.entries(STATUS_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      </div>
+
+      <button
+        type="button"
+        onClick={onReset}
+        className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer"
+      >
+        <RotateCcw className="w-3.5 h-3.5" />
+        <span>Đặt lại</span>
+      </button>
     </div>
   );
 }

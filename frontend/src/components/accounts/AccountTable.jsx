@@ -1,200 +1,187 @@
-import { MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Pencil, Lock, LockOpen, KeyRound, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ROLE_MAP, STATUS_LABELS, PAGE_SIZE_OPTIONS } from '../../constants/accountData';
+import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './accountFormat';
 
+const ACTION_CLASS =
+  'w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-colors cursor-pointer';
+
+/** Page numbers with gaps: 1 … 4 5 6 … 13. */
+function pageItems(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set([1, total, current - 1, current, current + 1]);
+  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const items = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) items.push(`gap-${p}`);
+    items.push(p);
+  });
+  return items;
+}
+
+function StatusBadge({ account }) {
+  const locked = account.status === 'LOCKED';
+  return (
+    <div className="flex flex-col items-start gap-1 whitespace-nowrap">
+      <span
+        className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+          locked ? 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]' : 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
+        }`}
+      >
+        {STATUS_LABELS[account.status]}
+      </span>
+      {account.passwordChangeRequired && (
+        <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#fdf1d8] text-[#b7791f] border border-[#f6dfa9]">
+          Chờ đổi mật khẩu
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** UC-5 account list with row actions for UC-6, UC-8, UC-10, and UC-11. */
 export function AccountTable({
   accounts,
+  totalCount,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
   selectedIds = [],
   onToggleSelectAll,
   onToggleSelectOne,
-  activeMenuId,
-  setActiveMenuId,
+  onView,
+  onEdit,
   onToggleLock,
-  totalCount = 128,
+  onResetPassword,
 }) {
-  const isAllSelected = accounts.length > 0 && selectedIds.length === accounts.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const isAllSelected = accounts.length > 0 && accounts.every((a) => selectedIds.includes(a.id));
+  const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalCount);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-      <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-              <th className="p-4 w-10 text-center">
+            <tr className="bg-[#f6f8f9] text-[11px] font-semibold text-[#1b2533]">
+              <th className="pl-3 pr-1 py-3 w-8">
                 <input
                   type="checkbox"
+                  aria-label="Chọn tất cả"
                   checked={isAllSelected}
                   onChange={onToggleSelectAll}
-                  className="w-4 h-4 rounded text-[#0d9488] border-slate-300 focus:ring-teal-500/20 cursor-pointer accent-[#0d9488]"
+                  className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-[#127e7a]"
                 />
               </th>
-              <th className="p-4">MÃ NV / TÊN ĐĂNG NHẬP</th>
-              <th className="p-4">NHÂN VIÊN</th>
-              <th className="p-4">THÔNG TIN LIÊN HỆ</th>
-              <th className="p-4">VAI TRÒ</th>
-              <th className="p-4">KHOA / PHÒNG</th>
-              <th className="p-4">TRẠNG THÁI</th>
-              <th className="p-4">NGÀY TẠO</th>
-              <th className="p-4 text-center">THAO TÁC</th>
+              <th className="px-2 py-3">Tên đăng nhập</th>
+              <th className="px-2 py-3">Họ và tên</th>
+              <th className="px-2 py-3">Vai trò</th>
+              <th className="px-2 py-3">Liên hệ</th>
+              <th className="px-2 py-3">Trạng thái</th>
+              <th className="px-2 py-3">Đăng nhập cuối</th>
+              <th className="px-2 py-3">Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-xs">
+          <tbody className="divide-y divide-slate-100 text-[11px]">
             {accounts.length === 0 ? (
               <tr>
-                <td colSpan="9" className="p-8 text-center text-slate-400 text-xs">
+                <td colSpan="8" className="p-10 text-center text-slate-400">
                   Không tìm thấy tài khoản nào phù hợp với điều kiện lọc.
                 </td>
               </tr>
             ) : (
               accounts.map((account) => {
                 const isSelected = selectedIds.includes(account.id);
+                const role = ROLE_MAP[account.role];
+                const locked = account.status === 'LOCKED';
                 return (
-                  <tr
-                    key={account.id}
-                    className={`hover:bg-slate-50/70 transition-colors ${
-                      isSelected ? 'bg-teal-50/30' : ''
-                    }`}
-                  >
-                    {/* Checkbox */}
-                    <td className="p-4 text-center">
+                  <tr key={account.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-teal-50/40' : ''}`}>
+                    <td className="pl-3 pr-1 py-3">
                       <input
                         type="checkbox"
+                        aria-label={`Chọn ${account.username}`}
                         checked={isSelected}
                         onChange={() => onToggleSelectOne(account.id)}
-                        className="w-4 h-4 rounded text-[#0d9488] border-slate-300 focus:ring-teal-500/20 cursor-pointer accent-[#0d9488]"
+                        className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-[#127e7a]"
                       />
                     </td>
-
-                    {/* Code & Username */}
-                    <td className="p-4">
-                      <div className="font-bold text-slate-800 tracking-tight">
-                        {account.code}
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        {account.username}
-                      </div>
-                    </td>
-
-                    {/* Full Name & Avatar */}
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        {account.avatar ? (
-                          <img
-                            src={account.avatar}
-                            alt={account.fullName}
-                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0">
-                            {account.initials}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-bold text-slate-800 leading-tight">
-                            {account.title && (
-                              <span className="text-[11px] text-[#0d9488] mr-1 font-semibold">
-                                {account.title}
-                              </span>
-                            )}
-                            {account.fullName}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            {account.staffId} • {account.position}
-                          </div>
+                    <td className="px-2 py-3 font-medium text-slate-700 whitespace-nowrap">{account.username}</td>
+                    <td className="px-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 ${avatarTone(account.role)}`}
+                          aria-hidden="true"
+                        >
+                          {initialsOf(account.fullName)}
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Contact Info */}
-                    <td className="p-4">
-                      <div className="text-slate-700 font-medium">{account.email}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                        {account.phone}
-                      </div>
-                    </td>
-
-                    {/* Role Pill */}
-                    <td className="p-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold border ${account.roleColor}`}
-                      >
-                        {account.roleLabel}
-                      </span>
-                    </td>
-
-                    {/* Department */}
-                    <td className="p-4">
-                      <span className="text-slate-700 font-medium">
-                        {account.department}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="p-4">
-                      {account.status === 'ACTIVE' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>Hoạt động</span>
+                        <span className="font-semibold text-slate-800 leading-tight whitespace-nowrap">
+                          {account.title && <span className="block text-[10px] text-slate-400 font-medium">{account.title}</span>}
+                          {account.fullName}
                         </span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap ${role?.color}`}>
+                        {role?.label || account.role}
+                      </span>
+                    </td>
+                    <td className="px-2 py-3 text-slate-500 max-w-[120px]">
+                      <div className="truncate" title={account.email}>{account.email}</div>
+                      <div className="text-[10px] text-slate-400 whitespace-nowrap">{formatPhone(account.phone)}</div>
+                    </td>
+                    <td className="px-2 py-3"><StatusBadge account={account} /></td>
+                    <td className="px-2 py-3 text-slate-500 whitespace-nowrap">
+                      {account.lastLoginAt ? (
+                        <>
+                          <div>{formatDate(account.lastLoginAt)}</div>
+                          <div className="text-[10px] text-slate-400">{formatTime(account.lastLoginAt)}</div>
+                        </>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                          <span>Bị khóa</span>
-                        </span>
+                        <span className="text-slate-400">Chưa đăng nhập</span>
                       )}
                     </td>
-
-                    {/* Created Date */}
-                    <td className="p-4 text-slate-500 text-[11px] font-medium">
-                      {account.createdAt}
-                    </td>
-
-                    {/* Actions Menu */}
-                    <td className="p-4 text-center relative">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveMenuId(activeMenuId === account.id ? null : account.id)
-                        }
-                        className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {/* Dropdown Action Popover */}
-                      {activeMenuId === account.id && (
-                        <div className="absolute right-6 top-10 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-20 text-left text-xs">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              alert(`Xem chi tiết tài khoản ${account.fullName}`);
-                              setActiveMenuId(null);
-                            }}
-                            className="w-full px-3.5 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                          >
-                            <span>Xem chi tiết</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              alert(`Cấp lại mật khẩu cho ${account.fullName}`);
-                              setActiveMenuId(null);
-                            }}
-                            className="w-full px-3.5 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                          >
-                            <span>Đặt lại mật khẩu</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => onToggleLock(account.id)}
-                            className="w-full px-3.5 py-1.5 text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium border-t border-slate-100"
-                          >
-                            <span>
-                              {account.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                            </span>
-                          </button>
-                        </div>
-                      )}
+                    <td className="px-2 py-3">
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          title="Xem chi tiết"
+                          aria-label={`Xem chi tiết ${account.username}`}
+                          onClick={() => onView(account)}
+                          className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Cập nhật thông tin"
+                          aria-label={`Cập nhật ${account.username}`}
+                          onClick={() => onEdit(account)}
+                          className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title={locked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                          aria-label={`${locked ? 'Mở khóa' : 'Khóa'} ${account.username}`}
+                          onClick={() => onToggleLock(account)}
+                          className={`${ACTION_CLASS} ${
+                            locked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
+                          }`}
+                        >
+                          {locked ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          title="Đặt lại mật khẩu"
+                          aria-label={`Đặt lại mật khẩu ${account.username}`}
+                          onClick={() => onResetPassword(account)}
+                          className={`${ACTION_CLASS} text-amber-500 hover:bg-amber-50 hover:text-amber-600`}
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -204,71 +191,60 @@ export function AccountTable({
         </table>
       </div>
 
-      {/* Table Pagination Footer */}
-      <div className="p-4 border-t border-slate-200/80 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-        <div>
-          Hiển thị <span className="font-semibold text-slate-800">1-{accounts.length}</span> trong
-          tổng số <span className="font-semibold text-slate-800">{totalCount}</span> tài khoản
+      <div className="pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-3">
+          <span>
+            Hiển thị {from}–{to} trên tổng số {totalCount} tài khoản
+          </span>
+          <select
+            aria-label="Số dòng mỗi trang"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none cursor-pointer"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size} / trang</option>
+            ))}
+          </select>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <span>Xem:</span>
-            <select className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none cursor-pointer">
-              <option>10 / trang</option>
-              <option>20 / trang</option>
-              <option>50 / trang</option>
-            </select>
-          </div>
-
-          {/* Page numbers */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled
-              className="p-1 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              className="w-7 h-7 rounded-lg bg-[#0d9488] text-white font-bold text-xs flex items-center justify-center cursor-pointer shadow-xs"
-            >
-              1
-            </button>
-
-            <button
-              type="button"
-              className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-600 text-xs flex items-center justify-center cursor-pointer"
-            >
-              2
-            </button>
-
-            <button
-              type="button"
-              className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-600 text-xs flex items-center justify-center cursor-pointer"
-            >
-              3
-            </button>
-
-            <span className="text-slate-400 px-1">…</span>
-
-            <button
-              type="button"
-              className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-600 text-xs flex items-center justify-center cursor-pointer"
-            >
-              16
-            </button>
-
-            <button
-              type="button"
-              className="p-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="Trang trước"
+            disabled={page === 1}
+            onClick={() => onPageChange(page - 1)}
+            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <ChevronsLeft className="w-3.5 h-3.5" />
+          </button>
+          {pageItems(page, totalPages).map((item) =>
+            typeof item === 'string' ? (
+              <span key={item} className="w-8 text-center text-slate-400">…</span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                aria-current={item === page ? 'page' : undefined}
+                onClick={() => onPageChange(item)}
+                className={`w-8 h-8 rounded-lg text-xs font-semibold flex items-center justify-center cursor-pointer ${
+                  item === page ? 'bg-[#e3f2f0] text-[#127e7a] border border-[#bfe0dc]' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {item}
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            aria-label="Trang sau"
+            disabled={page === totalPages}
+            onClick={() => onPageChange(page + 1)}
+            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        </nav>
       </div>
     </div>
   );
