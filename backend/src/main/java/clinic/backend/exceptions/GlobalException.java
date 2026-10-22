@@ -3,6 +3,7 @@ package clinic.backend.exceptions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import clinic.backend.config.RequestCorrelationFilter;
 import clinic.backend.dto.response.ErrorResponse;
 import clinic.backend.enums.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-
+import org.springframework.web.server.ResponseStatusException;
 /**
  * Translates exceptions into the standard {@link ErrorResponse}. Messages never echo submitted values.
  */
@@ -84,6 +85,32 @@ public class GlobalException {
     public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(
             OptimisticLockingFailureException exception, HttpServletRequest request) {
         return response(ErrorCode.CONCURRENT_MODIFICATION, Map.of(), request);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(
+            ResponseStatusException exception,
+            HttpServletRequest request) {
+
+        HttpStatus status = HttpStatus.valueOf(
+                exception.getStatusCode().value()
+        );
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(status.name())
+                .message(exception.getReason() != null
+                        ? exception.getReason()
+                        : status.getReasonPhrase())
+                .path(request.getRequestURI())
+                .requestId(String.valueOf(
+                        request.getAttribute(
+                                RequestCorrelationFilter.ATTRIBUTE_NAME
+                        )
+                ))
+                .timestamp(java.time.Instant.now())
+                .build();
+
+        return ResponseEntity.status(status).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)

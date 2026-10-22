@@ -1,3 +1,4 @@
+
 package clinic.backend.entity;
 
 import clinic.backend.enums.ServiceGroupType;
@@ -11,24 +12,24 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * A service group; routes orders to paraclinical rooms and is exported as V.2.6.5–6 (I1-D40).
- */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "service_groups", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_service_groups_loaimachidinh", columnNames = "loaimachidinh")
+        @UniqueConstraint(
+                name = "uq_service_groups_code",
+                columnNames = "service_group_code"
+        )
 })
 public class ServiceGroup extends VersionedEntity {
 
-    @Column(name = "loaimachidinh", nullable = false, updatable = false, length = 255)
-    private String loaimachidinh;
+    @Column(name = "service_group_code", nullable = false, updatable = false, length = 255)
+    private String serviceGroupCode;
 
-    @Column(name = "loaichidinh", nullable = false, length = 255)
-    private String loaichidinh;
+    @Column(name = "service_group_name", nullable = false, length = 255)
+    private String serviceGroupName;
 
-    /** Decides whether results are exported in group VI (imaging, functional) or VII (lab). */
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private ServiceGroupType type;

@@ -196,6 +196,7 @@ export const MOCK_ACCOUNT_ACTIVITIES = [
 ];
 
 export const NAV_ITEMS = [
+<<<<<<< Updated upstream
   { id: 'dashboard', label: 'Tổng quan', iconName: 'LayoutGrid' },
   { id: 'patients', label: 'Bệnh nhân', iconName: 'Users' },
   { id: 'appointments', label: 'Lịch khám', iconName: 'CalendarDays' },
@@ -215,6 +216,19 @@ export const NAV_ITEMS = [
     ],
   },
   { id: 'settings', label: 'Cài đặt', iconName: 'Settings' },
+=======
+  { id: 'dashboard', label: 'Tổng quan', iconName: 'LayoutDashboard' },
+  { id: 'patients', label: 'Quản lý bệnh nhân', iconName: 'Users2' },
+  { id: 'appointments', label: 'Quản lý lịch khám', iconName: 'Calendar' },
+  { id: 'examinations', label: 'Quản lý khám bệnh', iconName: 'Stethoscope' },
+  { id: 'rooms', label: 'Quản lý phòng', iconName: 'DoorOpen' },
+  { id: 'subclinical', label: 'Quản lý DV cận lâm sàng', iconName: 'Microscope' },
+  { id: 'billing', label: 'Quản lý thanh toán', iconName: 'CreditCard' },
+  { id: 'staff', label: 'Quản lý nhân sự', iconName: 'UserCheck' },
+  { id: 'accounts', label: 'Quản lý tài khoản', iconName: 'UserCog' },
+  { id: 'reports', label: 'Báo cáo thống kê', iconName: 'FileBarChart' },
+  { id: 'settings', label: 'Cài đặt hệ thống', iconName: 'Settings' },
+>>>>>>> Stashed changes
 ];
 
 export const GENDER_LABELS = {
