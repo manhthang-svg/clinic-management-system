@@ -5,8 +5,12 @@ import java.util.UUID;
 
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.FollowUpAppointmentStatus;
+import clinic.backend.enums.ImagingResultStatus;
+import clinic.backend.enums.LabResultStatus;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalRecordTypePhamVi;
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
+import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.support.PostgresIntegrationTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -38,6 +42,11 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     private UUID room;
     private UUID patient;
     private UUID visit;
+
+    // Set by newOrderDetail().
+    private UUID medicalRecord;
+    private UUID payment;
+    private UUID order;
 
     @Test
     void mapsMedicalRecordTypesAndAllowsOneDefault() {
@@ -172,6 +181,71 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void mapsAnOrderWithItsLabResultAndFiles() {
+        UUID detail = newOrderDetail();
+        UUID labResult = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into lab_results (id, order_detail_id, performer_account_id, sophieu, status, submitted_at,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'SUBMITTED', now(), now(), now(), 0)
+                """, labResult, detail, doctor, "KQ-" + detail);
+        for (String flag : List.of("0", "1")) {
+            jdbcTemplate.update("""
+                    insert into lab_result_items (id, lab_result_id, pkqxn_tenxetnghiem, ketqua, ketquabatthuong)
+                    values (?, ?, 'Glucose', '5.4', ?)
+                    """, UUID.randomUUID(), labResult, flag);
+        }
+        insertResultFile(null, labResult);
+
+        ParaclinicalOrder storedOrder = entityManager.find(ParaclinicalOrder.class, order);
+        assertThat(storedOrder.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
+        assertThat(storedOrder.getDetails()).singleElement().satisfies(line -> {
+            assertThat(line.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.COMPLETED);
+            assertThat(line.getOrder()).isSameAs(storedOrder);
+        });
+        LabResult stored = entityManager.find(LabResult.class, labResult);
+        assertThat(stored.getStatus()).isEqualTo(LabResultStatus.SUBMITTED);
+        assertThat(stored.getItems()).extracting(LabResultItem::getKetquabatthuong).containsExactlyInAnyOrder("0", "1");
+    }
+
+    @Test
+    void attachesAResultFileToExactlyOneResult() {
+        UUID detail = newOrderDetail();
+        UUID imagingResult = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into imaging_results (id, order_detail_id, performer_account_id, sophieu, kqcls_mota,
+                    kqcls_ketluan, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, 'Gan bình thường', 'Bình thường', 'DRAFT', now(), now(), 0)
+                """, imagingResult, detail, doctor, "CDHA-" + detail);
+        UUID file = insertResultFile(imagingResult, null);
+
+        assertThat(entityManager.find(ImagingResult.class, imagingResult).getStatus())
+                .isEqualTo(ImagingResultStatus.DRAFT);
+        assertThat(entityManager.find(ResultFile.class, file).getFileSha256()).hasSize(64);
+        assertThatThrownBy(() -> insertResultFile(null, null)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void requiresTheSubmissionTimeOfASubmittedResult() {
+        UUID detail = newOrderDetail();
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                insert into imaging_results (id, order_detail_id, performer_account_id, sophieu, kqcls_mota,
+                    kqcls_ketluan, status, created_at, updated_at, version)
+                values (?, ?, ?, 'CDHA-X', 'Mô tả', 'Kết luận', 'SUBMITTED', now(), now(), 0)
+                """, UUID.randomUUID(), detail, doctor))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void paysEachOrderWithItsOwnPayment() {
+        newOrderDetail();
+
+        assertThatThrownBy(() -> insertOrder(UUID.randomUUID(), medicalRecord, "PCD-2"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     /**
      * Creates a doctor, an examination room, a patient, a visit, and the visit's open medical record.
      */
@@ -227,6 +301,67 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 insert into conclusion_secondary_diagnoses (id, conclusion_id, maicd, tenicd, thu_tu, created_at)
                 values (?, ?, ?, ?, 1, now())
                 """, UUID.randomUUID(), conclusion, code, "Bệnh " + code);
+    }
+
+    /**
+     * Creates a medical record, a paraclinical payment, a lab service, a released order paid by that
+     * payment, and one completed ordered service with its payment line.
+     */
+    private UUID newOrderDetail() {
+        medicalRecord = newMedicalRecord();
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        payment = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount,
+                    insurance_total_amount, patient_total_amount, paid_at, created_at, updated_at, version)
+                values (?, ?, ?, 'PARACLINICAL_FEE', 'PAID', 40000, 0, 40000, now(), now(), now(), 0)
+                """, payment, "HD-" + suffix, visit);
+        UUID department = jdbcTemplate.queryForObject(
+                "select department_id from rooms where id = ?", UUID.class, room);
+        UUID group = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into service_groups (id, loaimachidinh, loaichidinh, type, created_at, updated_at, version)
+                values (?, ?, 'Sinh hóa', 'LAB', now(), now(), 0)
+                """, group, "SH-" + suffix);
+        UUID service = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into services (id, code, tenchidinh, type, department_id, service_group_id, clinic_price,
+                    status, created_at, updated_at, version)
+                values (?, ?, 'Định lượng Glucose máu', 'LAB', ?, ?, 40000, 'ACTIVE', now(), now(), 0)
+                """, service, "XN-" + suffix, department, group);
+        order = UUID.randomUUID();
+        insertOrder(order, medicalRecord, "PCD-" + suffix);
+        UUID detail = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into paraclinical_order_details (id, order_id, service_id, machidinh, ngaychidinh,
+                    tenchidinh, dongia, thanhtien, benhnhanphaitra, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, now(), 'Định lượng Glucose máu', 40000, 40000, 40000, 'COMPLETED',
+                    now(), now(), 0)
+                """, detail, order, service, "CD-" + suffix);
+        jdbcTemplate.update("""
+                insert into payment_items (id, payment_id, service_id, order_detail_id, service_code_snapshot,
+                    tenchidinh, price_type, dongia, thanhtien, benhnhanphaitra, created_at)
+                values (?, ?, ?, ?, ?, 'Định lượng Glucose máu', 'CLINIC', 40000, 40000, 40000, now())
+                """, UUID.randomUUID(), payment, service, detail, "XN-" + suffix);
+        return detail;
+    }
+
+    private void insertOrder(UUID id, UUID record, String sophieu) {
+        jdbcTemplate.update("""
+                insert into paraclinical_orders (id, sophieu, medical_record_id, doctor_account_id, payment_id,
+                    doituongbn, noichidinh, tongcong, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, 2, 'Phòng khám thử', 40000, 'RELEASED', now(), now(), 0)
+                """, id, sophieu, record, doctor, payment);
+    }
+
+    private UUID insertResultFile(UUID imagingResult, UUID labResult) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into result_files (id, imaging_result_id, lab_result_id, hinhanh, file_name, mime_type,
+                    file_sha256, uploaded_by_account_id, uploaded_at)
+                values (?, ?, ?, 'results/ket-qua.pdf', 'ket-qua.pdf', 'application/pdf', repeat('a', 64), ?, now())
+                """, id, imagingResult, labResult, doctor);
+        return id;
     }
 
     private void insertMedicalRecordType(String loaiba, boolean isDefault) {
