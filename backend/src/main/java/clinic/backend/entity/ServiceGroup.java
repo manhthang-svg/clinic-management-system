@@ -1,50 +1,35 @@
 package clinic.backend.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
 import clinic.backend.enums.ServiceGroupType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * A service group; routes orders to paraclinical rooms and is exported as V.2.6.5–6 (I1-D40).
+ */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
 @Entity
-@Table(name = "service_groups")
-public class ServiceGroup {
+@Table(name = "service_groups", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_service_groups_loaimachidinh", columnNames = "loaimachidinh")
+})
+public class ServiceGroup extends VersionedEntity {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
-    private UUID id;
+    @Column(name = "loaimachidinh", nullable = false, updatable = false, length = 255)
+    private String loaimachidinh;
 
-    @Column(name = "code", nullable = false, updatable = false, length = 30)
-    private String code;
+    @Column(name = "loaichidinh", nullable = false, length = 255)
+    private String loaichidinh;
 
-    @Column(name = "name", nullable = false, length = 100)
-    private String name;
-
+    /** Decides whether results are exported in group VI (imaging, functional) or VII (lab). */
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private ServiceGroupType type;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    // A null version marks a new entity for Spring Data.
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
 }

@@ -1,12 +1,11 @@
 package clinic.backend.enums;
 
 /**
- * Visit statuses from Report 3; Iteration 1 creates WAITING_FEE_PAYMENT and WAITING only.
+ * Visit statuses. A skipped visit keeps its status and is flagged with {@code is_skipped} (I1-D41).
  */
 public enum VisitStatus {
     WAITING_FEE_PAYMENT,
     WAITING,
-    SKIPPED,
     IN_EXAMINATION,
     WAITING_PARACLINICAL,
     WAITING_CONCLUSION,
