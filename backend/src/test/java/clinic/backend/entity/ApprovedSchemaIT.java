@@ -11,6 +11,7 @@ import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalRecordTypePhamVi;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
+import clinic.backend.enums.PrescriptionLienthongStatus;
 import clinic.backend.support.PostgresIntegrationTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -246,6 +247,32 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void mapsAPrescriptionWithItsLines() {
+        UUID prescription = insertPrescription(newMedicalRecord(), "79001ABC1234-C", "C");
+        jdbcTemplate.update("""
+                insert into prescription_details (id, prescription_id, machidinh, tenthuocvattu, donvitinh,
+                    soluongthuocvattu, cachdung, lieu_moi_lan, so_lan_ngay, so_ngay_dung, ngaykedonthuoc, created_at)
+                values (?, ?, ?, 'Paracetamol 500mg', 'Viên', 10, 'Uống sau ăn', '1 viên', 2, 5, current_date, now())
+                """, UUID.randomUUID(), prescription, "YL-" + prescription);
+
+        Prescription stored = entityManager.find(Prescription.class, prescription);
+        assertThat(stored.getLienthongStatus()).isEqualTo(PrescriptionLienthongStatus.PENDING);
+        assertThat(stored.getLoaidon()).isEqualTo("C");
+        assertThat(stored.getDetails()).singleElement().satisfies(line -> {
+            assertThat(line.getSoLanNgay()).isEqualTo((short) 2);
+            assertThat(line.getSoNgayDung()).isEqualTo((short) 5);
+        });
+    }
+
+    @Test
+    void rejectsAPrescriptionCodeThatDoesNotEndWithItsType() {
+        UUID record = newMedicalRecord();
+
+        assertThatThrownBy(() -> insertPrescription(record, "79001ABC1234-N", "C"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     /**
      * Creates a doctor, an examination room, a patient, a visit, and the visit's open medical record.
      */
@@ -361,6 +388,16 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                     file_sha256, uploaded_by_account_id, uploaded_at)
                 values (?, ?, ?, 'results/ket-qua.pdf', 'ket-qua.pdf', 'application/pdf', repeat('a', 64), ?, now())
                 """, id, imagingResult, labResult, doctor);
+        return id;
+    }
+
+    private UUID insertPrescription(UUID record, String madonthuoc, String loaidon) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into prescriptions (id, sophieu, madonthuoc, loaidon, medical_record_id, doctor_account_id,
+                    doituongbn, prescribed_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, ?, 2, now(), now(), now(), 0)
+                """, id, madonthuoc, madonthuoc, loaidon, record, doctor);
         return id;
     }
 
