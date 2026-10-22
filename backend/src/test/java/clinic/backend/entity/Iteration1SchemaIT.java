@@ -10,9 +10,8 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.LoginRequest;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.AuditOutcome;
-import clinic.backend.enums.AuditedEntityType;
-import clinic.backend.enums.BusinessAuditEventType;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Gender;
 import clinic.backend.enums.MedicalServiceType;
@@ -212,21 +211,24 @@ class Iteration1SchemaIT {
     }
 
     @Test
-    void storesBusinessAuditArraysAndJson() {
+    void storesAuditLogArraysAndJson() {
         UUID id = UUID.randomUUID();
         UUID actor = jdbcTemplate.queryForObject(
                 "select id from staff_accounts where username = 'lt.nguyenthihong'", UUID.class);
         UUID room = jdbcTemplate.queryForObject("select id from rooms where maphongkham = 'PK-NGOAI'", UUID.class);
+        jdbcTemplate.update("""
+                insert into audit_logs (id, occurred_at, actor_account_id, action, entity_type, entity_id, outcome,
+                    changed_fields, old_value, new_value)
+                values (?, now(), ?, 'UPDATE', 'rooms', ?, 'SUCCESS', ?, ?::jsonb, ?::jsonb)
+                """, id, actor, room, new String[] {"phongkham"}, "{\"phongkham\": \"A\"}",
+                "{\"phongkham\": \"B\"}");
 
-        transactionTemplate.executeWithoutResult(status -> entityManager.persist(new BusinessAuditEvent(
-                id, Instant.now(), actor, BusinessAuditEventType.ROOM_UPDATED, AuditedEntityType.ROOM, room,
-                AuditOutcome.SUCCESS, new String[] {"name"},
-                "{\"name\": {\"old\": \"A\", \"new\": \"B\"}}", null)));
-
-        BusinessAuditEvent stored = transactionTemplate.execute(
-                status -> entityManager.find(BusinessAuditEvent.class, id));
-        assertThat(stored.getChangedFields()).containsExactly("name");
-        assertThat(stored.getChanges()).contains("\"old\"");
+        AuditLog stored = transactionTemplate.execute(status -> entityManager.find(AuditLog.class, id));
+        assertThat(stored.getAction()).isEqualTo(AuditLogAction.UPDATE);
+        assertThat(stored.getOutcome()).isEqualTo(AuditOutcome.SUCCESS);
+        assertThat(stored.getChangedFields()).containsExactly("phongkham");
+        assertThat(stored.getOldValue()).contains("\"A\"");
+        assertThat(stored.getNewValue()).contains("\"B\"");
     }
 
     @Test

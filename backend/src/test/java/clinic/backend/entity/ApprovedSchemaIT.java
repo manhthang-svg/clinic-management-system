@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.ImagingResultStatus;
 import clinic.backend.enums.LabResultStatus;
@@ -12,6 +13,9 @@ import clinic.backend.enums.MedicalRecordTypePhamVi;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.enums.PrescriptionLienthongStatus;
+import clinic.backend.enums.RecordArchiveStatus;
+import clinic.backend.enums.RecordSignatureDocumentType;
+import clinic.backend.enums.RecordSignatureSignerType;
 import clinic.backend.support.PostgresIntegrationTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -273,6 +277,43 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void mapsASignedExportedAndArchivedRecord() {
+        UUID record = newMedicalRecord();
+        UUID exportLog = insertExportLog(record, "SUCCESS", null);
+        UUID archive = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into record_archives (id, medical_record_id, soluutru, export_log_id, package_uri,
+                    package_sha256, expires_on, status, archived_at)
+                values (?, ?, ?, ?, 'archives/ba.zip', repeat('b', 64), current_date + 3650, 'ARCHIVED', now())
+                """, archive, record, "LT-" + record, exportLog);
+        UUID signature = insertSignature(record, "STAFF", doctor, null);
+
+        assertThat(entityManager.find(ExportLog.class, exportLog).getExportFormat()).isEqualTo(ExportFormat.XML);
+        RecordArchive storedArchive = entityManager.find(RecordArchive.class, archive);
+        assertThat(storedArchive.getRetentionYears()).isEqualTo((short) 10);
+        assertThat(storedArchive.getStatus()).isEqualTo(RecordArchiveStatus.ARCHIVED);
+        RecordSignature storedSignature = entityManager.find(RecordSignature.class, signature);
+        assertThat(storedSignature.getSignerType()).isEqualTo(RecordSignatureSignerType.STAFF);
+        assertThat(storedSignature.getDocumentType()).isEqualTo(RecordSignatureDocumentType.KET_LUAN);
+    }
+
+    @Test
+    void requiresTheIdNumberOfASigningPatient() {
+        UUID record = newMedicalRecord();
+
+        assertThatThrownBy(() -> insertSignature(record, "PATIENT", null, null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void requiresTheReasonOfAFailedExport() {
+        UUID record = newMedicalRecord();
+
+        assertThatThrownBy(() -> insertExportLog(record, "FAILED", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     /**
      * Creates a doctor, an examination room, a patient, a visit, and the visit's open medical record.
      */
@@ -398,6 +439,28 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                     doituongbn, prescribed_at, created_at, updated_at, version)
                 values (?, ?, ?, ?, ?, ?, 2, now(), now(), now(), 0)
                 """, id, madonthuoc, madonthuoc, loaidon, record, doctor);
+        return id;
+    }
+
+    private UUID insertExportLog(UUID record, String status, String errorMessage) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into export_logs (id, medical_record_id, sovaovien, export_format, purpose, status,
+                    error_message, exported_at)
+                values (?, ?, 'DK-0000000001', 'XML', 'LUU_TRU', ?, ?, now())
+                """, id, record, status, errorMessage);
+        return id;
+    }
+
+    private UUID insertSignature(UUID record, String signerType, UUID signerAccount, String signerIdNumber) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into record_signatures (id, medical_record_id, document_type, document_id, document_version,
+                    document_sha256, signer_type, signer_account_id, signer_name, signer_id_number,
+                    signature_method, signed_at, created_at)
+                values (?, ?, 'KET_LUAN', ?, 0, repeat('c', 64), ?, ?, 'Người Ký', ?, 'ELECTRONIC_CONFIRMATION',
+                    now(), now())
+                """, id, record, UUID.randomUUID(), signerType, signerAccount, signerIdNumber);
         return id;
     }
 
