@@ -79,7 +79,7 @@ Decided session parameters (14/10/2026):
 - Generate a unique salt through the selected encoder and never implement custom password cryptography.
 - Never store, log, return, or include plaintext passwords in events or error messages.
 
-Decided account-security rules (14/10/2026; business decisions recorded in [`use-cases/staff-account.md`](use-cases/staff-account.md#decisions)):
+Decided account-security implementation rules (14/10/2026). These refine security details not specified by Report 3 and do not redefine its use-case flows:
 
 | Topic | Decision |
 | --- | --- |
@@ -168,7 +168,7 @@ Additional rules:
 - Restrict and monitor access to application and audit logs.
 - Decided security audit (14/10/2026): security and account-administration events are stored in a PostgreSQL audit table, separate from application logs. Fields: ID, time, actor account ID (empty when unauthenticated), event type, target account ID, outcome, correlation ID. Never stored: passwords, tokens, the submitted username of a failed login for an unknown account, medical data.
 - Event types: `LOGIN_SUCCEEDED`, `LOGIN_FAILED` (existing account only), `LOGIN_THROTTLED`, `LOGOUT`, `REFRESH_TOKEN_REUSE_DETECTED`, `PASSWORD_CHANGED`, `ACCOUNT_CREATED`, `ACCOUNT_UPDATED`, `ROLE_CHANGED`, `ACCOUNT_LOCKED`, `ACCOUNT_UNLOCKED`, `PASSWORD_RESET`. Business events (patients, visits, payments, departments, rooms, staff assignments) go to a separate `business_audit_events` table; the Iteration 1 event list and stored fields are in I1-D35 of [`iteration-1-decisions.md`](iteration-1-decisions.md). Audit events for clinical data are defined with the clinical use cases.
-- Audit records are append-only and are not deleted until a retention period is set by legal review. The only API read is UC-6 (decided 15/10/2026, AQ-18): Admin sees the 10 latest `LOGIN_SUCCEEDED`, `LOGOUT`, and `LOGIN_FAILED` events of one account, with time and event type. All other audit records are readable only by operators with database access.
+- Audit records are append-only and are not deleted until a retention period is set by legal review. The only API read is UC-06: Admin sees the 10 latest `LOGIN_SUCCEEDED`, `LOGOUT`, and `LOGIN_FAILED` events of one account, with time and event type. All other audit records are readable only by operators with database access.
 - An Admin action and its audit event are written in the same transaction. Failed-login events and throttling counters are committed even though the login fails.
 
 ## Sensitive Data Handling
@@ -183,7 +183,15 @@ Additional rules:
 
 ## Admin Recovery
 
-The bootstrap Admin is the only Admin (AQ-17). If that Admin forgets the password or leaves, an operator with shell access to the server runs a maintenance command that resets the Admin password; there is no API for it. The command follows the temporary-password rule above, revokes all sessions, and writes `PASSWORD_RESET` with an empty actor. Details: AQ-19 in [`use-cases/staff-account.md`](use-cases/staff-account.md#decisions).
+The deployment currently has one bootstrap Admin. If that Admin forgets the password or leaves, an operator with shell access to the server runs a maintenance command that resets the Admin password; there is no API for this operator recovery path. The command follows the temporary-password rule above, revokes all sessions, and writes `PASSWORD_RESET` with an empty actor.
+
+Stop the normal backend instance, then run the application once with the `admin-recovery` profile and the same database/security environment variables:
+
+```text
+java -jar clinic-backend-<version>.jar --spring.profiles.active=admin-recovery
+```
+
+This profile starts without an HTTP server, does not run Admin bootstrap or the development seed, prints the generated password once to the operator's console, and exits. Do not redirect or retain the console output. If the Admin has status `LOCKED`, recovery replaces the password but deliberately keeps that status.
 
 ## Remaining Decisions
 

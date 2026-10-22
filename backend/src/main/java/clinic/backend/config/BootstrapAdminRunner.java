@@ -6,13 +6,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Creates the first Admin at startup when none exists and bootstrap settings are present (AQ-10).
+ * Creates the first Admin at startup when none exists and bootstrap settings are present.
  */
 @Slf4j
 @Component
+@Profile("!admin-recovery")
 @RequiredArgsConstructor
 public class BootstrapAdminRunner implements ApplicationRunner {
 

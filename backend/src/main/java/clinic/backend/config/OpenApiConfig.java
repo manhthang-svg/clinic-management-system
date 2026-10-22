@@ -17,7 +17,8 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Clinic Management API")
-                        .description("Technical API foundation; business endpoints are not defined yet.")
+                        .description("Backend contract for Report 3 UC-01 to UC-04. Successful bodies use "
+                                + "ApiResponse; failures use ErrorResponse. Refresh tokens are HttpOnly cookies.")
                         .version("v1"))
                 .components(new Components().addSecuritySchemes(
                         BEARER_SECURITY_SCHEME,

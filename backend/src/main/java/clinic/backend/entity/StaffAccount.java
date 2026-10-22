@@ -30,7 +30,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * Staff account (docs/use-cases/staff-account.md).
+ * Staff account (Report 3).
  *
  * <p>State changes go through the behavior methods below; the entity has no setters. The password hash is an
  * opaque value produced by the application's password hasher.
@@ -46,12 +46,12 @@ public class StaffAccount {
     public static final int MAX_CONSECUTIVE_FAILED_LOGINS = 5;
     public static final Duration LOGIN_BLOCK_DURATION = Duration.ofMinutes(15);
 
-    /** Password rules decided in AQ-03: 8–64 characters and at most 72 bytes in UTF-8 (BCrypt input limit). */
+    /** Password rules from docs/security.md: 8–64 characters and at most 72 bytes in UTF-8 (BCrypt input limit). */
     public static final int PASSWORD_MINIMUM_LENGTH = 8;
     public static final int PASSWORD_MAXIMUM_LENGTH = 64;
     public static final int PASSWORD_MAXIMUM_UTF8_BYTES = 72;
 
-    /** Login identifier: case-insensitive, stored in lowercase, 3–50 characters of {@code a–z 0–9 . _ -} (AQ-05). */
+    /** Login identifier: case-insensitive, stored in lowercase, 3–50 characters of {@code a–z 0–9 . _ -}. */
     private static final Pattern USERNAME_FORMAT = Pattern.compile("[a-z0-9._-]{3,50}");
 
     @Id
@@ -146,7 +146,7 @@ public class StaffAccount {
     private Long version;
 
     /**
-     * Creates a new active account whose one-time password must be changed at first login (A01, AQ-01).
+     * Creates a new active account whose one-time password must be changed at first login (A01, docs/security.md).
      */
     public static StaffAccount create(
             UUID id,
@@ -203,7 +203,7 @@ public class StaffAccount {
     }
 
     /**
-     * Normalizes user input; returns empty when the input can never be a valid username (AQ-05).
+     * Normalizes user input; returns empty when the input can never be a valid username.
      */
     public static Optional<String> normalizeUsername(String input) {
         if (input == null) {
@@ -217,7 +217,7 @@ public class StaffAccount {
     }
 
     /**
-     * Checks a raw password against the password policy (AQ-03).
+     * Checks a raw password against the password policy in docs/security.md.
      */
     public static Optional<PasswordViolation> checkPasswordPolicy(String rawPassword) {
         if (rawPassword == null || rawPassword.codePointCount(0, rawPassword.length()) < PASSWORD_MINIMUM_LENGTH) {
@@ -235,7 +235,7 @@ public class StaffAccount {
     }
 
     /**
-     * Password login is temporarily refused after repeated failures (AQ-04). This is not the LOCKED status.
+     * Password login is temporarily refused after repeated failures. This is not the LOCKED status.
      */
     public boolean isLoginBlocked(Instant now) {
         return loginBlockedUntil != null && now.isBefore(loginBlockedUntil);
@@ -285,6 +285,26 @@ public class StaffAccount {
         passwordChangeRequired = false;
         passwordChangedAt = now;
         updatedAt = now;
+    }
+
+    /**
+     * Replaces a forgotten password with an operator-issued one-time password (docs/security.md, Admin Recovery).
+     * This deliberately does not change the account's ACTIVE/LOCKED status.
+     */
+    public void resetPasswordForRecovery(String temporaryPasswordHash, Instant now) {
+        passwordHash = requireText(temporaryPasswordHash, "temporaryPasswordHash");
+        passwordChangeRequired = true;
+        failedLoginAttempts = 0;
+        loginBlockedUntil = null;
+        passwordChangedAt = Objects.requireNonNull(now, "now");
+        updatedAt = now;
+    }
+
+    /** Updates the two owner-editable profile fields (UC-4 / BR-04). */
+    public void updateContact(String newPhoneNumber, String newEmail, Instant now) {
+        phoneNumber = requireText(newPhoneNumber, "phoneNumber");
+        email = requireText(newEmail, "email");
+        updatedAt = Objects.requireNonNull(now, "now");
     }
 
     private static String requireText(String value, String name) {

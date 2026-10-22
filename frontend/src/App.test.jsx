@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from './apis/apiError';
@@ -24,7 +25,7 @@ describe('App', () => {
         const sessionManager = manager({
             refresh: vi.fn().mockRejectedValue(new ApiError('Unauthorized', { status: 401 })),
         });
-        render(<App sessionManager={sessionManager}/>);
+        render(<MemoryRouter><App sessionManager={sessionManager}/></MemoryRouter>);
         expect(await screen.findByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument();
     });
     it('restores an existing session and greets the user', async () => {
@@ -37,7 +38,7 @@ describe('App', () => {
                 account: { id: 'id-1', username: 'dr.an', fullName: 'Nguyễn An', role: 'DOCTOR' },
             }),
         });
-        render(<App sessionManager={sessionManager}/>);
+        render(<MemoryRouter><App sessionManager={sessionManager}/></MemoryRouter>);
         expect(await screen.findByRole('heading', { name: 'Xin chào Nguyễn An (Bác sĩ)' })).toBeInTheDocument();
     });
     it('forces a password change first and drops the restriction afterwards', async () => {
@@ -62,7 +63,7 @@ describe('App', () => {
         const accountApi = {
             changePassword: vi.fn().mockResolvedValue(undefined),
         };
-        render(<App sessionManager={sessionManager} accountApi={accountApi}/>);
+        render(<MemoryRouter><App sessionManager={sessionManager} accountApi={accountApi}/></MemoryRouter>);
         expect(await screen.findByRole('alert')).toHaveTextContent('Bạn đang dùng mật khẩu tạm.');
         expect(screen.getByRole('heading', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
@@ -85,7 +86,7 @@ describe('App', () => {
                 account: { id: 'id-1', username: 'dr.an', fullName: 'Nguyễn An', role: 'DOCTOR' },
             }),
         });
-        render(<App sessionManager={sessionManager}/>);
+        render(<MemoryRouter><App sessionManager={sessionManager}/></MemoryRouter>);
         const logout = await screen.findByRole('button', { name: 'Đăng xuất' });
         await userEvent.click(logout);
         expect(await screen.findByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument();

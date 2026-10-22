@@ -161,17 +161,19 @@ export function AccountTable({
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          title={locked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                          aria-label={`${locked ? 'Mở khóa' : 'Khóa'} ${account.username}`}
-                          onClick={() => onToggleLock(account)}
-                          className={`${ACTION_CLASS} ${
-                            locked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
-                          }`}
-                        >
-                          {locked ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                        </button>
+                        {account.role !== 'ADMIN' && (
+                          <button
+                            type="button"
+                            title={locked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                            aria-label={`${locked ? 'Mở khóa' : 'Khóa'} ${account.username}`}
+                            onClick={() => onToggleLock(account)}
+                            className={`${ACTION_CLASS} ${
+                              locked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
+                            }`}
+                          >
+                            {locked ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
                         <button
                           type="button"
                           title="Đặt lại mật khẩu"
