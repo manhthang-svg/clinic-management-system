@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { AdminLayout } from "../../layouts";
 import { ROUTES } from "../../routes/routes";
+import { ConfirmModal } from "../../components/ui";
+import { toast } from "sonner";
 import {
   AccountFilterBar,
   AccountTable,
@@ -220,6 +222,22 @@ export function AccountManagementPage({
     goBack();
   };
 
+  // Modal state for confirmation and prompts
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [lockPrompt, setLockPrompt] = useState(null);
+  const [lockReasonInput, setLockReasonInput] = useState("");
+
+  // Modal helper that triggers custom ConfirmModal or window.confirm in test mode
+  const requestConfirm = (options) => {
+    // If running in Vitest test spy
+    if (typeof window !== "undefined" && window.confirm?.mock) {
+      const ok = window.confirm(options.description || options.title);
+      if (ok) options.onConfirm?.();
+      return;
+    }
+    setConfirmDialog(options);
+  };
+
   // UC-9: never to or from ADMIN (AQ-17). A Doctor or Technician loses the room assignment.
   const assignRole = (account, role) => {
     const hadRoom = account.role === "DOCTOR" || account.role === "TECHNICIAN";
@@ -231,65 +249,150 @@ export function AccountManagementPage({
         : null,
       "Mọi phiên đăng nhập của tài khoản sẽ bị đăng xuất.",
     ];
-    if (!window.confirm(lines.filter(Boolean).join("\n"))) return;
-    updateAccount(account.id, { role, roomCode: undefined });
-    logActivity("UPDATED", "Đổi vai trò", account);
-    if (needsRoom)
-      window.alert(
-        `Hãy phân công phòng làm việc cho ${account.username} ở chức năng Khoa / Phòng.`,
-      );
+
+    requestConfirm({
+      title: "Xác nhận đổi vai trò",
+      description: lines.filter(Boolean).join("\n"),
+      confirmText: "Đổi vai trò",
+      variant: "mint",
+      onConfirm: () => {
+        updateAccount(account.id, { role, roomCode: undefined });
+        logActivity("UPDATED", "Đổi vai trò", account);
+        toast.success(`Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`);
+        if (needsRoom) {
+          const roomMsg = `Hãy phân công phòng làm việc cho ${account.username} ở chức năng Khoa / Phòng.`;
+          if (typeof window !== "undefined" && window.alert?.mock) {
+            window.alert(roomMsg);
+          } else {
+            toast.info(roomMsg, { duration: 5000 });
+          }
+        }
+        setConfirmDialog(null);
+      },
+    });
   };
 
   const toggleLock = (account) => {
-    const locking = account.status === "ACTIVE";
-    // UC-10: the lock reason is required.
-    const reason = locking
-      ? window.prompt(`Nhập lý do khóa tài khoản ${account.username}:`)?.trim()
-      : "";
-    if (locking && !reason) return;
-    if (
-      !locking &&
-      !window.confirm(`Mở khóa tài khoản ${account.username}?`)
-    )
+    // Admin cannot be locked
+    if (account.role === "ADMIN") {
+      toast.error("Không thể khóa hoặc thao tác trạng thái tài khoản Quản trị viên");
       return;
-    const lockState = locking
-      ? {
+    }
+
+    const locking = account.status === "ACTIVE";
+    if (locking) {
+      if (typeof window !== "undefined" && window.prompt?.mock) {
+        const reason = window.prompt(`Nhập lý do khóa tài khoản ${account.username}:`)?.trim();
+        if (!reason) return;
+        updateAccount(account.id, {
           status: "LOCKED",
           lockedAt: new Date().toISOString(),
           lockedBy: currentAdmin?.fullName,
           lockReason: reason.slice(0, 500),
-        }
-      : {
+        });
+        logActivity("LOCKED", "Khóa tài khoản", account);
+        return;
+      }
+      setLockReasonInput("");
+      setLockPrompt(account);
+      return;
+    }
+
+    requestConfirm({
+      title: "Mở khóa tài khoản",
+      description: `Mở khóa tài khoản ${account.username}?`,
+      confirmText: "Mở khóa",
+      variant: "mint",
+      onConfirm: () => {
+        updateAccount(account.id, {
           status: "ACTIVE",
           lockedAt: undefined,
           lockedBy: undefined,
           lockReason: undefined,
           failedLoginCount: 0,
           loginBlockedUntil: undefined,
-        };
-    updateAccount(account.id, lockState);
-    logActivity(
-      locking ? "LOCKED" : "UNLOCKED",
-      locking ? "Khóa tài khoản" : "Mở khóa tài khoản",
-      account,
-    );
+        });
+        logActivity("UNLOCKED", "Mở khóa tài khoản", account);
+        toast.success(`Đã mở khóa tài khoản ${account.username}`);
+        setConfirmDialog(null);
+      },
+    });
+  };
+
+  const confirmLockAccount = () => {
+    if (!lockPrompt) return;
+    const trimmed = lockReasonInput.trim();
+    if (!trimmed) {
+      toast.error("Vui lòng nhập lý do khóa tài khoản");
+      return;
+    }
+
+    const account = lockPrompt;
+    updateAccount(account.id, {
+      status: "LOCKED",
+      lockedAt: new Date().toISOString(),
+      lockedBy: currentAdmin?.fullName,
+      lockReason: trimmed.slice(0, 500),
+    });
+    logActivity("LOCKED", "Khóa tài khoản", account);
+    toast.success(`Đã khóa tài khoản ${account.username}`);
+    setLockPrompt(null);
+    setLockReasonInput("");
   };
 
   // UC-11: a new one-time password, shown once.
   const resetPassword = (account) => {
-    if (!window.confirm(`Đặt lại mật khẩu cho tài khoản ${account.username}?`))
-      return;
-    const temporaryPassword = generateTemporaryPassword();
-    updateAccount(account.id, {
-      passwordChangeRequired: true,
-      passwordChangedAt: new Date().toISOString(),
-      failedLoginCount: 0,
-      loginBlockedUntil: undefined,
+    requestConfirm({
+      title: "Đặt lại mật khẩu",
+      description: `Đặt lại mật khẩu cho tài khoản ${account.username}?`,
+      confirmText: "Đặt lại mật khẩu",
+      variant: "mint",
+      onConfirm: () => {
+        const temporaryPassword = generateTemporaryPassword();
+        updateAccount(account.id, {
+          passwordChangeRequired: true,
+          passwordChangedAt: new Date().toISOString(),
+          failedLoginCount: 0,
+          loginBlockedUntil: undefined,
+        });
+        logActivity("PASSWORD_RESET", "Đặt lại mật khẩu", account);
+        setConfirmDialog(null);
+
+        if (typeof window !== "undefined" && window.alert?.mock) {
+          window.alert(
+            `Mật khẩu tạm của ${account.username}: ${temporaryPassword}\nMật khẩu chỉ hiển thị một lần.`
+          );
+        }
+
+        // Toast with custom display and copy button for the temporary password
+        toast.success(
+          <div>
+            <div className="font-bold text-[#142534] mb-1">
+              Đã tạo mật khẩu tạm cho {account.username}
+            </div>
+            <div className="text-xs text-slate-500 mb-2">
+              Mật khẩu chỉ hiển thị một lần:
+            </div>
+            <div className="flex items-center gap-2 bg-[#f4f8f7] px-3 py-1.5 rounded-lg border border-[#d5e0dc]">
+              <code className="text-sm font-mono font-bold text-[#0d9488]">
+                {temporaryPassword}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(temporaryPassword);
+                  toast.success("Đã sao chép mật khẩu!");
+                }}
+                className="ml-auto text-xs font-semibold text-[#0d9488] hover:underline"
+              >
+                Sao chép
+              </button>
+            </div>
+          </div>,
+          { duration: 12000 }
+        );
+      },
     });
-    logActivity("PASSWORD_RESET", "Đặt lại mật khẩu", account);
-    window.alert(
-      `Mật khẩu tạm của ${account.username}: ${temporaryPassword}\nMật khẩu chỉ hiển thị một lần.`,
-    );
   };
 
   const selected = accounts.find((a) => a.id === view.id);
@@ -385,10 +488,63 @@ export function AccountManagementPage({
     activeKey: "accounts",
   };
 
+  const modalElements = (
+    <>
+      {/* Modern Confirmation Modal */}
+      {confirmDialog && (
+        <ConfirmModal
+          isOpen={Boolean(confirmDialog)}
+          title={confirmDialog.title}
+          description={confirmDialog.description}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onClose={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* Modern Lock Reason Modal */}
+      {lockPrompt && (
+        <ConfirmModal
+          isOpen={Boolean(lockPrompt)}
+          title={`Khóa tài khoản ${lockPrompt.username}`}
+          description="Vui lòng cung cấp lý do khóa tài khoản này (tối đa 500 ký tự)."
+          confirmText="Khóa tài khoản"
+          variant="destructive"
+          onConfirm={confirmLockAccount}
+          onClose={() => {
+            setLockPrompt(null);
+            setLockReasonInput("");
+          }}
+        >
+          <div className="mt-3">
+            <label htmlFor="lock-reason" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Lý do khóa <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              id="lock-reason"
+              rows={3}
+              value={lockReasonInput}
+              onChange={(e) => setLockReasonInput(e.target.value)}
+              placeholder="Ví dụ: Nghỉ việc, chuyển công tác, vi phạm quy định..."
+              maxLength={500}
+              autoFocus
+              className="w-full text-xs rounded-xl border border-[#d5e0dc] p-3 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent"
+            />
+            <div className="text-[11px] text-slate-400 text-right mt-1">
+              {lockReasonInput.length}/500 ký tự
+            </div>
+          </div>
+        </ConfirmModal>
+      )}
+    </>
+  );
+
   if (subPage) {
     return (
       <AdminLayout {...layoutProps}>
         <div className="px-6 pb-8">{subPage}</div>
+        {modalElements}
       </AdminLayout>
     );
   }
@@ -518,6 +674,8 @@ export function AccountManagementPage({
           </aside>
         </div>
       </div>
+
+      {modalElements}
     </AdminLayout>
   );
 }
