@@ -55,6 +55,7 @@ public class Department extends VersionedEntity {
         this.active = active;
     }
 
+
     public void update(String tenkhoa, DepartmentType type, String description, boolean active, java.time.Instant now) {
         this.tenkhoa = tenkhoa;
         this.type = type;
