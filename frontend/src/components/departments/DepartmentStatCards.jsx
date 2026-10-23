@@ -1,0 +1,119 @@
+import { Building2, DoorOpen, CheckCircle2, AlertTriangle } from 'lucide-react';
+
+export function DepartmentStatCards({ stats }) {
+  const {
+    totalDepartments = 0,
+    totalRooms = 0,
+    activeRooms = 0,
+    maintenanceRooms = 0,
+    activeRate,
+    maintenanceNote,
+  } = stats || {};
+
+  // Tỷ lệ phần trăm hoạt động tính trên Phòng
+  const displayRate =
+    activeRate !== undefined && activeRate !== null
+      ? activeRate
+      : totalRooms > 0
+      ? Number(((activeRooms / totalRooms) * 100).toFixed(1))
+      : 0;
+
+  // Chú thích cảnh báo bảo trì
+  const displayMaintenanceNote =
+    maintenanceNote ||
+    (maintenanceRooms > 0
+      ? `${maintenanceRooms} phòng đang kiểm tra thiết bị`
+      : 'Tất cả phòng hoạt động bình thường');
+
+  const cards = [
+    {
+      id: 'departments',
+      title: 'Tổng số khoa',
+      value: totalDepartments,
+      badge: 'Khoa chuyên môn',
+      badgeClass: 'bg-blue-50 text-blue-700 border border-blue-100/80',
+      note: 'Lâm sàng & Cận lâm sàng',
+      icon: Building2,
+      iconClass: 'bg-blue-50 text-blue-600',
+    },
+    {
+      id: 'rooms',
+      title: 'Tổng số phòng',
+      value: totalRooms,
+      badge: 'Phòng tiếp nhận',
+      badgeClass: 'bg-teal-50 text-[#0d9488] border border-teal-100/80',
+      note: 'Khám bệnh, CLS & Nghiệp vụ',
+      icon: DoorOpen,
+      iconClass: 'bg-teal-50 text-[#0d9488]',
+    },
+    {
+      id: 'active',
+      title: 'Đang hoạt động',
+      value: activeRooms,
+      badge: `Tỷ lệ: ${displayRate}%`,
+      badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-100/80',
+      note: 'Sẵn sàng tiếp nhận bệnh nhân',
+      icon: CheckCircle2,
+      iconClass: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      id: 'maintenance',
+      title: 'Tạm ngưng / Bảo trì',
+      value: maintenanceRooms,
+      badge: maintenanceRooms > 0 ? 'Cần kiểm tra' : 'Bình thường',
+      badgeClass:
+        maintenanceRooms > 0
+          ? 'bg-amber-50 text-amber-700 border border-amber-100/80'
+          : 'bg-slate-50 text-slate-500 border border-slate-200/60',
+      note: displayMaintenanceNote,
+      icon: AlertTriangle,
+      iconClass:
+        maintenanceRooms > 0
+          ? 'bg-amber-50 text-amber-600'
+          : 'bg-slate-100 text-slate-500',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <div
+            key={card.id}
+            className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex items-center gap-4 transition-all hover:border-slate-300"
+          >
+            <div
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${card.iconClass}`}
+            >
+              <Icon className="w-6 h-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-slate-500 tracking-wide">
+                {card.title}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-2xl font-extrabold text-[#142534] tracking-tight">
+                  {card.value}
+                </span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${card.badgeClass}`}
+                >
+                  {card.badge}
+                </span>
+              </div>
+              <div
+                className="text-[11px] text-slate-400 mt-1 truncate"
+                title={card.note}
+              >
+                {card.note}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default DepartmentStatCards;

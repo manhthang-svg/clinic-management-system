@@ -13,6 +13,7 @@ export const ROUTES = {
     APPOINTMENTS: '/admin/appointments',
     EXAMINATIONS: '/admin/examinations',
     SUBCLINICAL: '/admin/subclinical',
+    DEPARTMENTS: '/admin/departments',
     BILLING: '/admin/billing',
     STAFF: '/admin/staff',
     REPORTS: '/admin/reports',
