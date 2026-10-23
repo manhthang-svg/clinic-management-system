@@ -51,43 +51,6 @@ public class Room extends VersionedEntity {
 
     public Room(
             UUID id,
-            UUID departmentId,
-            UUID serviceGroupId,
-            String maphongkham,
-            String phongkham,
-            String location,
-            RoomType type,
-            ActivationStatus status,
-            java.time.Instant now) {
-        super(id, now);
-        this.departmentId = departmentId;
-        this.serviceGroupId = serviceGroupId;
-        this.maphongkham = maphongkham;
-        this.phongkham = phongkham;
-        this.location = location;
-        this.type = type;
-        this.status = status;
-    }
-
-    public void update(
-            UUID departmentId,
-            String phongkham,
-            String location,
-            RoomType type,
-            ActivationStatus status,
-            java.time.Instant now) {
-        this.departmentId = departmentId;
-        this.phongkham = phongkham;
-        this.location = location;
-        this.type = type;
-        this.status = status;
-        touch(now);
-    }
-
-
-    public void setStatus(ActivationStatus status, java.time.Instant now) {
-        this.status = status;
-        touch(now);
             Instant createdAt,
             UUID departmentId,
             UUID serviceGroupId,
@@ -95,10 +58,8 @@ public class Room extends VersionedEntity {
             String roomName,
             String location,
             RoomType type,
-            ActivationStatus status
-    ) {
+            ActivationStatus status) {
         super(id, createdAt);
-
         this.departmentId = departmentId;
         this.serviceGroupId = serviceGroupId;
         this.roomCode = roomCode;
@@ -106,5 +67,25 @@ public class Room extends VersionedEntity {
         this.location = location;
         this.type = type;
         this.status = status;
+    }
+
+    public void update(
+            UUID departmentId,
+            String roomName,
+            String location,
+            RoomType type,
+            ActivationStatus status,
+            Instant now) {
+        this.departmentId = departmentId;
+        this.roomName = roomName;
+        this.location = location;
+        this.type = type;
+        this.status = status;
+        touch(now);
+    }
+
+    public void setStatus(ActivationStatus status, Instant now) {
+        this.status = status;
+        touch(now);
     }
 }
