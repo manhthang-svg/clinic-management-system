@@ -84,6 +84,7 @@ public class Room extends VersionedEntity {
         touch(now);
     }
 
+
     public void setStatus(ActivationStatus status, java.time.Instant now) {
         this.status = status;
         touch(now);
