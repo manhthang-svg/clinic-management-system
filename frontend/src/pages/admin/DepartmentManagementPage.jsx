@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
@@ -25,7 +25,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const [activeTab, setActiveTab] = useState('rooms');
 
   const [items, setItems] = useState(INITIAL_DEPARTMENT_ITEMS);
-  const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     totalDepartments: 5,
     totalRooms: 16,
@@ -62,30 +61,30 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // Fetch data từ backend
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [fetchedItems, fetchedStats] = await Promise.all([
-        departmentApi.getItems(),
-        departmentApi.getStats(),
-      ]);
-      if (Array.isArray(fetchedItems) && fetchedItems.length > 0) {
-        setItems(fetchedItems);
-      }
-      if (fetchedStats) {
-        setStats(fetchedStats);
-      }
-    } catch {
-      // Giữ mock fallback
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Fetch data từ backend (setState chỉ chạy sau await, không đồng bộ trong effect)
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [fetchedItems, fetchedStats] = await Promise.all([
+          departmentApi.getItems(),
+          departmentApi.getStats(),
+        ]);
+        if (cancelled) return;
+        if (Array.isArray(fetchedItems) && fetchedItems.length > 0) {
+          setItems(fetchedItems);
+        }
+        if (fetchedStats) {
+          setStats(fetchedStats);
+        }
+      } catch {
+        // Giữ mock fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Danh sách các chuyên khoa để hiển thị dropdown
   const departmentsList = useMemo(() => {

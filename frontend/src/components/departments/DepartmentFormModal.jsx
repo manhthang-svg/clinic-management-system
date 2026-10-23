@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Building2, DoorOpen, X } from 'lucide-react';
 
@@ -8,8 +8,47 @@ const INPUT_CLASS =
 const SELECT_CLASS =
   'w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400';
 
-export function DepartmentFormModal({
-  isOpen,
+function buildInitialForm({ initialData, departments, isRoom }) {
+  if (initialData) {
+    return {
+      code: initialData.code || '',
+      name: initialData.name || '',
+      departmentId: initialData.departmentId || (departments[0]?.id || ''),
+      type: initialData.type || (isRoom ? 'EXAMINATION' : 'CLINICAL'),
+      location: initialData.location || '',
+      headPerson: initialData.headPerson || '',
+      description: initialData.description || '',
+      status: initialData.status || 'ACTIVE',
+    };
+  }
+  return {
+    code: '',
+    name: '',
+    departmentId: departments[0]?.id || '',
+    type: isRoom ? 'EXAMINATION' : 'CLINICAL',
+    location: isRoom ? '' : 'Tòa A - Tầng 1',
+    headPerson: '',
+    description: '',
+    status: 'ACTIVE',
+  };
+}
+
+/**
+ * Modal chỉ mount phần nội dung khi đang mở; mỗi lần mở (hoặc đổi item/loại/chế độ)
+ * sẽ mount lại nên form được khởi tạo sạch mà không cần setState trong effect.
+ */
+export function DepartmentFormModal(props) {
+  if (!props.isOpen) return null;
+  const { mode = 'CREATE', targetType = 'ROOM', initialData = null } = props;
+  return (
+    <DepartmentFormModalContent
+      key={`${mode}-${targetType}-${initialData?.id ?? 'new'}`}
+      {...props}
+    />
+  );
+}
+
+function DepartmentFormModalContent({
   mode = 'CREATE', // 'CREATE' | 'EDIT'
   targetType = 'ROOM', // 'ROOM' | 'DEPARTMENT'
   initialData = null,
@@ -20,50 +59,11 @@ export function DepartmentFormModal({
   const isEdit = mode === 'EDIT';
   const isRoom = targetType === 'ROOM';
 
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    departmentId: '',
-    type: isRoom ? 'EXAMINATION' : 'CLINICAL',
-    location: '',
-    headPerson: '',
-    description: '',
-    status: 'ACTIVE',
-  });
+  const [formData, setFormData] = useState(() =>
+    buildInitialForm({ initialData, departments, isRoom })
+  );
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        setFormData({
-          code: initialData.code || '',
-          name: initialData.name || '',
-          departmentId: initialData.departmentId || (departments[0]?.id || ''),
-          type: initialData.type || (isRoom ? 'EXAMINATION' : 'CLINICAL'),
-          location: initialData.location || '',
-          headPerson: initialData.headPerson || '',
-          description: initialData.description || '',
-          status: initialData.status || 'ACTIVE',
-        });
-      } else {
-        setFormData({
-          code: '',
-          name: '',
-          departmentId: departments[0]?.id || '',
-          type: isRoom ? 'EXAMINATION' : 'CLINICAL',
-          location: isRoom ? '' : 'Tòa A - Tầng 1',
-          headPerson: '',
-          description: '',
-          status: 'ACTIVE',
-        });
-      }
-      setErrors({});
-      setSubmitting(false);
-    }
-  }, [isOpen, initialData, departments, isRoom]);
-
-  if (!isOpen) return null;
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
