@@ -38,4 +38,33 @@ public class Department extends VersionedEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    public Department(
+            java.util.UUID id,
+            String makhoa,
+            String tenkhoa,
+            DepartmentType type,
+            String description,
+            boolean active,
+            java.time.Instant now) {
+        super(id, now);
+        this.makhoa = makhoa;
+        this.tenkhoa = tenkhoa;
+        this.type = type;
+        this.description = description;
+        this.active = active;
+    }
+
+    public void update(String tenkhoa, DepartmentType type, String description, boolean active, java.time.Instant now) {
+        this.tenkhoa = tenkhoa;
+        this.type = type;
+        this.description = description;
+        this.active = active;
+        touch(now);
+    }
+
+    public void setActive(boolean active, java.time.Instant now) {
+        this.active = active;
+        touch(now);
+    }
 }
