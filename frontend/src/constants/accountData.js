@@ -203,6 +203,7 @@ export const NAV_ITEMS = [
   { id: 'subclinical', label: 'Cận lâm sàng', iconName: 'Microscope' },
   { id: 'departments', label: 'Khoa / Phòng', iconName: 'Building2' },
   { id: 'rooms', label: 'Quản lý phòng', iconName: 'DoorOpen' },
+  { id: 'services', label: 'Dịch vụ', iconName: 'BriefcaseMedical' },
   { id: 'billing', label: 'Thanh toán', iconName: 'CreditCard' },
   { id: 'reports', label: 'Báo cáo thống kê', iconName: 'ClipboardList' },
   {

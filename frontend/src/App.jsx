@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useNavigate } from "react-router";
 import { ROUTES } from "./routes/routes";
 import { createAccountApi } from "./apis/accountApi";
 import { ChangePasswordForm } from "./pages/auth/ChangePasswordForm";
-import { AccountManagementPage, RoomManagementPage } from "./pages/admin";
+import {
+  AccountManagementPage,
+  RoomManagementPage,
+  ServiceManagementPage,
+} from "./pages/admin";
 import { LoginPage } from "./pages/auth/LoginPage";
 import {
   apiClient,
@@ -26,6 +30,7 @@ export function App({
   const [changingPassword, setChangingPassword] = useState(false);
   const [notice, setNotice] = useState(null);
   const [adminNav, setAdminNav] = useState("accounts");
+  const navigate = useNavigate();
 
   useEffect(() => {
     sessionManager.restore().catch(() => sessionManager.clear());
@@ -61,19 +66,44 @@ export function App({
     session.passwordChangeRequired || changingPassword;
 
   if (session.account.role === "ADMIN" && !showPasswordForm) {
+    // Accounts and services have URLs; the other admin screens are still state-driven.
+    const selectAdminNav = (key) => {
+      if (key === "accounts" || key === "services") {
+        setAdminNav("accounts");
+        navigate(
+          key === "services" ? ROUTES.ADMIN.SERVICES : ROUTES.ADMIN.ACCOUNTS,
+        );
+        return;
+      }
+
+      setAdminNav(key);
+    };
+
     if (adminNav === "rooms") {
       return (
         <RoomManagementPage
           currentAdmin={session.account}
           onLogout={() => void sessionManager.logout()}
           onChangePassword={() => setChangingPassword(true)}
-          onSelectNav={setAdminNav}
+          onSelectNav={selectAdminNav}
         />
       );
     }
 
     return (
       <Routes>
+        <Route
+          path={ROUTES.ADMIN.SERVICES}
+          element={
+            <ServiceManagementPage
+              currentAdmin={session.account}
+              onLogout={() => void sessionManager.logout()}
+              onChangePassword={() => setChangingPassword(true)}
+              onNavigate={selectAdminNav}
+            />
+          }
+        />
+
         <Route
           path="/admin/*"
           element={
@@ -82,7 +112,7 @@ export function App({
               notice={notice}
               onLogout={() => void sessionManager.logout()}
               onChangePassword={() => setChangingPassword(true)}
-              onNavigate={setAdminNav}
+              onNavigate={selectAdminNav}
             />
           }
         />
