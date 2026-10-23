@@ -122,6 +122,7 @@ tables:
         sql_type: text
         base_type: text
         nullable: true
+        unique: true
         java_type: String
         proposal: keep
         standard: Không
@@ -283,6 +284,16 @@ tables:
         proposal: keep
         standard: Không – khóa ngoại nội bộ
         description: Admin tạo tài khoản; NULL với Admin khởi tạo
+      creation_submission_id:
+        field: creationSubmissionId
+        sql_type: uuid
+        base_type: uuid
+        nullable: true
+        unique: true
+        java_type: UUID
+        proposal: keep
+        standard: No
+        description: UC-07 account-creation idempotency key
       last_login_at:
         field: lastLoginAt
         sql_type: timestamptz
@@ -608,6 +619,16 @@ tables:
         proposal: keep
         standard: Không
         description: Mã liên kết các log cùng một request
+      ip_address:
+        field: ipAddress
+        sql_type: varchar(45)
+        base_type: varchar
+        length: 45
+        nullable: true
+        java_type: String
+        proposal: keep
+        standard: No
+        description: Request peer address; proxy headers are not trusted until configured
   departments:
     number: 5
     name: departments
