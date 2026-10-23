@@ -48,4 +48,44 @@ public class Room extends VersionedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ActivationStatus status;
+
+    public Room(
+            UUID id,
+            UUID departmentId,
+            UUID serviceGroupId,
+            String maphongkham,
+            String phongkham,
+            String location,
+            RoomType type,
+            ActivationStatus status,
+            java.time.Instant now) {
+        super(id, now);
+        this.departmentId = departmentId;
+        this.serviceGroupId = serviceGroupId;
+        this.maphongkham = maphongkham;
+        this.phongkham = phongkham;
+        this.location = location;
+        this.type = type;
+        this.status = status;
+    }
+
+    public void update(
+            UUID departmentId,
+            String phongkham,
+            String location,
+            RoomType type,
+            ActivationStatus status,
+            java.time.Instant now) {
+        this.departmentId = departmentId;
+        this.phongkham = phongkham;
+        this.location = location;
+        this.type = type;
+        this.status = status;
+        touch(now);
+    }
+
+    public void setStatus(ActivationStatus status, java.time.Instant now) {
+        this.status = status;
+        touch(now);
+    }
 }
