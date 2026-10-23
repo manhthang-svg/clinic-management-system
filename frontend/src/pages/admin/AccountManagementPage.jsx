@@ -57,10 +57,13 @@ function viewFromPath(path) {
   if (matchPath(ADMIN.ACCOUNTS, path)) return { name: "list" };
   if (matchPath(ADMIN.ACCOUNT_CREATE, path)) return { name: "create" };
   if (matchPath(ADMIN.PROFILE, path)) return { name: "profile" };
+
   const edit = matchPath(ADMIN.ACCOUNT_EDIT, path);
   if (edit) return { name: "edit", id: edit.params.id };
+
   const detail = matchPath(ADMIN.ACCOUNT_DETAIL, path);
   if (detail) return { name: "detail", id: detail.params.id };
+
   return null;
 }
 
@@ -70,6 +73,7 @@ const PASSWORD_ALPHABET =
 /** Mock of the 12-character one-time password the backend generates (UC-7, UC-11). */
 function generateTemporaryPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
+
   return Array.from(
     bytes,
     (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length],
@@ -80,6 +84,7 @@ export function AccountManagementPage({
   currentAdmin,
   onLogout,
   onChangePassword,
+  onNavigate,
   notice,
 }) {
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
@@ -90,7 +95,8 @@ export function AccountManagementPage({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedIds, setSelectedIds] = useState([]);
-  // The URL decides the screen. "Quay lại" / "Hủy" go one page back; the sidebar and breadcrumb open the list.
+
+  // The URL decides which account screen is displayed.
   const location = useLocation();
   const navigate = useNavigate();
   const matchedView = viewFromPath(location.pathname);
@@ -98,20 +104,28 @@ export function AccountManagementPage({
 
   const filteredAccounts = useMemo(() => {
     const term = normalizeSearch(searchQuery);
+
     return accounts.filter((acc) => {
       const matchSearch =
         term === "" ||
         [acc.username, acc.fullName, acc.email, acc.phone].some((field) =>
           normalizeSearch(field || "").includes(term),
         );
+
       const matchRole = roleFilter === "ALL" || acc.role === roleFilter;
-      const matchStatus = statusFilter === "ALL" || acc.status === statusFilter;
+      const matchStatus =
+        statusFilter === "ALL" || acc.status === statusFilter;
+
       return matchSearch && matchRole && matchStatus;
     });
   }, [accounts, searchQuery, roleFilter, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAccounts.length / pageSize),
+  );
   const currentPage = Math.min(page, totalPages);
+
   const pageAccounts = filteredAccounts.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
@@ -122,10 +136,11 @@ export function AccountManagementPage({
     const active = accounts.filter((a) => a.status === "ACTIVE").length;
     const locked = accounts.filter((a) => a.status === "LOCKED").length;
     const pending = accounts.filter((a) => a.passwordChangeRequired).length;
+
     return { total, active, locked, pending };
   }, [accounts]);
 
-  // Filters change the result set, so go back to the first page.
+  // Filters change the result set, so return to the first page.
   const withFirstPage = (setter) => (value) => {
     setter(value);
     setPage(1);
@@ -155,6 +170,7 @@ export function AccountManagementPage({
     const ids = pageAccounts.map((a) => a.id);
     const allSelected =
       ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+
     setSelectedIds((prev) =>
       allSelected
         ? prev.filter((id) => !ids.includes(id))
@@ -164,24 +180,32 @@ export function AccountManagementPage({
 
   const toggleSelectOne = (id) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id],
     );
   };
 
-  // A page opened straight from its URL has no previous page in the app ("default" key).
+  // A directly opened URL has no previous page in the app.
   const goBack = () =>
     location.key === "default"
       ? navigate(ADMIN.ACCOUNTS, { replace: true })
       : navigate(-1);
+
   const showList = () => navigate(ADMIN.ACCOUNTS);
   const openCreate = () => navigate(ADMIN.ACCOUNT_CREATE);
+
   const openEdit = (account) =>
     navigate(generatePath(ADMIN.ACCOUNT_EDIT, { id: account.id }));
+
   const openDetail = (id) =>
     navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }));
-  // The create result is replaced by the new account's detail, so "Quay lại" skips the empty form.
+
+  // After creating an account, replace the form with its detail page.
   const replaceWithDetail = (id) =>
-    navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }), { replace: true });
+    navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }), {
+      replace: true,
+    });
 
   const updateAccount = (id, changes) =>
     setAccounts((prev) =>
@@ -192,9 +216,10 @@ export function AccountManagementPage({
       ),
     );
 
-  // UC-7: the account starts ACTIVE and must change the one-time password.
+  // UC-7: the account starts ACTIVE and must change its one-time password.
   const createAccount = (form) => {
     const now = new Date().toISOString();
+
     const account = {
       id: `new-${Date.now()}`,
       username: form.username.trim().toLowerCase(),
@@ -208,40 +233,51 @@ export function AccountManagementPage({
       updatedAt: now,
       createdBy: currentAdmin?.fullName,
     };
+
     setAccounts((prev) => [account, ...prev]);
     logActivity("CREATED", "Tạo tài khoản mới", account);
     setPage(1);
-    return { account, temporaryPassword: generateTemporaryPassword() };
+
+    return {
+      account,
+      temporaryPassword: generateTemporaryPassword(),
+    };
   };
 
-  // UC-8: the seven personal fields only.
+  // UC-8: update the personal information fields.
   const saveAccount = (account, form) => {
     const changes = formToAccountFields(form);
+
     updateAccount(account.id, changes);
-    logActivity("UPDATED", "Cập nhật thông tin", { ...account, ...changes });
+    logActivity("UPDATED", "Cập nhật thông tin", {
+      ...account,
+      ...changes,
+    });
+
     goBack();
   };
 
-  // Modal state for confirmation and prompts
+  // Confirmation and prompt modal state.
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [lockPrompt, setLockPrompt] = useState(null);
   const [lockReasonInput, setLockReasonInput] = useState("");
 
-  // Modal helper that triggers custom ConfirmModal or window.confirm in test mode
   const requestConfirm = (options) => {
-    // If running in Vitest test spy
     if (typeof window !== "undefined" && window.confirm?.mock) {
       const ok = window.confirm(options.description || options.title);
       if (ok) options.onConfirm?.();
       return;
     }
+
     setConfirmDialog(options);
   };
 
-  // UC-9: never to or from ADMIN (AQ-17). A Doctor or Technician loses the room assignment.
+  // UC-9: change an account role and remove any previous room assignment.
   const assignRole = (account, role) => {
-    const hadRoom = account.role === "DOCTOR" || account.role === "TECHNICIAN";
+    const hadRoom =
+      account.role === "DOCTOR" || account.role === "TECHNICIAN";
     const needsRoom = role === "DOCTOR" || role === "TECHNICIAN";
+
     const lines = [
       `Đổi vai trò của ${account.username}: ${ROLE_LABELS[account.role]} → ${ROLE_LABELS[role]}?`,
       hadRoom && account.roomCode
@@ -256,43 +292,61 @@ export function AccountManagementPage({
       confirmText: "Đổi vai trò",
       variant: "mint",
       onConfirm: () => {
-        updateAccount(account.id, { role, roomCode: undefined });
+        updateAccount(account.id, {
+          role,
+          roomCode: undefined,
+        });
+
         logActivity("UPDATED", "Đổi vai trò", account);
-        toast.success(`Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`);
+
+        toast.success(
+          `Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`,
+        );
+
         if (needsRoom) {
           const roomMsg = `Hãy phân công phòng làm việc cho ${account.username} ở chức năng Khoa / Phòng.`;
+
           if (typeof window !== "undefined" && window.alert?.mock) {
             window.alert(roomMsg);
           } else {
             toast.info(roomMsg, { duration: 5000 });
           }
         }
+
         setConfirmDialog(null);
       },
     });
   };
 
   const toggleLock = (account) => {
-    // Admin cannot be locked
     if (account.role === "ADMIN") {
-      toast.error("Không thể khóa hoặc thao tác trạng thái tài khoản Quản trị viên");
+      toast.error(
+        "Không thể khóa hoặc thao tác trạng thái tài khoản Quản trị viên",
+      );
       return;
     }
 
     const locking = account.status === "ACTIVE";
+
     if (locking) {
       if (typeof window !== "undefined" && window.prompt?.mock) {
-        const reason = window.prompt(`Nhập lý do khóa tài khoản ${account.username}:`)?.trim();
+        const reason = window
+          .prompt(`Nhập lý do khóa tài khoản ${account.username}:`)
+          ?.trim();
+
         if (!reason) return;
+
         updateAccount(account.id, {
           status: "LOCKED",
           lockedAt: new Date().toISOString(),
           lockedBy: currentAdmin?.fullName,
           lockReason: reason.slice(0, 500),
         });
+
         logActivity("LOCKED", "Khóa tài khoản", account);
         return;
       }
+
       setLockReasonInput("");
       setLockPrompt(account);
       return;
@@ -312,6 +366,7 @@ export function AccountManagementPage({
           failedLoginCount: 0,
           loginBlockedUntil: undefined,
         });
+
         logActivity("UNLOCKED", "Mở khóa tài khoản", account);
         toast.success(`Đã mở khóa tài khoản ${account.username}`);
         setConfirmDialog(null);
@@ -321,26 +376,30 @@ export function AccountManagementPage({
 
   const confirmLockAccount = () => {
     if (!lockPrompt) return;
+
     const trimmed = lockReasonInput.trim();
+
     if (!trimmed) {
       toast.error("Vui lòng nhập lý do khóa tài khoản");
       return;
     }
 
     const account = lockPrompt;
+
     updateAccount(account.id, {
       status: "LOCKED",
       lockedAt: new Date().toISOString(),
       lockedBy: currentAdmin?.fullName,
       lockReason: trimmed.slice(0, 500),
     });
+
     logActivity("LOCKED", "Khóa tài khoản", account);
     toast.success(`Đã khóa tài khoản ${account.username}`);
     setLockPrompt(null);
     setLockReasonInput("");
   };
 
-  // UC-11: a new one-time password, shown once.
+  // UC-11: generate a new one-time password.
   const resetPassword = (account) => {
     requestConfirm({
       title: "Đặt lại mật khẩu",
@@ -349,22 +408,23 @@ export function AccountManagementPage({
       variant: "mint",
       onConfirm: () => {
         const temporaryPassword = generateTemporaryPassword();
+
         updateAccount(account.id, {
           passwordChangeRequired: true,
           passwordChangedAt: new Date().toISOString(),
           failedLoginCount: 0,
           loginBlockedUntil: undefined,
         });
+
         logActivity("PASSWORD_RESET", "Đặt lại mật khẩu", account);
         setConfirmDialog(null);
 
         if (typeof window !== "undefined" && window.alert?.mock) {
           window.alert(
-            `Mật khẩu tạm của ${account.username}: ${temporaryPassword}\nMật khẩu chỉ hiển thị một lần.`
+            `Mật khẩu tạm của ${account.username}: ${temporaryPassword}\nMật khẩu chỉ hiển thị một lần.`,
           );
         }
 
-        // Toast with custom display and copy button for the temporary password
         toast.success(
           <div>
             <div className="font-bold text-[#142534] mb-1">
@@ -389,22 +449,28 @@ export function AccountManagementPage({
               </button>
             </div>
           </div>,
-          { duration: 12000 }
+          { duration: 12000 },
         );
       },
     });
   };
 
   const selected = accounts.find((a) => a.id === view.id);
+
   const self = accounts.find(
     (a) => a.username === currentAdmin?.username,
   ) || { status: "ACTIVE", ...currentAdmin };
-  const isSelf = (account) => account.username === currentAdmin?.username;
 
-  // Other /admin/* paths have no screen yet; show the list under its own URL.
-  if (!matchedView) return <Navigate to={ADMIN.ACCOUNTS} replace />;
+  const isSelf = (account) =>
+    account.username === currentAdmin?.username;
+
+  // Redirect paths not handled by this page to the account list.
+  if (!matchedView) {
+    return <Navigate to={ADMIN.ACCOUNTS} replace />;
+  }
 
   let subPage = null;
+
   if (view.name === "create") {
     subPage = (
       <AccountCreateView
@@ -449,7 +515,10 @@ export function AccountManagementPage({
     subPage = (
       <AccountDetailView
         account={selected}
-        loginEvents={mockLoginEvents(selected, selected.failedLoginCount)}
+        loginEvents={mockLoginEvents(
+          selected,
+          selected.failedLoginCount,
+        )}
         isSelf={isSelf(selected)}
         onBack={goBack}
         onGoToList={showList}
@@ -484,13 +553,15 @@ export function AccountManagementPage({
     onLogout,
     onChangePassword,
     onOpenProfile: () => navigate(ADMIN.PROFILE),
-    onNavigate: (key) => key === "accounts" && showList(),
+    onNavigate: (key) => {
+      if (key === "accounts") showList();
+      else onNavigate?.(key);
+    },
     activeKey: "accounts",
   };
 
   const modalElements = (
     <>
-      {/* Modern Confirmation Modal */}
       {confirmDialog && (
         <ConfirmModal
           isOpen={Boolean(confirmDialog)}
@@ -503,7 +574,6 @@ export function AccountManagementPage({
         />
       )}
 
-      {/* Modern Lock Reason Modal */}
       {lockPrompt && (
         <ConfirmModal
           isOpen={Boolean(lockPrompt)}
@@ -518,7 +588,10 @@ export function AccountManagementPage({
           }}
         >
           <div className="mt-3">
-            <label htmlFor="lock-reason" className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label
+              htmlFor="lock-reason"
+              className="block text-xs font-semibold text-slate-700 mb-1.5"
+            >
               Lý do khóa <span className="text-rose-500">*</span>
             </label>
             <textarea
@@ -571,6 +644,7 @@ export function AccountManagementPage({
               Quản lý tài khoản người dùng, vai trò và quyền truy cập hệ thống
             </p>
           </div>
+
           <nav
             aria-label="Breadcrumb"
             className="flex items-center gap-1.5 text-xs text-slate-500"

@@ -174,27 +174,27 @@ class Iteration1SchemaIT {
     @Test
     void mapsCatalogEntitiesWithTheirEnums() {
         List<Room> rooms = entityManager
-                .createQuery("select room from Room room where room.maphongkham = 'XN-SH'", Room.class)
+                .createQuery("select room from Room room where room.roomCode = 'XN-SH'", Room.class)
                 .getResultList();
         assertThat(rooms).singleElement().satisfies(room -> {
             assertThat(room.getType()).isEqualTo(RoomType.PARACLINICAL);
             assertThat(room.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
-            assertThat(room.getPhongkham()).isEqualTo("Phòng Xét nghiệm Sinh hóa");
+            assertThat(room.getRoomName()).isEqualTo("Phòng Xét nghiệm Sinh hóa");
             assertThat(room.isNew()).isFalse();
         });
 
         Department department = entityManager
-                .createQuery("select department from Department department where department.makhoa = 'DEMO-XN'",
+                .createQuery("select department from Department department where department.departmentCode = 'DEMO-XN'",
                         Department.class)
                 .getSingleResult();
-        assertThat(department.getTenkhoa()).isEqualTo("Khoa Xét nghiệm");
+        assertThat(department.getDepartmentName()).isEqualTo("Khoa Xét nghiệm");
         assertThat(department.isActive()).isTrue();
 
         ServiceGroup group = entityManager
                 .createQuery("select serviceGroup from ServiceGroup serviceGroup"
-                        + " where serviceGroup.loaimachidinh = 'MRI'", ServiceGroup.class)
+                        + " where serviceGroup.serviceGroupCode = 'MRI'", ServiceGroup.class)
                 .getSingleResult();
-        assertThat(group.getLoaichidinh()).isEqualTo("Chụp cộng hưởng từ (MRI)");
+        assertThat(group.getServiceGroupName()).isEqualTo("Chụp cộng hưởng từ (MRI)");
 
         MedicalService examination = entityManager.createQuery(
                         "select service from MedicalService service where service.type = :type",

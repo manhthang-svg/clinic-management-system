@@ -74,7 +74,7 @@ class ProfileApiIT extends PostgresIntegrationTest {
 
     @Test
     void updatesContactAndWritesAuditInTheSameUseCase() throws Exception {
-        StaffAccount caller = account("0901234567", "old@clinic.test", false);
+        StaffAccount caller = account("0921234567", "old@clinic.test", false);
         String token = accessToken(login(caller));
 
         updateProfile(token, new UpdateProfileRequest("0987654321", "NEW@Clinic.Test"))
@@ -95,7 +95,7 @@ class ProfileApiIT extends PostgresIntegrationTest {
                 "select old_value::text from audit_logs where entity_type = 'staff_accounts' and entity_id = ?",
                 String.class, caller.getId())))
                 .isEqualTo(objectMapper.readTree(
-                        "{\"phoneNumber\":\"0901234567\",\"email\":\"old@clinic.test\"}"));
+                        "{\"phoneNumber\":\"0921234567\",\"email\":\"old@clinic.test\"}"));
         assertThat(objectMapper.readTree(jdbcTemplate.queryForObject(
                 "select new_value::text from audit_logs where entity_type = 'staff_accounts' and entity_id = ?",
                 String.class, caller.getId())))
@@ -105,10 +105,10 @@ class ProfileApiIT extends PostgresIntegrationTest {
 
     @Test
     void unchangedContactReturnsProfileWithoutAudit() throws Exception {
-        StaffAccount caller = account("0901234567", "same@clinic.test", false);
+        StaffAccount caller = account("0931234567", "same@clinic.test", false);
         String token = accessToken(login(caller));
 
-        updateProfile(token, new UpdateProfileRequest("0901234567", "SAME@clinic.test"))
+        updateProfile(token, new UpdateProfileRequest("0931234567", "SAME@clinic.test"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value("same@clinic.test"));
 
@@ -117,23 +117,23 @@ class ProfileApiIT extends PostgresIntegrationTest {
 
     @Test
     void duplicateEmailIsConflictAndChangesNothing() throws Exception {
-        account("0900000000", "used@clinic.test", false);
-        StaffAccount caller = account("0911111111", "original@clinic.test", false);
+        account("0940000000", "used@clinic.test", false);
+        StaffAccount caller = account("0941111111", "original@clinic.test", false);
 
-        updateProfile(accessToken(login(caller)), new UpdateProfileRequest("0922222222", "USED@clinic.test"))
+        updateProfile(accessToken(login(caller)), new UpdateProfileRequest("0942222222", "USED@clinic.test"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"))
                 .andExpect(jsonPath("$.details.email").value("ALREADY_EXISTS"));
 
         StaffAccount unchanged = accounts.findById(caller.getId()).orElseThrow();
-        assertThat(unchanged.getPhoneNumber()).isEqualTo("0911111111");
+        assertThat(unchanged.getPhoneNumber()).isEqualTo("0941111111");
         assertThat(unchanged.getEmail()).isEqualTo("original@clinic.test");
         assertThat(accountUpdatedEvents(caller.getId())).isZero();
     }
 
     @Test
-    void validatesRequiredPhoneAndEmailFormats() throws Exception {
-        StaffAccount caller = account("0901234567", "valid@clinic.test", false);
+    void validatesRequiredPhoneAndOptionalEmailFormats() throws Exception {
+        StaffAccount caller = account("0381234567", "valid@clinic.test", false);
         String token = accessToken(login(caller));
 
         updateProfile(token, Map.of("phoneNumber", "123", "email", "not-an-email"))
@@ -141,18 +141,36 @@ class ProfileApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.details.phoneNumber").exists())
                 .andExpect(jsonPath("$.details.email").exists());
-        updateProfile(token, Map.of("phoneNumber", "0901234567", "email", "x".repeat(101) + "@test.com"))
+        updateProfile(token, Map.of("phoneNumber", "0381234567", "email", "x".repeat(101) + "@test.com"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.details.email").exists());
         updateProfile(token, Map.of("phoneNumber", "", "email", ""))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.phoneNumber").exists())
-                .andExpect(jsonPath("$.details.email").exists());
+                .andExpect(jsonPath("$.details.phoneNumber").exists());
+
+        updateProfile(token, new UpdateProfileRequest("0381234567", null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.email").doesNotExist());
+    }
+
+    @Test
+    void duplicatePhoneIsConflictAndChangesNothing() throws Exception {
+        account("0960000000", "used-phone@clinic.test", false);
+        StaffAccount caller = account("0961111111", "original-phone@clinic.test", false);
+
+        updateProfile(accessToken(login(caller)), new UpdateProfileRequest("0960000000", null))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PHONE_ALREADY_EXISTS"))
+                .andExpect(jsonPath("$.details.phoneNumber").value("ALREADY_EXISTS"));
+
+        StaffAccount unchanged = accounts.findById(caller.getId()).orElseThrow();
+        assertThat(unchanged.getPhoneNumber()).isEqualTo("0961111111");
+        assertThat(unchanged.getEmail()).isEqualTo("original-phone@clinic.test");
     }
 
     @Test
     void rejectsAttemptsToChangeReadOnlyProfileFields() throws Exception {
-        StaffAccount caller = account("0901234567", "readonly@clinic.test", false);
+        StaffAccount caller = account("0971234567", "readonly@clinic.test", false);
 
         updateProfile(accessToken(login(caller)), Map.of(
                         "phoneNumber", "0987654321",
@@ -172,7 +190,7 @@ class ProfileApiIT extends PostgresIntegrationTest {
                                 new UpdateProfileRequest("0901234567", "user@clinic.test"))))
                 .andExpect(status().isUnauthorized());
 
-        StaffAccount caller = account("0901234567", "lock-after-login@clinic.test", false);
+        StaffAccount caller = account("0981234567", "lock-after-login@clinic.test", false);
         String token = accessToken(login(caller));
         jdbcTemplate.update("update staff_accounts set status = 'LOCKED' where id = ?", caller.getId());
 
@@ -183,7 +201,7 @@ class ProfileApiIT extends PostgresIntegrationTest {
 
     @Test
     void passwordChangeRequiredSessionCanViewButCannotUpdateProfile() throws Exception {
-        StaffAccount caller = account("0901234567", "restricted@clinic.test", true);
+        StaffAccount caller = account("0991234567", "restricted@clinic.test", true);
         String token = accessToken(login(caller));
 
         getProfile(token).andExpect(status().isOk());
@@ -192,7 +210,7 @@ class ProfileApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         StaffAccount unchanged = accounts.findById(caller.getId()).orElseThrow();
-        assertThat(unchanged.getPhoneNumber()).isEqualTo("0901234567");
+        assertThat(unchanged.getPhoneNumber()).isEqualTo("0991234567");
         assertThat(unchanged.getEmail()).isEqualTo("restricted@clinic.test");
         assertThat(accountUpdatedEvents(caller.getId())).isZero();
         assertThat(jdbcTemplate.queryForObject(

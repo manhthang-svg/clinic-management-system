@@ -51,8 +51,8 @@ public class StaffAccount {
     public static final int PASSWORD_MAXIMUM_LENGTH = 64;
     public static final int PASSWORD_MAXIMUM_UTF8_BYTES = 72;
 
-    /** Login identifier: case-insensitive, stored in lowercase, 3–50 characters of {@code a–z 0–9 . _ -}. */
-    private static final Pattern USERNAME_FORMAT = Pattern.compile("[a-z0-9._-]{3,50}");
+    /** Login identifier: case-insensitive, stored in lowercase, 4–30 characters of {@code a–z 0–9 . _}. */
+    private static final Pattern USERNAME_FORMAT = Pattern.compile("[a-z0-9._]{4,30}");
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -109,6 +109,9 @@ public class StaffAccount {
 
     @Column(name = "created_by_account_id", updatable = false)
     private UUID createdByAccountId;
+
+    @Column(name = "creation_submission_id", updatable = false)
+    private UUID creationSubmissionId;
 
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
@@ -179,6 +182,27 @@ public class StaffAccount {
             UUID createdByAccountId,
             Instant now) {
 
+        return create(
+                id, username, temporaryPasswordHash, fullName, academicTitle, dateOfBirth, gender, phoneNumber,
+                email, address, role, createdByAccountId, null, now);
+    }
+
+    public static StaffAccount create(
+            UUID id,
+            String username,
+            String temporaryPasswordHash,
+            String fullName,
+            String academicTitle,
+            LocalDate dateOfBirth,
+            Gender gender,
+            String phoneNumber,
+            String email,
+            String address,
+            Role role,
+            UUID createdByAccountId,
+            UUID creationSubmissionId,
+            Instant now) {
+
         if (username == null || !USERNAME_FORMAT.matcher(username).matches()) {
             throw new IllegalArgumentException("Username does not match the required format");
         }
@@ -197,6 +221,7 @@ public class StaffAccount {
                 .status(AccountStatus.ACTIVE)
                 .passwordChangeRequired(true)
                 .createdByAccountId(createdByAccountId)
+                .creationSubmissionId(creationSubmissionId)
                 .createdAt(Objects.requireNonNull(now, "now"))
                 .updatedAt(now)
                 .build();
@@ -303,8 +328,62 @@ public class StaffAccount {
     /** Updates the two owner-editable profile fields (UC-4 / BR-04). */
     public void updateContact(String newPhoneNumber, String newEmail, Instant now) {
         phoneNumber = requireText(newPhoneNumber, "phoneNumber");
-        email = requireText(newEmail, "email");
+        email = normalizeOptional(newEmail);
         updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void updatePersonalInformation(
+            String newFullName,
+            String newAcademicTitle,
+            LocalDate newDateOfBirth,
+            Gender newGender,
+            String newPhoneNumber,
+            String newEmail,
+            String newAddress,
+            Instant now) {
+        fullName = requireText(newFullName, "fullName");
+        academicTitle = normalizeOptional(newAcademicTitle);
+        dateOfBirth = newDateOfBirth;
+        gender = newGender;
+        phoneNumber = requireText(newPhoneNumber, "phoneNumber");
+        email = normalizeOptional(newEmail);
+        address = normalizeOptional(newAddress);
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void changeRole(Role newRole, Instant now) {
+        if (role == Role.ADMIN || newRole == Role.ADMIN || role == newRole) {
+            throw new IllegalArgumentException("Role transition is not allowed");
+        }
+        role = Objects.requireNonNull(newRole, "newRole");
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void lock(String reason, UUID actorAccountId, Instant now) {
+        if (role == Role.ADMIN || status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Account cannot be locked");
+        }
+        status = AccountStatus.LOCKED;
+        lockReason = requireText(reason, "reason");
+        lockedAt = Objects.requireNonNull(now, "now");
+        lockedByAccountId = Objects.requireNonNull(actorAccountId, "actorAccountId");
+        updatedAt = now;
+    }
+
+    /** Manual unlock deliberately preserves the independent 15-minute sign-in block (UC-10). */
+    public void unlock(Instant now) {
+        if (role == Role.ADMIN || status != AccountStatus.LOCKED) {
+            throw new IllegalStateException("Account cannot be unlocked");
+        }
+        status = AccountStatus.ACTIVE;
+        lockReason = null;
+        lockedAt = null;
+        lockedByAccountId = null;
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void resetPassword(String temporaryPasswordHash, Instant now) {
+        resetPasswordForRecovery(temporaryPasswordHash, now);
     }
 
     private static String requireText(String value, String name) {
@@ -312,6 +391,10 @@ public class StaffAccount {
             throw new IllegalArgumentException(name + " must not be blank");
         }
         return value;
+    }
+
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 
     @Override

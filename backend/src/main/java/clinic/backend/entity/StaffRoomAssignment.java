@@ -2,6 +2,7 @@ package clinic.backend.entity;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,4 +47,12 @@ public class StaffRoomAssignment {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    public void remove(UUID actorAccountId, Instant now) {
+        if (removedAt != null) {
+            return;
+        }
+        removedAt = Objects.requireNonNull(now, "now");
+        removedByAccountId = Objects.requireNonNull(actorAccountId, "actorAccountId");
+    }
 }

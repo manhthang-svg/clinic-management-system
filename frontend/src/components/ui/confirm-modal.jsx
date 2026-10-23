@@ -20,7 +20,7 @@ export function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
-      <div 
+      <div
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#e3ece9] transition-all transform scale-100"
         role="dialog"
         aria-modal="true"

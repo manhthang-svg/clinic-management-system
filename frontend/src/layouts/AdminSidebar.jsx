@@ -6,6 +6,7 @@ import {
   Stethoscope,
   Microscope,
   Building2,
+  DoorOpen,
   CreditCard,
   ClipboardList,
   Settings2,
@@ -22,6 +23,7 @@ const ICONS = {
   Stethoscope,
   Microscope,
   Building2,
+  DoorOpen,
   CreditCard,
   ClipboardList,
   Settings2,
@@ -38,7 +40,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
   );
 
   const toggleGroup = (id) =>
-    setOpenGroups((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]));
+    setOpenGroups((prev) => (prev.includes(id) ? prev.filter((group) => group !== id) : [...prev, id]));
 
   return (
     <aside className="w-[224px] bg-[#eef5f4] border-r border-[#dfeae8] flex flex-col shrink-0 select-none min-h-screen">

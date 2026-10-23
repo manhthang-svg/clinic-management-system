@@ -56,6 +56,9 @@ public class SecurityAuditEvent implements Persistable<UUID> {
     @Column(name = "correlation_id", updatable = false, length = 64)
     private String correlationId;
 
+    @Column(name = "ip_address", updatable = false, length = 45)
+    private String ipAddress;
+
     // Audit events are append-only: always new.
     @Getter(AccessLevel.NONE)
     @Transient
