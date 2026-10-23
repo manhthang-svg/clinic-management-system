@@ -554,8 +554,13 @@ export function AccountManagementPage({
     onChangePassword,
     onOpenProfile: () => navigate(ADMIN.PROFILE),
     onNavigate: (key) => {
-      if (key === "accounts") showList();
-      else onNavigate?.(key);
+      if (key === "accounts") {
+        showList();
+      } else if (key === "departments" || key === "rooms") {
+        navigate(ADMIN.DEPARTMENTS);
+      } else if (ADMIN[key.toUpperCase()]) {
+        navigate(ADMIN[key.toUpperCase()]);
+      }
     },
     activeKey: "accounts",
   };
