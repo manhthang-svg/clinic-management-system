@@ -56,6 +56,7 @@ public class SecurityConfig {
                         // Self-service endpoints need authentication only, so a token that still requires
                         // a password change is accepted here and nowhere else (RoleAuthoritiesConverter).
                         .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
+                        .requestMatchers("/api/v1/accounts", "/api/v1/accounts/**").authenticated()
                         .anyRequest().denyAll())
                 .build();
     }
