@@ -53,8 +53,6 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout")
                         .permitAll()
                         .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
-                        .requestMatchers("/api/v1/accounts", "/api/v1/accounts/**").authenticated()
-                        .requestMatchers("/api/v1/rooms", "/api/v1/rooms/**").authenticated()
                         .anyRequest().denyAll())
                 .build();
     }
