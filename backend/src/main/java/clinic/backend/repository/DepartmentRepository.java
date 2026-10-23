@@ -12,4 +12,8 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID> {
     List<Department> findAllByOrderByDepartmentNameAsc();
 
     Optional<Department> findByDepartmentCode(String departmentCode);
+
+    boolean existsByDepartmentCode(String departmentCode);
+
+    boolean existsByDepartmentNameIgnoreCase(String departmentName);
 }
