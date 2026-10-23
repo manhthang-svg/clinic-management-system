@@ -1,3 +1,4 @@
+
 package clinic.backend.entity;
 
 import clinic.backend.enums.DepartmentType;
@@ -11,10 +12,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * A department from the department code list (I1-D40). Created by the demo seed or an approved data
- * migration (I1-D01); its behavior methods arrive with UC-14.
- */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
@@ -24,10 +21,10 @@ import lombok.NoArgsConstructor;
 public class Department extends VersionedEntity {
 
     @Column(name = "makhoa", nullable = false, length = 50)
-    private String makhoa;
+    private String departmentCode;
 
     @Column(name = "tenkhoa", nullable = false, length = 255)
-    private String tenkhoa;
+    private String departmentName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)

@@ -255,7 +255,7 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
               Đặt lại mật khẩu
             </button>
           )}
-          {!isSelf && (
+          {!isSelf && account.role !== 'ADMIN' && (
             <button
               type="button"
               onClick={onToggleLock}

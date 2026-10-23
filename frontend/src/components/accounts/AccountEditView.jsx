@@ -152,7 +152,7 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
           <p className="text-sm text-slate-500">Quản lý quyền đăng nhập và bảo mật.</p>
 
           <div className="divide-y divide-slate-100 mt-2">
-            {!isSelf && (
+            {!isSelf && account.role !== 'ADMIN' && (
               <ControlRow
                 icon={locked ? LockOpen : Lock}
                 tone={locked ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}

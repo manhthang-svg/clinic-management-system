@@ -4,3 +4,4 @@ export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 export { Badge } from './badge'
 export { Label } from './label'
 export { Alert, AlertDescription } from './alert'
+export { ConfirmModal } from './confirm-modal'

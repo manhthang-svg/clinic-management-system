@@ -99,9 +99,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentOptionResponse> listDepartments() {
-        return departmentRepository.findAllByOrderByTenkhoaAsc().stream()
+        return departmentRepository.findAllByOrderByDepartmentNameAsc().stream()
                 .map(department -> new DepartmentOptionResponse(
-                        department.getId(), department.getMakhoa(), department.getTenkhoa(),
+                        department.getId(), department.getDepartmentCode(), department.getDepartmentName(),
                         department.getType(), department.isActive()))
                 .toList();
     }
@@ -408,8 +408,8 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     private Location location(UUID accountId) {
         return assignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(accountId)
                 .flatMap(assignment -> roomRepository.findById(assignment.getRoomId()))
-                .map(room -> new Location(room.getPhongkham(), departmentRepository.findById(room.getDepartmentId())
-                        .map(Department::getTenkhoa).orElse(null)))
+                .map(room -> new Location(room.getRoomName(), departmentRepository.findById(room.getDepartmentId())
+                        .map(Department::getDepartmentName).orElse(null)))
                 .orElse(Location.NONE);
     }
 

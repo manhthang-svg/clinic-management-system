@@ -14,8 +14,8 @@ export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onL
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-    const close = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    const close = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);

@@ -188,9 +188,9 @@ public class StaffAccountServiceImpl implements StaffAccountService {
 
     private ProfileLocation toLocation(Room room) {
         String departmentName = departmentRepository.findById(room.getDepartmentId())
-                .map(Department::getTenkhoa)
+                .map(Department::getDepartmentName)
                 .orElse(null);
-        return new ProfileLocation(room.getPhongkham(), departmentName);
+        return new ProfileLocation(room.getRoomName(), departmentName);
     }
 
     private record ProfileLocation(String roomName, String departmentName) {
