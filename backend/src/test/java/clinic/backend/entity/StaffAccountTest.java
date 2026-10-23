@@ -125,6 +125,50 @@ class StaffAccountTest {
     }
 
     @Test
+    void manualUnlockPreservesTheIndependentTemporaryLoginBlock() {
+        StaffAccount account = newAccount();
+        for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
+            account.registerFailedLogin(NOW);
+        }
+        UUID adminId = UUID.randomUUID();
+        account.lock("Employment review", adminId, NOW.plusSeconds(1));
+
+        account.unlock(NOW.plusSeconds(2));
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.isLoginBlocked(NOW.plusSeconds(2))).isTrue();
+        assertThat(account.getLockReason()).isNull();
+        assertThat(account.getLockedAt()).isNull();
+        assertThat(account.getLockedByAccountId()).isNull();
+    }
+
+    @Test
+    void adminResetClearsThrottleButPreservesLockedStatus() {
+        StaffAccount account = newAccount();
+        for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
+            account.registerFailedLogin(NOW);
+        }
+        account.lock("Security review", UUID.randomUUID(), NOW.plusSeconds(1));
+
+        account.resetPassword("{bcrypt}replacement", NOW.plusSeconds(2));
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
+        assertThat(account.isPasswordChangeRequired()).isTrue();
+        assertThat(account.getFailedLoginAttempts()).isZero();
+        assertThat(account.getLoginBlockedUntil()).isNull();
+    }
+
+    @Test
+    void roleChangePreservesAccountStatus() {
+        StaffAccount account = newAccount();
+
+        account.changeRole(Role.DOCTOR, NOW.plusSeconds(1));
+
+        assertThat(account.getRole()).isEqualTo(Role.DOCTOR);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
     void creationRequiresTheNormalizedUsername() {
         assertThatIllegalArgumentException().isThrownBy(() -> StaffAccount.create(
                 UUID.randomUUID(), "Admin", "{bcrypt}hash", "Admin", null, null, null, Role.ADMIN, NOW));
@@ -152,8 +196,8 @@ class StaffAccountTest {
 
         @Test
         void rejectsTooLongValues() {
-            assertThat(StaffAccount.normalizeUsername("a".repeat(51))).isEmpty();
-            assertThat(StaffAccount.normalizeUsername("a".repeat(50))).isPresent();
+            assertThat(StaffAccount.normalizeUsername("a".repeat(31))).isEmpty();
+            assertThat(StaffAccount.normalizeUsername("a".repeat(30))).isPresent();
         }
     }
 
