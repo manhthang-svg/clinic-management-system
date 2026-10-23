@@ -21,6 +21,6 @@ public interface StaffRoomAssignmentRepository extends JpaRepository<StaffRoomAs
     // lay toan bo danh sach phan cong chua bi go bo
     List<StaffRoomAssignment> findByRemovedAtIsNull();
 
-    // tim kiem phong co roomId cho nhân viên nào 
+    // tim kiem phong co roomId cho nhân viên nào
     Optional<StaffRoomAssignment> findByRoomIdAndRemovedAtIsNull(UUID roomId);
 }
