@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 
 import clinic.backend.dto.request.ChangePasswordRequest;
 import clinic.backend.dto.request.UpdateProfileRequest;
@@ -121,16 +122,28 @@ public class StaffAccountServiceImpl implements StaffAccountService {
     @PreAuthorize("!hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     public ProfileResponse updateOwnProfile(StaffPrincipal principal, UpdateProfileRequest request) {
         StaffAccount account = activeAccount(principal);
-        String normalizedEmail = request.email().strip().toLowerCase(Locale.ROOT);
+        String normalizedEmail = request.email() == null || request.email().isBlank()
+                ? null : request.email().strip().toLowerCase(Locale.ROOT);
 
         boolean phoneChanged = !request.phoneNumber().equals(account.getPhoneNumber());
-        boolean emailChanged = account.getEmail() == null || !normalizedEmail.equalsIgnoreCase(account.getEmail());
+        boolean emailChanged = !Objects.equals(normalizedEmail, account.getEmail());
         if (!phoneChanged && !emailChanged) {
             return toProfile(account);
         }
 
-        if (emailChanged && staffAccountRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, account.getId())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS, Map.of("email", "ALREADY_EXISTS"));
+        Map<String, String> conflicts = new LinkedHashMap<>();
+        if (phoneChanged && staffAccountRepository.existsByPhoneNumberAndIdNot(request.phoneNumber(), account.getId())) {
+            conflicts.put("phoneNumber", "ALREADY_EXISTS");
+        }
+        if (emailChanged && normalizedEmail != null
+                && staffAccountRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, account.getId())) {
+            conflicts.put("email", "ALREADY_EXISTS");
+        }
+        if (!conflicts.isEmpty()) {
+            ErrorCode code = conflicts.size() == 1 && conflicts.containsKey("email")
+                    ? ErrorCode.EMAIL_ALREADY_EXISTS
+                    : conflicts.size() == 1 ? ErrorCode.PHONE_ALREADY_EXISTS : ErrorCode.CONCURRENT_MODIFICATION;
+            throw new AppException(code, conflicts);
         }
 
         Map<String, String> oldValues = new LinkedHashMap<>();
@@ -150,7 +163,7 @@ public class StaffAccountServiceImpl implements StaffAccountService {
             staffAccountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException exception) {
             // The database unique index closes the race between the pre-check and this write.
-            throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS, Map.of("email", "ALREADY_EXISTS"));
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, Map.of("fields", "UNIQUENESS_CONFLICT"));
         }
         auditLogService.recordAccountUpdate(account.getId(), oldValues, newValues, now);
         securityAuditService.record(
