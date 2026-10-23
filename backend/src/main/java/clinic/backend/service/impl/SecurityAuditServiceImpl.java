@@ -13,6 +13,8 @@ import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +39,16 @@ public class SecurityAuditServiceImpl implements SecurityAuditService {
                 .targetAccountId(targetAccountId)
                 .outcome(outcome)
                 .correlationId(MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME))
+                .ipAddress(currentIpAddress())
                 .build());
+    }
+
+    private String currentIpAddress() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+            return null;
+        }
+        // Do not trust X-Forwarded-For until a trusted-proxy boundary is configured.
+        String value = attributes.getRequest().getRemoteAddr();
+        return value == null || value.length() > 45 ? null : value;
     }
 }

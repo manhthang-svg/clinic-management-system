@@ -14,8 +14,8 @@ export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onL
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-    const close = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    const close = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -23,7 +23,6 @@ export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onL
 
   const fullName = currentAdmin?.fullName || 'Quản trị viên';
 
-<<<<<<< Updated upstream
   return (
     <header className="h-20 px-6 flex items-center justify-between gap-6 shrink-0">
       <div className="relative flex-1 max-w-lg">
@@ -37,20 +36,6 @@ export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onL
         <span className="hidden md:flex items-center gap-1 absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
           <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans">Ctrl</kbd>
           <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans">K</kbd>
-=======
-export function AdminTopBar({ currentAdmin, onChangePassword, pageTitle = 'Quản lý tài khoản' }) {
-  return (
-    <header className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0 shadow-xs">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-        <span className="hover:text-slate-700 cursor-pointer">Trang chủ</span>
-        <span>/</span>
-        <span className="text-slate-800 font-semibold">{pageTitle}</span>
-        <span className="hidden md:inline-flex text-slate-300 mx-2">|</span>
-        <span className="hidden md:inline-flex items-center gap-1.5 text-slate-500 text-xs">
-          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-          Bệnh viện Đa khoa METPH - Cổng Quản trị
->>>>>>> Stashed changes
         </span>
       </div>
 

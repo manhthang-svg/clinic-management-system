@@ -132,6 +132,18 @@ class StaffAccountServiceImplTest {
         }
 
         @Test
+        void optionalEmailCanBeClearedAndOnlyEmailIsAudited() {
+            StaffAccount doctor = accountWithContact("dr.optional", "0901234567", "old@clinic.test");
+
+            ProfileResponse response = service.updateOwnProfile(
+                    principal(doctor), new UpdateProfileRequest("0901234567", null));
+
+            assertThat(response.email()).isNull();
+            assertThat(fixture.businessAuditLogs).singleElement().satisfies(audit ->
+                    assertThat(audit.getChangedFields()).containsExactly("email"));
+        }
+
+        @Test
         void unchangedContactIsANoOpWithoutAudit() {
             StaffAccount doctor = accountWithContact("dr.noop", "0901234567", "same@clinic.test");
 

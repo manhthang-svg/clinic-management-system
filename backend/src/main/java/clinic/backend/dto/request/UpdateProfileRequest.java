@@ -12,12 +12,12 @@ public record UpdateProfileRequest(
         @Schema(description = "Required Vietnamese phone number: exactly 10 digits beginning with 0.",
                 example = "0901234567", pattern = "^0[0-9]{9}$")
         @NotBlank(message = "Phone number is required.")
-        @Pattern(regexp = "^0[0-9]{9}$", message = "Phone number must contain 10 digits and start with 0.")
+        @Pattern(regexp = "^(?:03[2-9]|05[2689]|07[06789]|08[1-689]|09[0-46-9])[0-9]{7}$",
+                message = "Phone number must be a valid Vietnamese mobile number.")
         String phoneNumber,
 
-        @Schema(description = "Required email address, unique across staff accounts (case-insensitive).",
+        @Schema(description = "Optional email address, unique across staff accounts when provided (case-insensitive).",
                 example = "doctor@clinic.example", maxLength = 100)
-        @NotBlank(message = "Email is required.")
         @Email(message = "Email must have a valid format.")
         @Size(max = 100, message = "Email must not exceed 100 characters.")
         String email) {

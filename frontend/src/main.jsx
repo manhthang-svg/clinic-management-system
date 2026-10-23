@@ -16,9 +16,9 @@ createRoot(rootElement).render(
       <BrowserRouter>
         <App />
       </BrowserRouter>
-      <Toaster 
-        position="top-right" 
-        richColors 
+      <Toaster
+        position="top-right"
+        richColors
         closeButton
         toastOptions={{
           style: {

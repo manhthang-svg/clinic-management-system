@@ -21,10 +21,7 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "rooms",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uq_rooms_room_code",
-                        columnNames = "room_code"
-                )
+                @UniqueConstraint(name = "uq_rooms_maphongkham", columnNames = "maphongkham")
         }
 )
 public class Room extends VersionedEntity {
@@ -35,10 +32,10 @@ public class Room extends VersionedEntity {
     @Column(name = "service_group_id")
     private UUID serviceGroupId;
 
-    @Column(name = "room_code", nullable = false, updatable = false, length = 20)
+    @Column(name = "maphongkham", nullable = false, updatable = false, length = 255)
     private String roomCode;
 
-    @Column(name = "room_name", nullable = false, length = 100)
+    @Column(name = "phongkham", nullable = false, length = 255)
     private String roomName;
 
     @Column(name = "location", nullable = false, length = 255)

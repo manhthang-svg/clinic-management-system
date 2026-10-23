@@ -16,17 +16,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "departments", uniqueConstraints = {
-        @UniqueConstraint(
-                name = "uq_departments_code",
-                columnNames = "department_code"
-        )
+        @UniqueConstraint(name = "uq_departments_makhoa", columnNames = "makhoa")
 })
 public class Department extends VersionedEntity {
 
-    @Column(name = "department_code", nullable = false, length = 50)
+    @Column(name = "makhoa", nullable = false, length = 50)
     private String departmentCode;
 
-    @Column(name = "department_name", nullable = false, length = 255)
+    @Column(name = "tenkhoa", nullable = false, length = 255)
     private String departmentName;
 
     @Enumerated(EnumType.STRING)

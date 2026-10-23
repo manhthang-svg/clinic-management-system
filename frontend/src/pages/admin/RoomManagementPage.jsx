@@ -182,7 +182,7 @@ export function RoomManagementPage({
         onLogout={onLogout}
         onChangePassword={onChangePassword}
         activeKey="rooms"
-        onSelectNav={onSelectNav}
+        onNavigate={onSelectNav}
       >
         <CreateRoomPage
           onBack={() => setCurrentView('list')}
@@ -201,7 +201,7 @@ export function RoomManagementPage({
       onLogout={onLogout}
       onChangePassword={onChangePassword}
       activeKey="rooms"
-      onSelectNav={onSelectNav}
+      onNavigate={onSelectNav}
     >
       <div className="p-6 md:p-8 space-y-6">
         {/* HEADER: Tiêu đề & Nút Tạo phòng */}

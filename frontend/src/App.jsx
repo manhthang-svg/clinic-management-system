@@ -82,6 +82,7 @@ export function App({
               notice={notice}
               onLogout={() => void sessionManager.logout()}
               onChangePassword={() => setChangingPassword(true)}
+              onNavigate={setAdminNav}
             />
           }
         />

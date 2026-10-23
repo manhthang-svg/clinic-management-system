@@ -16,17 +16,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "service_groups", uniqueConstraints = {
-        @UniqueConstraint(
-                name = "uq_service_groups_code",
-                columnNames = "service_group_code"
-        )
+        @UniqueConstraint(name = "uq_service_groups_loaimachidinh", columnNames = "loaimachidinh")
 })
 public class ServiceGroup extends VersionedEntity {
 
-    @Column(name = "service_group_code", nullable = false, updatable = false, length = 255)
+    @Column(name = "loaimachidinh", nullable = false, updatable = false, length = 255)
     private String serviceGroupCode;
 
-    @Column(name = "service_group_name", nullable = false, length = 255)
+    @Column(name = "loaichidinh", nullable = false, length = 255)
     private String serviceGroupName;
 
 

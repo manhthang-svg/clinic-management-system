@@ -84,6 +84,7 @@ export function AccountManagementPage({
   currentAdmin,
   onLogout,
   onChangePassword,
+  onNavigate,
   notice,
 }) {
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
@@ -552,7 +553,10 @@ export function AccountManagementPage({
     onLogout,
     onChangePassword,
     onOpenProfile: () => navigate(ADMIN.PROFILE),
-    onNavigate: (key) => key === "accounts" && showList(),
+    onNavigate: (key) => {
+      if (key === "accounts") showList();
+      else onNavigate?.(key);
+    },
     activeKey: "accounts",
   };
 

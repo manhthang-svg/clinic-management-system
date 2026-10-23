@@ -8,7 +8,5 @@ export default function roomApi(client = apiClient) {
                 method: 'POST',
                 body: form,
             }),
-
     };
 }
-
