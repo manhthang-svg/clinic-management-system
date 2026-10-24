@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { Navigate, matchPath, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 import {
   FileText,
   CircleCheck,
@@ -18,7 +20,11 @@ import {
   ServiceTable,
   ServiceOverviewCard,
   ServiceActivityCard,
+  ServiceCreateView,
 } from "../../components/services";
+import { ROUTES } from "../../routes/routes";
+
+const { ADMIN } = ROUTES;
 
 export function ServiceManagementPage({
   currentAdmin,
@@ -32,6 +38,20 @@ export function ServiceManagementPage({
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+
+  // The URL decides whether the list or the create form is shown.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const creating = Boolean(matchPath(ADMIN.SERVICE_CREATE, location.pathname));
+  const known = creating || Boolean(matchPath(ADMIN.SERVICES, location.pathname));
+
+  const showList = () => navigate(ADMIN.SERVICES);
+
+  // A directly opened URL has no previous page in the app.
+  const goBack = () =>
+    location.key === "default"
+      ? navigate(ADMIN.SERVICES, { replace: true })
+      : navigate(-1);
 
   const filteredServices = useMemo(() => {
     const term = normalizeSearch(searchQuery);
@@ -67,14 +87,39 @@ export function ServiceManagementPage({
     setStatusFilter("ALL");
   };
 
+  const layoutProps = {
+    currentAdmin,
+    onLogout,
+    onChangePassword,
+    onNavigate: (key) => {
+      if (key === "services") showList();
+      else onNavigate?.(key);
+    },
+    activeKey: "services",
+  };
+
+  if (!known) {
+    return <Navigate to={ADMIN.SERVICES} replace />;
+  }
+
+  if (creating) {
+    return (
+      <AdminLayout {...layoutProps}>
+        <div className="px-6 pb-8">
+          <ServiceCreateView
+            onCreate={() =>
+              toast.info("Chưa kết nối API thêm dịch vụ.")
+            }
+            onCancel={goBack}
+            onGoToList={showList}
+          />
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
-    <AdminLayout
-      currentAdmin={currentAdmin}
-      onLogout={onLogout}
-      onChangePassword={onChangePassword}
-      onNavigate={onNavigate}
-      activeKey="services"
-    >
+    <AdminLayout {...layoutProps}>
       <div className="px-6 pb-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
@@ -139,9 +184,9 @@ export function ServiceManagementPage({
               <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
                 Danh sách dịch vụ
               </h2>
-              {/* TBD: no use case creates services; the catalog is seeded (docs/state-transitions.md). */}
               <button
                 type="button"
+                onClick={() => navigate(ADMIN.SERVICE_CREATE)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
