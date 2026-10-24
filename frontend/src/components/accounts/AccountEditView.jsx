@@ -3,8 +3,6 @@ import {
   CalendarClock,
   Lock,
   LockOpen,
-  KeyRound,
-  UserCog,
   CalendarDays,
   TriangleAlert,
   LockKeyhole,
@@ -20,9 +18,10 @@ import { accountToForm, validateAccountForm } from './accountForm';
 import { INPUT_CLASS, FormField, AccountPageHeader } from './AccountFormParts';
 
 // UC-8 edits exactly these seven fields; username, role and status have their own use cases.
-const EDIT_FIELDS = ['fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address'];
-const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
-
+const EDIT_FIELDS = [
+  'fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
+];
+const DIRTY_FIELDS = EDIT_FIELDS;
 function dateTime(iso) {
   return iso ? `${formatDate(iso)} ${formatTime(iso)}` : '—';
 }
@@ -59,24 +58,29 @@ function InfoRow({ icon: Icon, tone, label, value, note }) {
 
 const SMALL_BUTTON = 'inline-flex items-center gap-1.5 px-3 py-1.5 mt-2 text-xs font-semibold rounded-lg border cursor-pointer transition-colors';
 
-/** UC-8 Update Account Information, with the UC-9, UC-10 and UC-11 controls beside the form. */
-export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, onGoToList, onViewDetail, onToggleLock, onResetPassword, onAssignRole }) {
+/** UC-8 Update Account Information, with the UC-10 lock control beside the form. */
+export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, onGoToList, onViewDetail, onToggleLock }) {
   const initialForm = accountToForm(account);
   const [form, setForm] = useState(initialForm);
   const [touched, setTouched] = useState(false);
-  const [role, setRole] = useState(account.role === 'ADMIN' ? 'DOCTOR' : account.role);
+  const [submitError, setSubmitError] = useState('');
 
   const errors = validateAccountForm(form, { accounts, exceptId: account.id, fields: EDIT_FIELDS });
-  const dirty = EDIT_FIELDS.some((f) => form[f] !== initialForm[f]);
+  const dirty = DIRTY_FIELDS.some((f) => form[f] !== initialForm[f]);
   const locked = account.status === 'LOCKED';
 
   const onChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0 || !dirty) return;
-    onSave(form);
+    setSubmitError('');
+    try {
+      await onSave(form);
+    } catch (error) {
+      setSubmitError(error.message);
+    }
   };
 
   return (
@@ -169,38 +173,6 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
               </ControlRow>
             )}
 
-            {!isSelf && (
-              <ControlRow
-                icon={KeyRound}
-                tone="bg-amber-50 text-amber-600"
-                title="Đặt lại mật khẩu"
-                description={account.passwordChangeRequired ? 'Đang chờ nhân viên đổi mật khẩu.' : 'Tạo mật khẩu tạm, bắt buộc đổi ở lần đăng nhập tới.'}
-              >
-                <button type="button" onClick={onResetPassword} className={`${SMALL_BUTTON} text-amber-700 border-amber-200 hover:bg-amber-50`}>
-                  Đặt lại
-                </button>
-              </ControlRow>
-            )}
-
-            {account.role !== 'ADMIN' && (
-              <ControlRow icon={UserCog} tone="bg-blue-50 text-blue-600" title="Vai trò" description="Đổi vai trò sẽ đăng xuất mọi phiên đang mở.">
-                <div className="flex gap-2 mt-2">
-                  <select aria-label="Vai trò mới" value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT_CLASS} py-1.5! text-xs! cursor-pointer`}>
-                    {ASSIGNABLE_ROLES.map(([value, meta]) => (
-                      <option key={value} value={value}>{meta.label}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={role === account.role}
-                    onClick={() => onAssignRole(role)}
-                    className="shrink-0 px-3 text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Đổi
-                  </button>
-                </div>
-              </ControlRow>
-            )}
           </div>
 
           <div className="border-t border-slate-100 mt-1 pt-2">
@@ -232,6 +204,7 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 flex flex-wrap items-center justify-end gap-2.5 sticky bottom-4">
+        {submitError && <p role="alert" className="text-xs text-rose-600 mr-auto">{submitError}</p>}
         {touched && Object.keys(errors).length > 0 && (
           <p role="alert" className="text-xs text-rose-600 mr-auto">Vui lòng sửa các ô được đánh dấu.</p>
         )}

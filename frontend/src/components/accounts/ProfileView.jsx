@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Mail, Phone, AtSign, UserRound, Briefcase, ShieldCheck, KeyRound, Save, Info } from 'lucide-react';
-import { ROLE_MAP, STATUS_LABELS, MOCK_ROOMS } from '../../constants/accountData';
+import { ROLE_MAP, STATUS_LABELS } from '../../constants/accountData';
 import { AccountPersonalFields } from './AccountPersonalFields';
 import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './accountFormat';
 import { accountToForm, validateAccountForm } from './accountForm';
@@ -23,25 +23,33 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
   const [form, setForm] = useState(initialForm);
   const [touched, setTouched] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const errors = validateAccountForm(form, { accounts, exceptId: account.id, fields: PROFILE_FIELDS });
   const dirty = PROFILE_FIELDS.some((f) => form[f] !== initialForm[f]);
   const role = ROLE_MAP[account.role];
   const hasRoom = account.role === 'DOCTOR' || account.role === 'TECHNICIAN';
-  const room = account.roomCode ? MOCK_ROOMS[account.roomCode] : null;
+  const room = account.roomName
+    ? { name: account.roomName, department: account.departmentName }
+    : null;
 
   const onChange = (field, value) => {
     setSaved(false);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0 || !dirty) return;
-    onSave({ phone: form.phone.trim(), email: form.email.trim() });
-    setTouched(false);
-    setSaved(true);
+    setSubmitError('');
+    try {
+      await onSave({ phone: form.phone.trim(), email: form.email.trim() });
+      setTouched(false);
+      setSaved(true);
+    } catch (error) {
+      setSubmitError(error.message);
+    }
   };
 
   return (
@@ -58,6 +66,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
           Đã cập nhật thông tin liên hệ.
         </div>
       )}
+      {submitError && <div role="alert" className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">{submitError}</div>}
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 flex flex-col lg:flex-row lg:items-center gap-6">
         <div className="flex items-center gap-5">
@@ -98,7 +107,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
               {hasRoom && (
                 <>
                   <ReadOnly id="profile-department" label="Khoa" value={room?.department || 'Chưa được phân công'} />
-                  <ReadOnly id="profile-room" label="Phòng" value={room ? `${room.name} (${account.roomCode})` : 'Chưa được phân công'} />
+                  <ReadOnly id="profile-room" label="Phòng" value={room?.name || 'Chưa được phân công'} />
                 </>
               )}
               <ReadOnly id="profile-created" label="Ngày tạo tài khoản" value={formatDate(account.createdAt)} />

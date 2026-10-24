@@ -12,11 +12,8 @@ const ACTIVITY_STYLES = {
 export function AccountActivityCard({ activities, limit = 5 }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4">
-      <div className="flex items-center justify-between gap-2 mb-4 whitespace-nowrap">
+      <div className="mb-4 whitespace-nowrap">
         <h2 className="text-sm! leading-5! font-bold! text-[#1b2533] truncate">Hoạt động gần đây</h2>
-        <button type="button" className="shrink-0 text-[11px] font-semibold text-[#127e7a] hover:underline cursor-pointer">
-          Xem tất cả
-        </button>
       </div>
 
       {activities.length === 0 ? (
