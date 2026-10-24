@@ -8,6 +8,7 @@ export const ROUTES = {
     ACCOUNT_DETAIL: '/admin/accounts/:id',
     ACCOUNT_EDIT: '/admin/accounts/:id/edit',
     SERVICES: '/admin/services',
+    SERVICE_CREATE: '/admin/services/new',
     PROFILE: '/admin/profile',
     PATIENTS: '/admin/patients',
     APPOINTMENTS: '/admin/appointments',
