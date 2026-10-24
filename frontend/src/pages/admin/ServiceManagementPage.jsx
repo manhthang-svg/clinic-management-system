@@ -91,6 +91,7 @@ export function ServiceManagementPage({
     currentAdmin,
     onLogout,
     onChangePassword,
+    onOpenProfile: () => navigate(ADMIN.PROFILE),
     onNavigate: (key) => {
       if (key === "services") showList();
       else onNavigate?.(key);
