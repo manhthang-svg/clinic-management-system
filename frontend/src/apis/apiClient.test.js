@@ -62,6 +62,13 @@ describe('ApiClient', () => {
             message: 'Unable to reach the API.',
         });
     });
+    it('rethrows AbortError unchanged when the request is cancelled', async () => {
+        const client = new ApiClient({
+            baseUrl: '/api/v1',
+            fetchImplementation: vi.fn().mockRejectedValue(new DOMException('Aborted', 'AbortError')),
+        });
+        await expect(client.request('/me')).rejects.toMatchObject({ name: 'AbortError' });
+    });
     it('returns undefined for 204 No Content', async () => {
         const client = new ApiClient({
             baseUrl: '/api/v1',

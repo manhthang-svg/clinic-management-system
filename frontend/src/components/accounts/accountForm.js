@@ -64,10 +64,12 @@ export function validateAccountForm(form, { accounts = [], exceptId, fields }) {
       : fullName.length > 100 ? 'Họ và tên tối đa 100 ký tự.'
         : !FULL_NAME_PATTERN.test(fullName) ? 'Họ và tên chỉ gồm chữ cái và khoảng trắng.' : null);
 
-  check('title', form.title.trim().length > 50 ? 'Học hàm / học vị tối đa 50 ký tự.' : null);
+  const needsAcademicTitle = form.role === 'DOCTOR' || form.role === 'TECHNICIAN';
+  check('title', needsAcademicTitle && !form.title.trim()
+    ? 'Vui lòng nhập học hàm / học vị cho Bác sĩ hoặc Kỹ thuật viên.'
+    : form.title.trim().length > 50 ? 'Học hàm / học vị tối đa 50 ký tự.' : null);
   check('dateOfBirth', form.dateOfBirth && new Date(form.dateOfBirth) >= new Date() ? 'Ngày sinh phải ở trong quá khứ.' : null);
   check('address', form.address.trim().length > 255 ? 'Địa chỉ tối đa 255 ký tự.' : null);
-
   const phone = form.phone.trim();
   check('phone',
     !phone ? 'Vui lòng nhập số điện thoại.'

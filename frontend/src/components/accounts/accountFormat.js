@@ -43,6 +43,19 @@ export function formatTime(iso) {
   return iso ? TIME_FORMAT.format(new Date(iso)) : '';
 }
 
+export function accountExpiryState(iso, now = new Date()) {
+  if (!iso) return 'UNLIMITED';
+  const remaining = new Date(iso).getTime() - now.getTime();
+  if (remaining <= 0) return 'EXPIRED';
+  return remaining <= 30 * 24 * 60 * 60 * 1000 ? 'EXPIRING' : 'VALID';
+}
+
+export function formatAccessSchedule(schedule) {
+  if (!schedule) return 'Không giới hạn';
+  const labels = { MON: 'T2', TUE: 'T3', WED: 'T4', THU: 'T5', FRI: 'T6', SAT: 'T7', SUN: 'CN' };
+  return `${schedule.days.map((day) => labels[day] || day).join(', ')} · ${schedule.startTime}–${schedule.endTime}`;
+}
+
 /** "0901000002" → "0901 000 002". */
 export function formatPhone(phone = '') {
   const digits = phone.replace(/\D/g, '');

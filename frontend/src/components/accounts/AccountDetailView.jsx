@@ -19,7 +19,6 @@ import {
   ROLE_MAP,
   STATUS_LABELS,
   GENDER_LABELS,
-  MOCK_ROOMS,
   ROLE_PERMISSIONS,
   LOGIN_EVENT_LABELS,
 } from '../../constants/accountData';
@@ -32,6 +31,7 @@ const EVENT_STYLES = {
   LOGIN_SUCCEEDED: { icon: LogIn, tone: 'bg-emerald-50 text-emerald-600' },
   LOGOUT: { icon: LogOut, tone: 'bg-blue-50 text-blue-600' },
   LOGIN_FAILED: { icon: CircleAlert, tone: 'bg-rose-50 text-rose-600' },
+  LOGIN_THROTTLED: { icon: CircleAlert, tone: 'bg-amber-50 text-amber-600' },
 };
 
 function ageOf(isoDate) {
@@ -127,11 +127,14 @@ function HeaderStat({ icon: Icon, label, iso, empty, note }) {
 }
 
 /** UC-6 View Account Detail, with entry points to UC-8 … UC-11 (AQ-07, AQ-17). */
-export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoToList, onEdit, onAssignRole, onToggleLock, onResetPassword }) {
+export function AccountDetailView({ account, loginEvents, changeHistory = [], workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onToggleLock, onResetPassword }) {
   const locked = account.status === 'LOCKED';
   const permissions = ROLE_PERMISSIONS[account.role] || { modules: [], actions: [] };
   const hasRoom = account.role === 'DOCTOR' || account.role === 'TECHNICIAN';
-  const room = account.roomCode ? MOCK_ROOMS[account.roomCode] : null;
+  const room = account.roomName
+    ? { name: account.roomName, department: account.departmentName }
+    : null;
+  const actions = account.allowedActions || {};
 
   const personalRows = [
     ['Mã tài khoản', account.id],
@@ -154,11 +157,8 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
     assignmentRows = [
       ['Khoa', room.department],
       ['Phòng', room.name],
-      ['Mã phòng', account.roomCode],
-      ['Vị trí', room.location],
     ];
   }
-
   const accessRows = [
     ['Vai trò', <RoleBadge role={account.role} />],
     ['Phân hệ truy cập', (
@@ -222,20 +222,20 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
             icon={CalendarPlus}
             label="Ngày tạo tài khoản"
             iso={account.createdAt}
-            note={account.createdBy ? `bởi ${account.createdBy}` : 'Khởi tạo cùng hệ thống'}
+            note={account.createdByAccountId ? `bởi tài khoản ${account.createdByAccountId}` : 'Khởi tạo cùng hệ thống'}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 xl:w-80 xl:border-l xl:border-slate-100 xl:pl-5">
-          <button
+          {actions.update !== false && <button
             type="button"
             onClick={onEdit}
             className="col-span-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
           >
             <Pencil className="w-4 h-4" />
             Chỉnh sửa tài khoản
-          </button>
-          {account.role !== 'ADMIN' && (
+          </button>}
+          {actions.assignRole && (
             <button
               type="button"
               onClick={onAssignRole}
@@ -245,7 +245,7 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
               Đổi vai trò
             </button>
           )}
-          {!isSelf && (
+          {actions.resetPassword && !isSelf && (
             <button
               type="button"
               onClick={onResetPassword}
@@ -255,7 +255,7 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
               Đặt lại mật khẩu
             </button>
           )}
-          {!isSelf && account.role !== 'ADMIN' && (
+          {!isSelf && (actions.lock || actions.unlock) && (
             <button
               type="button"
               onClick={onToggleLock}
@@ -274,7 +274,7 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <div className="space-y-5">
-          <SectionCard icon={User} title="Thông tin cá nhân" action={<EditButton onClick={onEdit} />}>
+          <SectionCard icon={User} title="Thông tin cá nhân" action={actions.update !== false ? <EditButton onClick={onEdit} /> : null}>
             <InfoList rows={personalRows} />
           </SectionCard>
 
@@ -314,7 +314,7 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
             ) : (
               <ul className="divide-y divide-slate-100">
                 {loginEvents.map((event) => {
-                  const style = EVENT_STYLES[event.type];
+                  const style = EVENT_STYLES[event.type] || EVENT_STYLES.LOGIN_FAILED;
                   const Icon = style.icon;
                   return (
                     <li key={event.id} className="flex items-center gap-3 py-2.5">
@@ -329,6 +329,33 @@ export function AccountDetailView({ account, loginEvents, isSelf, onBack, onGoTo
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={Briefcase} title="Công việc đang xử lý">
+            <InfoList rows={[
+              ['Lượt khám đang xử lý', workInProgress?.visitsInProgress ?? 0],
+              ['Chỉ định CLS đang xử lý', workInProgress?.ordersInProgress ?? 0],
+            ]} />
+          </SectionCard>
+
+          <SectionCard icon={Clock} title="Lịch sử thay đổi tài khoản">
+            {changeHistory.length === 0 ? (
+              <p className="text-sm text-slate-400">Chưa có thay đổi nào được ghi nhận.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {changeHistory.map((entry) => (
+                  <li key={entry.id} className="py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold text-slate-800">{entry.action}</span>
+                      <span className="text-xs text-slate-500">{formatDate(entry.occurredAt)} {formatTime(entry.occurredAt)}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Trường thay đổi: {entry.changedFields?.join(', ') || '—'}
+                    </p>
+                  </li>
+                ))}
               </ul>
             )}
           </SectionCard>

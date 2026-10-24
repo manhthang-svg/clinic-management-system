@@ -17,7 +17,9 @@ import { AccountPersonalFields } from './AccountPersonalFields';
 import { EMPTY_ACCOUNT_FORM, validateAccountForm } from './accountForm';
 import { INPUT_CLASS, FormField, FormSection, AccountPageHeader } from './AccountFormParts';
 
-const CREATE_FIELDS = ['username', 'fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address'];
+const CREATE_FIELDS = [
+  'username', 'fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
+];
 // UC-7: ADMIN is never offered (AQ-17).
 const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
 
@@ -102,6 +104,7 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
   const [form, setForm] = useState(EMPTY_ACCOUNT_FORM);
   const [touched, setTouched] = useState(false);
   const [result, setResult] = useState(null);
+  const [submitError, setSubmitError] = useState('');
 
   const errors = validateAccountForm(form, { accounts, fields: CREATE_FIELDS });
   const shownErrors = touched ? errors : {};
@@ -112,11 +115,16 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
   const onChange = (field, value) =>
     setForm((prev) => ({ ...prev, [field]: field === 'username' ? value.toLowerCase() : value }));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0) return;
-    setResult(onCreate(form));
+    setSubmitError('');
+    try {
+      setResult(await onCreate(form));
+    } catch (error) {
+      setSubmitError(error.message);
+    }
   };
 
   const header = (
@@ -238,6 +246,7 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
           </FormSection>
 
           <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-2.5">
+            {submitError && <p role="alert" className="text-xs text-rose-600 text-center">{submitError}</p>}
             <button
               type="submit"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer"
