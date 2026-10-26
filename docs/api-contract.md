@@ -34,6 +34,7 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `POST` | `/api/v1/accounts/{accountId}/commands/lock` | Admin bearer token | `200` + locked detail |
 | `POST` | `/api/v1/accounts/{accountId}/commands/unlock` | Admin bearer token | `200` + unlocked detail |
 | `POST` | `/api/v1/accounts/{accountId}/commands/reset-password` | Admin bearer token | `200` + one-time password |
+| `GET` | `/api/v1/services` | Admin bearer token | `200` + paginated service and price summaries |
 
 The access token is held in memory and sent as `Authorization: Bearer <token>`. The refresh token is an HttpOnly
 cookie; browser calls to refresh and logout must include credentials and the configured frontend `Origin`.
@@ -53,6 +54,12 @@ Report 3 does not define an approved Academic Title catalog. Until that catalog 
 trimmed free-text value (maximum 50 characters), required for Doctor and Technician and optional for other roles.
 Full name accepts Unicode letters and spaces only, up to 100 characters. UC-08 writes one history entry per changed
 field.
+
+UC-20 uses `GET /api/v1/services` with optional `keyword`, `type`, `group`, `department`, and `status` filters.
+`group` and `department` contain UUID values. Pagination is zero-based, accepts sizes `10`, `20`, or `50`, and
+defaults to `page=0&size=10`. Sorting uses `field,direction`; allowed fields are `code`, `name`, `type`,
+`clinicPrice`, `insurancePrice`, and `status`, with `code,asc` as the default. A service not covered by insurance has
+`insurancePrice: null`. An empty catalog or unmatched filter is a successful response with an empty `content` array.
 
 Successful responses with a body use `ApiResponse`; failures use `ErrorResponse`. FE code should branch on the stable
 `code` field rather than the English `message`. Endpoint-specific statuses, codes, field constraints, nullable fields,
