@@ -26,8 +26,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * Staff account (Report 3).
@@ -127,15 +125,6 @@ public class StaffAccount {
 
     @Column(name = "locked_by_account_id")
     private UUID lockedByAccountId;
-
-    /** The account cannot sign in from this instant on; null means no end (CV 365 III.1.1.g). */
-    @Column(name = "account_expires_at")
-    private Instant accountExpiresAt;
-
-    /** Allowed sign-in hours as JSON; null means no limit (CV 365 III.1.1.g). The format is TBD. */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "access_schedule")
-    private String accessSchedule;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

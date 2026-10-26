@@ -46,8 +46,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Applies V2 to V4 and the development seed to a fresh PostgreSQL with the real dev profile, then checks the
- * seed, the entity mappings, and key database constraints of the Iteration 1 schema.
+ * Applies all production migrations and the development seed to a fresh PostgreSQL with the real dev profile,
+ * then checks the seed, entity mappings, and key database constraints of the Iteration 1 schema.
  *
  * <p>Uses its own container so the seed never leaks into other integration tests.
  */
@@ -124,8 +124,6 @@ class Iteration1SchemaIT {
         Instant lastLoginAt = createdAt.plusSeconds(60);
         Instant passwordChangedAt = createdAt.plusSeconds(120);
         Instant lockedAt = createdAt.plusSeconds(180);
-        Instant expiresAt = createdAt.plusSeconds(86_400);
-
         StaffAccount account = StaffAccount.builder()
                 .id(id)
                 .username("mapped_account")
@@ -146,8 +144,6 @@ class Iteration1SchemaIT {
                 .lockReason("Temporary lock")
                 .lockedAt(lockedAt)
                 .lockedByAccountId(actorId)
-                .accountExpiresAt(expiresAt)
-                .accessSchedule("{\"days\": [1, 2, 3, 4, 5, 6], \"from\": \"06:30\", \"to\": \"18:00\"}")
                 .createdAt(createdAt)
                 .updatedAt(lockedAt)
                 .build();
@@ -165,10 +161,13 @@ class Iteration1SchemaIT {
         assertThat(restored.getLockedAt()).isEqualTo(lockedAt);
         assertThat(restored.getLockedByAccountId()).isEqualTo(actorId);
         assertThat(restored.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
-        assertThat(restored.getAccountExpiresAt()).isEqualTo(expiresAt);
-        assertThat(jdbcTemplate.queryForObject(
-                "select access_schedule ->> 'from' from staff_accounts where id = ?", String.class, id))
-                .isEqualTo("06:30");
+        assertThat(jdbcTemplate.queryForList("""
+                select column_name
+                from information_schema.columns
+                where table_schema = current_schema()
+                  and table_name = 'staff_accounts'
+                  and column_name in ('account_expires_at', 'access_schedule')
+                """, String.class)).isEmpty();
     }
 
     @Test
