@@ -1,10 +1,7 @@
 
 import { Navigate, Outlet } from 'react-router';
-import { useAuth } from '../hooks';
 
-export default function ProtectRoute({ requiredRole }) {
-    const { session } = useAuth();
-
+export default function ProtectRoute({ session, requiredRole }) {
     if (session.status === 'restoring') {
         return (
             <main className="app-loading">

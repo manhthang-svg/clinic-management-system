@@ -15,21 +15,41 @@ import ProtectRoute from './ProtectRoute.jsx';
 import CashierOverviewPage from '../pages/cashier/CashierOverviewPage.jsx';
 import PaymentManagementPage from '../pages/cashier/PaymentManagementPage.jsx';
 import PaymentDetailPage from '../pages/cashier/PaymentDetailPage.jsx';
-import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx'
+import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx';
+import NotFound from '../pages/NotFound.jsx';
+
 export function AppRoutes({
     session,
     account,
     notice,
     onLogout,
     onChangePassword,
+    onOpenProfile,
 }) {
     return (
         <Routes>
+            <Route
+                path="/"
+                element={
+                    <Navigate
+                        to={session.account.role === 'ADMIN' ? ROUTES.ADMIN.ACCOUNTS : ROUTES.CASHIER.OVERVIEW}
+                        replace
+                    />
+                }
+            />
+
             {/* ADMIN */}
-            <Route element={<ProtectRoute requiredRole="ADMIN" />}>
+            <Route element={<ProtectRoute session={session} requiredRole="ADMIN" />}>
                 <Route
                     path="/admin"
-                    element={<DashboardLayout />}
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                            onOpenProfile={onOpenProfile}
+                        />
+                    }
                 >
                     <Route
                         index
@@ -90,11 +110,17 @@ export function AppRoutes({
             </Route>
 
             {/* CASHIER */}
-            {/* CASHIER */}
-            <Route element={<ProtectRoute requiredRole="CASHIER" />}>
+            <Route element={<ProtectRoute session={session} requiredRole="CASHIER" />}>
                 <Route
                     path="/cashier"
-                    element={<DashboardLayout />}
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                            onOpenProfile={onOpenProfile}
+                        />
+                    }
                 >
                     <Route
                         index
@@ -117,6 +143,8 @@ export function AppRoutes({
                     />
                 </Route>
             </Route>
+
+            <Route path="/404" element={<NotFound />} />
 
             <Route
                 path="*"
