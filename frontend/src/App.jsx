@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -8,11 +9,8 @@ import { ProfileView } from './components/accounts';
 
 import { apiClient, sessionManager as defaultSessionManager } from './services/session';
 import { useSession } from './hooks/useSession';
-import { ROLE_LABELS } from './constants/accountData';
-import { accountErrorMessage } from './components/accounts/accountErrors';
 import { AdminLayout } from './layouts';
 import AppRoutes from './routes/AppRoutes';
-
 
 export function App({
   sessionManager = defaultSessionManager,
@@ -33,7 +31,10 @@ export function App({
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    sessionManager.restore().catch(() => sessionManager.clear());
+    sessionManager.restore().catch((error) => {
+      console.error('RESTORE FAILED:', error);
+      sessionManager.clear();
+    });
   }, [sessionManager]);
 
   useEffect(() => {
@@ -46,7 +47,9 @@ export function App({
     account.profile(controller.signal)
       .then(setProfile)
       .catch((error) => {
-        if (error.name !== 'AbortError') setProfileError(accountErrorMessage(error));
+        if (error.name !== 'AbortError') {
+          setProfileError(error.message);
+        }
       });
 
     return () => controller.abort();
@@ -64,7 +67,16 @@ export function App({
     return (
       <LoginPage
         onLogin={async (username, password) => {
-          await sessionManager.login(username, password);
+          const loggedInSession = await sessionManager.login(username, password);
+          const role = loggedInSession.account?.role;
+
+          if (role === 'ADMIN') {
+            navigate('/admin/accounts', { replace: true });
+          } else if (role === 'CASHIER') {
+            navigate('/cashier', { replace: true });
+          } else {
+            navigate('/404', { replace: true });
+          }
         }}
       />
     );
@@ -79,7 +91,6 @@ export function App({
   const showPasswordForm =
     session.passwordChangeRequired || changingPassword;
 
-  // Giữ nguyên luồng đổi mật khẩu bắt buộc của ADMIN.
   if (session.account.role === 'ADMIN' && showPasswordForm) {
     const closePasswordForm = session.passwordChangeRequired
       ? undefined
@@ -119,7 +130,6 @@ export function App({
     );
   }
 
-  // Bắt buộc đổi mật khẩu đối với các role khác.
   if (showPasswordForm) {
     return (
       <main className="app-main">
@@ -145,7 +155,6 @@ export function App({
     );
   }
 
-  // Hồ sơ cá nhân.
   if (showProfile) {
     return (
       <main className="app-main">
@@ -186,56 +195,6 @@ export function App({
     );
   }
 
-  // Các phân hệ chưa có dashboard riêng vẫn cần trang chủ, hồ sơ và đăng xuất.
-  if (!['ADMIN', 'CASHIER'].includes(session.account.role)) {
-    return (
-      <>
-        <header className="app-header">
-          <p className="app-name">Clinic Management System</p>
-
-          <div className="app-header__actions">
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => {
-                setProfileError('');
-                setShowProfile(true);
-              }}
-            >
-              Hồ sơ cá nhân
-            </button>
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => setChangingPassword(true)}
-            >
-              Đổi mật khẩu
-            </button>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void sessionManager.logout()}
-            >
-              Đăng xuất
-            </button>
-          </div>
-        </header>
-
-        <main className="app-main">
-          <h1>
-            Xin chào {session.account.fullName} ({ROLE_LABELS[session.account.role] || session.account.role})
-          </h1>
-          {notice && (
-            <p role="status" className="banner banner--success">
-              {notice}
-            </p>
-          )}
-        </main>
-      </>
-    );
-  }
-
-  // Tất cả trang nghiệp vụ được phân tuyến tại AppRoutes.
   return (
     <>
       {notice && (
@@ -250,10 +209,6 @@ export function App({
         notice={notice}
         onLogout={() => void sessionManager.logout()}
         onChangePassword={() => setChangingPassword(true)}
-        onOpenProfile={() => {
-          setChangingPassword(false);
-          navigate('/admin/profile');
-        }}
       />
     </>
   );

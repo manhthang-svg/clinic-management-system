@@ -5,7 +5,7 @@ export default function ProtectRoute({ session, requiredRole }) {
     if (session.status === 'restoring') {
         return (
             <main className="app-loading">
-                <p role="status">Đang tải…</p>
+                <p role="status">Đang tải...</p>
             </main>
         );
     }
@@ -14,10 +14,7 @@ export default function ProtectRoute({ session, requiredRole }) {
         return <Navigate to="/login" replace />;
     }
 
-    if (
-        requiredRole &&
-        session.account.role !== requiredRole
-    ) {
+    if (requiredRole && session.account.role !== requiredRole) {
         return <Navigate to="/404" replace />;
     }
 

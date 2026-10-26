@@ -49,19 +49,19 @@ export class SessionManager {
     refresh() {
         this.inFlightRefresh ??= this.lock(REFRESH_LOCK_NAME, () => this.api.refresh())
             .then((session) => {
-            this.accept(session);
-            return true;
-        })
+                this.accept(session);
+                return true;
+            })
             .catch((error) => {
-            if (error instanceof ApiError && error.status === 401) {
-                this.clear();
-                return false;
-            }
-            throw error;
-        })
+                if (error instanceof ApiError && error.status === 401) {
+                    this.clear();
+                    return false;
+                }
+                throw error;
+            })
             .finally(() => {
-            this.inFlightRefresh = null;
-        });
+                this.inFlightRefresh = null;
+            });
         return this.inFlightRefresh;
     }
     async logout() {

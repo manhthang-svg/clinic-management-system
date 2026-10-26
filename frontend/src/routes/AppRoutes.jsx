@@ -1,22 +1,23 @@
+
 import { Navigate, Route, Routes } from 'react-router';
 
 import { ROUTES } from './routes.js';
 
-
 import {
     AccountManagementPage,
     DepartmentManagementPage,
+    RoomManagementPage,
     ServiceManagementPage,
 } from '../pages/admin/index.js';
 
-
 import DashboardLayout from '../layouts/DashboardlLayout.jsx';
 import ProtectRoute from './ProtectRoute.jsx';
+
 import CashierOverviewPage from '../pages/cashier/CashierOverviewPage.jsx';
 import PaymentManagementPage from '../pages/cashier/PaymentManagementPage.jsx';
 import PaymentDetailPage from '../pages/cashier/PaymentDetailPage.jsx';
 import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx';
-import NotFound from '../pages/NotFound.jsx';
+import HomeRedirect from './HomeRedirect.jsx';
 
 export function AppRoutes({
     session,
@@ -24,33 +25,24 @@ export function AppRoutes({
     notice,
     onLogout,
     onChangePassword,
-    onOpenProfile,
 }) {
     return (
         <Routes>
             <Route
                 path="/"
-                element={
-                    <Navigate
-                        to={session.account.role === 'ADMIN' ? ROUTES.ADMIN.ACCOUNTS : ROUTES.CASHIER.OVERVIEW}
-                        replace
-                    />
-                }
+                element={<HomeRedirect session={session} />}
             />
 
             {/* ADMIN */}
-            <Route element={<ProtectRoute session={session} requiredRole="ADMIN" />}>
-                <Route
-                    path="/admin"
-                    element={
-                        <DashboardLayout
-                            currentUser={session.account}
-                            onLogout={onLogout}
-                            onChangePassword={onChangePassword}
-                            onOpenProfile={onOpenProfile}
-                        />
-                    }
-                >
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="ADMIN"
+                    />
+                }
+            >
+                <Route path="/admin">
                     <Route
                         index
                         element={
@@ -88,7 +80,7 @@ export function AppRoutes({
                     <Route
                         path="rooms"
                         element={
-                            <DepartmentManagementPage
+                            <RoomManagementPage
                                 currentAdmin={session.account}
                                 onLogout={onLogout}
                                 onChangePassword={onChangePassword}
@@ -110,17 +102,17 @@ export function AppRoutes({
             </Route>
 
             {/* CASHIER */}
-            <Route element={<ProtectRoute session={session} requiredRole="CASHIER" />}>
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="CASHIER"
+                    />
+                }
+            >
                 <Route
                     path="/cashier"
-                    element={
-                        <DashboardLayout
-                            currentUser={session.account}
-                            onLogout={onLogout}
-                            onChangePassword={onChangePassword}
-                            onOpenProfile={onOpenProfile}
-                        />
-                    }
+                    element={<DashboardLayout />}
                 >
                     <Route
                         index
@@ -144,8 +136,12 @@ export function AppRoutes({
                 </Route>
             </Route>
 
-            <Route path="/404" element={<NotFound />} />
+            <Route
+                path="/404"
+                element={<div>404 - Không tìm thấy trang</div>}
+            />
 
+            {/* Các đường dẫn không tồn tại */}
             <Route
                 path="*"
                 element={<Navigate to="/404" replace />}
