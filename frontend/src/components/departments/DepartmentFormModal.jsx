@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from '../ui/button';
 import {
   Building2,
@@ -9,8 +9,14 @@ import {
   Layers,
   Stethoscope,
   Info,
+  Search,
+  ChevronDown,
+  Trash2,
 } from 'lucide-react';
-import { getServicesForRoom } from '../../constants/serviceData';
+import {
+  getServicesForRoom,
+  getAvailableServicesForDepartment,
+} from '../../constants/serviceData';
 import { formatPrice } from '../services/serviceFormat';
 
 const INPUT_CLASS =
@@ -115,11 +121,140 @@ function DepartmentFormModalContent({
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Danh sách dịch vụ được gán cho phòng
+  const [assignedServices, setAssignedServices] = useState(() => {
+    if (!isRoom) return [];
+    if (initialData) {
+      return getServicesForRoom(initialData);
+    }
+    // Khi tạo phòng mới: ban đầu chưa gán dịch vụ nào
+    return [];
+  });
+
+  // State các mã dịch vụ được tick tạm thời trong dropdown
+  const [selectedCodes, setSelectedCodes] = useState(() => {
+    if (!isRoom) return new Set();
+    if (initialData) {
+      const init = getServicesForRoom(initialData);
+      return new Set(init.map((s) => s.code));
+    }
+    return new Set();
+  });
+
+  // State tìm kiếm dịch vụ
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Đóng dropdown khi click ra ngoài ô chọn và khôi phục tick theo assignedServices
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setServiceDropdownOpen(false);
+        setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [assignedServices]);
+
+  // Khoa hiện tại mà phòng trực thuộc
+  const currentDeptObj = useMemo(() => {
+    return departments.find((d) => d.id === formData.departmentId) || null;
+  }, [departments, formData.departmentId]);
+
+  // Toàn bộ dịch vụ thuộc Chuyên khoa đã chọn
+  const deptServices = useMemo(() => {
+    if (!isRoom) return [];
+    return getAvailableServicesForDepartment(currentDeptObj);
+  }, [isRoom, currentDeptObj]);
+
+  // Danh sách dịch vụ lọc theo từ khóa tìm kiếm
+  const filteredDeptServices = useMemo(() => {
+    const term = serviceSearchQuery.trim().toLowerCase();
+    if (!term) return deptServices;
+    return deptServices.filter(
+      (s) =>
+        s.code.toLowerCase().includes(term) ||
+        s.name.toLowerCase().includes(term)
+    );
+  }, [deptServices, serviceSearchQuery]);
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
+    // Nếu đổi chuyên khoa trực thuộc -> lọc bỏ các dịch vụ không còn phù hợp với khoa mới
+    if (field === 'departmentId') {
+      const selectedDept = departments.find((d) => d.id === value);
+      const newDeptServices = getAvailableServicesForDepartment(selectedDept);
+      const allowedCodes = new Set(newDeptServices.map((s) => s.code));
+      setAssignedServices((prev) => prev.filter((s) => allowedCodes.has(s.code)));
+      setSelectedCodes((prev) => {
+        const next = new Set();
+        prev.forEach((c) => {
+          if (allowedCodes.has(c)) next.add(c);
+        });
+        return next;
+      });
+    }
+  };
+
+  const handleOpenDropdown = () => {
+    setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+    setServiceDropdownOpen(true);
+  };
+
+  const handleToggleService = (serviceCode) => {
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceCode)) {
+        next.delete(serviceCode);
+      } else {
+        next.add(serviceCode);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAll = () => {
+    const displayedCodes = filteredDeptServices.map((s) => s.code);
+    const allChecked = displayedCodes.every((c) => selectedCodes.has(c));
+
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (allChecked) {
+        displayedCodes.forEach((c) => next.delete(c));
+      } else {
+        displayedCodes.forEach((c) => next.add(c));
+      }
+      return next;
+    });
+  };
+
+  const handleSaveSelectedServices = () => {
+    const newAssigned = deptServices.filter((s) => selectedCodes.has(s.code));
+    setAssignedServices(newAssigned);
+    setServiceDropdownOpen(false);
+    setServiceSearchQuery('');
+  };
+
+  const handleCancelSelection = () => {
+    setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+    setServiceDropdownOpen(false);
+    setServiceSearchQuery('');
+  };
+
+  const handleRemoveService = (serviceCode) => {
+    setAssignedServices((prev) => prev.filter((s) => s.code !== serviceCode));
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      next.delete(serviceCode);
+      return next;
+    });
   };
 
   const validate = () => {
@@ -151,6 +286,8 @@ function DepartmentFormModalContent({
       await onSave(
         {
           ...formData,
+          assignedServices: isRoom ? assignedServices : [],
+          serviceIds: isRoom ? assignedServices.map((s) => s.id || s.code) : [],
           unitType: targetType,
         },
         targetType,
@@ -163,16 +300,6 @@ function DepartmentFormModalContent({
       setSubmitting(false);
     }
   };
-
-  // Preview danh sách dịch vụ phục vụ tương ứng với phòng
-  const previewServices = useMemo(() => {
-    if (!isRoom) return [];
-    return getServicesForRoom({
-      code: formData.code,
-      name: formData.name,
-      type: formData.type,
-    });
-  }, [formData.code, formData.name, formData.type, isRoom]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
@@ -414,47 +541,231 @@ function DepartmentFormModalContent({
                 />
               </div>
 
-              {/* Bảng xem trước dịch vụ phục vụ tại phòng */}
-              <div className="pt-1 space-y-2">
+              {/* Khối: Dịch vụ y tế phòng tiếp nhận phục vụ */}
+              <div className="pt-1 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
-                    <Stethoscope className="w-3.5 h-3.5 text-[#0d9488]" />
-                    <span>Dịch vụ y tế phòng tiếp nhận phục vụ ({previewServices.length})</span>
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                    <Stethoscope className="w-4 h-4 text-[#0d9488]" />
+                    <span>Dịch vụ y tế phòng tiếp nhận phục vụ ({assignedServices.length})</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">Tự động đối soát theo mã phòng</span>
+                  <span className="text-[10.5px] text-slate-400">Đơn vị: VNĐ</span>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border border-slate-200/80 bg-slate-50/50">
-                  <table className="w-full text-left border-collapse text-[10.5px]">
+                {/* Thanh tìm kiếm & chọn dịch vụ (Search & Select Dropdown) */}
+                <div ref={dropdownRef} className="relative">
+                  <div className="relative flex items-center">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={serviceSearchQuery}
+                      onChange={(e) => {
+                        setServiceSearchQuery(e.target.value);
+                        if (!serviceDropdownOpen) handleOpenDropdown();
+                      }}
+                      onFocus={handleOpenDropdown}
+                      placeholder="Tìm và gán dịch vụ y tế (chọn một hoặc nhiều)..."
+                      className="w-full pl-9 pr-14 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 placeholder:text-slate-400"
+                    />
+                    <div className="absolute right-2.5 flex items-center gap-1">
+                      {serviceSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setServiceSearchQuery('');
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                          title="Xóa tìm kiếm"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (serviceDropdownOpen) {
+                            handleCancelSelection();
+                          } else {
+                            handleOpenDropdown();
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                        title={serviceDropdownOpen ? 'Đóng danh sách' : 'Mở danh sách'}
+                      >
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            serviceDropdownOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dropdown danh sách gợi ý kèm checkbox bên trái và nút Lưu ở góc dưới bên phải */}
+                  {serviceDropdownOpen && (
+                    <div
+                      className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white rounded-xl border border-slate-200 shadow-xl max-h-72 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+                    >
+                      {/* Dropdown Header */}
+                      <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center justify-between shrink-0">
+                        <span>
+                          Dịch vụ chuyên khoa {currentDeptObj ? currentDeptObj.name : ''} ({filteredDeptServices.length})
+                        </span>
+                        <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                          Đã tick: {selectedCodes.size}
+                        </span>
+                      </div>
+
+                      {/* Danh sách các dịch vụ kèm ô checkbox bên trái */}
+                      <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+                        {filteredDeptServices.length === 0 ? (
+                          <div className="p-4 text-center text-slate-400 text-xs">
+                            Không tìm thấy dịch vụ nào phù hợp với chuyên khoa này.
+                          </div>
+                        ) : (
+                          filteredDeptServices.map((srv) => {
+                            const isChecked = selectedCodes.has(srv.code);
+                            return (
+                              <div
+                                key={srv.code}
+                                onClick={() => handleToggleService(srv.code)}
+                                className={`px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors group ${
+                                  isChecked ? 'bg-teal-50/50' : 'hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-3">
+                                  {/* Ô checkbox nằm bên trái */}
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleToggleService(srv.code)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-4 h-4 rounded border-slate-300 text-[#0d9488] focus:ring-teal-500 cursor-pointer accent-[#0d9488] shrink-0"
+                                  />
+                                  <span className="font-mono font-bold text-[10.5px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 shrink-0">
+                                    {srv.code}
+                                  </span>
+                                  <span
+                                    className={`text-xs line-clamp-1 ${
+                                      isChecked
+                                        ? 'font-bold text-teal-900'
+                                        : 'font-semibold text-slate-800'
+                                    }`}
+                                  >
+                                    {srv.name}
+                                  </span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="font-bold text-slate-800 text-[11px]">
+                                    {formatPrice(srv.clinicPrice)} đ
+                                  </div>
+                                  <div className="text-[10px] text-emerald-700 font-medium">
+                                    {srv.insurancePrice
+                                      ? `BHYT: ${formatPrice(srv.insurancePrice)} đ`
+                                      : 'Tự túc'}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Dropdown Footer: Nút Lưu ở phía dưới bên phải */}
+                      <div className="p-2.5 px-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600">
+                          {filteredDeptServices.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleToggleAll}
+                              className="text-[11px] text-teal-700 hover:text-teal-900 font-medium cursor-pointer underline"
+                            >
+                              {filteredDeptServices.every((s) => selectedCodes.has(s.code))
+                                ? 'Bỏ tick tất cả'
+                                : 'Tick chọn tất cả'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelSelection}
+                            className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveSelectedServices}
+                            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-[#0d9488] text-white hover:bg-[#0b7c72] shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span>Lưu</span>
+                            {selectedCodes.size > 0 && (
+                              <span className="bg-white/20 px-1.5 py-0.2 rounded-full text-[10px]">
+                                {selectedCodes.size}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bảng danh sách dịch vụ đã chọn */}
+                <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white">
+                  <table className="w-full text-left border-collapse text-[11px]">
                     <thead>
-                      <tr className="bg-slate-100/80 text-slate-700 border-b border-slate-200/80">
-                        <th className="px-2.5 py-2 font-bold">Mã DV</th>
-                        <th className="px-2.5 py-2 font-bold">Tên dịch vụ</th>
-                        <th className="px-2.5 py-2 font-bold text-right">Viện phí</th>
-                        <th className="px-2.5 py-2 font-bold text-right">BHYT</th>
+                      <tr className="bg-[#f6f8f9] text-[10.5px] font-bold text-[#1b2533] border-b border-slate-200/80">
+                        <th className="px-3 py-2.5">Mã DV</th>
+                        <th className="px-3 py-2.5">Tên dịch vụ</th>
+                        <th className="px-3 py-2.5 text-right">Viện phí</th>
+                        <th className="px-3 py-2.5 text-right">BHYT</th>
+                        <th className="px-3 py-2.5 text-center w-16">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {previewServices.length === 0 ? (
+                      {assignedServices.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="p-3 text-center text-slate-400 text-[10px]">
-                            Chưa có dịch vụ nào liên kết.
+                          <td colSpan="5" className="p-6 text-center text-slate-400 italic">
+                            Chưa có dịch vụ nào được gán cho phòng này
                           </td>
                         </tr>
                       ) : (
-                        previewServices.map((s) => (
-                          <tr key={s.code} className="hover:bg-white transition-colors">
-                            <td className="px-2.5 py-1.5 font-mono font-semibold text-slate-600">
-                              {s.code}
+                        assignedServices.map((service) => (
+                          <tr key={service.code} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-3 py-2.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                              {service.code}
                             </td>
-                            <td className="px-2.5 py-1.5 text-slate-800 font-medium">
-                              {s.name}
+                            <td className="px-3 py-2.5 font-medium text-slate-800">
+                              <div>{service.name}</div>
+                              {service.estimatedMinutes && (
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  Thời gian chuẩn: ~{service.estimatedMinutes} phút
+                                </div>
+                              )}
                             </td>
-                            <td className="px-2.5 py-1.5 text-right font-bold text-slate-800">
-                              {formatPrice(s.clinicPrice)} đ
+                            <td className="px-3 py-2.5 text-right font-bold text-slate-800 whitespace-nowrap">
+                              {formatPrice(service.clinicPrice)} đ
                             </td>
-                            <td className="px-2.5 py-2 text-right text-emerald-700 font-semibold">
-                              {s.insurancePrice ? `${formatPrice(s.insurancePrice)} đ` : '—'}
+                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                              {service.insurancePrice ? (
+                                <span className="font-semibold text-emerald-700">
+                                  {formatPrice(service.insurancePrice)} đ
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic">Không hỗ trợ</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <button
+                                type="button"
+                                title="Gỡ dịch vụ"
+                                onClick={() => handleRemoveService(service.code)}
+                                className="w-6 h-6 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         ))

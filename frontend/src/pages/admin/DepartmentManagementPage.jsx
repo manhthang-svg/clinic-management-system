@@ -363,7 +363,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             roomName: formData.name,
             phongkham: formData.name,
             departmentId: formData.departmentId,
-            serviceGroupId: formData.serviceGroupId || undefined,
+            serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -384,7 +384,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     operatingHours: formData.operatingHours,
                     capacity: formData.capacity,
                     deviceSetup: formData.deviceSetup,
-                    serviceGroupId: formData.serviceGroupId,
+                    assignedServices: formData.assignedServices || [],
+                    serviceIds: formData.serviceIds || [],
                   }
                 : i
             )
@@ -397,7 +398,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             maphongkham: formData.code,
             phongkham: formData.name,
             departmentId: formData.departmentId,
-            serviceGroupId: formData.serviceGroupId || undefined,
+            serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -417,7 +418,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             operatingHours: formData.operatingHours,
             capacity: formData.capacity,
             deviceSetup: formData.deviceSetup,
-            serviceGroupId: formData.serviceGroupId,
+            assignedServices: formData.assignedServices || [],
+            serviceIds: formData.serviceIds || [],
           };
           setItems((prev) => [newRoom, ...prev]);
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
@@ -479,7 +481,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     operatingHours: formData.operatingHours,
                     capacity: formData.capacity,
                     deviceSetup: formData.deviceSetup,
-                    serviceGroupId: formData.serviceGroupId,
+                    assignedServices: formData.assignedServices || [],
+                    serviceIds: formData.serviceIds || [],
                   }
                 : i
             )
@@ -500,7 +503,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             operatingHours: formData.operatingHours,
             capacity: formData.capacity,
             deviceSetup: formData.deviceSetup,
-            serviceGroupId: formData.serviceGroupId,
+            assignedServices: formData.assignedServices || [],
+            serviceIds: formData.serviceIds || [],
           };
           setItems((prev) => [newRoom, ...prev]);
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
