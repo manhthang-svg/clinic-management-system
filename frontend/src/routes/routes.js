@@ -21,6 +21,14 @@ export const ROUTES = {
     STAFF: '/admin/staff',
     REPORTS: '/admin/reports',
     SETTINGS: '/admin/settings',
+  }, 
+  
+  CASHIER: {
+    OVERVIEW: '/cashier',
+    PAYMENTS: '/cashier/payments',
+    PAYMENT_DETAIL: '/cashier/payments/:id',
+    PAYMENT_HISTORY: '/cashier/payment-history',
+    PROFILE: '/cashier/profile',
   },
 };
 

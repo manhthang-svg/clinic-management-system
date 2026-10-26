@@ -4,7 +4,6 @@ import { AuthContext } from './authContextInstance';
 
 export function AuthProvider({ children, sessionManager = defaultSessionManager }) {
   const session = useSession(sessionManager);
-
   const value = {
     session,
     user: session?.account || null,
