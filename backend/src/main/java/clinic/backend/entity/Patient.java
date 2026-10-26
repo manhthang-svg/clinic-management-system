@@ -1,5 +1,6 @@
 package clinic.backend.entity;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -123,4 +124,65 @@ public class Patient extends VersionedEntity {
 
     @Column(name = "created_by_account_id", nullable = false)
     private UUID createdByAccountId;
+
+
+    public Patient(
+            UUID id,
+            Instant createdAt,
+            String mabenhnhan,
+            String cccdSo,
+            String hochieuSo,
+            String hoten,
+            LocalDate ngaysinh,
+            short gioitinh,
+            String nghenghiep,
+            String nghenghiepMa,
+            String dantoc,
+            String dantocMa,
+            String ngoaikieu,
+            String ngoaikieuMa,
+            String diachi,
+            String xaphuong,
+            String xaphuongMa,
+            String tinhthanh,
+            String tinhthanhMa,
+            String noilamviec,
+            String sodienthoai,
+            String yeutorh,
+            String nhommau,
+            String hotennguoithan,
+            String nguoithanQuanhe,
+            String diachinguoithan,
+            String sodienthoainguoithan,
+            UUID createdByAccountId
+    ) {
+        super(id, createdAt);
+
+        this.mabenhnhan = mabenhnhan;
+        this.cccdSo = cccdSo;
+        this.hochieuSo = hochieuSo;
+        this.hoten = hoten;
+        this.ngaysinh = ngaysinh;
+        this.gioitinh = gioitinh;
+        this.nghenghiep = nghenghiep;
+        this.nghenghiepMa = nghenghiepMa;
+        this.dantoc = dantoc;
+        this.dantocMa = dantocMa;
+        this.ngoaikieu = ngoaikieu;
+        this.ngoaikieuMa = ngoaikieuMa;
+        this.diachi = diachi;
+        this.xaphuong = xaphuong;
+        this.xaphuongMa = xaphuongMa;
+        this.tinhthanh = tinhthanh;
+        this.tinhthanhMa = tinhthanhMa;
+        this.noilamviec = noilamviec;
+        this.sodienthoai = sodienthoai;
+        this.yeutorh = yeutorh;
+        this.nhommau = nhommau;
+        this.hotennguoithan = hotennguoithan;
+        this.nguoithanQuanhe = nguoithanQuanhe;
+        this.diachinguoithan = diachinguoithan;
+        this.sodienthoainguoithan = sodienthoainguoithan;
+        this.createdByAccountId = createdByAccountId;
+    }
 }

@@ -57,6 +57,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/rooms", "/api/v1/rooms/**").authenticated()
                         .requestMatchers("/api/v1/services", "/api/v1/services/**").authenticated()
                         .requestMatchers("/api/v1/departments", "/api/v1/departments/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/patients").authenticated()
                         .anyRequest().denyAll())
                 .build();
     }
