@@ -75,6 +75,12 @@ export function App({
             navigate('/admin/accounts', { replace: true });
           } else if (role === 'CASHIER') {
             navigate('/cashier', { replace: true });
+          } else if (role === 'RECEPTIONIST') {
+            navigate('/receptionist', { replace: true });
+          } else if (role === 'DOCTOR') {
+            navigate('/doctor', { replace: true });
+          } else if (role === 'TECHNICIAN') {
+            navigate('/technician', { replace: true });
           } else {
             navigate('/404', { replace: true });
           }
@@ -156,7 +162,12 @@ export function App({
     );
   }
 
-  if (session.account.role !== 'ADMIN' && session.account.role !== 'CASHIER') {
+  const role = session.account?.role
+    ?.toUpperCase()
+    .replace(/^ROLE_/, '');
+
+  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST', 'DOCTOR', 'TECHNICIAN']
+    .includes(role)) {
     return (
       <>
         <header className="app-header">

@@ -18,6 +18,10 @@ import PaymentManagementPage from '../pages/cashier/PaymentManagementPage.jsx';
 import PaymentDetailPage from '../pages/cashier/PaymentDetailPage.jsx';
 import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx';
 import HomeRedirect from './HomeRedirect.jsx';
+import ReceptionistOverviewPage from '../pages/receptionist/ReceptionistOverviewPage.jsx';
+import ReceptionistPatientsPage from '../pages/receptionist/ReceptionistPatientsPage.jsx';
+import ReceptionistAppointmentsPage from '../pages/receptionist/ReceptionistAppointmentsPage.jsx';
+import ReceptionistCreatePatientPage from '../pages/receptionist/ReceptionistCreatePatientPage.jsx';
 
 export function AppRoutes({
     session,
@@ -112,7 +116,13 @@ export function AppRoutes({
             >
                 <Route
                     path="/cashier"
-                    element={<DashboardLayout />}
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                        />
+                    }
                 >
                     <Route
                         index
@@ -132,6 +142,50 @@ export function AppRoutes({
                     <Route
                         path="payment-history"
                         element={<PaymentHistoryPage />}
+                    />
+                </Route>
+            </Route>
+
+            {/* RECEPTIONIST */}
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="RECEPTIONIST"
+                    />
+                }
+            >
+                <Route
+                    path="/receptionist"
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                        />
+                    }
+                >
+                    {/* Tổng quan lễ tân */}
+                    <Route
+                        index
+                        element={<ReceptionistOverviewPage />}
+                    />
+
+                    {/* Quản lý bệnh nhân */}
+                    <Route
+                        path="patients"
+                        element={<ReceptionistPatientsPage />}
+                    />
+
+                    <Route
+                        path="patients/new"
+                        element={<ReceptionistCreatePatientPage />}
+                    />
+
+                    {/* Lịch khám */}
+                    <Route
+                        path="appointments"
+                        element={<ReceptionistAppointmentsPage />}
                     />
                 </Route>
             </Route>
