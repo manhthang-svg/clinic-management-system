@@ -8,8 +8,10 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import clinic.backend.dto.response.MedicalServiceDetailResponse;
 import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.response.PerformingRoomResponse;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.ServiceGroup;
@@ -20,6 +22,7 @@ import clinic.backend.exceptions.AppException;
 import clinic.backend.mapper.MedicalServiceMapper;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.MedicalServiceRepository;
+import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.service.MedicalServiceService;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +42,30 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
     private final MedicalServiceRepository serviceRepository;
     private final DepartmentRepository departmentRepository;
     private final ServiceGroupRepository serviceGroupRepository;
+    private final RoomRepository roomRepository;
     private final MedicalServiceMapper serviceMapper;
+
+    @Override
+    @Transactional(readOnly = true)
+    public MedicalServiceDetailResponse getService(UUID serviceId) {
+        MedicalService medicalService = serviceRepository.findById(serviceId)
+                .orElseThrow(() -> new AppException(ErrorCode.SERVICE_NOT_FOUND));
+        Department department = medicalService.getDepartmentId() == null
+                ? null
+                : departmentRepository.findById(medicalService.getDepartmentId()).orElse(null);
+        ServiceGroup serviceGroup = medicalService.getServiceGroupId() == null
+                ? null
+                : serviceGroupRepository.findById(medicalService.getServiceGroupId()).orElse(null);
+        List<PerformingRoomResponse> performingRooms = medicalService.getServiceGroupId() == null
+                ? List.of()
+                : roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(
+                                medicalService.getServiceGroupId(), ActivationStatus.ACTIVE)
+                        .stream()
+                        .map(serviceMapper::toPerformingRoom)
+                        .toList();
+        return serviceMapper.toDetail(
+                medicalService, nameOf(serviceGroup), nameOf(department), performingRooms);
+    }
 
     @Override
     @Transactional(readOnly = true)

@@ -29,6 +29,7 @@ public enum ErrorCode {
     USERNAME_ALREADY_EXISTS("USERNAME_ALREADY_EXISTS", "The username is already used by another account.",
             HttpStatus.CONFLICT),
     ACCOUNT_NOT_FOUND("ACCOUNT_NOT_FOUND", "The staff account does not exist.", HttpStatus.NOT_FOUND),
+    SERVICE_NOT_FOUND("SERVICE_NOT_FOUND", "The medical service does not exist.", HttpStatus.NOT_FOUND),
     ADMIN_ACCOUNT_PROTECTED("ADMIN_ACCOUNT_PROTECTED", "The seeded Admin account cannot be changed by this operation.",
             HttpStatus.UNPROCESSABLE_ENTITY),
     SELF_ADMINISTRATION_FORBIDDEN("SELF_ADMINISTRATION_FORBIDDEN",

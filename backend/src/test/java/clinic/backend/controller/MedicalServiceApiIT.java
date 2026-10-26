@@ -67,8 +67,47 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    private void insertCatalog(UUID departmentId, UUID groupId, String suffix) {
+    @Test
+    void adminCanViewServiceDetailWithOnlyActiveRoomsInTheSameGroup() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID serviceId = insertCatalog(departmentId, groupId, suffix);
+        insertRoom(departmentId, groupId, "A-" + suffix, "ACTIVE");
+        insertRoom(departmentId, groupId, "B-" + suffix, "INACTIVE");
+
+        String adminToken = accessToken(admin);
+        mockMvc.perform(get("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(serviceId.toString()))
+                .andExpect(jsonPath("$.data.code").value("XN-" + suffix))
+                .andExpect(jsonPath("$.data.departmentName").value("Khoa " + suffix))
+                .andExpect(jsonPath("$.data.serviceGroupName").value("Nhóm " + suffix))
+                .andExpect(jsonPath("$.data.insurancePrice").doesNotExist())
+                .andExpect(jsonPath("$.data.version").value(0))
+                .andExpect(jsonPath("$.data.performingRooms.length()").value(1))
+                .andExpect(jsonPath("$.data.performingRooms[0].code").value("A-" + suffix));
+
+        mockMvc.perform(get("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/services/{serviceId}", serviceId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/services/{serviceId}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SERVICE_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/services/not-a-uuid")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    private UUID insertCatalog(UUID departmentId, UUID groupId, String suffix) {
         Instant now = Instant.now();
+        UUID serviceId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO departments (id, makhoa, tenkhoa, type, is_active, created_at, updated_at, version)
                 VALUES (?, ?, ?, 'PARACLINICAL', true, ?, ?, 0)
@@ -81,8 +120,18 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 INSERT INTO services (id, code, tenchidinh, type, department_id, service_group_id,
                     clinic_price, insurance_price, status, created_at, updated_at, version)
                 VALUES (?, ?, ?, 'LAB', ?, ?, 120000, NULL, 'ACTIVE', ?, ?, 0)
-                """, UUID.randomUUID(), "XN-" + suffix, "Xét nghiệm " + suffix,
+                """, serviceId, "XN-" + suffix, "Xét nghiệm " + suffix,
                 departmentId, groupId, now, now);
+        return serviceId;
+    }
+
+    private void insertRoom(UUID departmentId, UUID groupId, String code, String status) {
+        Instant now = Instant.now();
+        jdbc.update("""
+                INSERT INTO rooms (id, department_id, service_group_id, maphongkham, phongkham, location,
+                    type, status, created_at, updated_at, version)
+                VALUES (?, ?, ?, ?, ?, ?, 'PARACLINICAL', ?, ?, ?, 0)
+                """, UUID.randomUUID(), departmentId, groupId, code, "Phòng " + code, "Tầng 2", status, now, now);
     }
 
     private StaffAccount account(Role role) {

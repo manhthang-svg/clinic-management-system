@@ -35,6 +35,7 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `POST` | `/api/v1/accounts/{accountId}/commands/unlock` | Admin bearer token | `200` + unlocked detail |
 | `POST` | `/api/v1/accounts/{accountId}/commands/reset-password` | Admin bearer token | `200` + one-time password |
 | `GET` | `/api/v1/services` | Admin bearer token | `200` + paginated service and price summaries |
+| `GET` | `/api/v1/services/{serviceId}` | Admin bearer token | `200` + service detail and active performing rooms |
 
 The access token is held in memory and sent as `Authorization: Bearer <token>`. The refresh token is an HttpOnly
 cookie; browser calls to refresh and logout must include credentials and the configured frontend `Origin`.
@@ -60,6 +61,11 @@ UC-20 uses `GET /api/v1/services` with optional `keyword`, `type`, `group`, `dep
 defaults to `page=0&size=10`. Sorting uses `field,direction`; allowed fields are `code`, `name`, `type`,
 `clinicPrice`, `insurancePrice`, and `status`, with `code,asc` as the default. A service not covered by insurance has
 `insurancePrice: null`. An empty catalog or unmatched filter is a successful response with an empty `content` array.
+
+UC-21 uses `GET /api/v1/services/{serviceId}`. It returns the current service data and optimistic-lock `version`.
+For a paraclinical service, `performingRooms` contains active rooms in the same service group, ordered by room code.
+An examination service has no service group and returns an empty `performingRooms` array. A missing service returns
+`404 SERVICE_NOT_FOUND`.
 
 Successful responses with a body use `ApiResponse`; failures use `ErrorResponse`. FE code should branch on the stable
 `code` field rather than the English `message`. Endpoint-specific statuses, codes, field constraints, nullable fields,

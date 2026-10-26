@@ -4,6 +4,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.MedicalServiceDetailResponse;
 import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.PageResponse;
 import clinic.backend.enums.ActivationStatus;
@@ -18,6 +19,7 @@ import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +35,12 @@ import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
 public class MedicalServiceController {
 
     private final MedicalServiceService service;
+
+    @Operation(summary = "UC-21 View medical service detail")
+    @GetMapping("/{serviceId}")
+    public ApiResponse<MedicalServiceDetailResponse> detail(@PathVariable UUID serviceId) {
+        return ApiResponse.success(service.getService(serviceId));
+    }
 
     @Operation(summary = "UC-20 View and search the service and price list")
     @GetMapping
