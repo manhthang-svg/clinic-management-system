@@ -77,7 +77,7 @@ function buildInitialForm({ initialData, departments, isRoom }) {
     name: '',
     departmentId: departments[0]?.id || '',
     type: isRoom ? 'EXAMINATION' : 'CLINICAL',
-    location: isRoom ? '' : 'Tòa A - Tầng 1',
+    location: '',
     headPerson: '',
     description: '',
     status: 'ACTIVE',
@@ -473,22 +473,6 @@ function DepartmentFormModalContent({
                 </select>
               </div>
             </div>
-
-            {/* Vị trí (khi là khoa) */}
-            {!isRoom && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Vị trí / Khu vực
-                </label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => handleChange('location', e.target.value)}
-                  placeholder="VD: Tòa A - Tầng 1"
-                  className={INPUT_CLASS}
-                />
-              </div>
-            )}
           </div>
 
           {/* Section 2 (Chỉ cho ROOM): Thông số vận hành & Cơ sở vật chất */}
