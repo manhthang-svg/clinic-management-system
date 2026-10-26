@@ -174,11 +174,16 @@ export function Sidebar({ user }) {
   const items = NAV_ITEMS[role] ?? [];
 
   const isActive = (path) => {
-    if (location.pathname === path) {
-      return true;
-    } else {
-      return false;
-    }
+    const currentPath = location.pathname;
+    const matchedItems = items
+      .filter(
+        (item) =>
+          currentPath === item.path ||
+          currentPath.startsWith(`${item.path}/`)
+      )
+      .sort((a, b) => b.path.length - a.path.length);
+
+    return matchedItems[0]?.path === path;
   };
 
   return (
