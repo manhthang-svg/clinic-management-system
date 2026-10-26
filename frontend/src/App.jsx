@@ -9,6 +9,7 @@ import { ProfileView } from './components/accounts';
 
 import { apiClient, sessionManager as defaultSessionManager } from './services/session';
 import { useSession } from './hooks/useSession';
+import { ROLE_LABELS } from './constants/accountData';
 import { AdminLayout } from './layouts';
 import AppRoutes from './routes/AppRoutes';
 
@@ -155,43 +156,74 @@ export function App({
     );
   }
 
-  if (showProfile) {
+  if (session.account.role !== 'ADMIN' && session.account.role !== 'CASHIER') {
     return (
-      <main className="app-main">
-        <button
-          type="button"
-          className="button button--ghost"
-          onClick={() => setShowProfile(false)}
-        >
-          Quay lại
-        </button>
+      <>
+        <header className="app-header">
+          <p className="app-name">Clinic Management System</p>
 
-        {!profile && !profileError && (
-          <p role="status">Đang tải hồ sơ…</p>
-        )}
+          <div className="app-header__actions">
+            {!showPasswordForm && (
+              <>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => {
+                    setProfileError('');
+                    setShowProfile((value) => !value);
+                  }}
+                >
+                  {showProfile ? 'Trang chủ' : 'Hồ sơ cá nhân'}
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setChangingPassword(true)}
+                >
+                  Đổi mật khẩu
+                </button>
+              </>
+            )}
 
-        {profileError && (
-          <p role="alert">
-            Không thể tải hồ sơ: {profileError}
-          </p>
-        )}
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void sessionManager.logout()}
+            >
+              Đăng xuất
+            </button>
+          </div>
+        </header>
 
-        {profile && (
-          <ProfileView
-            account={profile}
-            accounts={[]}
-            onSave={async (contact) => {
-              const updated = await account.updateProfile(
-                contact.phone,
-                contact.email,
-              );
-              setProfile(updated);
-            }}
-            onCancel={() => setShowProfile(false)}
-            onChangePassword={() => setChangingPassword(true)}
-          />
-        )}
-      </main>
+        <main className="app-main">
+          {!showProfile && (
+            <h1>
+              Xin chào {session.account.fullName} ({ROLE_LABELS[session.account.role] || session.account.role})
+            </h1>
+          )}
+
+          {notice && (
+            <p role="status" className="banner banner--success">
+              {notice}
+            </p>
+          )}
+
+          {showProfile && !profile && !profileError && <p role="status">Đang tải hồ sơ…</p>}
+          {showProfile && profileError && <p role="alert">Không thể tải hồ sơ: {profileError}</p>}
+          {showProfile && profile && (
+            <ProfileView
+              account={profile}
+              accounts={[]}
+              onSave={async (contact) => {
+                const updated = await account.updateProfile(contact.phone, contact.email);
+                setProfile(updated);
+              }}
+              onCancel={() => setShowProfile(false)}
+              onChangePassword={() => setChangingPassword(true)}
+            />
+          )}
+        </main>
+      </>
     );
   }
 
