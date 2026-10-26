@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { accountErrorMessage, accountFieldErrors, withoutField } from './accountErrors';
 import { Mail, Phone, AtSign, UserRound, Briefcase, ShieldCheck, KeyRound, Save, Info } from 'lucide-react';
-import { ROLE_MAP, STATUS_LABELS, MOCK_ROOMS } from '../../constants/accountData';
+import { ROLE_MAP, STATUS_LABELS } from '../../constants/accountData';
 import { AccountPersonalFields } from './AccountPersonalFields';
 import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './accountFormat';
 import { accountToForm, validateAccountForm } from './accountForm';
@@ -23,25 +24,36 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
   const [form, setForm] = useState(initialForm);
   const [touched, setTouched] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
 
   const errors = validateAccountForm(form, { accounts, exceptId: account.id, fields: PROFILE_FIELDS });
   const dirty = PROFILE_FIELDS.some((f) => form[f] !== initialForm[f]);
   const role = ROLE_MAP[account.role];
   const hasRoom = account.role === 'DOCTOR' || account.role === 'TECHNICIAN';
-  const room = account.roomCode ? MOCK_ROOMS[account.roomCode] : null;
+  const room = account.roomName
+    ? { name: account.roomName, department: account.departmentName }
+    : null;
 
   const onChange = (field, value) => {
     setSaved(false);
+    setServerErrors((prev) => withoutField(prev, field));
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0 || !dirty) return;
-    onSave({ phone: form.phone.trim(), email: form.email.trim() });
-    setTouched(false);
-    setSaved(true);
+    setSubmitError('');
+    try {
+      await onSave({ phone: form.phone.trim(), email: form.email.trim() });
+      setTouched(false);
+      setSaved(true);
+    } catch (error) {
+      setServerErrors(accountFieldErrors(error));
+      setSubmitError(accountErrorMessage(error));
+    }
   };
 
   return (
@@ -58,6 +70,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
           Đã cập nhật thông tin liên hệ.
         </div>
       )}
+      {submitError && <div role="alert" className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">{submitError}</div>}
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 flex flex-col lg:flex-row lg:items-center gap-6">
         <div className="flex items-center gap-5">
@@ -83,7 +96,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <FormSection icon={UserRound} title="Thông tin cá nhân" description="Bạn chỉ được sửa số điện thoại và email.">
-          <AccountPersonalFields form={form} errors={touched ? errors : {}} onChange={onChange} editable={PROFILE_FIELDS} />
+          <AccountPersonalFields form={form} errors={{ ...(touched ? errors : {}), ...serverErrors }} onChange={onChange} editable={PROFILE_FIELDS} />
           <p className="flex items-start gap-2 mt-4 text-xs text-slate-500">
             <Info className="w-4 h-4 shrink-0 text-[#127e7a]" />
             Cần sửa họ tên, ngày sinh, giới tính hoặc địa chỉ? Hãy liên hệ quản trị viên.
@@ -95,10 +108,11 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
               <ReadOnly id="profile-role" label="Vai trò" value={role?.label || account.role} />
               <ReadOnly id="profile-status" label="Trạng thái" value={STATUS_LABELS[account.status]} />
+              <ReadOnly id="profile-practice-license" label="Số giấy phép hành nghề" value={account.practiceLicenseNo || '—'} />
               {hasRoom && (
                 <>
                   <ReadOnly id="profile-department" label="Khoa" value={room?.department || 'Chưa được phân công'} />
-                  <ReadOnly id="profile-room" label="Phòng" value={room ? `${room.name} (${account.roomCode})` : 'Chưa được phân công'} />
+                  <ReadOnly id="profile-room" label="Phòng" value={room?.name || 'Chưa được phân công'} />
                 </>
               )}
               <ReadOnly id="profile-created" label="Ngày tạo tài khoản" value={formatDate(account.createdAt)} />

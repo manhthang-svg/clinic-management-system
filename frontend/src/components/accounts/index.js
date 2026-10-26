@@ -7,3 +7,5 @@ export { AccountActivityCard } from './AccountActivityCard';
 export { AccountCreateView } from './AccountCreateView';
 export { AccountEditView } from './AccountEditView';
 export { ProfileView } from './ProfileView';
+export { AccountAssignRoleView } from './AccountAssignRoleView';
+export { AccountResetPasswordView } from './AccountResetPasswordView';

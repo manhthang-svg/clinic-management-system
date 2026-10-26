@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Navigate,
   generatePath,
@@ -26,38 +26,80 @@ import {
   AccountDetailView,
   AccountCreateView,
   AccountEditView,
+  AccountAssignRoleView,
+  AccountResetPasswordView,
   ProfileView,
   AccountStatCard,
   AccountOverviewCard,
   AccountActivityCard,
 } from "../../components/accounts";
+import { percentOf } from "../../components/accounts/accountFormat";
+import { accountErrorMessage } from "../../components/accounts/accountErrors";
+import { createAccountApi } from "../../apis/accountApi";
+import { apiClient } from "../../services/session";
 import {
-  normalizeSearch,
-  percentOf,
-} from "../../components/accounts/accountFormat";
-import { formToAccountFields } from "../../components/accounts/accountForm";
-import {
-  MOCK_ACCOUNTS,
-  MOCK_ACCOUNT_ACTIVITIES,
-  MOCK_ACCOUNT_PROFILES,
   PAGE_SIZE_OPTIONS,
-  mockLoginEvents,
   ROLE_LABELS,
 } from "../../constants";
 
-const INITIAL_ACCOUNTS = MOCK_ACCOUNTS.map((a) => ({
-  ...a,
-  ...MOCK_ACCOUNT_PROFILES[a.id],
-}));
+const defaultAccountApi = createAccountApi(apiClient);
+
+function fromApi(account) {
+  if (!account) return account;
+  return {
+    ...account,
+    phone: account.phoneNumber ?? account.phone ?? "",
+    title: account.academicTitle ?? account.title,
+    practiceLicenseNo: account.practiceLicenseNo ?? "",
+    failedLoginCount: account.failedLoginAttempts ?? account.failedLoginCount ?? 0,
+  };
+}
+
+function accountRequest(form) {
+  return {
+    fullName: form.fullName.trim(),
+    academicTitle: form.title.trim() || null,
+    practiceLicenseNo: form.practiceLicenseNo.trim() || null,
+    dateOfBirth: form.dateOfBirth || null,
+    gender: form.gender || null,
+    phoneNumber: form.phone.trim(),
+    email: form.email.trim() || null,
+    address: form.address.trim() || null,
+  };
+}
 
 const { ADMIN } = ROUTES;
+
+const SEARCH_DEBOUNCE_MS = 300;
+const SUMMARY_PAGE_SIZE = 50;
+const accountPageCache = new WeakMap();
+
+function updateAccountPageCache(accountApi, values) {
+  accountPageCache.set(accountApi, {
+    ...accountPageCache.get(accountApi),
+    ...values,
+  });
+}
+
+/** Every account, page by page; feeds the statistics and the client-side duplicate checks. */
+async function listAllAccounts(accountApi, signal) {
+  const accounts = [];
+  for (let page = 0; ; page += 1) {
+    const result = await accountApi.list({ page, size: SUMMARY_PAGE_SIZE }, signal);
+    accounts.push(...result.content.map(fromApi));
+    if (page + 1 >= result.page.totalPages) return accounts;
+  }
+}
 
 /** Which account screen the URL shows; null for paths this page does not own. */
 function viewFromPath(path) {
   if (matchPath(ADMIN.ACCOUNTS, path)) return { name: "list" };
   if (matchPath(ADMIN.ACCOUNT_CREATE, path)) return { name: "create" };
   if (matchPath(ADMIN.PROFILE, path)) return { name: "profile" };
-
+  const assignRole = matchPath(ADMIN.ACCOUNT_ASSIGN_ROLE, path);
+  if (assignRole) return { name: "assign-role", id: assignRole.params.id };
+  const resetPassword = matchPath(ADMIN.ACCOUNT_RESET_PASSWORD, path);
+  if (resetPassword) return { name: "reset-password", id: resetPassword.params.id };
   const edit = matchPath(ADMIN.ACCOUNT_EDIT, path);
   if (edit) return { name: "edit", id: edit.params.id };
 
@@ -67,69 +109,178 @@ function viewFromPath(path) {
   return null;
 }
 
-const PASSWORD_ALPHABET =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%";
-
-/** Mock of the 12-character one-time password the backend generates (UC-7, UC-11). */
-function generateTemporaryPassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
-
-  return Array.from(
-    bytes,
-    (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length],
-  ).join("");
-}
-
 export function AccountManagementPage({
   currentAdmin,
   onLogout,
   onChangePassword,
   onNavigate,
   notice,
+  accountApi = defaultAccountApi,
 }) {
-  const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
-  const [activities, setActivities] = useState(MOCK_ACCOUNT_ACTIVITIES);
+  const cached = accountPageCache.get(accountApi);
+  // All accounts (statistics, overview, duplicate checks) and the server-filtered table page.
+  const [accounts, setAccounts] = useState(() => cached?.accounts ?? []);
+  const [tablePage, setTablePage] = useState(() => cached?.tablePage ?? {
+    query: null, content: [], totalElements: 0, error: null,
+  });
+  const [tableReady, setTableReady] = useState(() => cached?.tablePage?.query != null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [details, setDetails] = useState({});
+  const [missingIds, setMissingIds] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [activities, setActivities] = useState([]);
+  const [changeHistory, setChangeHistory] = useState([]);
+  const [historyPage, setHistoryPage] = useState({ accountId: null, page: 0, totalPages: 0 });
+  const [workInProgress, setWorkInProgress] = useState(null);
+  const [departments, setDepartments] = useState(() => cached?.departments ?? []);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
+  const [sort, setSort] = useState("createdAt,desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const [selectedIds, setSelectedIds] = useState([]);
-
   // The URL decides which account screen is displayed.
   const location = useLocation();
   const navigate = useNavigate();
   const matchedView = viewFromPath(location.pathname);
   const view = matchedView || { name: "list" };
 
-  const filteredAccounts = useMemo(() => {
-    const term = normalizeSearch(searchQuery);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
-    return accounts.filter((acc) => {
-      const matchSearch =
-        term === "" ||
-        [acc.username, acc.fullName, acc.email, acc.phone].some((field) =>
-          normalizeSearch(field || "").includes(term),
-        );
+  useEffect(() => {
+    // Let the visible table request finish first. The complete list is only
+    // needed for statistics and duplicate checks, so it must not delay first paint.
+    if (!tableReady) return undefined;
+    const controller = new AbortController();
+    listAllAccounts(accountApi, controller.signal)
+      .then((items) => {
+        setAccounts(items);
+        updateAccountPageCache(accountApi, { accounts: items });
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") toast.error(accountErrorMessage(error));
+      });
+    return () => controller.abort();
+  }, [accountApi, reloadKey, tableReady]);
 
-      const matchRole = roleFilter === "ALL" || acc.role === roleFilter;
-      const matchStatus =
-        statusFilter === "ALL" || acc.status === statusFilter;
+  useEffect(() => {
+    const controller = new AbortController();
+    accountApi.departments(controller.signal)
+      .then((items) => {
+        const activeDepartments = items.filter((item) => item.active);
+        setDepartments(activeDepartments);
+        updateAccountPageCache(accountApi, { departments: activeDepartments });
+      })
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
+    return () => controller.abort();
+  }, [accountApi]);
 
-      return matchSearch && matchRole && matchStatus;
-    });
-  }, [accounts, searchQuery, roleFilter, statusFilter]);
+  // UC-5: the server searches, filters, and pages the table.
+  const tableQuery = JSON.stringify([debouncedSearch, roleFilter, departmentFilter, statusFilter, sort, page, pageSize, reloadKey]);
+  const loading = tablePage.query !== tableQuery;
+  const loadError = loading ? null : tablePage.error;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredAccounts.length / pageSize),
-  );
-  const currentPage = Math.min(page, totalPages);
+  useEffect(() => {
+    const controller = new AbortController();
+    accountApi.list({
+      search: debouncedSearch,
+      role: roleFilter === "ALL" ? undefined : roleFilter,
+      departmentId: departmentFilter === "ALL" ? undefined : departmentFilter,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      sort,
+      page: page - 1,
+      size: pageSize,
+    }, controller.signal)
+      .then((result) => {
+        const nextPage = {
+          query: tableQuery,
+          content: result.content.map(fromApi),
+          totalElements: result.page.totalElements,
+          error: null,
+        };
+        setTablePage(nextPage);
+        setTableReady(true);
+        updateAccountPageCache(accountApi, { tablePage: nextPage });
+        // A filter change or a lock can leave the current page past the end.
+        if (page > 1 && page > result.page.totalPages) {
+          setPage(Math.max(result.page.totalPages, 1));
+        }
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          setTablePage((prev) => ({ ...prev, query: tableQuery, error: accountErrorMessage(error) }));
+        }
+      });
+    return () => controller.abort();
+  }, [accountApi, tableQuery, debouncedSearch, roleFilter, departmentFilter, statusFilter, sort, page, pageSize]);
 
-  const pageAccounts = filteredAccounts.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  useEffect(() => {
+    if (view.id === undefined) return undefined;
+    const controller = new AbortController();
+    accountApi.detail(view.id, controller.signal)
+      .then((account) => setDetails((prev) => ({ ...prev, [view.id]: fromApi(account) })))
+      .catch((error) => {
+        if (error.status === 404) setMissingIds((prev) => [...new Set([...prev, view.id])]);
+        else if (error.name !== "AbortError") toast.error(accountErrorMessage(error));
+      });
+    return () => controller.abort();
+  }, [accountApi, view.id]);
+
+  useEffect(() => {
+    if (view.name !== "detail" || view.id === undefined) return undefined;
+    const controller = new AbortController();
+    Promise.all([
+      accountApi.activities(view.id, 10, controller.signal),
+      accountApi.workInProgress(view.id, controller.signal),
+    ])
+      .then(([items, work]) => {
+        setActivities(items.map((item) => ({
+          ...item,
+          time: item.occurredAt,
+          title: item.type,
+          detail: item.ipAddress || item.outcome,
+        })));
+        setWorkInProgress(work);
+      })
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
+    return () => controller.abort();
+  }, [accountApi, view.id, view.name, reloadKey]);
+
+  // UC-6: Change History is paginated; another account or a completed action starts again at page 0.
+  const requestedHistoryPage = historyPage.accountId === view.id ? historyPage.page : 0;
+  useEffect(() => {
+    if (view.name !== "detail" || view.id === undefined) return undefined;
+    const controller = new AbortController();
+    accountApi.changeHistory(view.id, requestedHistoryPage, 10, controller.signal)
+      .then((history) => {
+        setChangeHistory(history.content);
+        setHistoryPage({
+          accountId: view.id,
+          page: history.page?.number ?? requestedHistoryPage,
+          totalPages: history.page?.totalPages ?? 1,
+        });
+      })
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
+    return () => controller.abort();
+  }, [accountApi, view.id, view.name, requestedHistoryPage, reloadKey]);
+
+  const reloadAccounts = () => {
+    setHistoryPage((prev) => ({ ...prev, page: 0 }));
+    setReloadKey((key) => key + 1);
+  };
+
+  useEffect(() => {
+    if (view.name !== "profile") return undefined;
+    const controller = new AbortController();
+    accountApi.profile(controller.signal).then((value) => setProfile(fromApi(value)))
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
+    return () => controller.abort();
+  }, [accountApi, view.name]);
 
   const stats = useMemo(() => {
     const total = accounts.length;
@@ -149,41 +300,10 @@ export function AccountManagementPage({
   const resetFilters = () => {
     setSearchQuery("");
     setRoleFilter("ALL");
+    setDepartmentFilter("ALL");
     setStatusFilter("ALL");
+    setSort("createdAt,desc");
     setPage(1);
-  };
-
-  const logActivity = (type, title, account) => {
-    setActivities((prev) => [
-      {
-        id: `${Date.now()}-${prev.length}`,
-        type,
-        title,
-        detail: `${account.fullName} (${account.username})`,
-        time: "Vừa xong",
-      },
-      ...prev,
-    ]);
-  };
-
-  const toggleSelectAll = () => {
-    const ids = pageAccounts.map((a) => a.id);
-    const allSelected =
-      ids.length > 0 && ids.every((id) => selectedIds.includes(id));
-
-    setSelectedIds((prev) =>
-      allSelected
-        ? prev.filter((id) => !ids.includes(id))
-        : [...new Set([...prev, ...ids])],
-    );
-  };
-
-  const toggleSelectOne = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((item) => item !== id)
-        : [...prev, id],
-    );
   };
 
   // A directly opened URL has no previous page in the app.
@@ -200,60 +320,45 @@ export function AccountManagementPage({
 
   const openDetail = (id) =>
     navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }));
-
+  const openAssignRole = (id) =>
+    navigate(generatePath(ADMIN.ACCOUNT_ASSIGN_ROLE, { id }));
+  const openResetPassword = (id) =>
+    navigate(generatePath(ADMIN.ACCOUNT_RESET_PASSWORD, { id }));
   // After creating an account, replace the form with its detail page.
   const replaceWithDetail = (id) =>
     navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }), {
       replace: true,
     });
 
-  const updateAccount = (id, changes) =>
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, ...changes, updatedAt: new Date().toISOString() }
-          : a,
-      ),
-    );
-
   // UC-7: the account starts ACTIVE and must change its one-time password.
-  const createAccount = (form) => {
-    const now = new Date().toISOString();
-
-    const account = {
-      id: `new-${Date.now()}`,
+  const createAccount = async (form) => {
+    const created = await accountApi.create({
       username: form.username.trim().toLowerCase(),
       role: form.role,
-      ...formToAccountFields(form),
-      status: "ACTIVE",
-      passwordChangeRequired: true,
-      failedLoginCount: 0,
-      lastLoginAt: null,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: currentAdmin?.fullName,
-    };
-
-    setAccounts((prev) => [account, ...prev]);
-    logActivity("CREATED", "Tạo tài khoản mới", account);
+      ...accountRequest(form),
+      passwordMode: "GENERATE",
+      initialPassword: null,
+      submissionId: crypto.randomUUID(),
+    });
+    const account = fromApi(await accountApi.detail(created.accountId));
+    setDetails((prev) => ({ ...prev, [account.id]: account }));
     setPage(1);
+    reloadAccounts();
 
     return {
       account,
-      temporaryPassword: generateTemporaryPassword(),
+      temporaryPassword: created.temporaryPassword,
     };
   };
 
   // UC-8: update the personal information fields.
-  const saveAccount = (account, form) => {
-    const changes = formToAccountFields(form);
-
-    updateAccount(account.id, changes);
-    logActivity("UPDATED", "Cập nhật thông tin", {
-      ...account,
-      ...changes,
-    });
-
+  const saveAccount = async (account, form) => {
+    const updated = fromApi(await accountApi.update(account.id, {
+      ...accountRequest(form),
+      version: account.version,
+    }));
+    setDetails((prev) => ({ ...prev, [account.id]: updated }));
+    reloadAccounts();
     goBack();
   };
 
@@ -263,25 +368,35 @@ export function AccountManagementPage({
   const [lockReasonInput, setLockReasonInput] = useState("");
 
   const requestConfirm = (options) => {
-    if (typeof window !== "undefined" && window.confirm?.mock) {
-      const ok = window.confirm(options.description || options.title);
-      if (ok) options.onConfirm?.();
-      return;
-    }
-
     setConfirmDialog(options);
   };
 
   // UC-9: change an account role and remove any previous room assignment.
-  const assignRole = (account, role) => {
+  const assignRole = async (account, role) => {
     const hadRoom =
       account.role === "DOCTOR" || account.role === "TECHNICIAN";
     const needsRoom = role === "DOCTOR" || role === "TECHNICIAN";
 
+    let check;
+    try {
+      check = await accountApi.checkRoleChange(account.id, {
+        newRole: role,
+        expectedRole: account.role,
+      });
+    } catch (error) {
+      toast.error(accountErrorMessage(error));
+      return;
+    }
+
+    if (check.visitsInProgress + check.ordersInProgress > 0) {
+      toast.error(`Không thể đổi vai trò: còn ${check.visitsInProgress} lượt khám và ${check.ordersInProgress} chỉ định đang xử lý.`);
+      return;
+    }
+
     const lines = [
       `Đổi vai trò của ${account.username}: ${ROLE_LABELS[account.role]} → ${ROLE_LABELS[role]}?`,
-      hadRoom && account.roomCode
-        ? `Phân công phòng ${account.roomCode} sẽ bị gỡ.`
+      hadRoom && account.roomName
+        ? `Phân công phòng ${account.roomName} sẽ bị gỡ.`
         : null,
       "Mọi phiên đăng nhập của tài khoản sẽ bị đăng xuất.",
     ];
@@ -291,13 +406,14 @@ export function AccountManagementPage({
       description: lines.filter(Boolean).join("\n"),
       confirmText: "Đổi vai trò",
       variant: "mint",
-      onConfirm: () => {
-        updateAccount(account.id, {
-          role,
-          roomCode: undefined,
-        });
-
-        logActivity("UPDATED", "Đổi vai trò", account);
+      onConfirm: async () => {
+        try {
+          const updated = fromApi(await accountApi.changeRole(account.id, {
+            newRole: role,
+            expectedRole: account.role,
+          }));
+          setDetails((prev) => ({ ...prev, [account.id]: updated }));
+          reloadAccounts();
 
         toast.success(
           `Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`,
@@ -306,19 +422,19 @@ export function AccountManagementPage({
         if (needsRoom) {
           const roomMsg = `Hãy phân công phòng làm việc cho ${account.username} ở chức năng Khoa / Phòng.`;
 
-          if (typeof window !== "undefined" && window.alert?.mock) {
-            window.alert(roomMsg);
-          } else {
-            toast.info(roomMsg, { duration: 5000 });
-          }
+          toast.info(roomMsg, { duration: 5000 });
         }
 
-        setConfirmDialog(null);
+          setConfirmDialog(null);
+          openDetail(account.id);
+        } catch (error) {
+          toast.error(accountErrorMessage(error));
+        }
       },
     });
   };
 
-  const toggleLock = (account) => {
+  const toggleLock = async (account) => {
     if (account.role === "ADMIN") {
       toast.error(
         "Không thể khóa hoặc thao tác trạng thái tài khoản Quản trị viên",
@@ -329,24 +445,6 @@ export function AccountManagementPage({
     const locking = account.status === "ACTIVE";
 
     if (locking) {
-      if (typeof window !== "undefined" && window.prompt?.mock) {
-        const reason = window
-          .prompt(`Nhập lý do khóa tài khoản ${account.username}:`)
-          ?.trim();
-
-        if (!reason) return;
-
-        updateAccount(account.id, {
-          status: "LOCKED",
-          lockedAt: new Date().toISOString(),
-          lockedBy: currentAdmin?.fullName,
-          lockReason: reason.slice(0, 500),
-        });
-
-        logActivity("LOCKED", "Khóa tài khoản", account);
-        return;
-      }
-
       setLockReasonInput("");
       setLockPrompt(account);
       return;
@@ -357,24 +455,24 @@ export function AccountManagementPage({
       description: `Mở khóa tài khoản ${account.username}?`,
       confirmText: "Mở khóa",
       variant: "mint",
-      onConfirm: () => {
-        updateAccount(account.id, {
-          status: "ACTIVE",
-          lockedAt: undefined,
-          lockedBy: undefined,
-          lockReason: undefined,
-          failedLoginCount: 0,
-          loginBlockedUntil: undefined,
-        });
-
-        logActivity("UNLOCKED", "Mở khóa tài khoản", account);
-        toast.success(`Đã mở khóa tài khoản ${account.username}`);
-        setConfirmDialog(null);
+      onConfirm: async () => {
+        try {
+          const updated = fromApi(await accountApi.unlock(account.id, {
+            expectedStatus: account.status,
+            expectedVersion: account.version,
+          }));
+          setDetails((prev) => ({ ...prev, [account.id]: updated }));
+          reloadAccounts();
+          toast.success(`Đã mở khóa tài khoản ${account.username}`);
+          setConfirmDialog(null);
+        } catch (error) {
+          toast.error(accountErrorMessage(error));
+        }
       },
     });
   };
 
-  const confirmLockAccount = () => {
+  const confirmLockAccount = async () => {
     if (!lockPrompt) return;
 
     const trimmed = lockReasonInput.trim();
@@ -386,78 +484,37 @@ export function AccountManagementPage({
 
     const account = lockPrompt;
 
-    updateAccount(account.id, {
-      status: "LOCKED",
-      lockedAt: new Date().toISOString(),
-      lockedBy: currentAdmin?.fullName,
-      lockReason: trimmed.slice(0, 500),
-    });
-
-    logActivity("LOCKED", "Khóa tài khoản", account);
-    toast.success(`Đã khóa tài khoản ${account.username}`);
-    setLockPrompt(null);
-    setLockReasonInput("");
+    try {
+      const updated = fromApi(await accountApi.lock(account.id, {
+        reason: trimmed.slice(0, 500),
+        expectedStatus: account.status,
+        expectedVersion: account.version,
+      }));
+      setDetails((prev) => ({ ...prev, [account.id]: updated }));
+      reloadAccounts();
+      toast.success(`Đã khóa tài khoản ${account.username}`);
+      setLockPrompt(null);
+      setLockReasonInput("");
+    } catch (error) {
+      toast.error(accountErrorMessage(error));
+    }
   };
 
-  // UC-11: generate a new one-time password.
-  const resetPassword = (account) => {
-    requestConfirm({
-      title: "Đặt lại mật khẩu",
-      description: `Đặt lại mật khẩu cho tài khoản ${account.username}?`,
-      confirmText: "Đặt lại mật khẩu",
-      variant: "mint",
-      onConfirm: () => {
-        const temporaryPassword = generateTemporaryPassword();
-
-        updateAccount(account.id, {
-          passwordChangeRequired: true,
-          passwordChangedAt: new Date().toISOString(),
-          failedLoginCount: 0,
-          loginBlockedUntil: undefined,
-        });
-
-        logActivity("PASSWORD_RESET", "Đặt lại mật khẩu", account);
-        setConfirmDialog(null);
-
-        if (typeof window !== "undefined" && window.alert?.mock) {
-          window.alert(
-            `Mật khẩu tạm của ${account.username}: ${temporaryPassword}\nMật khẩu chỉ hiển thị một lần.`,
-          );
-        }
-
-        toast.success(
-          <div>
-            <div className="font-bold text-[#142534] mb-1">
-              Đã tạo mật khẩu tạm cho {account.username}
-            </div>
-            <div className="text-xs text-slate-500 mb-2">
-              Mật khẩu chỉ hiển thị một lần:
-            </div>
-            <div className="flex items-center gap-2 bg-[#f4f8f7] px-3 py-1.5 rounded-lg border border-[#d5e0dc]">
-              <code className="text-sm font-mono font-bold text-[#0d9488]">
-                {temporaryPassword}
-              </code>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(temporaryPassword);
-                  toast.success("Đã sao chép mật khẩu!");
-                }}
-                className="ml-auto text-xs font-semibold text-[#0d9488] hover:underline"
-              >
-                Sao chép
-              </button>
-            </div>
-          </div>,
-          { duration: 12000 },
-        );
-      },
+  const resetPassword = async (account, request) => {
+    const result = await accountApi.resetPassword(account.id, {
+      ...request,
+      expectedVersion: account.version,
     });
+    const updated = fromApi(await accountApi.detail(account.id));
+    setDetails((prev) => ({ ...prev, [account.id]: updated }));
+    reloadAccounts();
+    return result;
   };
 
-  const selected = accounts.find((a) => a.id === view.id);
+  const selected = details[view.id];
+  const accountNames = new Map(accounts.map((item) => [item.id, item.username]));
 
-  const self = accounts.find(
+  const self = profile || accounts.find(
     (a) => a.username === currentAdmin?.username,
   ) || { status: "ACTIVE", ...currentAdmin };
 
@@ -481,15 +538,17 @@ export function AccountManagementPage({
         onViewDetail={replaceWithDetail}
       />
     );
+  } else if (view.name === "profile" && !profile) {
+    subPage = <section role="status" className="bg-white rounded-2xl border border-slate-200/70 p-10 text-center text-sm text-slate-500">Đang tải hồ sơ…</section>;
   } else if (view.name === "profile") {
     subPage = (
       <ProfileView
         key={self.id}
         account={self}
         accounts={accounts}
-        onSave={(contact) => {
-          updateAccount(self.id, contact);
-          logActivity("UPDATED", "Cập nhật hồ sơ cá nhân", self);
+        onSave={async (contact) => {
+          const updated = fromApi(await accountApi.updateProfile(contact.phone, contact.email));
+          setProfile(updated);
         }}
         onCancel={goBack}
         onChangePassword={onChangePassword}
@@ -507,26 +566,50 @@ export function AccountManagementPage({
         onGoToList={showList}
         onViewDetail={() => openDetail(selected.id)}
         onToggleLock={() => toggleLock(selected)}
-        onResetPassword={() => resetPassword(selected)}
-        onAssignRole={(role) => assignRole(selected, role)}
+      />
+    );
+  } else if (selected && view.name === "assign-role" && selected.role !== "ADMIN") {
+    subPage = (
+      <AccountAssignRoleView
+        account={selected}
+        onCancel={() => openDetail(selected.id)}
+        onGoToList={showList}
+        onAssign={(role) => assignRole(selected, role)}
+      />
+    );
+  } else if (selected && view.name === "reset-password" && !isSelf(selected)) {
+    subPage = (
+      <AccountResetPasswordView
+        account={selected}
+        onCancel={() => openDetail(selected.id)}
+        onGoToList={showList}
+        onReset={(request) => resetPassword(selected, request)}
       />
     );
   } else if (selected && view.name === "detail") {
     subPage = (
       <AccountDetailView
         account={selected}
-        loginEvents={mockLoginEvents(
-          selected,
-          selected.failedLoginCount,
-        )}
+        loginEvents={activities}
+        changeHistory={changeHistory}
+        historyPage={historyPage.accountId === selected.id ? historyPage : null}
+        onHistoryPageChange={(page) => setHistoryPage({ ...historyPage, accountId: selected.id, page })}
+        accountNames={accountNames}
+        workInProgress={workInProgress}
         isSelf={isSelf(selected)}
         onBack={goBack}
         onGoToList={showList}
         onEdit={() => openEdit(selected)}
-        onAssignRole={() => openEdit(selected)}
+        onAssignRole={() => openAssignRole(selected.id)}
         onToggleLock={() => toggleLock(selected)}
-        onResetPassword={() => resetPassword(selected)}
+        onResetPassword={() => openResetPassword(selected.id)}
       />
+    );
+  } else if (view.id !== undefined && !missingIds.includes(view.id)) {
+    subPage = (
+      <section role="status" className="bg-white rounded-2xl border border-slate-200/70 p-10 text-center text-sm text-slate-500">
+        Đang tải thông tin tài khoản…
+      </section>
     );
   } else if (view.id !== undefined) {
     subPage = (
@@ -554,8 +637,13 @@ export function AccountManagementPage({
     onChangePassword,
     onOpenProfile: () => navigate(ADMIN.PROFILE),
     onNavigate: (key) => {
-      if (key === "accounts") showList();
-      else onNavigate?.(key);
+      if (key === "accounts") {
+        showList();
+      } else if (key === "departments" || key === "rooms") {
+        navigate(ADMIN.DEPARTMENTS);
+      } else if (ADMIN[key.toUpperCase()]) {
+        navigate(ADMIN[key.toUpperCase()]);
+      }
     },
     activeKey: "accounts",
   };
@@ -625,6 +713,12 @@ export function AccountManagementPage({
   return (
     <AdminLayout {...layoutProps}>
       <div className="px-6 pb-8 space-y-6">
+        {loading && tablePage.content.length > 0 && (
+          <div role="status" className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs font-semibold text-teal-700">
+            Đang cập nhật danh sách tài khoản…
+          </div>
+        )}
+        {loadError && <div role="alert" className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700">Không thể tải tài khoản: {loadError}</div>}
         {notice && (
           <div
             role="status"
@@ -719,26 +813,29 @@ export function AccountManagementPage({
               setRoleFilter={withFirstPage(setRoleFilter)}
               statusFilter={statusFilter}
               setStatusFilter={withFirstPage(setStatusFilter)}
+              departmentFilter={departmentFilter}
+              setDepartmentFilter={withFirstPage(setDepartmentFilter)}
+              departments={departments}
               onReset={resetFilters}
             />
 
             <AccountTable
-              accounts={pageAccounts}
-              totalCount={filteredAccounts.length}
-              page={currentPage}
+              accounts={tablePage.content}
+              loading={loading}
+              totalCount={tablePage.totalElements}
+              page={page}
               pageSize={pageSize}
               onPageChange={setPage}
               onPageSizeChange={(size) => {
                 setPageSize(size);
                 setPage(1);
               }}
-              selectedIds={selectedIds}
-              onToggleSelectAll={toggleSelectAll}
-              onToggleSelectOne={toggleSelectOne}
               onView={(account) => openDetail(account.id)}
               onEdit={openEdit}
               onToggleLock={toggleLock}
-              onResetPassword={resetPassword}
+              onResetPassword={(account) => openResetPassword(account.id)}
+              sort={sort}
+              onSortChange={withFirstPage(setSort)}
             />
           </section>
 

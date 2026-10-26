@@ -58,10 +58,8 @@ public class Room extends VersionedEntity {
             String roomName,
             String location,
             RoomType type,
-            ActivationStatus status
-    ) {
+            ActivationStatus status) {
         super(id, createdAt);
-
         this.departmentId = departmentId;
         this.serviceGroupId = serviceGroupId;
         this.roomCode = roomCode;
@@ -69,5 +67,25 @@ public class Room extends VersionedEntity {
         this.location = location;
         this.type = type;
         this.status = status;
+    }
+
+    public void update(
+            UUID departmentId,
+            String roomName,
+            String location,
+            RoomType type,
+            ActivationStatus status,
+            Instant now) {
+        this.departmentId = departmentId;
+        this.roomName = roomName;
+        this.location = location;
+        this.type = type;
+        this.status = status;
+        touch(now);
+    }
+
+    public void setStatus(ActivationStatus status, Instant now) {
+        this.status = status;
+        touch(now);
     }
 }

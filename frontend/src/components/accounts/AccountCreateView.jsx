@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { accountErrorMessage, accountFieldErrors, withoutField } from './accountErrors';
 import {
   UserRound,
   Briefcase,
@@ -17,7 +18,9 @@ import { AccountPersonalFields } from './AccountPersonalFields';
 import { EMPTY_ACCOUNT_FORM, validateAccountForm } from './accountForm';
 import { INPUT_CLASS, FormField, FormSection, AccountPageHeader } from './AccountFormParts';
 
-const CREATE_FIELDS = ['username', 'fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address'];
+const CREATE_FIELDS = [
+  'username', 'fullName', 'title', 'practiceLicenseNo', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
+];
 // UC-7: ADMIN is never offered (AQ-17).
 const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
 
@@ -102,21 +105,32 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
   const [form, setForm] = useState(EMPTY_ACCOUNT_FORM);
   const [touched, setTouched] = useState(false);
   const [result, setResult] = useState(null);
+  const [submitError, setSubmitError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
 
   const errors = validateAccountForm(form, { accounts, fields: CREATE_FIELDS });
-  const shownErrors = touched ? errors : {};
+  const shownErrors = { ...(touched ? errors : {}), ...serverErrors };
   const has = (field) => Boolean(errors[field]);
   const permissions = ROLE_PERMISSIONS[form.role];
 
   // Usernames are case-insensitive and stored in lowercase (AQ-05).
-  const onChange = (field, value) =>
+  const onChange = (field, value) => {
+    setServerErrors((prev) => withoutField(prev, field));
     setForm((prev) => ({ ...prev, [field]: field === 'username' ? value.toLowerCase() : value }));
+  };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0) return;
-    setResult(onCreate(form));
+    setSubmitError('');
+    setServerErrors({});
+    try {
+      setResult(await onCreate(form));
+    } catch (error) {
+      setServerErrors(accountFieldErrors(error));
+      setSubmitError(accountErrorMessage(error));
+    }
   };
 
   const header = (
@@ -212,9 +226,9 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
           <FormSection icon={ClipboardCheck} title="Kiểm tra trước khi tạo" description="Hoàn thành các mục dưới đây">
             <ul className="space-y-4">
               <ChecklistItem
-                done={!has('fullName') && !has('username') && !has('phone') && !has('email')}
+                done={!has('fullName') && !has('username') && !has('phone') && !has('title') && !has('practiceLicenseNo')}
                 title="Đã nhập thông tin bắt buộc"
-                detail="Họ tên, tên đăng nhập, số điện thoại, email"
+                detail="Họ tên, tên đăng nhập, số điện thoại; học hàm / học vị và giấy phép hành nghề với Bác sĩ, Kỹ thuật viên"
               />
               <ChecklistItem
                 done={form.username.trim() !== '' && !has('username')}
@@ -222,9 +236,9 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
                 detail="Đúng định dạng và chưa được sử dụng"
               />
               <ChecklistItem
-                done={form.email.trim() !== '' && !has('email')}
-                title="Email chưa được sử dụng"
-                detail="Không trùng với tài khoản khác, kể cả tài khoản đã khóa"
+                done={!has('email')}
+                title="Email hợp lệ (không bắt buộc)"
+                detail="Nếu nhập, không trùng với tài khoản khác, kể cả tài khoản đã khóa"
               />
               <ChecklistItem done={form.phone.trim() !== '' && !has('phone')} title="Số điện thoại hợp lệ" detail="10 chữ số, bắt đầu bằng 0" />
               <li className="flex items-start gap-3">
@@ -238,6 +252,7 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
           </FormSection>
 
           <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-2.5">
+            {submitError && <p role="alert" className="text-xs text-rose-600 text-center">{submitError}</p>}
             <button
               type="submit"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer"

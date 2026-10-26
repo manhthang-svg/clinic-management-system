@@ -57,6 +57,10 @@ export class ApiClient {
             });
         }
         catch (cause) {
+            // A cancelled request is not a network failure; callers ignore AbortError.
+            if (cause?.name === 'AbortError') {
+                throw cause;
+            }
             throw new ApiError('Unable to reach the API.', { cause });
         }
         if (!response.ok) {

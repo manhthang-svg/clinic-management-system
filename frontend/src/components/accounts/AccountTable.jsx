@@ -1,4 +1,4 @@
-import { Eye, Pencil, Lock, LockOpen, KeyRound, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Eye, Pencil, Lock, LockOpen, KeyRound, ChevronsLeft, ChevronsRight, ArrowUpDown } from 'lucide-react';
 import { ROLE_MAP, STATUS_LABELS, PAGE_SIZE_OPTIONS } from '../../constants/accountData';
 import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './accountFormat';
 
@@ -38,24 +38,39 @@ function StatusBadge({ account }) {
   );
 }
 
+function SortHeader({ field, sort, onSortChange, children, className = '' }) {
+  const [currentField, direction] = sort.split(',');
+  const active = currentField === field;
+  return (
+    <th className={`px-2 py-3 ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSortChange(`${field},${active && direction === 'asc' ? 'desc' : 'asc'}`)}
+        className="inline-flex items-center gap-1 hover:text-[#127e7a] cursor-pointer"
+      >
+        {children}<ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
+
 /** UC-5 account list with row actions for UC-6, UC-8, UC-10, and UC-11. */
 export function AccountTable({
   accounts,
+  loading = false,
   totalCount,
   page,
   pageSize,
   onPageChange,
   onPageSizeChange,
-  selectedIds = [],
-  onToggleSelectAll,
-  onToggleSelectOne,
   onView,
   onEdit,
   onToggleLock,
   onResetPassword,
+  sort,
+  onSortChange,
 }) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const isAllSelected = accounts.length > 0 && accounts.every((a) => selectedIds.includes(a.id));
   const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalCount);
 
@@ -65,26 +80,26 @@ export function AccountTable({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#f6f8f9] text-[11px] font-semibold text-[#1b2533]">
-              <th className="pl-3 pr-1 py-3 w-8">
-                <input
-                  type="checkbox"
-                  aria-label="Chọn tất cả"
-                  checked={isAllSelected}
-                  onChange={onToggleSelectAll}
-                  className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-[#127e7a]"
-                />
-              </th>
-              <th className="px-2 py-3">Tên đăng nhập</th>
-              <th className="px-2 py-3">Họ và tên</th>
-              <th className="px-2 py-3">Vai trò</th>
+              <SortHeader field="username" sort={sort} onSortChange={onSortChange} className="pl-4">Tên đăng nhập</SortHeader>
+              <SortHeader field="fullName" sort={sort} onSortChange={onSortChange}>Họ và tên</SortHeader>
+              <SortHeader field="role" sort={sort} onSortChange={onSortChange}>Vai trò</SortHeader>
+              <th className="px-2 py-3">Khoa / Phòng</th>
               <th className="px-2 py-3">Liên hệ</th>
-              <th className="px-2 py-3">Trạng thái</th>
-              <th className="px-2 py-3">Đăng nhập cuối</th>
+              <SortHeader field="status" sort={sort} onSortChange={onSortChange}>Trạng thái</SortHeader>
+              <SortHeader field="lastLoginAt" sort={sort} onSortChange={onSortChange}>Đăng nhập cuối</SortHeader>
               <th className="px-2 py-3">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
-            {accounts.length === 0 ? (
+            {loading && accounts.length === 0 ? (
+              Array.from({ length: 6 }, (_, index) => (
+                <tr key={`account-skeleton-${index}`} aria-hidden="true">
+                  <td colSpan="8" className="px-4 py-3.5">
+                    <div className="h-7 animate-pulse rounded-lg bg-slate-100" />
+                  </td>
+                </tr>
+              ))
+            ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan="8" className="p-10 text-center text-slate-400">
                   Không tìm thấy tài khoản nào phù hợp với điều kiện lọc.
@@ -92,21 +107,11 @@ export function AccountTable({
               </tr>
             ) : (
               accounts.map((account) => {
-                const isSelected = selectedIds.includes(account.id);
                 const role = ROLE_MAP[account.role];
                 const locked = account.status === 'LOCKED';
                 return (
-                  <tr key={account.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-teal-50/40' : ''}`}>
-                    <td className="pl-3 pr-1 py-3">
-                      <input
-                        type="checkbox"
-                        aria-label={`Chọn ${account.username}`}
-                        checked={isSelected}
-                        onChange={() => onToggleSelectOne(account.id)}
-                        className="w-4 h-4 rounded border-slate-300 cursor-pointer accent-[#127e7a]"
-                      />
-                    </td>
-                    <td className="px-2 py-3 font-medium text-slate-700 whitespace-nowrap">{account.username}</td>
+                  <tr key={account.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="pl-4 pr-2 py-3 font-medium text-slate-700 whitespace-nowrap">{account.username}</td>
                     <td className="px-2 py-3">
                       <div className="flex items-center gap-2">
                         <div
@@ -120,6 +125,10 @@ export function AccountTable({
                           {account.fullName}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-2 py-3 text-slate-500 max-w-[150px]">
+                      <div className="truncate" title={account.departmentName || ''}>{account.departmentName || '—'}</div>
+                      <div className="truncate text-[10px] text-slate-400" title={account.roomName || ''}>{account.roomName || 'Chưa phân phòng'}</div>
                     </td>
                     <td className="px-2 py-3">
                       <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap ${role?.color}`}>
@@ -143,7 +152,7 @@ export function AccountTable({
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex items-center gap-0.5">
-                        <button
+                        {account.role !== 'ADMIN' && <button
                           type="button"
                           title="Xem chi tiết"
                           aria-label={`Xem chi tiết ${account.username}`}
@@ -151,8 +160,8 @@ export function AccountTable({
                           className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
+                        </button>}
+                        {account.role !== 'ADMIN' && <button
                           type="button"
                           title="Cập nhật thông tin"
                           aria-label={`Cập nhật ${account.username}`}
@@ -160,7 +169,7 @@ export function AccountTable({
                           className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
                         >
                           <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        </button>}
                         {account.role !== 'ADMIN' && (
                           <button
                             type="button"

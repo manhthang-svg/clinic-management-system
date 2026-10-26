@@ -1,6 +1,9 @@
 
 package clinic.backend.entity;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import clinic.backend.enums.DepartmentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,4 +38,38 @@ public class Department extends VersionedEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    public Department(
+            UUID id,
+            String departmentCode,
+            String departmentName,
+            DepartmentType type,
+            String description,
+            boolean active,
+            Instant now) {
+        super(id, now);
+        this.departmentCode = departmentCode;
+        this.departmentName = departmentName;
+        this.type = type;
+        this.description = description;
+        this.active = active;
+    }
+
+    public void update(
+            String departmentName,
+            DepartmentType type,
+            String description,
+            boolean active,
+            Instant now) {
+        this.departmentName = departmentName;
+        this.type = type;
+        this.description = description;
+        this.active = active;
+        touch(now);
+    }
+
+    public void setActive(boolean active, Instant now) {
+        this.active = active;
+        touch(now);
+    }
 }
