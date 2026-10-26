@@ -92,15 +92,14 @@ export function RoomTable({
               <th className="px-3 py-3.5">Chuyên khoa</th>
               <th className="px-3 py-3.5">Loại phòng</th>
               <th className="px-3 py-3.5">Vị trí</th>
-              <th className="px-3 py-3.5">Bác sĩ / KTV phụ trách</th>
               <th className="px-3 py-3.5">Trạng thái</th>
-              <th className="px-4 py-3.5 text-right">Thao tác</th>
+              <th className="px-4 py-3.5 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {items.length === 0 ? (
               <tr>
-                <td colSpan="8" className="p-10 text-center text-slate-400">
+                <td colSpan="7" className="p-10 text-center text-slate-400">
                   Không tìm thấy phòng khám nào phù hợp với điều kiện lọc.
                 </td>
               </tr>
@@ -151,22 +150,14 @@ export function RoomTable({
                       </div>
                     </td>
 
-                    {/* Bác sĩ/KTV phụ trách */}
-                    <td className="px-3 py-3 text-slate-700 font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{room.headPerson || 'Chưa phân công'}</span>
-                      </div>
-                    </td>
-
                     {/* Trạng thái */}
                     <td className="px-3 py-3 whitespace-nowrap">
                       {getStatusBadge(room.status)}
                     </td>
 
                     {/* Thao tác */}
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
                           title="Xem chi tiết"

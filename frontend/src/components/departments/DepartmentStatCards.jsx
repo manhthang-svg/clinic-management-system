@@ -4,6 +4,8 @@ export function DepartmentStatCards({ stats }) {
   const {
     totalDepartments = 0,
     totalRooms = 0,
+    clinicalRooms = 0,
+    paraclinicalRooms = 0,
     activeRooms = 0,
     maintenanceRooms = 0,
     activeRate,
@@ -40,8 +42,16 @@ export function DepartmentStatCards({ stats }) {
       id: 'rooms',
       title: 'Tổng số phòng',
       value: totalRooms,
-      badge: 'Phòng tiếp nhận',
-      badgeClass: 'bg-teal-50 text-[#0d9488] border border-teal-100/80',
+      badges: [
+        {
+          label: `Lâm sàng: ${clinicalRooms}`,
+          badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200/70',
+        },
+        {
+          label: `Cận lâm sàng: ${paraclinicalRooms}`,
+          badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200/70',
+        },
+      ],
       note: 'Khám bệnh, CLS & Nghiệp vụ',
       icon: DoorOpen,
       iconClass: 'bg-teal-50 text-[#0d9488]',
@@ -92,15 +102,26 @@ export function DepartmentStatCards({ stats }) {
               <div className="text-xs font-semibold text-slate-500 tracking-wide">
                 {card.title}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-2xl font-extrabold text-[#142534] tracking-tight">
+              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                <span className="text-2xl font-extrabold text-[#142534] tracking-tight mr-1">
                   {card.value}
                 </span>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${card.badgeClass}`}
-                >
-                  {card.badge}
-                </span>
+                {card.badges ? (
+                  card.badges.map((b, idx) => (
+                    <span
+                      key={idx}
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10.5px] font-semibold whitespace-nowrap ${b.badgeClass}`}
+                    >
+                      {b.label}
+                    </span>
+                  ))
+                ) : (
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${card.badgeClass}`}
+                  >
+                    {card.badge}
+                  </span>
+                )}
               </div>
               <div
                 className="text-[11px] text-slate-400 mt-1 truncate"

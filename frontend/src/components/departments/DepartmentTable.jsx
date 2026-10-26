@@ -42,7 +42,7 @@ export function DepartmentTable({
               <th className="px-3 py-3.5">Vị trí / Khu vực</th>
               <th className="px-3 py-3.5">Phòng trực thuộc</th>
               <th className="px-3 py-3.5">Trạng thái</th>
-              <th className="px-4 py-3.5 text-right">Thao tác</th>
+              <th className="px-4 py-3.5 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
@@ -123,8 +123,8 @@ export function DepartmentTable({
                     </td>
 
                     {/* Thao tác */}
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
                           title="Xem chi tiết"
