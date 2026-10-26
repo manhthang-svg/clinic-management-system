@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,10 @@ describe('AccountManagementPage backend integration surface', () => {
   it('loads detail, recent activity, change history and work in progress', async () => {
     const api = accountApi({
       changeHistory: vi.fn().mockResolvedValue({
-        content: [{ id: 'history-1', action: 'UPDATE', occurredAt: '2026-10-20T08:00:00Z', changedFields: ['email'] }],
+        content: [{
+          id: 'history-1', action: 'UPDATE', occurredAt: '2026-10-20T08:00:00Z', actorAccountId: null,
+          changedFields: ['email'], oldValue: '{"email":"old@clinic.test"}', newValue: '{"email":"an@clinic.test"}',
+        }],
         page: { number: 0, size: 10, totalElements: 1, totalPages: 1 },
       }),
       workInProgress: vi.fn().mockResolvedValue({ visitsInProgress: 1, ordersInProgress: 2 }),
@@ -67,7 +70,9 @@ describe('AccountManagementPage backend integration surface', () => {
 
     expect(await screen.findByRole('heading', { name: 'Chi tiết tài khoản' })).toBeInTheDocument();
     expect(await screen.findByText('Lịch sử thay đổi tài khoản')).toBeInTheDocument();
-    expect(screen.getByText('Trường thay đổi: email')).toBeInTheDocument();
+    expect(screen.getByText('Cập nhật thông tin')).toBeInTheDocument();
+    expect(screen.getByText('old@clinic.test')).toBeInTheDocument();
+    expect(screen.getByText('Người thực hiện: Hệ thống')).toBeInTheDocument();
     expect(api.activities).toHaveBeenCalledWith('acc-1', 10, expect.any(AbortSignal));
     expect(api.changeHistory).toHaveBeenCalledWith('acc-1', 0, 10, expect.any(AbortSignal));
     expect(api.workInProgress).toHaveBeenCalledWith('acc-1', expect.any(AbortSignal));
@@ -79,6 +84,10 @@ describe('AccountManagementPage backend integration surface', () => {
     renderPage('/admin/accounts/acc-1/reset-password', api);
 
     await user.click(await screen.findByRole('button', { name: 'Đặt lại mật khẩu' }));
+    expect(api.resetPassword).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Nguyễn An \(bs\.an\)/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Đặt lại mật khẩu' }));
     await waitFor(() => expect(api.resetPassword).toHaveBeenCalledWith('acc-1', {
       mode: 'GENERATE', password: null, expectedVersion: 2,
     }));

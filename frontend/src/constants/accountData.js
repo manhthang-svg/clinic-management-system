@@ -62,4 +62,27 @@ export const LOGIN_EVENT_LABELS = {
   LOGIN_SUCCEEDED: 'Đăng nhập thành công',
   LOGOUT: 'Đăng xuất',
   LOGIN_FAILED: 'Đăng nhập thất bại',
+  LOGIN_THROTTLED: 'Tạm chặn đăng nhập do sai mật khẩu nhiều lần',
+};
+
+/** Account change-history actions (backend AuditLogAction) shown in UC-6. */
+export const CHANGE_ACTION_LABELS = {
+  CREATE: 'Tạo tài khoản',
+  UPDATE: 'Cập nhật thông tin',
+  LOCK: 'Khóa tài khoản',
+  UNLOCK: 'Mở khóa tài khoản',
+};
+
+/** Field names recorded in account change history. */
+export const CHANGE_FIELD_LABELS = {
+  fullName: 'Họ và tên',
+  academicTitle: 'Học hàm / học vị',
+  dateOfBirth: 'Ngày sinh',
+  gender: 'Giới tính',
+  phoneNumber: 'Số điện thoại',
+  email: 'Email',
+  address: 'Địa chỉ',
+  role: 'Vai trò',
+  status: 'Trạng thái',
+  lockReason: 'Lý do khóa',
 };

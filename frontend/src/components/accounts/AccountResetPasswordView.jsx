@@ -1,8 +1,17 @@
 import { useState } from 'react';
 import { CheckCircle2, Clipboard, KeyRound, Printer } from 'lucide-react';
 import { AccountPageHeader, FormField, INPUT_CLASS } from './AccountFormParts';
+import { ConfirmModal } from '../ui';
+import { accountErrorMessage } from './accountErrors';
 
-const PASSWORD_PATTERN = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,64}$/;
+// Same policy as the backend (StaffAccount.checkPasswordPolicy): 8–64 characters, at most 72 UTF-8 bytes.
+function passwordPolicyError(password) {
+  const length = [...password].length;
+  if (length < 8 || length > 64 || new TextEncoder().encode(password).length > 72) {
+    return 'Mật khẩu phải dài 8–64 ký tự và không quá 72 byte.';
+  }
+  return null;
+}
 
 /** UC-11 supports both password modes exposed by ResetAccountPasswordRequest. */
 export function AccountResetPasswordView({ account, onCancel, onGoToList, onReset }) {
@@ -12,24 +21,32 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [confirming, setConfirming] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
     setError('');
-    if (mode === 'MANUAL' && !PASSWORD_PATTERN.test(password)) {
-      setError('Mật khẩu phải dài 8–64 ký tự và có chữ hoa, chữ thường, số, ký tự đặc biệt.');
+    const policyError = mode === 'MANUAL' ? passwordPolicyError(password) : null;
+    if (policyError) {
+      setError(policyError);
       return;
     }
     if (mode === 'MANUAL' && password !== confirmPassword) {
       setError('Mật khẩu xác nhận không khớp.');
       return;
     }
+    // UC-11 step 2: confirm (MSG06) with the target's full name and username before resetting.
+    setConfirming(true);
+  };
+
+  const reset = async () => {
+    setConfirming(false);
     setSubmitting(true);
     try {
       const response = await onReset({ mode, password: mode === 'MANUAL' ? password : null });
       setTemporaryPassword(response.temporaryPassword);
     } catch (requestError) {
-      setError(requestError.message);
+      setError(accountErrorMessage(requestError));
     } finally {
       setSubmitting(false);
     }
@@ -87,6 +104,15 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
           </div>
         </form>
       )}
+      <ConfirmModal
+        isOpen={confirming}
+        title="Xác nhận đặt lại mật khẩu"
+        description={`Bạn có chắc muốn đặt lại mật khẩu cho ${account.fullName} (${account.username})? Mật khẩu cũ sẽ hết hiệu lực và mọi phiên đăng nhập của tài khoản sẽ bị đăng xuất.`}
+        confirmText="Đặt lại mật khẩu"
+        variant="destructive"
+        onConfirm={reset}
+        onClose={() => setConfirming(false)}
+      />
     </div>
   );
 }
