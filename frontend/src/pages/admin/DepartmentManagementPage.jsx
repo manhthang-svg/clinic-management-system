@@ -100,6 +100,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const currentStats = useMemo(() => {
     const totalDepts = departmentsList.length;
     const totalRooms = allRoomsList.length;
+    const clinicalRooms = allRoomsList.filter(
+      (i) => i.type === 'EXAMINATION' || i.code?.startsWith('PK-')
+    ).length;
+    const paraclinicalRooms = totalRooms - clinicalRooms;
     const activeRooms = allRoomsList.filter((i) => i.status === 'ACTIVE').length;
     const maintenanceRooms = totalRooms - activeRooms;
     const activeRate = totalRooms > 0 ? Number(((activeRooms / totalRooms) * 100).toFixed(1)) : 0;
@@ -110,6 +114,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     return {
       totalDepartments: totalDepts,
       totalRooms: totalRooms,
+      clinicalRooms: clinicalRooms,
+      paraclinicalRooms: paraclinicalRooms,
       activeRooms: activeRooms,
       maintenanceRooms: maintenanceRooms,
       activeRate: activeRate,
@@ -357,6 +363,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             roomName: formData.name,
             phongkham: formData.name,
             departmentId: formData.departmentId,
+            serviceGroupId: formData.serviceGroupId || undefined,
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -374,6 +381,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     location: formData.location,
                     headPerson: formData.headPerson,
                     status: formData.status,
+                    operatingHours: formData.operatingHours,
+                    capacity: formData.capacity,
+                    deviceSetup: formData.deviceSetup,
+                    serviceGroupId: formData.serviceGroupId,
                   }
                 : i
             )
@@ -386,6 +397,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             maphongkham: formData.code,
             phongkham: formData.name,
             departmentId: formData.departmentId,
+            serviceGroupId: formData.serviceGroupId || undefined,
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -402,6 +414,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             location: formData.location,
             headPerson: formData.headPerson || 'Chưa phân công',
             status: formData.status,
+            operatingHours: formData.operatingHours,
+            capacity: formData.capacity,
+            deviceSetup: formData.deviceSetup,
+            serviceGroupId: formData.serviceGroupId,
           };
           setItems((prev) => [newRoom, ...prev]);
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
@@ -460,6 +476,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     location: formData.location,
                     headPerson: formData.headPerson,
                     status: formData.status,
+                    operatingHours: formData.operatingHours,
+                    capacity: formData.capacity,
+                    deviceSetup: formData.deviceSetup,
+                    serviceGroupId: formData.serviceGroupId,
                   }
                 : i
             )
@@ -477,6 +497,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             location: formData.location,
             headPerson: formData.headPerson || 'Chưa phân công',
             status: formData.status,
+            operatingHours: formData.operatingHours,
+            capacity: formData.capacity,
+            deviceSetup: formData.deviceSetup,
+            serviceGroupId: formData.serviceGroupId,
           };
           setItems((prev) => [newRoom, ...prev]);
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);

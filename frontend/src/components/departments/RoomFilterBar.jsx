@@ -68,7 +68,6 @@ export function RoomFilterBar({
             <option value="ALL">Tất cả loại phòng</option>
             <option value="EXAMINATION">Phòng khám lâm sàng</option>
             <option value="PARACLINICAL">Phòng cận lâm sàng</option>
-            <option value="ADMINISTRATIVE">Phòng thu ngân/Lễ tân</option>
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
