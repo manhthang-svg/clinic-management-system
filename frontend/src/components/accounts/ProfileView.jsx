@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { accountErrorMessage, accountFieldErrors, withoutField } from './accountErrors';
 import { Mail, Phone, AtSign, UserRound, Briefcase, ShieldCheck, KeyRound, Save, Info } from 'lucide-react';
 import { ROLE_MAP, STATUS_LABELS } from '../../constants/accountData';
 import { AccountPersonalFields } from './AccountPersonalFields';
@@ -24,6 +25,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
   const [touched, setTouched] = useState(false);
   const [saved, setSaved] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
 
   const errors = validateAccountForm(form, { accounts, exceptId: account.id, fields: PROFILE_FIELDS });
   const dirty = PROFILE_FIELDS.some((f) => form[f] !== initialForm[f]);
@@ -35,6 +37,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
 
   const onChange = (field, value) => {
     setSaved(false);
+    setServerErrors((prev) => withoutField(prev, field));
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -48,7 +51,8 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
       setTouched(false);
       setSaved(true);
     } catch (error) {
-      setSubmitError(error.message);
+      setServerErrors(accountFieldErrors(error));
+      setSubmitError(accountErrorMessage(error));
     }
   };
 
@@ -92,7 +96,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <FormSection icon={UserRound} title="Thông tin cá nhân" description="Bạn chỉ được sửa số điện thoại và email.">
-          <AccountPersonalFields form={form} errors={touched ? errors : {}} onChange={onChange} editable={PROFILE_FIELDS} />
+          <AccountPersonalFields form={form} errors={{ ...(touched ? errors : {}), ...serverErrors }} onChange={onChange} editable={PROFILE_FIELDS} />
           <p className="flex items-start gap-2 mt-4 text-xs text-slate-500">
             <Info className="w-4 h-4 shrink-0 text-[#127e7a]" />
             Cần sửa họ tên, ngày sinh, giới tính hoặc địa chỉ? Hãy liên hệ quản trị viên.
@@ -104,6 +108,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
               <ReadOnly id="profile-role" label="Vai trò" value={role?.label || account.role} />
               <ReadOnly id="profile-status" label="Trạng thái" value={STATUS_LABELS[account.status]} />
+              <ReadOnly id="profile-practice-license" label="Số giấy phép hành nghề" value={account.practiceLicenseNo || '—'} />
               {hasRoom && (
                 <>
                   <ReadOnly id="profile-department" label="Khoa" value={room?.department || 'Chưa được phân công'} />

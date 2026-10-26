@@ -1,4 +1,4 @@
-import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users } from 'lucide-react';
+import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users, BadgeCheck } from 'lucide-react';
 import { GENDER_LABELS } from '../../constants/accountData';
 import { FormField, INPUT_CLASS } from './AccountFormParts';
 
@@ -31,10 +31,10 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
           label="Tên đăng nhập"
           required={canEdit('username')}
           error={errors.username}
-          hint={canEdit('username') ? '3–50 ký tự: a–z, 0–9, dấu . _ -. Không đổi được sau khi tạo.' : null}
+          hint={canEdit('username') ? '4–30 ký tự: a–z, 0–9, dấu chấm và gạch dưới. Không đổi được sau khi tạo.' : null}
           icon={AtSign}
         >
-          <input type="text" placeholder="vd: bs.nguyenvana" maxLength={50} autoComplete="off" className={WITH_ICON} {...props('username')} />
+          <input type="text" placeholder="vd: bs.nguyenvana" maxLength={30} autoComplete="off" className={WITH_ICON} {...props('username')} />
         </FormField>
       )}
 
@@ -55,12 +55,23 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
         <input type="tel" inputMode="numeric" placeholder="09xxxxxxxx" maxLength={10} className={WITH_ICON} {...props('phone')} />
       </FormField>
 
-      <FormField id="account-email" label="Email" required={canEdit('email')} error={errors.email} icon={Mail}>
+      <FormField id="account-email" label="Email" error={errors.email} icon={Mail}>
         <input type="email" placeholder="ten@clinic.example" maxLength={100} className={WITH_ICON} {...props('email')} />
       </FormField>
 
       <FormField id="account-title" label="Học hàm / học vị" error={errors.title} hint={canEdit('title') ? 'Không bắt buộc, vd: BSCKI, ThS.BS' : null} icon={GraduationCap}>
         <input type="text" placeholder="vd: ThS.BS" maxLength={50} className={WITH_ICON} {...props('title')} />
+      </FormField>
+
+      <FormField
+        id="account-practiceLicenseNo"
+        label="Số giấy phép hành nghề"
+        required={canEdit('practiceLicenseNo') && (form.role === 'DOCTOR' || form.role === 'TECHNICIAN')}
+        error={errors.practiceLicenseNo}
+        hint={canEdit('practiceLicenseNo') ? 'Bắt buộc đối với Bác sĩ và Kỹ thuật viên.' : null}
+        icon={BadgeCheck}
+      >
+        <input type="text" placeholder="vd: 000123/HCM-CCHN" maxLength={255} className={WITH_ICON} {...props('practiceLicenseNo')} />
       </FormField>
 
       <FormField

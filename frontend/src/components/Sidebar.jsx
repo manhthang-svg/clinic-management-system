@@ -15,7 +15,6 @@ import {
   Settings,
   Plus,
 } from 'lucide-react';
-import { useAuth } from '../hooks';
 
 const ICONS = {
   LayoutDashboard,
@@ -165,10 +164,9 @@ const ACTIVE_CLASS =
 const IDLE_CLASS =
   'text-slate-500 hover:bg-white hover:text-slate-800';
 
-export function Sidebar() {
+export function Sidebar({ user }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [openGroups] = useState([]);
 
   const rawRole = user?.role?.toUpperCase();
