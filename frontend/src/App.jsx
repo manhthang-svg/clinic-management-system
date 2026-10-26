@@ -9,6 +9,7 @@ import { ProfileView } from './components/accounts';
 import { apiClient, sessionManager as defaultSessionManager } from './services/session';
 import { useSession } from './hooks/useSession';
 import { ROLE_LABELS } from './constants/accountData';
+import { accountErrorMessage } from './components/accounts/accountErrors';
 import { AdminLayout } from './layouts';
 import AppRoutes from './routes/AppRoutes';
 
@@ -45,9 +46,7 @@ export function App({
     account.profile(controller.signal)
       .then(setProfile)
       .catch((error) => {
-        if (error.name !== 'AbortError') {
-          setProfileError(error.message);
-        }
+        if (error.name !== 'AbortError') setProfileError(accountErrorMessage(error));
       });
 
     return () => controller.abort();

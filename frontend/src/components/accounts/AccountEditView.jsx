@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { accountErrorMessage, accountFieldErrors, withoutField } from './accountErrors';
 import {
   CalendarClock,
   Lock,
@@ -19,7 +20,7 @@ import { INPUT_CLASS, FormField, AccountPageHeader } from './AccountFormParts';
 
 // UC-8 edits exactly these seven fields; username, role and status have their own use cases.
 const EDIT_FIELDS = [
-  'fullName', 'title', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
+  'fullName', 'title', 'practiceLicenseNo', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
 ];
 const DIRTY_FIELDS = EDIT_FIELDS;
 function dateTime(iso) {
@@ -64,22 +65,28 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
   const [form, setForm] = useState(initialForm);
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
 
   const errors = validateAccountForm(form, { accounts, exceptId: account.id, fields: EDIT_FIELDS });
   const dirty = DIRTY_FIELDS.some((f) => form[f] !== initialForm[f]);
   const locked = account.status === 'LOCKED';
 
-  const onChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+  const onChange = (field, value) => {
+    setServerErrors((prev) => withoutField(prev, field));
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
     if (Object.keys(errors).length > 0 || !dirty) return;
     setSubmitError('');
+    setServerErrors({});
     try {
       await onSave(form);
     } catch (error) {
-      setSubmitError(error.message);
+      setServerErrors(accountFieldErrors(error));
+      setSubmitError(accountErrorMessage(error));
     }
   };
 
@@ -148,7 +155,7 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
             </FormField>
           </div>
 
-          <AccountPersonalFields form={form} errors={touched ? errors : {}} onChange={onChange} editable={EDIT_FIELDS} showUsername={false} />
+          <AccountPersonalFields form={form} errors={{ ...(touched ? errors : {}), ...serverErrors }} onChange={onChange} editable={EDIT_FIELDS} showUsername={false} />
         </section>
 
         <aside className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5">

@@ -34,6 +34,7 @@ import {
   AccountActivityCard,
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
+import { accountErrorMessage } from "../../components/accounts/accountErrors";
 import { createAccountApi } from "../../apis/accountApi";
 import { apiClient } from "../../services/session";
 import {
@@ -49,6 +50,7 @@ function fromApi(account) {
     ...account,
     phone: account.phoneNumber ?? account.phone ?? "",
     title: account.academicTitle ?? account.title,
+    practiceLicenseNo: account.practiceLicenseNo ?? "",
     failedLoginCount: account.failedLoginAttempts ?? account.failedLoginCount ?? 0,
   };
 }
@@ -57,6 +59,7 @@ function accountRequest(form) {
   return {
     fullName: form.fullName.trim(),
     academicTitle: form.title.trim() || null,
+    practiceLicenseNo: form.practiceLicenseNo.trim() || null,
     dateOfBirth: form.dateOfBirth || null,
     gender: form.gender || null,
     phoneNumber: form.phone.trim(),
@@ -127,6 +130,7 @@ export function AccountManagementPage({
   const [profile, setProfile] = useState(null);
   const [activities, setActivities] = useState([]);
   const [changeHistory, setChangeHistory] = useState([]);
+  const [historyPage, setHistoryPage] = useState({ accountId: null, page: 0, totalPages: 0 });
   const [workInProgress, setWorkInProgress] = useState(null);
   const [departments, setDepartments] = useState(() => cached?.departments ?? []);
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,7 +163,7 @@ export function AccountManagementPage({
         updateAccountPageCache(accountApi, { accounts: items });
       })
       .catch((error) => {
-        if (error.name !== "AbortError") toast.error(error.message);
+        if (error.name !== "AbortError") toast.error(accountErrorMessage(error));
       });
     return () => controller.abort();
   }, [accountApi, reloadKey, tableReady]);
@@ -172,7 +176,7 @@ export function AccountManagementPage({
         setDepartments(activeDepartments);
         updateAccountPageCache(accountApi, { departments: activeDepartments });
       })
-      .catch((error) => error.name !== "AbortError" && toast.error(error.message));
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
     return () => controller.abort();
   }, [accountApi]);
 
@@ -209,13 +213,11 @@ export function AccountManagementPage({
       })
       .catch((error) => {
         if (error.name !== "AbortError") {
-          setTablePage((prev) => ({ ...prev, query: tableQuery, error: error.message }));
+          setTablePage((prev) => ({ ...prev, query: tableQuery, error: accountErrorMessage(error) }));
         }
       });
     return () => controller.abort();
   }, [accountApi, tableQuery, debouncedSearch, roleFilter, departmentFilter, statusFilter, sort, page, pageSize]);
-
-  const reloadAccounts = () => setReloadKey((key) => key + 1);
 
   useEffect(() => {
     if (view.id === undefined) return undefined;
@@ -224,7 +226,7 @@ export function AccountManagementPage({
       .then((account) => setDetails((prev) => ({ ...prev, [view.id]: fromApi(account) })))
       .catch((error) => {
         if (error.status === 404) setMissingIds((prev) => [...new Set([...prev, view.id])]);
-        else if (error.name !== "AbortError") toast.error(error.message);
+        else if (error.name !== "AbortError") toast.error(accountErrorMessage(error));
       });
     return () => controller.abort();
   }, [accountApi, view.id]);
@@ -234,28 +236,49 @@ export function AccountManagementPage({
     const controller = new AbortController();
     Promise.all([
       accountApi.activities(view.id, 10, controller.signal),
-      accountApi.changeHistory(view.id, 0, 10, controller.signal),
       accountApi.workInProgress(view.id, controller.signal),
     ])
-      .then(([items, history, work]) => {
+      .then(([items, work]) => {
         setActivities(items.map((item) => ({
           ...item,
           time: item.occurredAt,
           title: item.type,
           detail: item.ipAddress || item.outcome,
         })));
-        setChangeHistory(history.content);
         setWorkInProgress(work);
       })
-      .catch((error) => error.name !== "AbortError" && toast.error(error.message));
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
     return () => controller.abort();
-  }, [accountApi, view.id, view.name]);
+  }, [accountApi, view.id, view.name, reloadKey]);
+
+  // UC-6: Change History is paginated; another account or a completed action starts again at page 0.
+  const requestedHistoryPage = historyPage.accountId === view.id ? historyPage.page : 0;
+  useEffect(() => {
+    if (view.name !== "detail" || view.id === undefined) return undefined;
+    const controller = new AbortController();
+    accountApi.changeHistory(view.id, requestedHistoryPage, 10, controller.signal)
+      .then((history) => {
+        setChangeHistory(history.content);
+        setHistoryPage({
+          accountId: view.id,
+          page: history.page?.number ?? requestedHistoryPage,
+          totalPages: history.page?.totalPages ?? 1,
+        });
+      })
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
+    return () => controller.abort();
+  }, [accountApi, view.id, view.name, requestedHistoryPage, reloadKey]);
+
+  const reloadAccounts = () => {
+    setHistoryPage((prev) => ({ ...prev, page: 0 }));
+    setReloadKey((key) => key + 1);
+  };
 
   useEffect(() => {
     if (view.name !== "profile") return undefined;
     const controller = new AbortController();
     accountApi.profile(controller.signal).then((value) => setProfile(fromApi(value)))
-      .catch((error) => error.name !== "AbortError" && toast.error(error.message));
+      .catch((error) => error.name !== "AbortError" && toast.error(accountErrorMessage(error)));
     return () => controller.abort();
   }, [accountApi, view.name]);
 
@@ -361,7 +384,7 @@ export function AccountManagementPage({
         expectedRole: account.role,
       });
     } catch (error) {
-      toast.error(error.message);
+      toast.error(accountErrorMessage(error));
       return;
     }
 
@@ -405,7 +428,7 @@ export function AccountManagementPage({
           setConfirmDialog(null);
           openDetail(account.id);
         } catch (error) {
-          toast.error(error.message);
+          toast.error(accountErrorMessage(error));
         }
       },
     });
@@ -443,7 +466,7 @@ export function AccountManagementPage({
           toast.success(`Đã mở khóa tài khoản ${account.username}`);
           setConfirmDialog(null);
         } catch (error) {
-          toast.error(error.message);
+          toast.error(accountErrorMessage(error));
         }
       },
     });
@@ -473,7 +496,7 @@ export function AccountManagementPage({
       setLockPrompt(null);
       setLockReasonInput("");
     } catch (error) {
-      toast.error(error.message);
+      toast.error(accountErrorMessage(error));
     }
   };
 
@@ -489,6 +512,7 @@ export function AccountManagementPage({
   };
 
   const selected = details[view.id];
+  const accountNames = new Map(accounts.map((item) => [item.id, item.username]));
 
   const self = profile || accounts.find(
     (a) => a.username === currentAdmin?.username,
@@ -568,6 +592,9 @@ export function AccountManagementPage({
         account={selected}
         loginEvents={activities}
         changeHistory={changeHistory}
+        historyPage={historyPage.accountId === selected.id ? historyPage : null}
+        onHistoryPageChange={(page) => setHistoryPage({ ...historyPage, accountId: selected.id, page })}
+        accountNames={accountNames}
         workInProgress={workInProgress}
         isSelf={isSelf(selected)}
         onBack={goBack}
