@@ -9,13 +9,8 @@ import {
   Layers,
   Stethoscope,
   Info,
-  CheckCircle2,
 } from 'lucide-react';
-import {
-  getServicesForRoom,
-  SERVICE_GROUP_LABELS,
-  SERVICE_TYPE_MAP,
-} from '../../constants/serviceData';
+import { getServicesForRoom } from '../../constants/serviceData';
 import { formatPrice } from '../services/serviceFormat';
 
 const INPUT_CLASS =

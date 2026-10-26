@@ -9,9 +9,7 @@ import {
   Clock,
   Activity,
   Layers,
-  Sparkles,
   Stethoscope,
-  ShieldCheck,
   CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -22,9 +20,12 @@ import {
 } from '../../constants/serviceData';
 import { formatPrice } from '../services/serviceFormat';
 
-export function DepartmentDetailModal({ isOpen, item, onEdit, onClose }) {
-  if (!isOpen || !item) return null;
+export function DepartmentDetailModal(props) {
+  if (!props.isOpen || !props.item) return null;
+  return <DepartmentDetailModalContent {...props} />;
+}
 
+function DepartmentDetailModalContent({ item, onEdit, onClose }) {
   const isDept = item.unitType === 'DEPARTMENT';
   const isActive = item.status === 'ACTIVE';
 
