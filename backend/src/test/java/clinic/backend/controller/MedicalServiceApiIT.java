@@ -1,5 +1,6 @@
 package clinic.backend.controller;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -106,7 +107,7 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
     }
 
     private UUID insertCatalog(UUID departmentId, UUID groupId, String suffix) {
-        Instant now = Instant.now();
+        Timestamp now = Timestamp.from(Instant.now());
         UUID serviceId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO departments (id, makhoa, tenkhoa, type, is_active, created_at, updated_at, version)
@@ -126,7 +127,7 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
     }
 
     private void insertRoom(UUID departmentId, UUID groupId, String code, String status) {
-        Instant now = Instant.now();
+        Timestamp now = Timestamp.from(Instant.now());
         jdbc.update("""
                 INSERT INTO rooms (id, department_id, service_group_id, maphongkham, phongkham, location,
                     type, status, created_at, updated_at, version)
