@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -8,10 +9,8 @@ import { ProfileView } from './components/accounts';
 
 import { apiClient, sessionManager as defaultSessionManager } from './services/session';
 import { useSession } from './hooks/useSession';
-import { ROLE_LABELS } from './constants/accountData';
 import { AdminLayout } from './layouts';
 import AppRoutes from './routes/AppRoutes';
-
 
 export function App({
   sessionManager = defaultSessionManager,
@@ -32,7 +31,10 @@ export function App({
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    sessionManager.restore().catch(() => sessionManager.clear());
+    sessionManager.restore().catch((error) => {
+      console.error('RESTORE FAILED:', error);
+      sessionManager.clear();
+    });
   }, [sessionManager]);
 
   useEffect(() => {
@@ -65,7 +67,16 @@ export function App({
     return (
       <LoginPage
         onLogin={async (username, password) => {
-          await sessionManager.login(username, password);
+          const loggedInSession = await sessionManager.login(username, password);
+          const role = loggedInSession.account?.role;
+
+          if (role === 'ADMIN') {
+            navigate('/admin/accounts', { replace: true });
+          } else if (role === 'CASHIER') {
+            navigate('/cashier', { replace: true });
+          } else {
+            navigate('/404', { replace: true });
+          }
         }}
       />
     );
@@ -80,7 +91,6 @@ export function App({
   const showPasswordForm =
     session.passwordChangeRequired || changingPassword;
 
-  // Giữ nguyên luồng đổi mật khẩu bắt buộc của ADMIN.
   if (session.account.role === 'ADMIN' && showPasswordForm) {
     const closePasswordForm = session.passwordChangeRequired
       ? undefined
@@ -120,7 +130,6 @@ export function App({
     );
   }
 
-  // Bắt buộc đổi mật khẩu đối với các role khác.
   if (showPasswordForm) {
     return (
       <main className="app-main">
@@ -146,7 +155,6 @@ export function App({
     );
   }
 
-  // Hồ sơ cá nhân.
   if (showProfile) {
     return (
       <main className="app-main">
@@ -187,7 +195,6 @@ export function App({
     );
   }
 
-  // Tất cả trang nghiệp vụ được phân tuyến tại AppRoutes.
   return (
     <>
       {notice && (

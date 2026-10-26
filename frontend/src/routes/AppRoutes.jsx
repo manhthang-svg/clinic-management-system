@@ -1,21 +1,24 @@
+
 import { Navigate, Route, Routes } from 'react-router';
 
 import { ROUTES } from './routes.js';
 
-
 import {
     AccountManagementPage,
     DepartmentManagementPage,
+    RoomManagementPage,
     ServiceManagementPage,
 } from '../pages/admin/index.js';
 
-
 import DashboardLayout from '../layouts/DashboardlLayout.jsx';
 import ProtectRoute from './ProtectRoute.jsx';
+
 import CashierOverviewPage from '../pages/cashier/CashierOverviewPage.jsx';
 import PaymentManagementPage from '../pages/cashier/PaymentManagementPage.jsx';
 import PaymentDetailPage from '../pages/cashier/PaymentDetailPage.jsx';
-import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx'
+import PaymentHistoryPage from '../pages/cashier/PaymentHistoryPage.jsx';
+import HomeRedirect from './HomeRedirect.jsx';
+
 export function AppRoutes({
     session,
     account,
@@ -25,12 +28,21 @@ export function AppRoutes({
 }) {
     return (
         <Routes>
+            <Route
+                path="/"
+                element={<HomeRedirect session={session} />}
+            />
+
             {/* ADMIN */}
-            <Route element={<ProtectRoute requiredRole="ADMIN" />}>
-                <Route
-                    path="/admin"
-                    element={<DashboardLayout />}
-                >
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="ADMIN"
+                    />
+                }
+            >
+                <Route path="/admin">
                     <Route
                         index
                         element={
@@ -68,7 +80,7 @@ export function AppRoutes({
                     <Route
                         path="rooms"
                         element={
-                            <DepartmentManagementPage
+                            <RoomManagementPage
                                 currentAdmin={session.account}
                                 onLogout={onLogout}
                                 onChangePassword={onChangePassword}
@@ -90,8 +102,14 @@ export function AppRoutes({
             </Route>
 
             {/* CASHIER */}
-            {/* CASHIER */}
-            <Route element={<ProtectRoute requiredRole="CASHIER" />}>
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="CASHIER"
+                    />
+                }
+            >
                 <Route
                     path="/cashier"
                     element={<DashboardLayout />}
@@ -118,6 +136,12 @@ export function AppRoutes({
                 </Route>
             </Route>
 
+            <Route
+                path="/404"
+                element={<div>404 - Không tìm thấy trang</div>}
+            />
+
+            {/* Các đường dẫn không tồn tại */}
             <Route
                 path="*"
                 element={<Navigate to="/404" replace />}

@@ -1,14 +1,11 @@
 
 import { Navigate, Outlet } from 'react-router';
-import { useAuth } from '../hooks';
 
-export default function ProtectRoute({ requiredRole }) {
-    const { session } = useAuth();
-
+export default function ProtectRoute({ session, requiredRole }) {
     if (session.status === 'restoring') {
         return (
             <main className="app-loading">
-                <p role="status">Đang tải…</p>
+                <p role="status">Đang tải...</p>
             </main>
         );
     }
@@ -17,10 +14,7 @@ export default function ProtectRoute({ requiredRole }) {
         return <Navigate to="/login" replace />;
     }
 
-    if (
-        requiredRole &&
-        session.account.role !== requiredRole
-    ) {
+    if (requiredRole && session.account.role !== requiredRole) {
         return <Navigate to="/404" replace />;
     }
 
