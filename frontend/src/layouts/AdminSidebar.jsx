@@ -2,16 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   LayoutGrid,
-  Users,
-  CalendarDays,
-  Stethoscope,
-  Microscope,
   Building2,
-  DoorOpen,
   BriefcaseMedical,
-  CreditCard,
   ClipboardList,
+  Pill,
+  BookOpen,
+  FileHeart,
   Settings2,
+  Hospital,
   Settings,
   ChevronDown,
   Plus,
@@ -20,16 +18,14 @@ import { NAV_ITEMS } from '../constants/accountData';
 
 const ICONS = {
   LayoutGrid,
-  Users,
-  CalendarDays,
-  Stethoscope,
-  Microscope,
   Building2,
-  DoorOpen,
   BriefcaseMedical,
-  CreditCard,
   ClipboardList,
+  Pill,
+  BookOpen,
+  FileHeart,
   Settings2,
+  Hospital,
   Settings,
 };
 
@@ -64,7 +60,7 @@ export function AdminSidebar({ activeKey = 'accounts' }) {
     setOpenGroups((prev) => (prev.includes(id) ? prev.filter((group) => group !== id) : [...prev, id]));
 
   return (
-    <aside className="w-[224px] bg-[#eef5f4] border-r border-[#dfeae8] flex flex-col shrink-0 select-none min-h-screen">
+    <aside className="w-[224px] h-full overflow-y-auto bg-[#eef5f4] border-r border-[#dfeae8] flex flex-col shrink-0 select-none">
       <div className="h-20 flex items-center gap-3 px-6">
         <div className="w-9 h-9 rounded-xl bg-[#127e7a] text-white flex items-center justify-center shadow-sm">
           <Plus className="w-5 h-5" strokeWidth={3} />

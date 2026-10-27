@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Bell, ChevronDown, KeyRound, LogOut, UserRound } from 'lucide-react';
+import { Bell, ChevronDown, KeyRound, LogOut, UserRound } from 'lucide-react';
 import { ROLE_LABELS } from '../constants/accountData';
 
 function initials(fullName = '') {
@@ -24,21 +24,7 @@ export function AdminTopBar({ currentAdmin, onOpenProfile, onChangePassword, onL
   const fullName = currentAdmin?.fullName || 'Quản trị viên';
 
   return (
-    <header className="h-20 px-6 flex items-center justify-between gap-6 shrink-0">
-      <div className="relative flex-1 max-w-lg">
-        <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-        <input
-          type="search"
-          aria-label="Tìm kiếm nhanh"
-          placeholder="Tìm bệnh nhân, lịch khám hoặc bất kỳ thông tin nào..."
-          className="w-full pl-11 pr-20 py-2.5 text-xs bg-white border border-slate-200/80 rounded-xl shadow-2xs focus:outline-none focus:border-[#127e7a] transition-all placeholder:text-slate-400"
-        />
-        <span className="hidden md:flex items-center gap-1 absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
-          <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans">Ctrl</kbd>
-          <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans">K</kbd>
-        </span>
-      </div>
-
+    <header className="h-20 px-6 flex items-center justify-end gap-6 shrink-0">
       <div className="flex items-center gap-5">
         <button
           type="button"

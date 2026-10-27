@@ -80,7 +80,7 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
         title="Phân quyền tài khoản"
         description="Thay đổi vai trò và kiểm tra quyền truy cập trước khi áp dụng"
         onBack={onCancel}
-        crumbs={[{ label: 'Quản trị hệ thống' }, { label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Phân quyền' }]}
+        crumbs={[{ label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Phân quyền' }]}
       />
       <AccountSummary account={account} />
 

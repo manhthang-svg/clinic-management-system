@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   CalendarDays,
   CalendarPlus,
@@ -28,6 +29,7 @@ import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './a
 import { AccountPageHeader } from './AccountFormParts';
 
 const VISIBLE_PERMISSIONS = 8;
+const HISTORY_PAGE_SIZE = 5;
 
 const EVENT_STYLES = {
   LOGIN_SUCCEEDED: { icon: LogIn, tone: 'bg-emerald-50 text-emerald-600' },
@@ -144,6 +146,31 @@ function SectionCard({ icon: Icon, title, action, children }) {
   );
 }
 
+function HistoryPager({ page, totalPages, onPageChange }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+      <button
+        type="button"
+        onClick={() => onPageChange(page - 1)}
+        disabled={page <= 0}
+        className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Mới hơn
+      </button>
+      <span>Trang {page + 1}/{totalPages}</span>
+      <button
+        type="button"
+        onClick={() => onPageChange(page + 1)}
+        disabled={page + 1 >= totalPages}
+        className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Cũ hơn
+      </button>
+    </div>
+  );
+}
+
 function EditButton({ onClick, label = 'Sửa' }) {
   return (
     <button
@@ -192,6 +219,7 @@ function HeaderStat({ icon: Icon, label, iso, empty, note }) {
 
 /** UC-6 View Account Detail, with entry points to UC-8 … UC-11 (AQ-07, AQ-17). */
 export function AccountDetailView({ account, loginEvents, changeHistory = [], historyPage, onHistoryPageChange, accountNames, workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onToggleLock, onResetPassword }) {
+  const [loginHistoryState, setLoginHistoryState] = useState({ accountId: account.id, page: 0 });
   const locked = account.status === 'LOCKED';
   const permissions = ROLE_PERMISSIONS[account.role] || { modules: [], actions: [] };
   const hasRoom = account.role === 'DOCTOR' || account.role === 'TECHNICIAN';
@@ -199,6 +227,14 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
     ? { name: account.roomName, department: account.departmentName }
     : null;
   const actions = account.allowedActions || {};
+  const loginHistoryTotalPages = Math.max(1, Math.ceil(loginEvents.length / HISTORY_PAGE_SIZE));
+  const loginHistoryPage = loginHistoryState.accountId === account.id
+    ? Math.min(loginHistoryState.page, loginHistoryTotalPages - 1)
+    : 0;
+  const visibleLoginEvents = loginEvents.slice(
+    loginHistoryPage * HISTORY_PAGE_SIZE,
+    (loginHistoryPage + 1) * HISTORY_PAGE_SIZE,
+  );
 
   const personalRows = [
     ['Mã tài khoản', account.id],
@@ -260,7 +296,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
         title="Chi tiết tài khoản"
         description="Xem thông tin, trạng thái và quyền truy cập của tài khoản nhân viên"
         onBack={onBack}
-        crumbs={[{ label: 'Quản trị hệ thống' }, { label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Chi tiết tài khoản' }]}
+        crumbs={[{ label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Chi tiết tài khoản' }]}
       />
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 flex flex-col xl:flex-row xl:items-center gap-5">
@@ -346,6 +382,13 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
           <SectionCard icon={Briefcase} title="Thông tin công tác">
             <InfoList rows={assignmentRows} />
           </SectionCard>
+
+          <SectionCard icon={Briefcase} title="Công việc đang xử lý">
+            <InfoList rows={[
+              ['Lượt khám đang xử lý', workInProgress?.visitsInProgress ?? 0],
+              ['Chỉ định CLS đang xử lý', workInProgress?.ordersInProgress ?? 0],
+            ]} />
+          </SectionCard>
         </div>
 
         <div className="space-y-5">
@@ -378,7 +421,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
               <p className="text-sm text-slate-400">Tài khoản chưa đăng nhập lần nào.</p>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {loginEvents.map((event) => {
+                {visibleLoginEvents.map((event) => {
                   const style = EVENT_STYLES[event.type] || EVENT_STYLES.LOGIN_FAILED;
                   const Icon = style.icon;
                   return (
@@ -399,13 +442,11 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
                 })}
               </ul>
             )}
-          </SectionCard>
-
-          <SectionCard icon={Briefcase} title="Công việc đang xử lý">
-            <InfoList rows={[
-              ['Lượt khám đang xử lý', workInProgress?.visitsInProgress ?? 0],
-              ['Chỉ định CLS đang xử lý', workInProgress?.ordersInProgress ?? 0],
-            ]} />
+            <HistoryPager
+              page={loginHistoryPage}
+              totalPages={loginHistoryTotalPages}
+              onPageChange={(nextPage) => setLoginHistoryState({ accountId: account.id, page: nextPage })}
+            />
           </SectionCard>
 
           <SectionCard icon={Clock} title="Lịch sử thay đổi tài khoản">
@@ -414,26 +455,12 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             ) : (
               <>
                 <ChangeHistoryList entries={changeHistory} accountNames={accountNames} />
-                {historyPage && historyPage.totalPages > 1 && (
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                    <button
-                      type="button"
-                      onClick={() => onHistoryPageChange(historyPage.page - 1)}
-                      disabled={historyPage.page <= 0}
-                      className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Mới hơn
-                    </button>
-                    <span>Trang {historyPage.page + 1}/{historyPage.totalPages}</span>
-                    <button
-                      type="button"
-                      onClick={() => onHistoryPageChange(historyPage.page + 1)}
-                      disabled={historyPage.page + 1 >= historyPage.totalPages}
-                      className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Cũ hơn
-                    </button>
-                  </div>
+                {historyPage && (
+                  <HistoryPager
+                    page={historyPage.page}
+                    totalPages={historyPage.totalPages}
+                    onPageChange={onHistoryPageChange}
+                  />
                 )}
               </>
             )}

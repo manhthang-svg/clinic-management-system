@@ -97,7 +97,6 @@ export function AccountEditView({ account, accounts, isSelf, onSave, onCancel, o
         description="Chỉnh sửa thông tin cá nhân và liên hệ của nhân viên"
         onBack={onCancel}
         crumbs={[
-          { label: 'Quản trị hệ thống' },
           { label: 'Quản lý tài khoản', onClick: onGoToList },
           { label: 'Cập nhật tài khoản' },
         ]}

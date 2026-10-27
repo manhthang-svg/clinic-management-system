@@ -630,7 +630,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               className="hover:text-slate-600 transition-colors cursor-pointer flex items-center gap-1"
             >
               <House className="w-3.5 h-3.5" />
-              <span>Quản trị hệ thống</span>
             </button>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="font-semibold text-slate-700">Khoa / Phòng</span>

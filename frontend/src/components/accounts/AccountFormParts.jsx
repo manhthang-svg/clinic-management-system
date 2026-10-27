@@ -49,22 +49,9 @@ export function FormSection({ icon: Icon, title, description, children, action }
 }
 
 /** Page title with breadcrumb, shared by the account sub-pages. */
-export function AccountPageHeader({ title, description, crumbs, onBack }) {
+export function AccountPageHeader({ title, description, crumbs }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-      <div>
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-xs font-semibold text-[#127e7a] hover:underline cursor-pointer mb-2"
-          >
-            ← Quay lại
-          </button>
-        )}
-        <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">{title}</h1>
-        <p className="text-sm text-slate-500 mt-1">{description}</p>
-      </div>
+    <div className="flex flex-col items-start gap-3">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
         <House className="w-3.5 h-3.5" />
         {crumbs.map((crumb, i) => (
@@ -78,6 +65,10 @@ export function AccountPageHeader({ title, description, crumbs, onBack }) {
           </span>
         ))}
       </nav>
+      <div>
+        <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">{title}</h1>
+        <p className="text-sm text-slate-500 mt-1">{description}</p>
+      </div>
     </div>
   );
 }
