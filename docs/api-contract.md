@@ -35,7 +35,14 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `POST` | `/api/v1/accounts/{accountId}/commands/unlock` | Admin bearer token | `200` + unlocked detail |
 | `POST` | `/api/v1/accounts/{accountId}/commands/reset-password` | Admin bearer token | `200` + one-time password |
 | `GET` | `/api/v1/services` | Admin bearer token | `200` + paginated service and price summaries |
+| `GET` | `/api/v1/services/form-options` | Admin bearer token | `200` + service types, groups, and departments |
+| `POST` | `/api/v1/services` | Admin bearer token | `201` + created service ID |
 | `GET` | `/api/v1/services/{serviceId}` | Admin bearer token | `200` + service detail and active performing rooms |
+| `PUT` | `/api/v1/services/{serviceId}` | Admin bearer token | `200` + updated or unchanged service detail |
+| `PUT` | `/api/v1/services/{serviceId}/prices` | Admin bearer token | `200` + updated or unchanged service detail |
+| `GET` | `/api/v1/services/{serviceId}/deactivation-check` | Admin bearer token | `200` + unfinished-order count |
+| `GET` | `/api/v1/services/{serviceId}/activation-check` | Admin bearer token | `200` when activation is allowed |
+| `PATCH` | `/api/v1/services/{serviceId}/status` | Admin bearer token | `200` + updated or unchanged service detail |
 
 The access token is held in memory and sent as `Authorization: Bearer <token>`. The refresh token is an HttpOnly
 cookie; browser calls to refresh and logout must include credentials and the configured frontend `Origin`.
@@ -66,6 +73,18 @@ UC-21 uses `GET /api/v1/services/{serviceId}`. It returns the current service da
 For a paraclinical service, `performingRooms` contains active rooms in the same service group, ordered by room code.
 An examination service has no service group and returns an empty `performingRooms` array. A missing service returns
 `404 SERVICE_NOT_FOUND`.
+
+UC-24 uses `PUT /api/v1/services/{serviceId}/prices` with `clinicPrice`, nullable `insurancePrice`, and the current
+optimistic-lock `version`. Clinic price is a whole VND amount from 1 to 100,000,000; insurance price is either null
+or a whole VND amount from 0 to 100,000,000. Sending unchanged prices performs no write. A stale changed request
+returns `409 CONCURRENT_MODIFICATION`. Payment lines keep their creation-time price snapshots (BR-09); no separate
+price-history table is used.
+
+UC-25 checks status changes before confirmation and repeats the same business checks inside the transactional
+`PATCH /api/v1/services/{serviceId}/status` command. Deactivation reports unfinished paraclinical order details in
+`PENDING_PAYMENT`, `WAITING`, `IN_PROGRESS`, or `PENDING_RESULT`; those existing orders continue unchanged. The last
+active examination service cannot be deactivated. A paraclinical service can only be activated when its service
+group has an active room. Status changes use optimistic-lock `version`.
 
 Successful responses with a body use `ApiResponse`; failures use `ErrorResponse`. FE code should branch on the stable
 `code` field rather than the English `message`. Endpoint-specific statuses, codes, field constraints, nullable fields,

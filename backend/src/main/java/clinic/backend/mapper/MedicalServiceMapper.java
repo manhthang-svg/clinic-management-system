@@ -5,8 +5,12 @@ import java.util.List;
 import clinic.backend.dto.response.MedicalServiceDetailResponse;
 import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.PerformingRoomResponse;
+import clinic.backend.dto.response.DepartmentOptionResponse;
+import clinic.backend.dto.response.ServiceGroupOptionResponse;
+import clinic.backend.entity.Department;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -32,4 +36,12 @@ public interface MedicalServiceMapper {
     @Mapping(target = "code", source = "roomCode")
     @Mapping(target = "name", source = "roomName")
     PerformingRoomResponse toPerformingRoom(Room room);
+
+    @Mapping(target = "code", source = "serviceGroupCode")
+    @Mapping(target = "name", source = "serviceGroupName")
+    ServiceGroupOptionResponse toServiceGroupOption(ServiceGroup serviceGroup);
+
+    @Mapping(target = "code", source = "departmentCode")
+    @Mapping(target = "name", source = "departmentName")
+    DepartmentOptionResponse toDepartmentOption(Department department);
 }
