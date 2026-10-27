@@ -1,9 +1,6 @@
-import { Eye, Pencil, Lock, LockOpen, KeyRound, ChevronsLeft, ChevronsRight, ArrowUpDown } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, ArrowUpDown } from 'lucide-react';
 import { ROLE_MAP, STATUS_LABELS, PAGE_SIZE_OPTIONS } from '../../constants/accountData';
 import { avatarTone, initialsOf, formatDate, formatTime, formatPhone } from './accountFormat';
-
-const ACTION_CLASS =
-  'w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-colors cursor-pointer';
 
 /** Page numbers with gaps: 1 … 4 5 6 … 13. */
 function pageItems(current, total) {
@@ -54,7 +51,7 @@ function SortHeader({ field, sort, onSortChange, children, className = '' }) {
   );
 }
 
-/** UC-5 account list with row actions for UC-6, UC-8, UC-10, and UC-11. */
+/** UC-5 account list. Select a row to open UC-6 account details. */
 export function AccountTable({
   accounts,
   loading = false,
@@ -64,9 +61,6 @@ export function AccountTable({
   onPageChange,
   onPageSizeChange,
   onView,
-  onEdit,
-  onToggleLock,
-  onResetPassword,
   sort,
   onSortChange,
 }) {
@@ -82,35 +76,45 @@ export function AccountTable({
             <tr className="bg-[#f6f8f9] text-[11px] font-semibold text-[#1b2533]">
               <SortHeader field="username" sort={sort} onSortChange={onSortChange} className="pl-4">Tên đăng nhập</SortHeader>
               <SortHeader field="fullName" sort={sort} onSortChange={onSortChange}>Họ và tên</SortHeader>
-              <SortHeader field="role" sort={sort} onSortChange={onSortChange}>Vai trò</SortHeader>
               <th className="px-2 py-3">Khoa / Phòng</th>
+              <SortHeader field="role" sort={sort} onSortChange={onSortChange}>Vai trò</SortHeader>
               <th className="px-2 py-3">Liên hệ</th>
               <SortHeader field="status" sort={sort} onSortChange={onSortChange}>Trạng thái</SortHeader>
               <SortHeader field="lastLoginAt" sort={sort} onSortChange={onSortChange}>Đăng nhập cuối</SortHeader>
-              <th className="px-2 py-3">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {loading && accounts.length === 0 ? (
               Array.from({ length: 6 }, (_, index) => (
                 <tr key={`account-skeleton-${index}`} aria-hidden="true">
-                  <td colSpan="8" className="px-4 py-3.5">
+                  <td colSpan="7" className="px-4 py-3.5">
                     <div className="h-7 animate-pulse rounded-lg bg-slate-100" />
                   </td>
                 </tr>
               ))
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan="8" className="p-10 text-center text-slate-400">
+                <td colSpan="7" className="p-10 text-center text-slate-400">
                   Không tìm thấy tài khoản nào phù hợp với điều kiện lọc.
                 </td>
               </tr>
             ) : (
               accounts.map((account) => {
                 const role = ROLE_MAP[account.role];
-                const locked = account.status === 'LOCKED';
                 return (
-                  <tr key={account.id} className="hover:bg-slate-50/70 transition-colors">
+                  <tr
+                    key={account.id}
+                    tabIndex={0}
+                    aria-label={`Xem chi tiết ${account.username}`}
+                    onClick={() => onView(account)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onView(account);
+                      }
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-slate-50/70 focus:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#127e7a]/20"
+                  >
                     <td className="pl-4 pr-2 py-3 font-medium text-slate-700 whitespace-nowrap">{account.username}</td>
                     <td className="px-2 py-3">
                       <div className="flex items-center gap-2">
@@ -149,50 +153,6 @@ export function AccountTable({
                       ) : (
                         <span className="text-slate-400">Chưa đăng nhập</span>
                       )}
-                    </td>
-                    <td className="px-2 py-3">
-                      <div className="flex items-center gap-0.5">
-                        {account.role !== 'ADMIN' && <button
-                          type="button"
-                          title="Xem chi tiết"
-                          aria-label={`Xem chi tiết ${account.username}`}
-                          onClick={() => onView(account)}
-                          className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>}
-                        {account.role !== 'ADMIN' && <button
-                          type="button"
-                          title="Cập nhật thông tin"
-                          aria-label={`Cập nhật ${account.username}`}
-                          onClick={() => onEdit(account)}
-                          className={`${ACTION_CLASS} text-slate-500 hover:bg-slate-50 hover:text-slate-800`}
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>}
-                        {account.role !== 'ADMIN' && (
-                          <button
-                            type="button"
-                            title={locked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                            aria-label={`${locked ? 'Mở khóa' : 'Khóa'} ${account.username}`}
-                            onClick={() => onToggleLock(account)}
-                            className={`${ACTION_CLASS} ${
-                              locked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
-                            }`}
-                          >
-                            {locked ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          title="Đặt lại mật khẩu"
-                          aria-label={`Đặt lại mật khẩu ${account.username}`}
-                          onClick={() => onResetPassword(account)}
-                          className={`${ACTION_CLASS} text-amber-500 hover:bg-amber-50 hover:text-amber-600`}
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 );

@@ -73,6 +73,19 @@ export function AppRoutes({
                     />
 
                     <Route
+                        path="profile"
+                        element={
+                            <AccountManagementPage
+                                currentAdmin={session.account}
+                                notice={notice}
+                                accountApi={account}
+                                onLogout={onLogout}
+                                onChangePassword={onChangePassword}
+                            />
+                        }
+                    />
+
+                    <Route
                         path="departments"
                         element={
                             <DepartmentManagementPage

@@ -3,6 +3,8 @@ import { Building2, DoorOpen, CheckCircle2, AlertTriangle } from 'lucide-react';
 export function DepartmentStatCards({ stats }) {
   const {
     totalDepartments = 0,
+    clinicalDepartments = 0,
+    paraclinicalDepartments = 0,
     totalRooms = 0,
     clinicalRooms = 0,
     paraclinicalRooms = 0,
@@ -32,8 +34,16 @@ export function DepartmentStatCards({ stats }) {
       id: 'departments',
       title: 'Tổng số khoa',
       value: totalDepartments,
-      badge: 'Khoa chuyên môn',
-      badgeClass: 'bg-blue-50 text-blue-700 border border-blue-100/80',
+      badges: [
+        {
+          label: `Lâm sàng: ${clinicalDepartments}`,
+          badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200/70',
+        },
+        {
+          label: `Cận lâm sàng: ${paraclinicalDepartments}`,
+          badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200/70',
+        },
+      ],
       note: 'Lâm sàng & Cận lâm sàng',
       icon: Building2,
       iconClass: 'bg-blue-50 text-blue-600',

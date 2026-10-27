@@ -73,8 +73,8 @@ describe('AccountManagementPage backend integration surface', () => {
     expect(screen.getByText('Cập nhật thông tin')).toBeInTheDocument();
     expect(screen.getByText('old@clinic.test')).toBeInTheDocument();
     expect(screen.getByText('Người thực hiện: Hệ thống')).toBeInTheDocument();
-    expect(api.activities).toHaveBeenCalledWith('acc-1', 10, expect.any(AbortSignal));
-    expect(api.changeHistory).toHaveBeenCalledWith('acc-1', 0, 10, expect.any(AbortSignal));
+    expect(api.activities).toHaveBeenCalledWith('acc-1', 100, expect.any(AbortSignal));
+    expect(api.changeHistory).toHaveBeenCalledWith('acc-1', 0, 5, expect.any(AbortSignal));
     expect(api.workInProgress).toHaveBeenCalledWith('acc-1', expect.any(AbortSignal));
   });
 

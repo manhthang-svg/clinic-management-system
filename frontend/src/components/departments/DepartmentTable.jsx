@@ -1,4 +1,4 @@
-import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, MapPin, UserCheck, DoorOpen } from 'lucide-react';
+import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, UserCheck, DoorOpen } from 'lucide-react';
 
 const ACTION_CLASS =
   'w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center transition-colors cursor-pointer';
@@ -25,6 +25,7 @@ export function DepartmentTable({
   onView,
   onEdit,
   onToggleStatus,
+  onSelectDepartmentRooms,
 }) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -38,8 +39,8 @@ export function DepartmentTable({
             <tr className="bg-[#f6f8f9] text-[11px] font-bold text-[#1b2533] border-b border-slate-200/80">
               <th className="px-4 py-3.5">Mã khoa</th>
               <th className="px-3 py-3.5">Tên chuyên khoa</th>
+              <th className="px-3 py-3.5">Phân loại</th>
               <th className="px-3 py-3.5">Trưởng khoa</th>
-              <th className="px-3 py-3.5">Vị trí / Khu vực</th>
               <th className="px-3 py-3.5">Phòng trực thuộc</th>
               <th className="px-3 py-3.5">Trạng thái</th>
               <th className="px-4 py-3.5 text-center">Thao tác</th>
@@ -55,6 +56,12 @@ export function DepartmentTable({
             ) : (
               items.map((dept) => {
                 const isActive = dept.status === 'ACTIVE';
+                const isClinical =
+                  dept.type === 'CLINICAL' ||
+                  dept.code === 'DEMO-NOI' ||
+                  dept.code === 'DEMO-NGOAI' ||
+                  dept.name?.toLowerCase().includes('nội') ||
+                  dept.name?.toLowerCase().includes('ngoại');
 
                 return (
                   <tr
@@ -85,6 +92,19 @@ export function DepartmentTable({
                       </div>
                     </td>
 
+                    {/* Phân loại (Lâm sàng / Cận lâm sàng) */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      {isClinical ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/70">
+                          Lâm sàng
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/70">
+                          Cận lâm sàng
+                        </span>
+                      )}
+                    </td>
+
                     {/* Trưởng khoa */}
                     <td className="px-3 py-3 text-slate-700 font-medium whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
@@ -93,20 +113,19 @@ export function DepartmentTable({
                       </div>
                     </td>
 
-                    {/* Vị trí / Khu vực */}
-                    <td className="px-3 py-3 text-slate-600 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{dept.location || 'Khu trung tâm'}</span>
-                      </div>
-                    </td>
-
-                    {/* Số lượng phòng trực thuộc */}
+                    {/* Số lượng phòng trực thuộc (Link tương tác được) */}
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/80">
-                        <DoorOpen className="w-3 h-3 text-slate-500" />
-                        <span>{dept.roomCount || 0} phòng</span>
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectDepartmentRooms?.(dept)}
+                        title={`Xem các phòng thuộc ${dept.name}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal-50 text-[#0d9488] hover:bg-teal-100 hover:text-[#0b7267] border border-teal-200/70 transition-all cursor-pointer group shadow-2xs"
+                      >
+                        <DoorOpen className="w-3.5 h-3.5 text-[#0d9488] group-hover:scale-110 transition-transform" />
+                        <span className="underline-offset-2 group-hover:underline">
+                          {dept.roomCount || 0} phòng
+                        </span>
+                      </button>
                     </td>
 
                     {/* Trạng thái */}

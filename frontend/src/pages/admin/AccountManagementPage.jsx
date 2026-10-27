@@ -30,8 +30,6 @@ import {
   AccountResetPasswordView,
   ProfileView,
   AccountStatCard,
-  AccountOverviewCard,
-  AccountActivityCard,
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
 import { accountErrorMessage } from "../../components/accounts/accountErrors";
@@ -235,7 +233,7 @@ export function AccountManagementPage({
     if (view.name !== "detail" || view.id === undefined) return undefined;
     const controller = new AbortController();
     Promise.all([
-      accountApi.activities(view.id, 10, controller.signal),
+      accountApi.activities(view.id, 100, controller.signal),
       accountApi.workInProgress(view.id, controller.signal),
     ])
       .then(([items, work]) => {
@@ -256,7 +254,7 @@ export function AccountManagementPage({
   useEffect(() => {
     if (view.name !== "detail" || view.id === undefined) return undefined;
     const controller = new AbortController();
-    accountApi.changeHistory(view.id, requestedHistoryPage, 10, controller.signal)
+    accountApi.changeHistory(view.id, requestedHistoryPage, 5, controller.signal)
       .then((history) => {
         setChangeHistory(history.content);
         setHistoryPage({
@@ -729,7 +727,18 @@ export function AccountManagementPage({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="flex flex-col items-start gap-3">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-xs text-slate-500"
+          >
+            <House className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-700 font-medium">
+              Quản lý tài khoản
+            </span>
+          </nav>
+
           <div>
             <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">
               Quản lý tài khoản
@@ -738,19 +747,6 @@ export function AccountManagementPage({
               Quản lý tài khoản người dùng, vai trò và quyền truy cập hệ thống
             </p>
           </div>
-
-          <nav
-            aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-xs text-slate-500"
-          >
-            <House className="w-3.5 h-3.5" />
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span>Quản trị hệ thống</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-700 font-medium">
-              Quản lý tài khoản
-            </span>
-          </nav>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -790,60 +786,50 @@ export function AccountManagementPage({
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_248px] gap-5 items-start">
-          <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
-                Danh sách tài khoản
-              </h2>
-              <button
-                type="button"
-                onClick={openCreate}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tạo tài khoản</span>
-              </button>
-            </div>
+        <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
+              Danh sách tài khoản
+            </h2>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo tài khoản</span>
+            </button>
+          </div>
 
-            <AccountFilterBar
-              searchQuery={searchQuery}
-              setSearchQuery={withFirstPage(setSearchQuery)}
-              roleFilter={roleFilter}
-              setRoleFilter={withFirstPage(setRoleFilter)}
-              statusFilter={statusFilter}
-              setStatusFilter={withFirstPage(setStatusFilter)}
-              departmentFilter={departmentFilter}
-              setDepartmentFilter={withFirstPage(setDepartmentFilter)}
-              departments={departments}
-              onReset={resetFilters}
-            />
+          <AccountFilterBar
+            searchQuery={searchQuery}
+            setSearchQuery={withFirstPage(setSearchQuery)}
+            roleFilter={roleFilter}
+            setRoleFilter={withFirstPage(setRoleFilter)}
+            statusFilter={statusFilter}
+            setStatusFilter={withFirstPage(setStatusFilter)}
+            departmentFilter={departmentFilter}
+            setDepartmentFilter={withFirstPage(setDepartmentFilter)}
+            departments={departments}
+            onReset={resetFilters}
+          />
 
-            <AccountTable
-              accounts={tablePage.content}
-              loading={loading}
-              totalCount={tablePage.totalElements}
-              page={page}
-              pageSize={pageSize}
-              onPageChange={setPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setPage(1);
-              }}
-              onView={(account) => openDetail(account.id)}
-              onEdit={openEdit}
-              onToggleLock={toggleLock}
-              onResetPassword={(account) => openResetPassword(account.id)}
-              sort={sort}
-              onSortChange={withFirstPage(setSort)}
-            />
-          </section>
-
-          <aside className="space-y-5">
-            <AccountOverviewCard accounts={accounts} />
-            <AccountActivityCard activities={activities} />
-          </aside>
-        </div>
+          <AccountTable
+            accounts={tablePage.content}
+            loading={loading}
+            totalCount={tablePage.totalElements}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+            onView={(account) => openDetail(account.id)}
+            sort={sort}
+            onSortChange={withFirstPage(setSort)}
+          />
+        </section>
       </div>
 
       {modalElements}

@@ -11,7 +11,7 @@ export function AdminLayout({
   activeKey = "accounts",
 }) {
   return (
-    <div className="flex min-h-screen bg-[#eef5f4] font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 antialiased">
+    <div className="flex h-screen overflow-hidden bg-[#eef5f4] font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 antialiased">
       <AdminSidebar
         activeKey={activeKey}
         onNavigate={onNavigate}

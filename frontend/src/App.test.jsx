@@ -119,7 +119,6 @@ describe('App', () => {
 
         expect(await screen.findByRole('heading', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
         expect(screen.getByText('METPH')).toBeInTheDocument();
-        expect(screen.getByRole('searchbox', { name: 'Tìm kiếm nhanh' })).toBeInTheDocument();
         expect(screen.queryByText('Clinic Management System')).not.toBeInTheDocument();
     });
     it('opens service management from the admin services route', async () => {

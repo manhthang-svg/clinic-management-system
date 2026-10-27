@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Navigate, matchPath, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -7,37 +7,63 @@ import {
   CircleMinus,
   ShieldPlus,
   Plus,
-  ChevronRight,
 } from "lucide-react";
 import { AdminLayout } from "../../layouts";
 import { AccountStatCard } from "../../components/accounts";
-import {
-  normalizeSearch,
-  percentOf,
-} from "../../components/accounts/accountFormat";
+import { AccountPageHeader } from "../../components/accounts/AccountFormParts";
+import { percentOf } from "../../components/accounts/accountFormat";
 import {
   ServiceFilterBar,
   ServiceTable,
-  ServiceOverviewCard,
-  ServiceActivityCard,
   ServiceCreateView,
 } from "../../components/services";
+import { serviceErrorMessage } from "../../components/services/serviceErrors";
+import { formToServiceRequest } from "../../components/services/serviceForm";
+import { createServiceApi } from "../../apis/serviceApi";
+import { apiClient } from "../../services/session";
+import { PAGE_SIZE_OPTIONS } from "../../constants";
 import { ROUTES } from "../../routes/routes";
 
 const { ADMIN } = ROUTES;
+
+const defaultServiceApi = createServiceApi(apiClient);
+
+const SEARCH_DEBOUNCE_MS = 300;
+const SUMMARY_PAGE_SIZE = 50;
+
+async function listAllServices(serviceApi, signal) {
+  const services = [];
+  for (let page = 0; ; page += 1) {
+    const result = await serviceApi.list({ page, size: SUMMARY_PAGE_SIZE }, signal);
+    services.push(...result.content);
+    if (page + 1 >= result.page.totalPages) return services;
+  }
+}
 
 export function ServiceManagementPage({
   currentAdmin,
   onLogout,
   onChangePassword,
   onNavigate,
+  serviceApi = defaultServiceApi,
 }) {
-  const [services] = useState([]);
-  const [activities] = useState([]);
+  const [allServices, setAllServices] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [groups, setGroups] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [tablePage, setTablePage] = useState({
+    query: null,
+    content: [],
+    totalElements: 0,
+    error: null,
+  });
 
   // The URL decides whether the list or the create form is shown.
   const location = useLocation();
@@ -53,38 +79,95 @@ export function ServiceManagementPage({
       ? navigate(ADMIN.SERVICES, { replace: true })
       : navigate(-1);
 
-  const filteredServices = useMemo(() => {
-    const term = normalizeSearch(searchQuery);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
-    return services.filter((service) => {
-      const matchSearch =
-        term === "" ||
-        [service.code, service.name].some((field) =>
-          normalizeSearch(field).includes(term),
-        );
+  useEffect(() => {
+    const controller = new AbortController();
+    serviceApi.formOptions(controller.signal)
+      .then((options) => {
+        setGroups(options.serviceGroups ?? []);
+        setDepartments(options.departments ?? []);
+      })
+      .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
+    return () => controller.abort();
+  }, [serviceApi]);
 
-      const matchType = typeFilter === "ALL" || service.type === typeFilter;
-      const matchGroup = groupFilter === "ALL" || service.group === groupFilter;
-      const matchStatus =
-        statusFilter === "ALL" || service.status === statusFilter;
+  useEffect(() => {
+    const controller = new AbortController();
+    listAllServices(serviceApi, controller.signal)
+      .then(setAllServices)
+      .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
+    return () => controller.abort();
+  }, [serviceApi, reloadKey]);
 
-      return matchSearch && matchType && matchGroup && matchStatus;
-    });
-  }, [services, searchQuery, typeFilter, groupFilter, statusFilter]);
+  // UC-20: the server searches, filters, and pages the table.
+  const tableQuery = JSON.stringify([debouncedSearch, typeFilter, groupFilter, statusFilter, page, pageSize, reloadKey]);
+  const loading = tablePage.query !== tableQuery;
+  const loadError = loading ? null : tablePage.error;
+  const filtered =
+    debouncedSearch !== "" || typeFilter !== "ALL" || groupFilter !== "ALL" || statusFilter !== "ALL";
+
+  useEffect(() => {
+    const controller = new AbortController();
+    serviceApi.list({
+      keyword: debouncedSearch,
+      type: typeFilter === "ALL" ? undefined : typeFilter,
+      group: groupFilter === "ALL" ? undefined : groupFilter,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      page: page - 1,
+      size: pageSize,
+    }, controller.signal)
+      .then((result) => {
+        setTablePage({
+          query: tableQuery,
+          content: result.content,
+          totalElements: result.page.totalElements,
+          error: null,
+        });
+        // A filter change can leave the current page past the end.
+        if (page > 1 && page > result.page.totalPages) {
+          setPage(Math.max(result.page.totalPages, 1));
+        }
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          setTablePage((prev) => ({ ...prev, query: tableQuery, error: serviceErrorMessage(error) }));
+        }
+      });
+    return () => controller.abort();
+  }, [serviceApi, tableQuery, debouncedSearch, typeFilter, groupFilter, statusFilter, page, pageSize]);
 
   const stats = useMemo(() => {
-    const total = services.length;
-    const active = services.filter((s) => s.status === "ACTIVE").length;
-    const insured = services.filter((s) => s.insurancePrice !== null).length;
+    const total = allServices.length;
+    const active = allServices.filter((s) => s.status === "ACTIVE").length;
+    const insured = allServices.filter((s) => s.insurancePrice !== null && s.insurancePrice !== undefined).length;
 
     return { total, active, inactive: total - active, insured };
-  }, [services]);
+  }, [allServices]);
+
+  // Filters change the result set, so return to the first page.
+  const withFirstPage = (setter) => (value) => {
+    setter(value);
+    setPage(1);
+  };
 
   const resetFilters = () => {
     setSearchQuery("");
     setTypeFilter("ALL");
     setGroupFilter("ALL");
     setStatusFilter("ALL");
+    setPage(1);
+  };
+
+  const createService = async (form) => {
+    const request = formToServiceRequest(form);
+    await serviceApi.create(request);
+    toast.success(`Đã thêm dịch vụ ${request.code.toUpperCase()}`);
+    setReloadKey((key) => key + 1);
+    navigate(ADMIN.SERVICES, { replace: true });
   };
 
   const layoutProps = {
@@ -108,9 +191,9 @@ export function ServiceManagementPage({
       <AdminLayout {...layoutProps}>
         <div className="px-6 pb-8">
           <ServiceCreateView
-            onCreate={() =>
-              toast.info("Chưa kết nối API thêm dịch vụ.")
-            }
+            groups={groups}
+            departments={departments}
+            onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}
           />
@@ -122,25 +205,11 @@ export function ServiceManagementPage({
   return (
     <AdminLayout {...layoutProps}>
       <div className="px-6 pb-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">
-              Quản lý dịch vụ và giá
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Danh mục dịch vụ khám và cận lâm sàng, giá viện phí và giá BHYT
-            </p>
-          </div>
-
-          <nav
-            aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-xs text-slate-500"
-          >
-            <span>Quản trị</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-700 font-medium">Dịch vụ và giá</span>
-          </nav>
-        </div>
+        <AccountPageHeader
+          title="Quản lý dịch vụ và giá"
+          description="Danh mục dịch vụ khám và cận lâm sàng, giá viện phí và giá BHYT"
+          crumbs={[{ label: "Quản lý dịch vụ và giá" }]}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <AccountStatCard
@@ -179,45 +248,49 @@ export function ServiceManagementPage({
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_248px] gap-5 items-start">
-          <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
-                Danh sách dịch vụ
-              </h2>
-              <button
-                type="button"
-                onClick={() => navigate(ADMIN.SERVICE_CREATE)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Thêm dịch vụ</span>
-              </button>
-            </div>
+        <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
+              Danh sách dịch vụ
+            </h2>
+            <button
+              type="button"
+              onClick={() => navigate(ADMIN.SERVICE_CREATE)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Thêm dịch vụ</span>
+            </button>
+          </div>
 
-            <ServiceFilterBar
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              typeFilter={typeFilter}
-              setTypeFilter={setTypeFilter}
-              groupFilter={groupFilter}
-              setGroupFilter={setGroupFilter}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              onReset={resetFilters}
-            />
+          <ServiceFilterBar
+            searchQuery={searchQuery}
+            setSearchQuery={withFirstPage(setSearchQuery)}
+            typeFilter={typeFilter}
+            setTypeFilter={withFirstPage(setTypeFilter)}
+            groupFilter={groupFilter}
+            setGroupFilter={withFirstPage(setGroupFilter)}
+            statusFilter={statusFilter}
+            setStatusFilter={withFirstPage(setStatusFilter)}
+            onReset={resetFilters}
+            groups={groups}
+          />
 
-            <ServiceTable
-              services={filteredServices}
-              totalCount={services.length}
-            />
-          </section>
-
-          <aside className="space-y-5">
-            <ServiceOverviewCard services={services} />
-            <ServiceActivityCard activities={activities} />
-          </aside>
-        </div>
+          <ServiceTable
+            services={tablePage.content}
+            loading={loading}
+            error={loadError}
+            filtered={filtered}
+            totalCount={tablePage.totalElements}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        </section>
       </div>
     </AdminLayout>
   );

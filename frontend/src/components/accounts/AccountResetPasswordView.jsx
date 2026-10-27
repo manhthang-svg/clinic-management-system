@@ -58,7 +58,7 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
         title="Đặt lại mật khẩu"
         description={`Tạo mật khẩu tạm cho ${account.username}`}
         onBack={onCancel}
-        crumbs={[{ label: 'Quản trị hệ thống' }, { label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Đặt lại mật khẩu' }]}
+        crumbs={[{ label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Đặt lại mật khẩu' }]}
       />
 
       {temporaryPassword ? (

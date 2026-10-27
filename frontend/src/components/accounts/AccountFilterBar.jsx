@@ -18,8 +18,8 @@ export function AccountFilterBar({
   onReset,
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="relative flex-1 min-w-[240px]">
+    <div className="flex flex-wrap xl:flex-nowrap items-center gap-3">
+      <div className="relative w-full min-w-[240px] xl:flex-1 xl:min-w-0 xl:max-w-[320px]">
         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="search"
@@ -31,7 +31,7 @@ export function AccountFilterBar({
         />
       </div>
 
-      <div className="relative w-44">
+      <div className="relative w-[176px] shrink-0">
         <select
           aria-label="Lọc theo vai trò"
           value={roleFilter}
@@ -46,7 +46,7 @@ export function AccountFilterBar({
         <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
 
-      <div className="relative w-52">
+      <div className="relative w-[208px] shrink-0">
         <select
           aria-label="Lọc theo khoa"
           value={departmentFilter}
@@ -61,7 +61,7 @@ export function AccountFilterBar({
         <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
 
-      <div className="relative w-44">
+      <div className="relative w-[176px] shrink-0">
         <select
           aria-label="Lọc theo trạng thái"
           value={statusFilter}
@@ -79,7 +79,7 @@ export function AccountFilterBar({
       <button
         type="button"
         onClick={onReset}
-        className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer"
+        className="inline-flex shrink-0 items-center gap-2 px-5 py-2.5 text-xs font-semibold whitespace-nowrap text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer"
       >
         <RotateCcw className="w-3.5 h-3.5" />
         <span>Đặt lại</span>

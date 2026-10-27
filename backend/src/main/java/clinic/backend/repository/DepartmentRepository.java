@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.entity.Department;
+import clinic.backend.enums.DepartmentType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DepartmentRepository extends JpaRepository<Department, UUID> {
@@ -16,4 +17,6 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID> {
     boolean existsByDepartmentCode(String departmentCode);
 
     boolean existsByDepartmentNameIgnoreCase(String departmentName);
+
+    List<Department> findAllByTypeAndActiveTrueOrderByDepartmentNameAsc(DepartmentType type);
 }

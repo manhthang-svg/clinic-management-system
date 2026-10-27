@@ -11,6 +11,7 @@ import {
   Layers,
   Stethoscope,
   CheckCircle2,
+  DoorOpen,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -18,6 +19,7 @@ import {
   SERVICE_TYPE_MAP,
   SERVICE_GROUP_LABELS,
 } from '../../constants/serviceData';
+import { INITIAL_DEPARTMENT_ITEMS } from '../../apis/departmentApi';
 import { formatPrice } from '../services/serviceFormat';
 
 export function DepartmentDetailModal(props) {
@@ -25,9 +27,27 @@ export function DepartmentDetailModal(props) {
   return <DepartmentDetailModalContent {...props} />;
 }
 
-function DepartmentDetailModalContent({ item, onEdit, onClose }) {
+function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
   const isDept = item.unitType === 'DEPARTMENT';
   const isActive = item.status === 'ACTIVE';
+
+  // Lấy danh sách các phòng trực thuộc chuyên khoa này
+  const departmentRooms = useMemo(() => {
+    if (!isDept) return [];
+    const sourceRooms =
+      rooms && rooms.length > 0
+        ? rooms
+        : INITIAL_DEPARTMENT_ITEMS.filter((i) => i.unitType === 'ROOM');
+
+    return sourceRooms.filter((r) => {
+      return (
+        r.departmentId === item.id ||
+        r.departmentId === item.departmentId ||
+        r.departmentName === item.name ||
+        (item.code && r.departmentCode === item.code)
+      );
+    });
+  }, [isDept, item, rooms]);
 
   // Lấy danh sách dịch vụ thực hiện tại phòng
   const roomServices = useMemo(() => {
@@ -64,7 +84,7 @@ function DepartmentDetailModalContent({ item, onEdit, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
       <div
         className={`w-full ${
-          isDept ? 'max-w-lg' : 'max-w-3xl'
+          isDept ? 'max-w-2xl' : 'max-w-3xl'
         } rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-[#e3ece9] transition-all transform scale-100 max-h-[92vh] flex flex-col`}
         role="dialog"
         aria-modal="true"
@@ -107,50 +127,83 @@ function DepartmentDetailModalContent({ item, onEdit, onClose }) {
         {/* Modal Body with scroll */}
         <div className="py-4 space-y-4 text-xs overflow-y-auto flex-1 pr-1">
           {/* Thông tin tổng quan trạng thái & phân loại */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f8faf9] p-3.5 rounded-xl border border-slate-100">
-            <div>
-              <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Trạng thái</span>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold text-[11px] border ${
-                  isActive
-                    ? 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
-                    : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
-                }`}
-              >
-                {isActive ? 'Đang hoạt động' : 'Tạm ngưng / Bảo trì'}
-              </span>
+          {isDept ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#f8faf9] p-3.5 rounded-xl border border-slate-100">
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Trạng thái</span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold text-[11px] border ${
+                    isActive
+                      ? 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
+                      : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
+                  }`}
+                >
+                  {isActive ? 'Đang hoạt động' : 'Đang khóa'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Phân loại</span>
+                <span className="font-semibold text-slate-800">
+                  {item.type === 'CLINICAL' ||
+                  item.code === 'DEMO-NOI' ||
+                  item.code === 'DEMO-NGOAI' ||
+                  item.name?.toLowerCase().includes('nội') ||
+                  item.name?.toLowerCase().includes('ngoại')
+                    ? 'Lâm sàng'
+                    : 'Cận lâm sàng'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Mô tả nhiệm vụ</span>
+                <span className="font-semibold text-slate-800 line-clamp-2" title={item.description}>
+                  {item.description || 'Chưa có mô tả'}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Phân loại</span>
-              <span className="font-semibold text-slate-800">
-                {item.type === 'CLINICAL'
-                  ? 'Lâm sàng'
-                  : item.type === 'PARACLINICAL'
-                  ? 'Cận lâm sàng'
-                  : item.type === 'EXAMINATION'
-                  ? 'Khám lâm sàng'
-                  : item.type === 'ADMINISTRATIVE'
-                  ? 'Hành chính / Thu ngân'
-                  : item.type || '—'}
-              </span>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f8faf9] p-3.5 rounded-xl border border-slate-100">
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Trạng thái</span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold text-[11px] border ${
+                    isActive
+                      ? 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
+                      : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
+                  }`}
+                >
+                  {isActive ? 'Đang hoạt động' : 'Tạm ngưng / Bảo trì'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Phân loại</span>
+                <span className="font-semibold text-slate-800">
+                  {item.type === 'EXAMINATION'
+                    ? 'Khám lâm sàng'
+                    : item.type === 'PARACLINICAL'
+                    ? 'Cận lâm sàng'
+                    : item.type === 'ADMINISTRATIVE'
+                    ? 'Hành chính / Thu ngân'
+                    : item.type || '—'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Khoa chủ quản</span>
+                <span className="font-semibold text-slate-800 line-clamp-1">
+                  {item.departmentName || '—'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Vị trí / Tầng</span>
+                <span className="font-semibold text-slate-800 line-clamp-1">
+                  {item.location || '—'}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Khoa chủ quản</span>
-              <span className="font-semibold text-slate-800 line-clamp-1">
-                {isDept ? item.name : item.departmentName || '—'}
-              </span>
-            </div>
-            <div>
-              <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Vị trí / Tầng</span>
-              <span className="font-semibold text-slate-800 line-clamp-1">
-                {item.location || '—'}
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Nếu là Chuyên khoa (DEPARTMENT) */}
           {isDept && (
-            <div className="space-y-3 pt-1">
+            <div className="space-y-3.5 pt-1">
               <div className="flex items-start gap-2.5 text-slate-700">
                 <User className="w-4 h-4 text-[#127e7a] shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -159,23 +212,72 @@ function DepartmentDetailModalContent({ item, onEdit, onClose }) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2.5 text-slate-700">
-                <Home className="w-4 h-4 text-[#127e7a] shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-semibold text-slate-500 block text-[11px]">Số lượng phòng</span>
-                  <span className="font-medium text-slate-800">{item.roomCount || 0} phòng trực thuộc</span>
-                </div>
-              </div>
-
-              {item.description && (
-                <div className="flex items-start gap-2.5 text-slate-700 pt-1">
-                  <FileText className="w-4 h-4 text-[#127e7a] shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <span className="font-semibold text-slate-500 block text-[11px]">Mô tả nhiệm vụ</span>
-                    <p className="text-slate-600 leading-relaxed mt-0.5">{item.description}</p>
+              {/* Danh sách phòng chức năng trực thuộc khoa */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                    <DoorOpen className="w-4 h-4 text-[#0d9488]" />
+                    <span>Danh sách phòng chức năng trực thuộc</span>
+                    <span className="ml-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/70">
+                      {departmentRooms.length} phòng
+                    </span>
                   </div>
                 </div>
-              )}
+
+                {departmentRooms.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
+                    Chuyên khoa này hiện chưa có phòng chức năng nào trực thuộc.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-700 font-semibold">
+                          <th className="py-2.5 px-3">Mã phòng</th>
+                          <th className="py-2.5 px-3">Tên phòng</th>
+                          <th className="py-2.5 px-3">Vị trí buồng</th>
+                          <th className="py-2.5 px-3 text-right">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {departmentRooms.map((room) => {
+                          const isRoomActive = room.status === 'ACTIVE';
+                          return (
+                            <tr key={room.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-700 whitespace-nowrap">
+                                {room.code}
+                              </td>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                {room.name}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
+                                {room.location || '—'}
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                                    isRoomActive
+                                      ? 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
+                                      : room.status === 'MAINTENANCE'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
+                                  }`}
+                                >
+                                  {isRoomActive
+                                    ? 'Đang hoạt động'
+                                    : room.status === 'MAINTENANCE'
+                                    ? 'Đang bảo trì'
+                                    : 'Tạm ngưng'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

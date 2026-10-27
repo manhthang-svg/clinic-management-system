@@ -99,6 +99,16 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   // Tính toán số liệu thống kê động
   const currentStats = useMemo(() => {
     const totalDepts = departmentsList.length;
+    const clinicalDepts = departmentsList.filter(
+      (dept) =>
+        dept.type === 'CLINICAL' ||
+        dept.code === 'DEMO-NOI' ||
+        dept.code === 'DEMO-NGOAI' ||
+        dept.name?.toLowerCase().includes('nội') ||
+        dept.name?.toLowerCase().includes('ngoại')
+    ).length;
+    const paraclinicalDepts = totalDepts - clinicalDepts;
+
     const totalRooms = allRoomsList.length;
     const clinicalRooms = allRoomsList.filter(
       (i) => i.type === 'EXAMINATION' || i.code?.startsWith('PK-')
@@ -113,6 +123,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
 
     return {
       totalDepartments: totalDepts,
+      clinicalDepartments: clinicalDepts,
+      paraclinicalDepartments: paraclinicalDepts,
       totalRooms: totalRooms,
       clinicalRooms: clinicalRooms,
       paraclinicalRooms: paraclinicalRooms,
@@ -240,49 +252,116 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     const isRoom = item.unitType === 'ROOM';
     const isDeactivating = item.status === 'ACTIVE';
 
+    if (!isRoom) {
+      // Đang thao tác trên CHUYÊN KHOA
+      const deptRooms = allRoomsList.filter(
+        (r) =>
+          r.departmentId === item.id ||
+          r.departmentId === item.departmentId ||
+          r.departmentName === item.name ||
+          (item.code && r.departmentCode === item.code)
+      );
+      const activeDeptRoomsCount = deptRooms.filter((r) => r.status === 'ACTIVE').length;
+
+      if (isDeactivating) {
+        // Cảnh báo bắt buộc khi ngưng hoạt động khoa
+        setConfirmDialog({
+          title: 'Khóa chuyên khoa',
+          description: `Khoa này đang có ${activeDeptRoomsCount} phòng hoạt động. Việc ngưng hoạt động khoa sẽ tạm ngưng toàn bộ các phòng trực thuộc. Bạn có chắc chắn muốn tiếp tục?`,
+          confirmText: 'Khóa chuyên khoa',
+          variant: 'destructive',
+          onConfirm: async () => {
+            try {
+              await departmentApi.toggleDepartmentStatus(item.id);
+            } catch {
+              // Mock fallback
+            } finally {
+              // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang INACTIVE
+              setItems((prev) =>
+                prev.map((i) => {
+                  if (i.id === item.id && i.unitType === 'DEPARTMENT') {
+                    return { ...i, status: 'INACTIVE' };
+                  }
+                  if (
+                    i.unitType === 'ROOM' &&
+                    (i.departmentId === item.id ||
+                      i.departmentId === item.departmentId ||
+                      i.departmentName === item.name ||
+                      (item.code && i.departmentCode === item.code))
+                  ) {
+                    return { ...i, status: 'INACTIVE' };
+                  }
+                  return i;
+                })
+              );
+              toast.success(
+                `Đã tạm ngưng chuyên khoa "${item.name}" và toàn bộ các phòng trực thuộc!`
+              );
+              setConfirmDialog(null);
+            }
+          },
+        });
+        return;
+      } else {
+        // Mở khóa chuyên khoa: kích hoạt lại chuyên khoa và toàn bộ phòng trực thuộc
+        setConfirmDialog({
+          title: 'Mở khóa chuyên khoa',
+          description: `Kích hoạt lại chuyên khoa "${item.name}"? Toàn bộ các phòng chức năng trực thuộc sẽ được kích hoạt hoạt động trở lại.`,
+          confirmText: 'Kích hoạt lại',
+          variant: 'mint',
+          onConfirm: async () => {
+            try {
+              await departmentApi.toggleDepartmentStatus(item.id);
+            } catch {
+              // Mock fallback
+            } finally {
+              // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang ACTIVE
+              setItems((prev) =>
+                prev.map((i) => {
+                  if (i.id === item.id && i.unitType === 'DEPARTMENT') {
+                    return { ...i, status: 'ACTIVE' };
+                  }
+                  if (
+                    i.unitType === 'ROOM' &&
+                    (i.departmentId === item.id ||
+                      i.departmentId === item.departmentId ||
+                      i.departmentName === item.name ||
+                      (item.code && i.departmentCode === item.code))
+                  ) {
+                    return { ...i, status: 'ACTIVE' };
+                  }
+                  return i;
+                })
+              );
+              toast.success(
+                `Đã kích hoạt lại chuyên khoa "${item.name}" và toàn bộ phòng trực thuộc!`
+              );
+              setConfirmDialog(null);
+            }
+          },
+        });
+        return;
+      }
+    }
+
+    // Trường hợp là ROOM (Phòng chức năng)
     setConfirmDialog({
-      title: isDeactivating
-        ? isRoom
-          ? 'Tạm ngưng hoạt động phòng'
-          : 'Khóa chuyên khoa'
-        : isRoom
-        ? 'Kích hoạt lại phòng khám'
-        : 'Mở khóa chuyên khoa',
+      title: isDeactivating ? 'Tạm ngưng hoạt động phòng' : 'Kích hoạt lại phòng khám',
       description: isDeactivating
         ? `Bạn có chắc muốn tạm ngưng "${item.name}" (${item.code})?\nĐơn vị sẽ không hiển thị khi phân bổ lịch khám mới.`
         : `Kích hoạt lại "${item.name}" (${item.code}) để sẵn sàng phục vụ tiếp nhận bệnh nhân?`,
-      confirmText: isDeactivating ? (isRoom ? 'Tạm ngưng' : 'Khóa khoa') : 'Kích hoạt',
+      confirmText: isDeactivating ? 'Tạm ngưng' : 'Kích hoạt',
       variant: isDeactivating ? 'destructive' : 'mint',
       onConfirm: async () => {
         try {
-          if (isRoom) {
-            await departmentApi.toggleRoomStatus(item.id);
-          } else {
-            await departmentApi.toggleDepartmentStatus(item.id);
-          }
-
-          const newStatus = isDeactivating ? 'INACTIVE' : 'ACTIVE';
-          setItems((prev) =>
-            prev.map((i) =>
-              i.id === item.id && i.unitType === item.unitType
-                ? { ...i, status: newStatus }
-                : i
-            )
-          );
-
-          toast.success(
-            isDeactivating
-              ? `Đã tạm ngưng "${item.name}" thành công!`
-              : `Đã kích hoạt "${item.name}" thành công!`
-          );
+          await departmentApi.toggleRoomStatus(item.id);
         } catch {
           // Fallback UI
+        } finally {
           const newStatus = isDeactivating ? 'INACTIVE' : 'ACTIVE';
           setItems((prev) =>
             prev.map((i) =>
-              i.id === item.id && i.unitType === item.unitType
-                ? { ...i, status: newStatus }
-                : i
+              i.id === item.id && i.unitType === 'ROOM' ? { ...i, status: newStatus } : i
             )
           );
           toast.success(
@@ -290,7 +369,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               ? `Đã tạm ngưng "${item.name}" thành công!`
               : `Đã kích hoạt "${item.name}" thành công!`
           );
-        } finally {
           setConfirmDialog(null);
         }
       },
@@ -346,7 +424,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             departmentId: `dept-${Date.now()}`,
             departmentName: formData.name,
             type: formData.type,
-            location: formData.location || 'Khu trung tâm',
+            location: '',
             headPerson: formData.headPerson || 'Chưa bổ nhiệm',
             status: formData.status,
             description: formData.description,
@@ -454,7 +532,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             departmentId: `dept-${Date.now()}`,
             departmentName: formData.name,
             type: formData.type,
-            location: formData.location || 'Tòa A - Tầng 1',
+            location: '',
             headPerson: formData.headPerson || 'Chưa bổ nhiệm',
             status: formData.status,
             description: formData.description,
@@ -513,6 +591,15 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     }
   };
 
+  const handleSelectDepartmentRooms = (dept) => {
+    setActiveTab('rooms');
+    setRoomDeptFilter(dept.id || dept.name);
+    setRoomSearchQuery('');
+    setRoomTypeFilter('ALL');
+    setRoomStatusFilter('ALL');
+    setRoomPage(1);
+  };
+
   const layoutProps = {
     currentAdmin,
     onLogout,
@@ -543,7 +630,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               className="hover:text-slate-600 transition-colors cursor-pointer flex items-center gap-1"
             >
               <House className="w-3.5 h-3.5" />
-              <span>Quản trị hệ thống</span>
             </button>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="font-semibold text-slate-700">Khoa / Phòng</span>
@@ -696,6 +782,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 onView={handleOpenView}
                 onEdit={handleOpenEdit}
                 onToggleStatus={handleToggleStatus}
+                onSelectDepartmentRooms={handleSelectDepartmentRooms}
               />
             </div>
           )}
@@ -717,6 +804,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       <DepartmentDetailModal
         isOpen={detailModalOpen}
         item={viewingItem}
+        rooms={allRoomsList}
         onEdit={(item) => {
           handleOpenEdit(item);
         }}
