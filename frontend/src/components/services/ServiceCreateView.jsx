@@ -152,8 +152,7 @@ export function ServiceCreateView({ groups = [], departments = [], onCreate, onC
       <AccountPageHeader
         title="Thêm dịch vụ"
         description="Thêm dịch vụ khám hoặc cận lâm sàng vào danh mục, kèm giá viện phí và giá BHYT"
-        onBack={onCancel}
-        crumbs={[{ label: 'Quản trị' }, { label: 'Dịch vụ và giá', onClick: onGoToList }, { label: 'Thêm dịch vụ' }]}
+        crumbs={[{ label: 'Quản lý dịch vụ và giá', onClick: onGoToList }, { label: 'Thêm dịch vụ' }]}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-5 items-start">

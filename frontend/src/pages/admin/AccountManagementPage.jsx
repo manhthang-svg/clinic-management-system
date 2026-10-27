@@ -30,8 +30,6 @@ import {
   AccountResetPasswordView,
   ProfileView,
   AccountStatCard,
-  AccountOverviewCard,
-  AccountActivityCard,
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
 import { accountErrorMessage } from "../../components/accounts/accountErrors";
@@ -788,57 +786,50 @@ export function AccountManagementPage({
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_248px] gap-5 items-start">
-          <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
-                Danh sách tài khoản
-              </h2>
-              <button
-                type="button"
-                onClick={openCreate}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tạo tài khoản</span>
-              </button>
-            </div>
+        <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">
+              Danh sách tài khoản
+            </h2>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo tài khoản</span>
+            </button>
+          </div>
 
-            <AccountFilterBar
-              searchQuery={searchQuery}
-              setSearchQuery={withFirstPage(setSearchQuery)}
-              roleFilter={roleFilter}
-              setRoleFilter={withFirstPage(setRoleFilter)}
-              statusFilter={statusFilter}
-              setStatusFilter={withFirstPage(setStatusFilter)}
-              departmentFilter={departmentFilter}
-              setDepartmentFilter={withFirstPage(setDepartmentFilter)}
-              departments={departments}
-              onReset={resetFilters}
-            />
+          <AccountFilterBar
+            searchQuery={searchQuery}
+            setSearchQuery={withFirstPage(setSearchQuery)}
+            roleFilter={roleFilter}
+            setRoleFilter={withFirstPage(setRoleFilter)}
+            statusFilter={statusFilter}
+            setStatusFilter={withFirstPage(setStatusFilter)}
+            departmentFilter={departmentFilter}
+            setDepartmentFilter={withFirstPage(setDepartmentFilter)}
+            departments={departments}
+            onReset={resetFilters}
+          />
 
-            <AccountTable
-              accounts={tablePage.content}
-              loading={loading}
-              totalCount={tablePage.totalElements}
-              page={page}
-              pageSize={pageSize}
-              onPageChange={setPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setPage(1);
-              }}
-              onView={(account) => openDetail(account.id)}
-              sort={sort}
-              onSortChange={withFirstPage(setSort)}
-            />
-          </section>
-
-          <aside className="space-y-5">
-            <AccountOverviewCard accounts={accounts} />
-            <AccountActivityCard activities={activities} />
-          </aside>
-        </div>
+          <AccountTable
+            accounts={tablePage.content}
+            loading={loading}
+            totalCount={tablePage.totalElements}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+            onView={(account) => openDetail(account.id)}
+            sort={sort}
+            onSortChange={withFirstPage(setSort)}
+          />
+        </section>
       </div>
 
       {modalElements}
