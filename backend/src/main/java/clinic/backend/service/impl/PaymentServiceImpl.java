@@ -57,19 +57,11 @@ public class PaymentServiceImpl implements PaymentService {
             String search,
             Pageable pageable
     ) {
-        Page<Payment> page;
-
-        if (status != null && type != null) {
-            page = paymentRepository.findByStatusAndType(status, type, pageable);
-        } else if (status != null) {
-            page = paymentRepository.findByStatus(status, pageable);
-        } else if (type != null) {
-            page = paymentRepository.findByType(type, pageable);
-        } else {
-            page = paymentRepository.findAll(pageable);
-        }
-
-        return page.map(this::toResponse);
+        String normalizedSearch = search == null || search.isBlank()
+                ? null
+                : search.trim();
+        return paymentRepository.search(status, type, normalizedSearch, pageable)
+                .map(this::toResponse);
     }
 
     @Override
@@ -92,6 +84,26 @@ public class PaymentServiceImpl implements PaymentService {
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy phiếu thu"
                 ));
+
+        return toResponse(payment);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentResponse getPrintablePayment(UUID paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy phiếu thu"
+                ));
+
+        if (payment.getStatus() != PaymentStatus.PAID
+                && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ được in phiếu đã thanh toán hoặc miễn phí"
+            );
+        }
 
         return toResponse(payment);
     }

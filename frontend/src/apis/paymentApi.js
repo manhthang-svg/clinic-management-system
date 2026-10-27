@@ -16,6 +16,10 @@ export const paymentApi = {
         return apiClient.request(`/payments/${encodeURIComponent(id)}`, { signal });
     },
 
+    getPrintable(id) {
+        return apiClient.request(`/payments/${encodeURIComponent(id)}/print`);
+    },
+
     confirm(id, data) {
         return apiClient.request(`/payments/${encodeURIComponent(id)}/confirm`, {
             method: 'POST',

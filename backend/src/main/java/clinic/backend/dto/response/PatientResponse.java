@@ -29,5 +29,6 @@ public record PatientResponse(
         String hotennguoithan,
         String nguoithanQuanhe,
         String diachinguoithan,
-        String sodienthoainguoithan
+        String sodienthoainguoithan,
+        Long version
 ) {}

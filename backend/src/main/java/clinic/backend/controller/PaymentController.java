@@ -68,6 +68,15 @@ public class PaymentController {
         return ApiResponse.success(paymentService.getPaymentById(paymentId));
     }
 
+    @PreAuthorize("hasRole('CASHIER')")
+    @GetMapping("/{paymentId}/print")
+    @Operation(summary = "UC-72 Chuẩn bị dữ liệu in phiếu thu")
+    public ApiResponse<PaymentResponse> getPrintablePayment(
+            @PathVariable UUID paymentId
+    ) {
+        return ApiResponse.success(paymentService.getPrintablePayment(paymentId));
+    }
+
     // 4. Xác nhận thanh toán tại quầy (Tiền mặt / Thẻ)
     @PreAuthorize("hasRole('CASHIER')")
     @PostMapping("/{paymentId}/confirm")

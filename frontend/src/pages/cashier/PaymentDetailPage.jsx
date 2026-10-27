@@ -78,6 +78,16 @@ export default function PaymentDetailPage() {
     const [qrData, setQrData] = useState(null);
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
+    const isPrintable = payment?.status === 'PAID' || payment?.status === 'FEE_EXEMPT';
+
+    const handlePrint = async () => {
+        try {
+            await paymentApi.getPrintable(payment.id);
+            window.print();
+        } catch (err) {
+            setNotice(err?.message || 'Chỉ được in phiếu đã thanh toán hoặc miễn phí.');
+        }
+    };
 
     const loadPayment = useCallback(async () => {
         if (!id) return;
@@ -387,8 +397,9 @@ export default function PaymentDetailPage() {
 
                     <div className="flex flex-wrap items-center gap-3">
                         <button
-                            onClick={() => window.print()}
-                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-xs"
+                            onClick={() => void handlePrint()}
+                            disabled={!isPrintable}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <Printer size={16} /> In phiếu thu
                         </button>
