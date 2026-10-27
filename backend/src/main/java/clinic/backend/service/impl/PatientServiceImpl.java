@@ -2,6 +2,7 @@
 package clinic.backend.service.impl;
 
 import clinic.backend.dto.request.CreatePatientRequest;
+import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.entity.Patient;
 import clinic.backend.repository.PatientRepository;
@@ -128,8 +129,64 @@ public class PatientServiceImpl implements PatientService {
                 savedPatient.getHotennguoithan(),
                 savedPatient.getNguoithanQuanhe(),
                 savedPatient.getDiachinguoithan(),
-                savedPatient.getSodienthoainguoithan()
+                savedPatient.getSodienthoainguoithan(),
+                savedPatient.getVersion()
         );
+    }
+
+    @Override
+    @Transactional
+    public PatientResponse updatePatient(UUID id, UpdatePatientRequest request) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy bệnh nhân"
+                ));
+
+        if (!patient.getVersion().equals(request.version())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Thông tin bệnh nhân đã được cập nhật bởi người khác"
+            );
+        }
+
+        String cccdSo = normalize(request.cccdSo());
+        if (cccdSo != null && patientRepository.existsByCccdSoAndIdNot(cccdSo, id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "CCCD đã tồn tại trong hệ thống"
+            );
+        }
+
+        patient.updateAdministrativeInfo(
+                cccdSo,
+                normalize(request.hochieuSo()),
+                request.hoten().trim(),
+                request.ngaysinh(),
+                request.gioitinh(),
+                normalize(request.nghenghiep()),
+                normalize(request.nghenghiepMa()),
+                request.dantoc().trim(),
+                request.dantocMa().trim(),
+                normalize(request.ngoaikieu()),
+                normalize(request.ngoaikieuMa()),
+                request.diachi().trim(),
+                normalize(request.xaphuong()),
+                normalize(request.xaphuongMa()),
+                normalize(request.tinhthanh()),
+                normalize(request.tinhthanhMa()),
+                normalize(request.noilamviec()),
+                normalize(request.sodienthoai()),
+                normalize(request.yeutorh()),
+                normalize(request.nhommau()),
+                normalize(request.hotennguoithan()),
+                normalize(request.nguoithanQuanhe()),
+                normalize(request.diachinguoithan()),
+                normalize(request.sodienthoainguoithan()),
+                Instant.now()
+        );
+
+        return toResponse(patientRepository.save(patient));
     }
 
     @Override
@@ -138,7 +195,11 @@ public class PatientServiceImpl implements PatientService {
             String keyword,
             org.springframework.data.domain.Pageable pageable
     ) {
-        return patientRepository.findAll(pageable).map(this::toResponse);
+        String normalizedKeyword = normalize(keyword);
+        return (normalizedKeyword == null
+                ? patientRepository.findAll(pageable)
+                : patientRepository.search(normalizedKeyword, pageable))
+                .map(this::toResponse);
     }
 
     @Override
@@ -179,7 +240,8 @@ public class PatientServiceImpl implements PatientService {
                 savedPatient.getHotennguoithan(),
                 savedPatient.getNguoithanQuanhe(),
                 savedPatient.getDiachinguoithan(),
-                savedPatient.getSodienthoainguoithan()
+                savedPatient.getSodienthoainguoithan(),
+                savedPatient.getVersion()
         );
     }
 }

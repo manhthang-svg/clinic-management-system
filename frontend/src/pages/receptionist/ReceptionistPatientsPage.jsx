@@ -27,6 +27,9 @@ export default function ReceptionistPatientsPage() {
     const [keyword, setKeyword] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [notice, setNotice] = useState('');
+    const [editingPatient, setEditingPatient] = useState(null);
+    const [editForm, setEditForm] = useState(null);
+    const [savingPatient, setSavingPatient] = useState(false);
 
     // Modal Đăng ký khám (Tạo Visit)
     const [registerPatient, setRegisterPatient] = useState(null);
@@ -41,7 +44,7 @@ export default function ReceptionistPatientsPage() {
     const fetchPatients = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await patientApi.list({ size: 50 });
+            const res = await patientApi.list({ size: 50, keyword: keyword.trim() });
             const list = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
             setPatients(list);
         } catch (err) {
@@ -49,7 +52,7 @@ export default function ReceptionistPatientsPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [keyword]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -124,22 +127,40 @@ export default function ReceptionistPatientsPage() {
         }
     };
 
-    const filteredPatients = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
-        return patients.filter((patient) => {
-            const name = patient.hoten || patient.name || '';
-            const code = patient.mabenhnhan || patient.id || '';
-            const phone = patient.sodienthoai || patient.phone || '';
-            const cccd = patient.cccdSo || patient.identity || '';
+    const filteredPatients = patients;
 
-            return (
-                !query ||
-                [name, code, phone, cccd].some((value) =>
-                    value.toLowerCase().includes(query)
-                )
+    const openEditPatient = async (patient) => {
+        try {
+            const response = await patientApi.detail(patient.id);
+            const detail = response?.data || response;
+            setEditingPatient(detail);
+            setEditForm({
+                ...detail,
+                version: detail.version ?? patient.version ?? 0,
+            });
+        } catch (err) {
+            setNotice(err?.message || 'Không thể tải hồ sơ bệnh nhân');
+        }
+    };
+
+    const handleSavePatient = async (event) => {
+        event.preventDefault();
+        setSavingPatient(true);
+        try {
+            const response = await patientApi.update(editingPatient.id, editForm);
+            const updated = response?.data || response;
+            setPatients((current) =>
+                current.map((patient) => patient.id === updated.id ? updated : patient)
             );
-        });
-    }, [patients, keyword]);
+            setEditingPatient(null);
+            setEditForm(null);
+            setNotice('Cập nhật hồ sơ bệnh nhân thành công.');
+        } catch (err) {
+            setNotice(err?.message || 'Không thể cập nhật hồ sơ bệnh nhân');
+        } finally {
+            setSavingPatient(false);
+        }
+    };
 
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6">
@@ -268,6 +289,14 @@ export default function ReceptionistPatientsPage() {
                                                 >
                                                     <Eye size={15} />
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    title="Chỉnh sửa hồ sơ"
+                                                    onClick={() => void openEditPatient(patient)}
+                                                    className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -381,6 +410,61 @@ export default function ReceptionistPatientsPage() {
                                             <option value="ELDERLY">Người cao tuổi (≥ 75 tuổi)</option>
                                             <option value="FRAIL_DISABLED">Người khuyết tật nặng / suy kiệt</option>
                                         </select>
+                                    </div>
+                                )}
+
+                                {editingPatient && editForm && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+                                        <form onSubmit={handleSavePatient} className="w-full max-w-2xl space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                                <h3 className="text-lg font-bold text-slate-800">Cập nhật hồ sơ bệnh nhân</h3>
+                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                {[
+                                                    ['hoten', 'Họ và tên'],
+                                                    ['ngaysinh', 'Ngày sinh'],
+                                                    ['cccdSo', 'Số CCCD'],
+                                                    ['sodienthoai', 'Số điện thoại'],
+                                                    ['diachi', 'Địa chỉ'],
+                                                    ['dantoc', 'Dân tộc'],
+                                                    ['dantocMa', 'Mã dân tộc'],
+                                                    ['version', 'Phiên bản'],
+                                                ].map(([field, label]) => (
+                                                    <label key={field} className="text-sm font-semibold text-slate-700">
+                                                        {label}
+                                                        <input
+                                                            type={field === 'ngaysinh' ? 'date' : field === 'version' ? 'number' : 'text'}
+                                                            value={editForm[field] ?? ''}
+                                                            onChange={(event) => setEditForm({ ...editForm, [field]: field === 'version' ? Number(event.target.value) : event.target.value })}
+                                                            readOnly={field === 'version'}
+                                                            required={['hoten', 'ngaysinh', 'diachi', 'dantoc', 'dantocMa'].includes(field)}
+                                                            className={`${inputClass} mt-1`}
+                                                        />
+                                                    </label>
+                                                ))}
+                                                <label className="text-sm font-semibold text-slate-700">
+                                                    Giới tính
+                                                    <select
+                                                        value={editForm.gioitinh ?? 3}
+                                                        onChange={(event) => setEditForm({ ...editForm, gioitinh: Number(event.target.value) })}
+                                                        className={`${inputClass} mt-1`}
+                                                    >
+                                                        <option value="1">Nam</option>
+                                                        <option value="2">Nữ</option>
+                                                        <option value="3">Khác</option>
+                                                    </select>
+                                                </label>
+                                            </div>
+                                            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Hủy</button>
+                                                <button type="submit" disabled={savingPatient} className="rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                                                    {savingPatient ? 'Đang lưu...' : 'Lưu thay đổi'}
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
                                 )}
                             </div>

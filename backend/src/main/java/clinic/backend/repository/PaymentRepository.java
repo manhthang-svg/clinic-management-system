@@ -40,6 +40,30 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             Pageable pageable
     );
 
+    @Query("""
+            select p from Payment p
+            join Visit v on v.id = p.visitId
+            join Patient patient on patient.id = v.patientId
+            where (:status is null or p.status = :status)
+              and (:type is null or p.type = :type)
+              and (
+                    :search is null
+                    or lower(p.paymentCode) like lower(concat('%', :search, '%'))
+                    or lower(coalesce(p.receiptNumber, '')) like lower(concat('%', :search, '%'))
+                    or lower(coalesce(v.sovaovien, '')) like lower(concat('%', :search, '%'))
+                    or lower(patient.mabenhnhan) like lower(concat('%', :search, '%'))
+                    or lower(patient.hoten) like lower(concat('%', :search, '%'))
+                    or lower(coalesce(patient.cccdSo, '')) like lower(concat('%', :search, '%'))
+                    or lower(coalesce(patient.sodienthoai, '')) like lower(concat('%', :search, '%'))
+                  )
+            """)
+    Page<Payment> search(
+            @Param("status") PaymentStatus status,
+            @Param("type") PaymentType type,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
     List<Payment> findByVisitId(UUID visitId);
 
     Optional<Payment> findByPayosOrderCode(Long payosOrderCode);

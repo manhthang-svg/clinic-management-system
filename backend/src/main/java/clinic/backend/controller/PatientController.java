@@ -3,6 +3,7 @@ package clinic.backend.controller;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreatePatientRequest;
+import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.service.PatientService;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +38,16 @@ public class PatientController {
             @Valid @RequestBody CreatePatientRequest request
     ) {
         return ApiResponse.success(patientService.createPatient(request));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @Operation(summary = "UC-38 Cập nhật thông tin bệnh nhân")
+    public ApiResponse<PatientResponse> updatePatient(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePatientRequest request
+    ) {
+        return ApiResponse.success(patientService.updatePatient(id, request));
     }
 
     @GetMapping

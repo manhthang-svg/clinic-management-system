@@ -19,6 +19,9 @@ frontend/dist/
 # Logs
 *.log
 
+# Local specification drafts
+docs/specifications/
+
 # Operating system files
 .DS_Store
 Thumbs.db

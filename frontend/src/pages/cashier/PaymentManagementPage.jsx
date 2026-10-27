@@ -94,6 +94,7 @@ export default function PaymentManagementPage() {
             const params = { size: 50 };
             if (statusFilter !== 'ALL') params.status = statusFilter;
             if (typeTab !== 'ALL') params.type = typeTab;
+            if (search.trim()) params.search = search.trim();
 
             const res = await paymentApi.list(params);
             const content = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
@@ -103,7 +104,7 @@ export default function PaymentManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, typeTab]);
+    }, [search, statusFilter, typeTab]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -112,21 +113,9 @@ export default function PaymentManagementPage() {
         return () => window.clearTimeout(timer);
     }, [fetchPayments]);
 
-    // Lọc tìm kiếm phía client trên danh sách đã tải
     const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return payments;
-        return payments.filter((p) => {
-            return [
-                p.paymentCode,
-                p.patientName,
-                p.patientCode,
-                p.sovaovien,
-                p.receiptNumber,
-                p.patientPhone,
-            ].some((v) => v && v.toLowerCase().includes(q));
-        });
-    }, [payments, search]);
+        return payments;
+    }, [payments]);
 
     // Xử lý xác nhận tiền mặt
     const handleConfirmCash = async () => {
