@@ -9,6 +9,7 @@ export function createServiceApi(client) {
             return client.request(`/services${suffix}`, { signal });
         },
         formOptions: (signal) => client.request('/services/form-options', { signal }),
+        create: (body) => client.request('/services', { method: 'POST', body }),
     };
 }
 

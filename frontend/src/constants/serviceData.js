@@ -17,19 +17,6 @@ export const SERVICE_GROUP_LABELS = {
   ECG: 'Điện tim',
 };
 
-// Each group belongs to one paraclinical service type (docs/demo-master-data.md).
-export const SERVICE_GROUP_TYPES = {
-  HEMATOLOGY: 'LAB',
-  BIOCHEMISTRY: 'LAB',
-  MICROBIOLOGY: 'LAB',
-  ULTRASOUND: 'IMAGING',
-  XRAY: 'IMAGING',
-  CT: 'IMAGING',
-  MRI: 'IMAGING',
-  ENDOSCOPY: 'FUNCTIONAL',
-  ECG: 'FUNCTIONAL',
-};
-
 export const SERVICE_STATUS_LABELS = {
   ACTIVE: 'Đang hoạt động',
   INACTIVE: 'Ngừng hoạt động',
