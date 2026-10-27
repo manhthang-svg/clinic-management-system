@@ -18,5 +18,9 @@ export default function HomeRedirect({ session }) {
         return <Navigate to="/admin/accounts" replace />;
     }
 
+    if (session.account?.role === 'RECEPTIONIST') {
+        return <Navigate to="/receptionist" replace />;
+    }
+
     return <p>Role không được hỗ trợ: {session.account?.role}</p>;
 }
