@@ -62,7 +62,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
         title="Hồ sơ cá nhân"
         description="Xem thông tin tài khoản và cập nhật thông tin liên hệ của bạn"
         onBack={onCancel}
-        crumbs={[{ label: 'Quản trị hệ thống' }, { label: 'Hồ sơ cá nhân' }]}
+        crumbs={[{ label: 'Hồ sơ cá nhân' }]}
       />
 
       {saved && (

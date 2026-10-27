@@ -16,22 +16,27 @@ export const GENDER_LABELS = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Tổng quan', iconName: 'LayoutGrid' },
-  { id: 'patients', label: 'Bệnh nhân', iconName: 'Users' },
-  { id: 'appointments', label: 'Lịch khám', iconName: 'CalendarDays' },
-  { id: 'examinations', label: 'Khám bệnh', iconName: 'Stethoscope' },
-  { id: 'subclinical', label: 'Cận lâm sàng', iconName: 'Microscope' },
+  { id: 'reports', label: 'Báo cáo thống kê', iconName: 'ClipboardList' },
   { id: 'departments', label: 'Khoa / Phòng', iconName: 'Building2' },
   { id: 'services', label: 'Dịch vụ', iconName: 'BriefcaseMedical' },
-  { id: 'billing', label: 'Thanh toán', iconName: 'CreditCard' },
-  { id: 'reports', label: 'Báo cáo thống kê', iconName: 'ClipboardList' },
+  { id: 'medicines', label: 'Danh mục thuốc', iconName: 'Pill' },
+  { id: 'shared-catalogs', label: 'Danh mục dùng chung', iconName: 'BookOpen' },
+  {
+    id: 'medical-records', label: 'Hồ sơ bệnh án', iconName: 'FileHeart',
+    children: [
+      { id: 'unlock-medical-record', label: 'Mở khóa hồ sơ' },
+      { id: 'record-archive', label: 'Lưu trữ hồ sơ' },
+    ],
+  },
   {
     id: 'administration', label: 'Quản trị hệ thống', iconName: 'Settings2',
     children: [
       { id: 'accounts', label: 'Quản lý tài khoản' },
-      { id: 'roles', label: 'Vai trò & phân quyền' },
       { id: 'audit', label: 'Nhật ký hệ thống' },
+      { id: 'merge-patients', label: 'Gộp hồ sơ trùng' },
     ],
   },
+  { id: 'hospital-information', label: 'Thông tin bệnh viện', iconName: 'Hospital' },
   { id: 'settings', label: 'Cài đặt', iconName: 'Settings' },
 ];
 

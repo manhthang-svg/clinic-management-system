@@ -138,7 +138,7 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
       title="Tạo tài khoản"
       description="Thêm tài khoản mới cho nhân viên phòng khám"
       onBack={onCancel}
-      crumbs={[{ label: 'Quản trị hệ thống' }, { label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Tạo tài khoản' }]}
+      crumbs={[{ label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Tạo tài khoản' }]}
     />
   );
 

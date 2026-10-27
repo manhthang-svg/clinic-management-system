@@ -235,7 +235,7 @@ export function AccountManagementPage({
     if (view.name !== "detail" || view.id === undefined) return undefined;
     const controller = new AbortController();
     Promise.all([
-      accountApi.activities(view.id, 10, controller.signal),
+      accountApi.activities(view.id, 100, controller.signal),
       accountApi.workInProgress(view.id, controller.signal),
     ])
       .then(([items, work]) => {
@@ -256,7 +256,7 @@ export function AccountManagementPage({
   useEffect(() => {
     if (view.name !== "detail" || view.id === undefined) return undefined;
     const controller = new AbortController();
-    accountApi.changeHistory(view.id, requestedHistoryPage, 10, controller.signal)
+    accountApi.changeHistory(view.id, requestedHistoryPage, 5, controller.signal)
       .then((history) => {
         setChangeHistory(history.content);
         setHistoryPage({
@@ -729,7 +729,18 @@ export function AccountManagementPage({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="flex flex-col items-start gap-3">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-xs text-slate-500"
+          >
+            <House className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-700 font-medium">
+              Quản lý tài khoản
+            </span>
+          </nav>
+
           <div>
             <h1 className="text-2xl! leading-8! font-extrabold! text-[#1b2533] tracking-tight">
               Quản lý tài khoản
@@ -738,19 +749,6 @@ export function AccountManagementPage({
               Quản lý tài khoản người dùng, vai trò và quyền truy cập hệ thống
             </p>
           </div>
-
-          <nav
-            aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-xs text-slate-500"
-          >
-            <House className="w-3.5 h-3.5" />
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span>Quản trị hệ thống</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-700 font-medium">
-              Quản lý tài khoản
-            </span>
-          </nav>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -831,9 +829,6 @@ export function AccountManagementPage({
                 setPage(1);
               }}
               onView={(account) => openDetail(account.id)}
-              onEdit={openEdit}
-              onToggleLock={toggleLock}
-              onResetPassword={(account) => openResetPassword(account.id)}
               sort={sort}
               onSortChange={withFirstPage(setSort)}
             />
