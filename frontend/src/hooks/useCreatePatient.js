@@ -1,4 +1,3 @@
-
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router';
 import patientApi from '../apis/patientApi';
@@ -152,12 +151,14 @@ export function useCreatePatient() {
         setSubmitting(true);
 
         try {
-            await patientApi.create(buildPatientPayload(form));
+            const res = await patientApi.create(buildPatientPayload(form));
+            const created = res?.data || res;
 
-            navigate('/receptionist/patients', {
+            navigate('/receptionist', {
                 replace: true,
                 state: {
-                    notice: 'Tạo hồ sơ bệnh nhân thành công.',
+                    notice: `Tạo hồ sơ bệnh nhân "${form.hoten.trim()}" thành công!`,
+                    openVisitFor: created,
                 },
             });
         } catch (err) {
@@ -172,7 +173,7 @@ export function useCreatePatient() {
 
     const goBack = useCallback(() => {
         if (!submitting) {
-            navigate('/receptionist/patients');
+            navigate('/receptionist');
         }
     }, [navigate, submitting]);
 

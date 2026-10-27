@@ -1,4 +1,3 @@
-
 import { Navigate } from 'react-router';
 
 export default function HomeRedirect({ session }) {
@@ -16,6 +15,14 @@ export default function HomeRedirect({ session }) {
 
     if (session.account?.role === 'ADMIN') {
         return <Navigate to="/admin/accounts" replace />;
+    }
+
+    if (session.account?.role === 'RECEPTIONIST') {
+        return <Navigate to="/receptionist" replace />;
+    }
+
+    if (session.account?.role === 'DOCTOR') {
+        return <Navigate to="/doctor" replace />;
     }
 
     return <p>Role không được hỗ trợ: {session.account?.role}</p>;

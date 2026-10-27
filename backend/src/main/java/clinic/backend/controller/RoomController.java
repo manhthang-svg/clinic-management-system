@@ -27,4 +27,8 @@ public class RoomController {
         return roomService.createRoom(request);
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/active-examination")
+    public java.util.List<RoomResponse> getActiveExaminationRooms() {
+        return roomService.getActiveExaminationRooms();
+    }
 }

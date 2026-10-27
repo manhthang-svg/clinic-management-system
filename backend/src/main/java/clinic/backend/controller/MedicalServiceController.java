@@ -30,19 +30,19 @@ import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/services")
-@Tag(name = "Medical service administration", description = "Admin-only service and price catalog")
+@Tag(name = "Quản lý dịch vụ y tế", description = "Quản lý dịch vụ và bảng giá dành cho quản trị viên")
 @SecurityRequirement(name = BEARER_SECURITY_SCHEME)
 public class MedicalServiceController {
 
     private final MedicalServiceService service;
 
-    @Operation(summary = "UC-21 View medical service detail")
+    @Operation(summary = "UC-21 Xem chi tiết dịch vụ y tế")
     @GetMapping("/{serviceId}")
     public ApiResponse<MedicalServiceDetailResponse> detail(@PathVariable UUID serviceId) {
         return ApiResponse.success(service.getService(serviceId));
     }
 
-    @Operation(summary = "UC-20 View and search the service and price list")
+    @Operation(summary = "UC-20 Xem và tìm kiếm danh sách dịch vụ, bảng giá")
     @GetMapping
     public ApiResponse<PageResponse<MedicalServiceSummaryResponse>> list(
             @RequestParam(required = false) String keyword,

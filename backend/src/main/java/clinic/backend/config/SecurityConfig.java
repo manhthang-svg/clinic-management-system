@@ -50,14 +50,26 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
-                                "/api/v1/auth/logout")
+                                "/api/v1/auth/logout",
+                                "/api/v1/payments/payos-webhook",
+                                "/api/v1/payments/confirm-payos-result")
+                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/payments/by-order-code/**")
                         .permitAll()
                         .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
                         .requestMatchers("/api/v1/accounts", "/api/v1/accounts/**").authenticated()
                         .requestMatchers("/api/v1/rooms", "/api/v1/rooms/**").authenticated()
                         .requestMatchers("/api/v1/services", "/api/v1/services/**").authenticated()
                         .requestMatchers("/api/v1/departments", "/api/v1/departments/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/patients").authenticated()
+                        .requestMatchers("/api/v1/patients", "/api/v1/patients/**").authenticated()
+                        .requestMatchers("/api/v1/visits", "/api/v1/visits/**").authenticated()
+                        .requestMatchers(
+                                "/api/v1/payments",
+                                "/api/v1/payments/**"
+                        ).authenticated()
+                        .requestMatchers("/api/v1/paraclinical-orders", "/api/v1/paraclinical-orders/**").authenticated()
                         .anyRequest().denyAll())
                 .build();
     }

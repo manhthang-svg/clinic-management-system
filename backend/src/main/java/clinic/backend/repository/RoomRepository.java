@@ -2,6 +2,7 @@ package clinic.backend.repository;
 
 import clinic.backend.entity.Room;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.RoomType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -18,4 +19,7 @@ public interface RoomRepository extends JpaRepository<Room, UUID> {
 
     List<Room> findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(
             UUID serviceGroupId, ActivationStatus status);
+
+    List<Room> findByTypeAndStatusOrderByRoomCodeAsc(
+            RoomType type, ActivationStatus status);
 }

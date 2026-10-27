@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 import clinic.backend.enums.PriceType;
@@ -16,10 +17,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * One line of a payment; its prices are snapshotted when created and never change (BR-09). Cancelling
- * the service only marks the line.
- */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
@@ -39,11 +36,9 @@ public class PaymentItem extends CreatedOnlyEntity {
     @Column(name = "service_code_snapshot", nullable = false, length = 50, updatable = false)
     private String serviceCodeSnapshot;
 
-    /** CV 365 V.2.6.10. */
     @Column(name = "tenchidinh", nullable = false, length = 255, updatable = false)
     private String tenchidinh;
 
-    /** CV 365 V.2.6.9. */
     @Column(name = "soluong", nullable = false, precision = 15, scale = 2, updatable = false)
     private BigDecimal soluong;
 
@@ -51,24 +46,107 @@ public class PaymentItem extends CreatedOnlyEntity {
     @Column(name = "price_type", nullable = false, length = 20, updatable = false)
     private PriceType priceType;
 
-    /** CV 365 V.2.6.4. */
     @Column(name = "dongia", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal dongia;
 
     @Column(name = "coverage_rate", updatable = false)
     private Short coverageRate;
 
-    /** CV 365 V.2.6.11. */
     @Column(name = "thanhtien", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal thanhtien;
 
     @Column(name = "bhyt_chitra", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal bhytChitra;
 
-    /** CV 365 V.2.6.3. */
     @Column(name = "benhnhanphaitra", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal benhnhanphaitra;
 
     @Column(name = "is_cancelled", nullable = false)
     private boolean isCancelled;
+
+    public PaymentItem(UUID id, Instant createdAt) {
+        super(id, createdAt);
+    }
+
+    public static PaymentItem createClinicItem(
+            UUID id,
+            Instant createdAt,
+            Payment payment,
+            MedicalService service,
+            BigDecimal quantity
+    ) {
+        if (id == null || createdAt == null
+                || payment == null || service == null || quantity == null
+                || quantity.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Thông tin chi tiết phiếu thu không hợp lệ"
+            );
+        }
+
+        BigDecimal unitPrice = service.getClinicPrice();
+
+        if (unitPrice == null || unitPrice.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Giá dịch vụ phòng khám không hợp lệ"
+            );
+        }
+
+        PaymentItem item = new PaymentItem(id, createdAt);
+        item.payment = payment;
+        item.serviceId = service.getId();
+        item.serviceCodeSnapshot = service.getCode();
+        item.tenchidinh = service.getTenchidinh();
+        item.soluong = quantity;
+        item.priceType = PriceType.CLINIC;
+        item.dongia = unitPrice;
+        item.coverageRate = null;
+        item.thanhtien = unitPrice.multiply(quantity);
+        item.bhytChitra = BigDecimal.ZERO;
+        item.benhnhanphaitra = item.thanhtien;
+        item.isCancelled = false;
+
+        return item;
+    }
+
+    public static PaymentItem createParaclinicalItem(
+            UUID id,
+            Instant createdAt,
+            Payment payment,
+            MedicalService service,
+            BigDecimal quantity,
+            UUID orderDetailId
+    ) {
+        if (id == null || createdAt == null
+                || payment == null || service == null || quantity == null
+                || quantity.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "Thông tin chi tiết phiếu thu không hợp lệ"
+            );
+        }
+
+        BigDecimal unitPrice = service.getClinicPrice();
+
+        if (unitPrice == null || unitPrice.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Giá dịch vụ phòng khám không hợp lệ"
+            );
+        }
+
+        PaymentItem item = new PaymentItem(id, createdAt);
+        item.payment = payment;
+        item.serviceId = service.getId();
+        item.orderDetailId = orderDetailId;
+        item.serviceCodeSnapshot = service.getCode();
+        item.tenchidinh = service.getTenchidinh();
+        item.soluong = quantity;
+        item.priceType = PriceType.CLINIC;
+        item.dongia = unitPrice;
+        item.coverageRate = null;
+        item.thanhtien = unitPrice.multiply(quantity);
+        item.bhytChitra = BigDecimal.ZERO;
+        item.benhnhanphaitra = item.thanhtien;
+        item.isCancelled = false;
+
+        return item;
+    }
 }

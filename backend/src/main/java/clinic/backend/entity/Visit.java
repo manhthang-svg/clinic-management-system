@@ -127,4 +127,66 @@ public class Visit extends VersionedEntity {
 
     @Column(name = "completed_at")
     private Instant completedAt;
+
+
+    public Visit(
+            UUID id,
+            Instant createdAt,
+            String sovaovien,
+            UUID patientId,
+            UUID roomId,
+            UUID registeredByAccountId,
+            Instant thoigianvaovien,
+            VisitDoituongbnLoai doituongbnLoai,
+            String mabhyt,
+            String lydotiepnhan,
+            String noigioithieuLoai,
+            String lydovaovien,
+            boolean isPriority,
+            PriorityReason priorityReason,
+            LocalDate queueDate,
+            int queueNumber,
+            VisitStatus status,
+            VisitInsuranceVerifyStatus insuranceVerifyStatus
+    ) {
+        super(id, createdAt);
+
+        this.sovaovien = sovaovien;
+        this.patientId = patientId;
+        this.roomId = roomId;
+        this.registeredByAccountId = registeredByAccountId;
+        this.thoigianvaovien = thoigianvaovien;
+        this.doituongbnLoai = doituongbnLoai;
+        this.mabhyt = mabhyt;
+        this.lydotiepnhan = lydotiepnhan;
+        this.noigioithieuLoai = noigioithieuLoai;
+        this.lydovaovien = lydovaovien;
+        this.isPriority = isPriority;
+        this.priorityReason = priorityReason;
+        this.queueDate = queueDate;
+        this.queueNumber = queueNumber;
+        this.status = status;
+        this.insuranceVerifyStatus = insuranceVerifyStatus;
+        this.isSkipped = false;
+    }
+
+    public void markAsWaiting() {
+        if (this.status != VisitStatus.WAITING_FEE_PAYMENT) {
+            throw new IllegalStateException(
+                    "Lượt khám không ở trạng thái chờ thanh toán"
+            );
+        }
+
+        this.status = VisitStatus.WAITING;
+    }
+
+    public void markAsWaitingParaclinical() {
+        this.status = VisitStatus.WAITING_PARACLINICAL;
+    }
+
+    public void startExamination(UUID doctorAccountId) {
+        this.doctorAccountId = doctorAccountId;
+        this.status = VisitStatus.IN_EXAMINATION;
+        this.denkhambenhluc = Instant.now();
+    }
 }

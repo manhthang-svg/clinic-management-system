@@ -70,4 +70,23 @@ public class MedicalRecord extends VersionedEntity {
 
     @Column(name = "unlock_reason")
     private String unlockReason;
+
+    public MedicalRecord(
+            UUID id,
+            Instant createdAt,
+            UUID visitId,
+            String soba,
+            String loaiba,
+            MedicalRecordStatus status,
+            Instant openedAt,
+            UUID openedByAccountId
+    ) {
+        super(id, createdAt);
+        this.visitId = visitId;
+        this.soba = soba;
+        this.loaiba = loaiba != null ? loaiba : "NGOAITRU";
+        this.status = status != null ? status : MedicalRecordStatus.OPEN;
+        this.openedAt = openedAt != null ? openedAt : Instant.now();
+        this.openedByAccountId = openedByAccountId;
+    }
 }

@@ -3,3 +3,6 @@ export * from './apiResponse';
 export * from './apiClient';
 export * from './authApi';
 export * from './accountApi';
+export * from './patientApi';
+export * from './paymentApi';
+export * from './visitApi';

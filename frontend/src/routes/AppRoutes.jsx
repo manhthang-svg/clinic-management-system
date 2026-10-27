@@ -22,6 +22,8 @@ import ReceptionistOverviewPage from '../pages/receptionist/ReceptionistOverview
 import ReceptionistPatientsPage from '../pages/receptionist/ReceptionistPatientsPage.jsx';
 import ReceptionistAppointmentsPage from '../pages/receptionist/ReceptionistAppointmentsPage.jsx';
 import ReceptionistCreatePatientPage from '../pages/receptionist/ReceptionistCreatePatientPage.jsx';
+import PaymentResultPage from '../pages/payment/PaymentResultPage.jsx';
+import DoctorQueuePage from '../pages/doctor/DoctorQueuePage.jsx';
 
 export function AppRoutes({
     session,
@@ -189,6 +191,49 @@ export function AppRoutes({
                     />
                 </Route>
             </Route>
+
+            {/* DOCTOR */}
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="DOCTOR"
+                    />
+                }
+            >
+                <Route
+                    path="/doctor"
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                        />
+                    }
+                >
+                    <Route
+                        index
+                        element={<DoctorQueuePage />}
+                    />
+                    <Route
+                        path="queue"
+                        element={<DoctorQueuePage />}
+                    />
+                    <Route
+                        path="examinations"
+                        element={<DoctorQueuePage />}
+                    />
+                    <Route
+                        path="appointments"
+                        element={<DoctorQueuePage />}
+                    />
+                </Route>
+            </Route>
+
+            {/* KẾT QUẢ THANH TOÁN PAYOS */}
+            <Route path="/payment/result" element={<PaymentResultPage />} />
+            <Route path="/payment/success" element={<PaymentResultPage />} />
+            <Route path="/payment/cancel" element={<PaymentResultPage />} />
 
             <Route
                 path="/404"
