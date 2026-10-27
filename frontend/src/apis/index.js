@@ -3,3 +3,4 @@ export * from './apiResponse';
 export * from './apiClient';
 export * from './authApi';
 export * from './accountApi';
+export * from './serviceApi';
