@@ -7,30 +7,24 @@ import clinic.backend.entity.Patient;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.service.PatientService;
 import clinic.backend.utils.UuidV7Generator;
-import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class PatientServiceImpl implements PatientService {
 
     private final PatientRepository patientRepository;
     private final UuidV7Generator uuidV7Generator;
-
-    public PatientServiceImpl(
-            PatientRepository patientRepository,
-            UuidV7Generator uuidV7Generator
-    ) {
-        this.patientRepository = patientRepository;
-        this.uuidV7Generator = uuidV7Generator;
-    }
 
     private String generatePatientCode() {
         int number = java.util.concurrent.ThreadLocalRandom
@@ -108,6 +102,57 @@ public class PatientServiceImpl implements PatientService {
 
         Patient savedPatient = patientRepository.save(patient);
 
+        return new PatientResponse(
+                savedPatient.getId(),
+                savedPatient.getMabenhnhan(),
+                savedPatient.getCccdSo(),
+                savedPatient.getHochieuSo(),
+                savedPatient.getHoten(),
+                savedPatient.getNgaysinh(),
+                savedPatient.getGioitinh(),
+                savedPatient.getNghenghiep(),
+                savedPatient.getNghenghiepMa(),
+                savedPatient.getDantoc(),
+                savedPatient.getDantocMa(),
+                savedPatient.getNgoaikieu(),
+                savedPatient.getNgoaikieuMa(),
+                savedPatient.getDiachi(),
+                savedPatient.getXaphuong(),
+                savedPatient.getXaphuongMa(),
+                savedPatient.getTinhthanh(),
+                savedPatient.getTinhthanhMa(),
+                savedPatient.getNoilamviec(),
+                savedPatient.getSodienthoai(),
+                savedPatient.getYeutorh(),
+                savedPatient.getNhommau(),
+                savedPatient.getHotennguoithan(),
+                savedPatient.getNguoithanQuanhe(),
+                savedPatient.getDiachinguoithan(),
+                savedPatient.getSodienthoainguoithan()
+        );
+    }
+
+    @Override
+    @Transactional
+    public org.springframework.data.domain.Page<PatientResponse> listPatients(
+            String keyword,
+            org.springframework.data.domain.Pageable pageable
+    ) {
+        return patientRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public PatientResponse getPatientById(UUID id) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy bệnh nhân"
+                ));
+        return toResponse(patient);
+    }
+
+    private PatientResponse toResponse(Patient savedPatient) {
         return new PatientResponse(
                 savedPatient.getId(),
                 savedPatient.getMabenhnhan(),

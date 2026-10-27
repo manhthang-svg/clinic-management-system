@@ -10,7 +10,7 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.service.RoomService;
 import clinic.backend.utils.UuidV7Generator;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,30 +20,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class RoomServiceImpl implements RoomService {
 
-    @Autowired
-    private RoomRepository roomRepository;
-
-    @Autowired
-    private DepartmentRepository departmentRepository;
-
-    @Autowired
-    private ServiceGroupRepository serviceGroupRepository;
-
+    private final RoomRepository roomRepository;
+    private final DepartmentRepository departmentRepository;
+    private final ServiceGroupRepository serviceGroupRepository;
     private final UuidV7Generator uuidV7Generator;
-
-    public RoomServiceImpl(
-            UuidV7Generator uuidV7Generator,
-            RoomRepository roomRepository,
-            DepartmentRepository departmentRepository,
-            ServiceGroupRepository serviceGroupRepository
-    ) {
-        this.uuidV7Generator = uuidV7Generator;
-        this.roomRepository = roomRepository;
-        this.departmentRepository = departmentRepository;
-        this.serviceGroupRepository = serviceGroupRepository;
-    }
 
     @Override
     public void assignStaffToRoom(Long roomId, Long staffId) {
@@ -124,5 +107,25 @@ public class RoomServiceImpl implements RoomService {
                 savedRoom.getCreatedAt(),
                 savedRoom.getUpdatedAt()
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<RoomResponse> getActiveExaminationRooms() {
+        return roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        ).stream().map(savedRoom -> new RoomResponse(
+                savedRoom.getId(),
+                savedRoom.getDepartmentId(),
+                savedRoom.getServiceGroupId(),
+                savedRoom.getRoomCode(),
+                savedRoom.getRoomName(),
+                savedRoom.getLocation(),
+                savedRoom.getType(),
+                savedRoom.getStatus(),
+                savedRoom.getCreatedAt(),
+                savedRoom.getUpdatedAt()
+        )).toList();
     }
 }

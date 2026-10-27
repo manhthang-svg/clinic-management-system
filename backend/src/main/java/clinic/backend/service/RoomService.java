@@ -19,4 +19,6 @@ public interface RoomService {
     );
 
     RoomResponse createRoom(@Valid CreateRoomRequest request);
+
+    java.util.List<RoomResponse> getActiveExaminationRooms();
 }

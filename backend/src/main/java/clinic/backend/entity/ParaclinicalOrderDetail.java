@@ -111,4 +111,47 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
 
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
+
+    public ParaclinicalOrderDetail(
+            UUID id,
+            Instant createdAt,
+            ParaclinicalOrder order,
+            UUID serviceId,
+            String machidinh,
+            Instant ngaychidinh,
+            String tenchidinh,
+            String loaichidinh,
+            String loaimachidinh,
+            BigDecimal soluong,
+            BigDecimal dongia,
+            BigDecimal thanhtien,
+            BigDecimal bhytChitra,
+            BigDecimal benhnhanphaitra,
+            UUID roomId,
+            ParaclinicalOrderDetailStatus status
+    ) {
+        super(id, createdAt);
+        this.order = order;
+        this.serviceId = serviceId;
+        this.machidinh = machidinh;
+        this.ngaychidinh = ngaychidinh;
+        this.tenchidinh = tenchidinh;
+        this.loaichidinh = loaichidinh;
+        this.loaimachidinh = loaimachidinh;
+        this.soluong = soluong;
+        this.dongia = dongia;
+        this.thanhtien = thanhtien;
+        this.bhytChitra = bhytChitra;
+        this.benhnhanphaitra = benhnhanphaitra;
+        this.roomId = roomId;
+        this.status = status;
+        this.isSkipped = false;
+    }
+
+    public void release(Instant when) {
+        if (this.status == ParaclinicalOrderDetailStatus.PENDING_PAYMENT) {
+            this.status = ParaclinicalOrderDetailStatus.WAITING;
+            this.releasedAt = when != null ? when : Instant.now();
+        }
+    }
 }

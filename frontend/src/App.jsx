@@ -65,6 +65,23 @@ export function App({
   }
 
   if (session.status === 'anonymous') {
+    const isPublicPaymentResult =
+      window.location.pathname.startsWith('/payment/result') ||
+      window.location.pathname.startsWith('/payment/success') ||
+      window.location.pathname.startsWith('/payment/cancel');
+
+    if (isPublicPaymentResult) {
+      return (
+        <AppRoutes
+          session={session}
+          account={account}
+          notice={notice}
+          onLogout={() => void sessionManager.logout()}
+          onChangePassword={() => setChangingPassword(true)}
+        />
+      );
+    }
+
     return (
       <LoginPage
         onLogin={async (username, password) => {
@@ -77,12 +94,8 @@ export function App({
             navigate('/cashier', { replace: true });
           } else if (role === 'RECEPTIONIST') {
             navigate('/receptionist', { replace: true });
-          } else if (role === 'DOCTOR') {
-            navigate('/doctor', { replace: true });
-          } else if (role === 'TECHNICIAN') {
-            navigate('/technician', { replace: true });
           } else {
-            navigate('/404', { replace: true });
+            navigate('/', { replace: true });
           }
         }}
       />

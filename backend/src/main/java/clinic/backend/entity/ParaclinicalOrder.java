@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -72,7 +73,46 @@ public class ParaclinicalOrder extends VersionedEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ParaclinicalOrderDetail> details = new ArrayList<>();
 
+    public ParaclinicalOrder(
+            UUID id,
+            Instant createdAt,
+            String sophieu,
+            UUID medicalRecordId,
+            UUID doctorAccountId,
+            UUID paymentId,
+            String chandoansobo,
+            short doituongbn,
+            String mucdochidinh,
+            String noichidinh,
+            BigDecimal tongcong,
+            ParaclinicalOrderStatus status
+    ) {
+        super(id, createdAt);
+        this.sophieu = sophieu;
+        this.medicalRecordId = medicalRecordId;
+        this.doctorAccountId = doctorAccountId;
+        this.paymentId = paymentId;
+        this.chandoansobo = chandoansobo;
+        this.doituongbn = doituongbn;
+        this.mucdochidinh = mucdochidinh != null ? mucdochidinh : "Thường";
+        this.noichidinh = noichidinh;
+        this.tongcong = tongcong;
+        this.status = status;
+    }
+
     public List<ParaclinicalOrderDetail> getDetails() {
         return Collections.unmodifiableList(details);
+    }
+
+    public void addDetail(ParaclinicalOrderDetail detail) {
+        if (detail != null) {
+            this.details.add(detail);
+        }
+    }
+
+    public void release() {
+        if (this.status == ParaclinicalOrderStatus.PENDING_PAYMENT) {
+            this.status = ParaclinicalOrderStatus.RELEASED;
+        }
     }
 }
