@@ -58,4 +58,8 @@ jobs:
             backend/.mvn/wrapper/maven-wrapper.properties
 
       - name: Verify backend
+        env:
+          PAYOS_CLIENT_ID: ci-placeholder-client-id
+          PAYOS_API_KEY: ci-placeholder-api-key
+          PAYOS_CHECKSUM_KEY: ci-placeholder-checksum-key
         run: ./mvnw verify
