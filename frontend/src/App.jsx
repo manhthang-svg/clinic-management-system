@@ -166,8 +166,7 @@ export function App({
     ?.toUpperCase()
     .replace(/^ROLE_/, '');
 
-  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST', 'DOCTOR', 'TECHNICIAN']
-    .includes(role)) {
+  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST'].includes(role)) {
     return (
       <>
         <header className="app-header">
