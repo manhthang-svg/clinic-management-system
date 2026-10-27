@@ -2,6 +2,8 @@ package clinic.backend.controller;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.dto.request.LoginRequest;
@@ -20,8 +22,12 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -104,6 +110,259 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/v1/services/not-a-uuid")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void adminCanLoadFormOptionsAndCreateService() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        insertCatalog(departmentId, groupId, suffix);
+        String adminToken = accessToken(admin);
+
+        mockMvc.perform(get("/api/v1/services/form-options")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.types", hasItem("LAB")))
+                .andExpect(jsonPath("$.data.serviceGroups[*].id", hasItem(groupId.toString())))
+                .andExpect(jsonPath("$.data.departments[*].id", hasItem(departmentId.toString())));
+
+        String code = ("NEW-" + suffix).toUpperCase(Locale.ROOT);
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "code", code.toLowerCase(),
+                "name", "Dich vu " + suffix,
+                "type", "LAB",
+                "serviceGroupId", groupId,
+                "departmentId", departmentId,
+                "clinicPrice", 150000,
+                "insurancePrice", 0,
+                "description", "Mo ta"));
+        String responseBody = mockMvc.perform(post("/api/v1/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.serviceId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        UUID serviceId = UUID.fromString(
+                objectMapper.readTree(responseBody).path("data").path("serviceId").asText());
+
+        Map<String, Object> createdService = jdbc.queryForMap(
+                "SELECT code, status FROM services WHERE id = ?", serviceId);
+        assertThat(createdService)
+                .containsEntry("code", code)
+                .containsEntry("status", "ACTIVE");
+        mockMvc.perform(post("/api/v1/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SERVICE_CODE_ALREADY_EXISTS"));
+        mockMvc.perform(post("/api/v1/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createServiceRejectsInvalidAssignmentAndPrice() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        String token = accessToken(admin);
+        String invalidAssignment = objectMapper.writeValueAsString(Map.of(
+                "code", "BAD-" + UUID.randomUUID().toString().substring(0, 8),
+                "name", "Invalid assignment",
+                "type", "LAB",
+                "clinicPrice", 100000));
+        mockMvc.perform(post("/api/v1/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidAssignment))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SERVICE_ASSIGNMENT_INVALID"));
+
+        String invalidPrice = objectMapper.writeValueAsString(Map.of(
+                "code", "PRICE-" + UUID.randomUUID().toString().substring(0, 8),
+                "name", "Invalid price",
+                "type", "EXAMINATION",
+                "clinicPrice", 100000001));
+        mockMvc.perform(post("/api/v1/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidPrice))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_FAILED"));
+    }
+
+    @Test
+    void adminCanUpdateServiceInformationWithOptimisticLocking() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID serviceId = insertCatalog(departmentId, groupId, suffix);
+        String adminToken = accessToken(admin);
+        String updatedName = "Updated service " + suffix;
+        String updatedDescription = "Updated description";
+        String updateBody = objectMapper.writeValueAsString(Map.of(
+                "name", updatedName,
+                "description", updatedDescription,
+                "version", 0));
+
+        mockMvc.perform(put("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value(updatedName))
+                .andExpect(jsonPath("$.data.description").value(updatedDescription))
+                .andExpect(jsonPath("$.data.version").value(1));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT version FROM services WHERE id = ?", Long.class, serviceId)).isEqualTo(1L);
+
+        String noChangeBody = objectMapper.writeValueAsString(Map.of(
+                "name", " " + updatedName + " ",
+                "description", updatedDescription,
+                "version", 1));
+        mockMvc.perform(put("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noChangeBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.version").value(1));
+        String staleBody = objectMapper.writeValueAsString(Map.of(
+                "name", "Another name",
+                "description", updatedDescription,
+                "version", 0));
+        mockMvc.perform(put("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(staleBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
+        mockMvc.perform(put("/api/v1/services/{serviceId}", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noChangeBody))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanUpdateAndRemoveServicePricesWithOptimisticLocking() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID serviceId = insertCatalog(UUID.randomUUID(), UUID.randomUUID(), suffix);
+        String adminToken = accessToken(admin);
+        String updateBody = objectMapper.writeValueAsString(Map.of(
+                "clinicPrice", 150000,
+                "insurancePrice", 50000,
+                "version", 0));
+
+        mockMvc.perform(put("/api/v1/services/{serviceId}/prices", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clinicPrice").value(150000))
+                .andExpect(jsonPath("$.data.insurancePrice").value(50000))
+                .andExpect(jsonPath("$.data.version").value(1));
+
+        var removeInsuranceBody = objectMapper.createObjectNode()
+                .put("clinicPrice", 150000)
+                .putNull("insurancePrice")
+                .put("version", 1)
+                .toString();
+        mockMvc.perform(put("/api/v1/services/{serviceId}/prices", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(removeInsuranceBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clinicPrice").value(150000))
+                .andExpect(jsonPath("$.data.insurancePrice").doesNotExist())
+                .andExpect(jsonPath("$.data.version").value(2));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT insurance_price FROM services WHERE id = ?", Object.class, serviceId)).isNull();
+        String staleBody = objectMapper.writeValueAsString(Map.of(
+                "clinicPrice", 160000,
+                "version", 1));
+        mockMvc.perform(put("/api/v1/services/{serviceId}/prices", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(staleBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
+        mockMvc.perform(put("/api/v1/services/{serviceId}/prices", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(removeInsuranceBody))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanDeactivateAndReactivateServiceAfterRequiredChecks() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID serviceId = insertCatalog(departmentId, groupId, suffix);
+        String adminToken = accessToken(admin);
+
+        mockMvc.perform(get("/api/v1/services/{serviceId}/deactivation-check", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.currentStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.targetStatus").value("INACTIVE"))
+                .andExpect(jsonPath("$.data.unfinishedOrderCount").value(0));
+
+        String deactivateBody = objectMapper.writeValueAsString(Map.of(
+                "status", "INACTIVE",
+                "version", 0));
+        mockMvc.perform(patch("/api/v1/services/{serviceId}/status", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deactivateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"))
+                .andExpect(jsonPath("$.data.version").value(1));
+
+        mockMvc.perform(get("/api/v1/services/{serviceId}/activation-check", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SERVICE_GROUP_HAS_NO_ACTIVE_ROOM"));
+
+        insertRoom(departmentId, groupId, "P-" + suffix, "ACTIVE");
+        mockMvc.perform(get("/api/v1/services/{serviceId}/activation-check", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.targetStatus").value("ACTIVE"));
+
+        String activateBody = objectMapper.writeValueAsString(Map.of(
+                "status", "ACTIVE",
+                "version", 1));
+        mockMvc.perform(patch("/api/v1/services/{serviceId}/status", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(activateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.version").value(2));
+
+        mockMvc.perform(patch("/api/v1/services/{serviceId}/status", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deactivateBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
+        mockMvc.perform(get("/api/v1/services/{serviceId}/deactivation-check", serviceId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isForbidden());
     }
 
     private UUID insertCatalog(UUID departmentId, UUID groupId, String suffix) {
