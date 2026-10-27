@@ -95,39 +95,39 @@ export function DepartmentStatCards({ stats }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 2xl:gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.id}
-            className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex items-center gap-4 transition-all hover:border-slate-300"
+            className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-3.5 sm:p-4 2xl:p-5 flex items-center gap-3 2xl:gap-4 transition-all hover:border-slate-300 min-w-0"
           >
             <div
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${card.iconClass}`}
+              className={`w-11 h-11 2xl:w-14 2xl:h-14 rounded-2xl flex items-center justify-center shrink-0 ${card.iconClass}`}
             >
-              <Icon className="w-6 h-6" />
+              <Icon className="w-5 h-5 2xl:w-6 2xl:h-6" />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-slate-500 tracking-wide">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div className="text-xs font-semibold text-slate-500 tracking-wide truncate">
                 {card.title}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                <span className="text-2xl font-extrabold text-[#142534] tracking-tight mr-1">
+              <div className="flex items-center gap-1 2xl:gap-1.5 mt-1 min-w-0 flex-nowrap">
+                <span className="text-xl 2xl:text-2xl font-extrabold text-[#142534] tracking-tight shrink-0">
                   {card.value}
                 </span>
                 {card.badges ? (
                   card.badges.map((b, idx) => (
                     <span
                       key={idx}
-                      className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10.5px] font-semibold whitespace-nowrap ${b.badgeClass}`}
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] 2xl:text-[10.5px] font-semibold whitespace-nowrap shrink-0 ${b.badgeClass}`}
                     >
                       {b.label}
                     </span>
                   ))
                 ) : (
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${card.badgeClass}`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] 2xl:text-[11px] font-semibold whitespace-nowrap shrink-0 ${card.badgeClass}`}
                   >
                     {card.badge}
                   </span>
