@@ -19,6 +19,7 @@ import {
   ServiceCreateView,
 } from "../../components/services";
 import { serviceErrorMessage } from "../../components/services/serviceErrors";
+import { formToServiceRequest } from "../../components/services/serviceForm";
 import { createServiceApi } from "../../apis/serviceApi";
 import { apiClient } from "../../services/session";
 import { PAGE_SIZE_OPTIONS } from "../../constants";
@@ -48,6 +49,7 @@ export function ServiceManagementPage({
   serviceApi = defaultServiceApi,
 }) {
   const [allServices, setAllServices] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
   const [groups, setGroups] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -100,10 +102,10 @@ export function ServiceManagementPage({
       .then(setAllServices)
       .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
     return () => controller.abort();
-  }, [serviceApi]);
+  }, [serviceApi, reloadKey]);
 
   // UC-20: the server searches, filters, and pages the table.
-  const tableQuery = JSON.stringify([debouncedSearch, typeFilter, groupFilter, statusFilter, page, pageSize]);
+  const tableQuery = JSON.stringify([debouncedSearch, typeFilter, groupFilter, statusFilter, page, pageSize, reloadKey]);
   const loading = tablePage.query !== tableQuery;
   const loadError = loading ? null : tablePage.error;
   const filtered =
@@ -161,6 +163,14 @@ export function ServiceManagementPage({
     setPage(1);
   };
 
+  const createService = async (form) => {
+    const request = formToServiceRequest(form);
+    await serviceApi.create(request);
+    toast.success(`Đã thêm dịch vụ ${request.code.toUpperCase()}`);
+    setReloadKey((key) => key + 1);
+    navigate(ADMIN.SERVICES, { replace: true });
+  };
+
   const layoutProps = {
     currentAdmin,
     onLogout,
@@ -182,10 +192,9 @@ export function ServiceManagementPage({
       <AdminLayout {...layoutProps}>
         <div className="px-6 pb-8">
           <ServiceCreateView
+            groups={groups}
             departments={departments}
-            onCreate={() =>
-              toast.info("Chưa kết nối API thêm dịch vụ.")
-            }
+            onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}
           />
