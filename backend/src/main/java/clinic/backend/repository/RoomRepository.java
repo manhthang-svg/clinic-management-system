@@ -13,6 +13,11 @@ public interface RoomRepository extends JpaRepository<Room, UUID> {
 
     boolean existsByRoomCode(String roomCode);
 
+    boolean existsByServiceGroupIdAndStatus(
+            UUID serviceGroupId,
+            ActivationStatus status
+    );
+
     Optional<Room> findByRoomCode(String roomCode);
 
     List<Room> findByDepartmentId(UUID departmentId);

@@ -15,6 +15,19 @@ public interface MedicalServiceRepository
         extends JpaRepository<MedicalService, UUID>,
         JpaSpecificationExecutor<MedicalService> {
 
+    boolean existsByCode(String code);
+
+    boolean existsByTypeAndStatus(
+            MedicalServiceType type,
+            ActivationStatus status
+    );
+
+    boolean existsByTypeAndStatusAndIdNot(
+            MedicalServiceType type,
+            ActivationStatus status,
+            UUID id
+    );
+
     Optional<MedicalService>
     findByTypeAndDepartmentIdIsNullAndServiceGroupIdIsNullAndStatus(
             MedicalServiceType type,
