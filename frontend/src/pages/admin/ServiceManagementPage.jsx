@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Navigate, matchPath, useLocation, useNavigate } from "react-router";
+import { Navigate, generatePath, matchPath, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   FileText,
@@ -16,9 +16,14 @@ import {
   ServiceFilterBar,
   ServiceTable,
   ServiceCreateView,
+  ServiceDetailView,
 } from "../../components/services";
 import { serviceErrorMessage } from "../../components/services/serviceErrors";
-import { formToServiceRequest } from "../../components/services/serviceForm";
+import {
+  formToServiceRequest,
+  infoFormToRequest,
+  priceFormToRequest,
+} from "../../components/services/serviceForm";
 import { createServiceApi } from "../../apis/serviceApi";
 import { apiClient } from "../../services/session";
 import { PAGE_SIZE_OPTIONS } from "../../constants";
@@ -65,11 +70,17 @@ export function ServiceManagementPage({
     error: null,
   });
 
-  // The URL decides whether the list or the create form is shown.
+  // { id, service, error } of the detail screen; service is null while loading.
+  const [detail, setDetail] = useState({ id: null, service: null, error: null });
+  const [detailReloadKey, setDetailReloadKey] = useState(0);
+
+  // The URL decides whether the list, the create form, or a detail is shown.
+  // "/new" also matches ":id", so the create route is checked first.
   const location = useLocation();
   const navigate = useNavigate();
   const creating = Boolean(matchPath(ADMIN.SERVICE_CREATE, location.pathname));
-  const known = creating || Boolean(matchPath(ADMIN.SERVICES, location.pathname));
+  const detailId = creating ? null : matchPath(ADMIN.SERVICE_DETAIL, location.pathname)?.params.id ?? null;
+  const known = creating || detailId !== null || Boolean(matchPath(ADMIN.SERVICES, location.pathname));
 
   const showList = () => navigate(ADMIN.SERVICES);
 
@@ -102,6 +113,18 @@ export function ServiceManagementPage({
       .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
     return () => controller.abort();
   }, [serviceApi, reloadKey]);
+
+  // UC-21: load the service the detail URL names.
+  useEffect(() => {
+    if (detailId === null) return undefined;
+    const controller = new AbortController();
+    serviceApi.detail(detailId, controller.signal)
+      .then((service) => setDetail({ id: detailId, service, error: null }))
+      .catch((error) => {
+        if (error.name !== "AbortError") setDetail({ id: detailId, service: null, error });
+      });
+    return () => controller.abort();
+  }, [serviceApi, detailId, detailReloadKey]);
 
   // UC-20: the server searches, filters, and pages the table.
   const tableQuery = JSON.stringify([debouncedSearch, typeFilter, groupFilter, statusFilter, page, pageSize, reloadKey]);
@@ -170,6 +193,34 @@ export function ServiceManagementPage({
     navigate(ADMIN.SERVICES, { replace: true });
   };
 
+  // UC-23 / UC-24 send the loaded version; a stale one (409) reloads the detail and keeps the dialog open.
+  const updateDetail = async (send, message) => {
+    const { id, service } = detail;
+    try {
+      const updated = await send(id, service.version);
+      setDetail({ id, service: updated, error: null });
+      setReloadKey((key) => key + 1);
+      toast.success(message);
+    } catch (error) {
+      if (error.errorResponse?.code === "CONCURRENT_MODIFICATION") {
+        setDetailReloadKey((key) => key + 1);
+      }
+      throw error;
+    }
+  };
+
+  const updateInfo = (form) =>
+    updateDetail(
+      (id, version) => serviceApi.update(id, infoFormToRequest(form, version)),
+      "Đã cập nhật thông tin dịch vụ",
+    );
+
+  const updatePrices = (form) =>
+    updateDetail(
+      (id, version) => serviceApi.updatePrices(id, priceFormToRequest(form, version)),
+      "Đã cập nhật giá dịch vụ",
+    );
+
   const layoutProps = {
     currentAdmin,
     onLogout,
@@ -198,6 +249,55 @@ export function ServiceManagementPage({
             onGoToList={showList}
           />
         </div>
+      </AdminLayout>
+    );
+  }
+
+  if (detailId !== null) {
+    const current = detail.id === detailId ? detail : { service: null, error: null };
+    const notFound = current.error?.status === 404 || current.error?.status === 400;
+
+    let content;
+    if (current.service) {
+      content = (
+        <ServiceDetailView
+          service={current.service}
+          onGoToList={showList}
+          onUpdateInfo={updateInfo}
+          onUpdatePrices={updatePrices}
+        />
+      );
+    } else if (current.error) {
+      content = (
+        <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-10 text-center">
+          <h1 className="text-xl! font-extrabold! text-[#1b2533]">
+            {notFound ? "Không tìm thấy dịch vụ" : "Không tải được dịch vụ"}
+          </h1>
+          <p role="alert" className="text-sm text-slate-500 mt-1">
+            {notFound
+              ? "Dịch vụ không tồn tại hoặc đường dẫn không đúng."
+              : "Đã xảy ra lỗi khi tải dịch vụ. Vui lòng thử lại."}
+          </p>
+          <button
+            type="button"
+            onClick={showList}
+            className="mt-5 px-4 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer"
+          >
+            Về danh sách dịch vụ
+          </button>
+        </section>
+      );
+    } else {
+      content = (
+        <p role="status" className="p-10 text-center text-sm text-slate-400">
+          Đang tải thông tin dịch vụ…
+        </p>
+      );
+    }
+
+    return (
+      <AdminLayout {...layoutProps}>
+        <div className="px-6 pb-8">{content}</div>
       </AdminLayout>
     );
   }
@@ -289,6 +389,7 @@ export function ServiceManagementPage({
               setPageSize(size);
               setPage(1);
             }}
+            onView={(service) => navigate(generatePath(ADMIN.SERVICE_DETAIL, { id: service.id }))}
           />
         </section>
       </div>

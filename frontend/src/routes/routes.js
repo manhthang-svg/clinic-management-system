@@ -11,6 +11,7 @@ export const ROUTES = {
     ACCOUNT_RESET_PASSWORD: '/admin/accounts/:id/reset-password',
     SERVICES: '/admin/services',
     SERVICE_CREATE: '/admin/services/new',
+    SERVICE_DETAIL: '/admin/services/:id',
     PROFILE: '/admin/profile',
     PATIENTS: '/admin/patients',
     APPOINTMENTS: '/admin/appointments',
