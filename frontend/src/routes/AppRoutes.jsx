@@ -22,6 +22,7 @@ import ReceptionistOverviewPage from '../pages/receptionist/ReceptionistOverview
 import ReceptionistPatientsPage from '../pages/receptionist/ReceptionistPatientsPage.jsx';
 import ReceptionistAppointmentsPage from '../pages/receptionist/ReceptionistAppointmentsPage.jsx';
 import ReceptionistCreatePatientPage from '../pages/receptionist/ReceptionistCreatePatientPage.jsx';
+import ReceptionistVisitRegisterPage from '../pages/receptionist/ReceptionistVisitRegisterPage.jsx';
 import PaymentResultPage from '../pages/payment/PaymentResultPage.jsx';
 import DoctorQueuePage from '../pages/doctor/DoctorQueuePage.jsx';
 
@@ -195,6 +196,11 @@ export function AppRoutes({
                     <Route
                         path="patients/new"
                         element={<ReceptionistCreatePatientPage />}
+                    />
+
+                    <Route
+                        path="patients/:id/register"
+                        element={<ReceptionistVisitRegisterPage />}
                     />
 
                     {/* Lịch khám */}

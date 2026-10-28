@@ -24,6 +24,13 @@ export const ROUTES = {
     SETTINGS: '/admin/settings',
   }, 
   
+  RECEPTIONIST: {
+    OVERVIEW: '/receptionist',
+    PATIENTS: '/receptionist/patients',
+    PATIENT_CREATE: '/receptionist/patients/new',
+    VISIT_REGISTER: '/receptionist/patients/:id/register',
+  },
+
   CASHIER: {
     OVERVIEW: '/cashier',
     PAYMENTS: '/cashier/payments',
