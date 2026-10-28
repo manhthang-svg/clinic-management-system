@@ -47,6 +47,36 @@ const FIELD_LABEL = {
   description: 'Mô tả',
 };
 
+const UPDATE_CODE_MESSAGE = {
+  UNAUTHORIZED: CREATE_CODE_MESSAGE.UNAUTHORIZED,
+  FORBIDDEN: 'Bạn không có quyền cập nhật dịch vụ.',
+  SERVICE_NOT_FOUND: 'Dịch vụ không còn tồn tại.',
+  CONCURRENT_MODIFICATION:
+    'Dịch vụ vừa được cập nhật ở nơi khác. Thông tin mới đã được tải lại, vui lòng kiểm tra rồi lưu lại.',
+  REQUEST_VALIDATION_FAILED: CREATE_CODE_MESSAGE.REQUEST_VALIDATION_FAILED,
+  MALFORMED_REQUEST: CREATE_CODE_MESSAGE.MALFORMED_REQUEST,
+};
+
+/** Field errors and one summary message for a failed UC-23 / UC-24 update. */
+export function serviceUpdateErrors(error) {
+  if (!(error instanceof ApiError)) return { fields: {}, message: 'Đã xảy ra lỗi. Vui lòng thử lại.' };
+  const code = error.errorResponse?.code;
+  if (!code && error.status === undefined) return { fields: {}, message: NETWORK_MESSAGE };
+
+  const details = error.errorResponse?.details ?? {};
+  const fields = {};
+  if (code === 'REQUEST_VALIDATION_FAILED') {
+    Object.keys(details).forEach((field) => {
+      if (FIELD_LABEL[field]) fields[field] = `${FIELD_LABEL[field]} không hợp lệ.`;
+    });
+  }
+
+  return {
+    fields,
+    message: UPDATE_CODE_MESSAGE[code] || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
+  };
+}
+
 /** Field errors and one summary message for a failed create-service request. */
 export function serviceCreateErrors(error) {
   if (!(error instanceof ApiError)) return { fields: {}, message: 'Đã xảy ra lỗi. Vui lòng thử lại.' };

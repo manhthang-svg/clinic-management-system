@@ -35,6 +35,7 @@ export function ServiceTable({
   onPageChange,
   onPageSizeChange,
   onToggleStatus,
+  onView,
 }) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -73,7 +74,21 @@ export function ServiceTable({
                 const active = service.status === 'ACTIVE';
                 const ToggleIcon = active ? PowerOff : Power;
                 return (
-                  <tr key={service.id} className="hover:bg-slate-50/70 transition-colors">
+                  <tr
+                    key={service.id}
+                    tabIndex={onView ? 0 : undefined}
+                    aria-label={onView ? `Xem chi tiết ${service.name}` : undefined}
+                    onClick={onView ? () => onView(service) : undefined}
+                    onKeyDown={onView ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onView(service);
+                      }
+                    } : undefined}
+                    className={`transition-colors hover:bg-slate-50/70 ${
+                      onView ? 'cursor-pointer focus:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#127e7a]/20' : ''
+                    }`}
+                  >
                     <td className="pl-3 pr-2 py-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">{service.code}</td>
                     <td className="px-2 py-3 font-semibold text-slate-800 min-w-[160px]">{service.name}</td>
                     <td className="px-2 py-3">
@@ -106,7 +121,10 @@ export function ServiceTable({
                           type="button"
                           title={active ? 'Ngừng hoạt động' : 'Kích hoạt'}
                           aria-label={`${active ? 'Ngừng hoạt động' : 'Kích hoạt'} ${service.name}`}
-                          onClick={() => onToggleStatus(service)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleStatus(service);
+                          }}
                           className={`${ACTION_CLASS} ${
                             active ? 'text-slate-500 hover:bg-rose-50 hover:text-rose-600' : 'text-slate-500 hover:bg-teal-50 hover:text-[#127e7a]'
                           }`}

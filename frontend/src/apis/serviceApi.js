@@ -9,7 +9,10 @@ export function createServiceApi(client) {
             return client.request(`/services${suffix}`, { signal });
         },
         formOptions: (signal) => client.request('/services/form-options', { signal }),
+        detail: (id, signal) => client.request(`/services/${id}`, { signal }),
         create: (body) => client.request('/services', { method: 'POST', body }),
+        update: (id, body) => client.request(`/services/${id}`, { method: 'PUT', body }),
+        updatePrices: (id, body) => client.request(`/services/${id}/prices`, { method: 'PUT', body }),
     };
 }
 
