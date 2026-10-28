@@ -1,3 +1,5 @@
+package clinic.backend.controller;
+
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
