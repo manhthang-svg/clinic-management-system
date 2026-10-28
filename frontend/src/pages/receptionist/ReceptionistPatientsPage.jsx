@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { generatePath, useLocation, useNavigate } from 'react-router';
 import {
     Search,
     UserPlus,
@@ -13,7 +13,7 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import patientApi from '../../apis/patientApi';
-import visitApi from '../../apis/visitApi';
+import { ROUTES } from '../../routes/routes';
 
 const inputClass =
     'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
@@ -31,14 +31,11 @@ export default function ReceptionistPatientsPage() {
     const [editForm, setEditForm] = useState(null);
     const [savingPatient, setSavingPatient] = useState(false);
 
-    // Modal Đăng ký khám (Tạo Visit)
-    const [registerPatient, setRegisterPatient] = useState(null);
-    const [rooms, setRooms] = useState([]);
-    const [selectedRoomId, setSelectedRoomId] = useState('');
-    const [lydovaovien, setLydovaovien] = useState('Khám nội tổng quát');
-    const [isPriority, setIsPriority] = useState(false);
-    const [priorityReason, setPriorityReason] = useState('ELDERLY');
-    const [submittingVisit, setSubmittingVisit] = useState(false);
+    // UC-40: đăng ký khám mở trang riêng thay vì popup.
+    const openRegisterVisit = useCallback(
+        (patient) => navigate(generatePath(ROUTES.RECEPTIONIST.VISIT_REGISTER, { id: patient.id })),
+        [navigate]
+    );
 
     // Tải danh sách bệnh nhân
     const fetchPatients = useCallback(async () => {
@@ -67,65 +64,11 @@ export default function ReceptionistPatientsPage() {
                 setNotice(location.state.notice);
             }
             if (location.state?.openVisitFor) {
-                void handleOpenRegisterModal(location.state.openVisitFor);
+                openRegisterVisit(location.state.openVisitFor);
             }
         }, 0);
         return () => window.clearTimeout(timer);
-    }, [location.state]);
-
-    // Tải danh sách phòng khám khi mở modal đăng ký khám
-    async function handleOpenRegisterModal(patient) {
-        setRegisterPatient(patient);
-        setLydovaovien('Khám nội tổng quát');
-        setIsPriority(false);
-        setPriorityReason('ELDERLY');
-        try {
-            const res = await visitApi.getActiveExaminationRooms();
-            const roomList = res?.data || res || [];
-            setRooms(roomList);
-            if (roomList.length > 0) {
-                setSelectedRoomId(roomList[0].id);
-            }
-        } catch (err) {
-            console.error('Không thể tải danh sách phòng khám', err);
-        }
-    }
-
-    // Gửi yêu cầu đăng ký khám
-    const handleSubmitVisit = async (e) => {
-        e.preventDefault();
-        if (!selectedRoomId) {
-            alert('Vui lòng chọn phòng khám');
-            return;
-        }
-        if (!lydovaovien.trim()) {
-            alert('Vui lòng nhập lý do vào viện');
-            return;
-        }
-
-        setSubmittingVisit(true);
-        try {
-            const res = await visitApi.create({
-                patientId: registerPatient.id,
-                roomId: selectedRoomId,
-                doituongbnLoai: 'DV', // Khám dịch vụ
-                lydovaovien: lydovaovien.trim(),
-                isPriority,
-                priorityReason: isPriority ? priorityReason : null,
-            });
-            const data = res?.data || res;
-            setNotice(
-                `Đăng ký khám thành công cho bệnh nhân ${registerPatient.hoten || registerPatient.name}! ` +
-                `Số vào viện: ${data?.sovaovien || '—'}, STT: ${data?.queueNumber || '—'}. ` +
-                `Vui lòng hướng dẫn bệnh nhân qua Quầy Thu Ngân để nộp phí khám (Lần 1).`
-            );
-            setRegisterPatient(null);
-        } catch (err) {
-            alert(err?.message || 'Không thể tạo lượt khám');
-        } finally {
-            setSubmittingVisit(false);
-        }
-    };
+    }, [location.state, openRegisterVisit]);
 
     const filteredPatients = patients;
 
@@ -274,7 +217,7 @@ export default function ReceptionistPatientsPage() {
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleOpenRegisterModal(patient)}
+                                                    onClick={() => openRegisterVisit(patient)}
                                                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#0F9D9A] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-700"
                                                     title="Đăng ký khám cho bệnh nhân"
                                                 >
@@ -314,104 +257,6 @@ export default function ReceptionistPatientsPage() {
                     </table>
                 </div>
             </section>
-
-            {/* MODAL ĐĂNG KÝ KHÁM (TẠO VISIT) */}
-            {registerPatient && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800">Đăng ký lượt khám bệnh mới</h3>
-                                <p className="text-xs text-slate-500">
-                                    Tạo lượt khám dịch vụ & gửi yêu cầu thanh toán lần 1 tới Quầy Thu Ngân
-                                </p>
-                            </div>
-                            <button onClick={() => setRegisterPatient(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmitVisit} className="mt-4 space-y-4">
-                            {/* Bệnh nhân info */}
-                            <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-1">
-                                <p className="text-sm font-bold text-slate-800">
-                                    {registerPatient.hoten || registerPatient.name}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                    Mã BN: <strong className="font-mono text-slate-700">{registerPatient.mabenhnhan || registerPatient.id}</strong>{' '}
-                                    • SĐT: {registerPatient.sodienthoai || registerPatient.phone || '—'}
-                                </p>
-                            </div>
-
-                            {/* Phòng khám */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                                    Chọn phòng khám bệnh <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    value={selectedRoomId}
-                                    onChange={(e) => setSelectedRoomId(e.target.value)}
-                                    required
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-teal-500"
-                                >
-                                    {rooms.map((r) => (
-                                        <option key={r.id} value={r.id}>
-                                            {r.roomCode} - {r.roomName} ({r.location || 'Khu khám'})
-                                        </option>
-                                    ))}
-                                    {rooms.length === 0 && <option value="">Đang tải danh sách phòng khám...</option>}
-                                </select>
-                            </div>
-
-                            {/* Đối tượng */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-700 mb-1">Hình thức khám</label>
-                                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 text-sm font-semibold text-teal-800">
-                                    Khám Dịch Vụ (DV) - Tự chi trả 2 lần (Phí khám + Phí CLS)
-                                </div>
-                            </div>
-
-                            {/* Lý do vào viện */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                                    Lý do vào viện / Triệu chứng <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    value={lydovaovien}
-                                    onChange={(e) => setLydovaovien(e.target.value)}
-                                    placeholder="VD: Khám tổng quát, Đau đầu, Sốt nhẹ..."
-                                    required
-                                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-teal-500"
-                                />
-                            </div>
-
-                            {/* Ưu tiên */}
-                            <div className="space-y-2 pt-1">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={isPriority}
-                                        onChange={(e) => setIsPriority(e.target.checked)}
-                                        className="h-4 w-4 rounded text-teal-600 focus:ring-teal-500"
-                                    />
-                                    <span className="text-sm font-medium text-slate-700">Ưu tiên tiếp đón & khám bệnh</span>
-                                </label>
-
-                                {isPriority && (
-                                    <div className="ml-6 rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-xs">
-                                        <label className="block font-semibold text-amber-900">
-                                            Lý do ưu tiên <span className="text-red-500">*</span>
-                                        </label>
-                                        <select
-                                            value={priorityReason}
-                                            onChange={(e) => setPriorityReason(e.target.value)}
-                                            className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-teal-500"
-                                        >
-                                            <option value="ELDERLY">Người cao tuổi (≥ 75 tuổi)</option>
-                                            <option value="FRAIL_DISABLED">Người khuyết tật nặng / suy kiệt</option>
-                                        </select>
-                                    </div>
-                                )}
 
                                 {editingPatient && editForm && (
                                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
@@ -467,29 +312,6 @@ export default function ReceptionistPatientsPage() {
                                         </form>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setRegisterPatient(null)}
-                                    className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                                >
-                                    Hủy
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submittingVisit}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 shadow-sm"
-                                >
-                                    <CheckCircle2 size={16} />
-                                    {submittingVisit ? 'Đang tiếp nhận...' : 'Hoàn tất & Gửi Thu Ngân'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
