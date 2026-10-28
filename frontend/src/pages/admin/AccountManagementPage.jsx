@@ -370,7 +370,7 @@ export function AccountManagementPage({
   };
 
   // UC-9: change an account role and remove any previous room assignment.
-  const assignRole = async (account, role) => {
+  const assignRole = async (account, role, professional = {}) => {
     const hadRoom =
       account.role === "DOCTOR" || account.role === "TECHNICIAN";
     const needsRoom = role === "DOCTOR" || role === "TECHNICIAN";
@@ -380,6 +380,7 @@ export function AccountManagementPage({
       check = await accountApi.checkRoleChange(account.id, {
         newRole: role,
         expectedRole: account.role,
+        ...professional,
       });
     } catch (error) {
       toast.error(accountErrorMessage(error));
@@ -409,22 +410,23 @@ export function AccountManagementPage({
           const updated = fromApi(await accountApi.changeRole(account.id, {
             newRole: role,
             expectedRole: account.role,
+            ...professional,
           }));
           setDetails((prev) => ({ ...prev, [account.id]: updated }));
           reloadAccounts();
 
-        toast.success(
-          `Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`,
-        );
-
-        if (needsRoom) {
-          const roomMsg = `Hãy phân công phòng làm việc cho ${account.username} ở chức năng Khoa / Phòng.`;
-
-          toast.info(roomMsg, { duration: 5000 });
-        }
-
+          toast.success(
+            `Đã đổi vai trò của ${account.username} thành ${ROLE_LABELS[role]}`,
+          );
           setConfirmDialog(null);
-          openDetail(account.id);
+
+          // Department follows the room (BR-05): continue with room staff assignment (UC-15).
+          if (needsRoom) {
+            toast.info(`Hãy phân công phòng làm việc cho ${account.username}.`, { duration: 5000 });
+            navigate(ADMIN.DEPARTMENTS);
+          } else {
+            openDetail(account.id);
+          }
         } catch (error) {
           toast.error(accountErrorMessage(error));
         }
@@ -443,6 +445,16 @@ export function AccountManagementPage({
     const locking = account.status === "ACTIVE";
 
     if (locking) {
+      try {
+        const currentWork = await accountApi.workInProgress(account.id);
+        if (currentWork.visitsInProgress + currentWork.ordersInProgress > 0) {
+          toast.error(`Không thể khóa tài khoản: còn ${currentWork.visitsInProgress} lượt khám và ${currentWork.ordersInProgress} chỉ định đang xử lý.`);
+          return;
+        }
+      } catch (error) {
+        toast.error(accountErrorMessage(error));
+        return;
+      }
       setLockReasonInput("");
       setLockPrompt(account);
       return;
@@ -572,7 +584,7 @@ export function AccountManagementPage({
         account={selected}
         onCancel={() => openDetail(selected.id)}
         onGoToList={showList}
-        onAssign={(role) => assignRole(selected, role)}
+        onAssign={(role, professional) => assignRole(selected, role, professional)}
       />
     );
   } else if (selected && view.name === "reset-password" && !isSelf(selected)) {
