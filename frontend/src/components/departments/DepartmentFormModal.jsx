@@ -4,9 +4,6 @@ import {
   Building2,
   DoorOpen,
   X,
-  Clock,
-  Activity,
-  Layers,
   Stethoscope,
   Info,
   Search,
@@ -25,38 +22,7 @@ const INPUT_CLASS =
 const SELECT_CLASS =
   'w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400';
 
-function getDefaultSpecs(initialData, isRoom) {
-  if (!isRoom) return {};
-  const isExam = initialData?.type === 'EXAMINATION' || initialData?.code?.startsWith('PK-');
-  return {
-    operatingHours:
-      initialData?.operatingHours || '07:30 – 16:30 (Thứ 2 – Thứ 7)',
-    capacity:
-      initialData?.capacity ||
-      (isExam ? '40 – 60 lượt khám/ngày' : '30 – 50 ca xét nghiệm/ngày'),
-    deviceSetup:
-      initialData?.deviceSetup ||
-      (isExam
-        ? 'Bàn khám tiêu chuẩn, máy đo huyết áp điện tử, ống nghe y tế, đèn khám, giường khám bệnh'
-        : initialData?.code?.includes('SA')
-        ? 'Hệ thống siêu âm 4D màu Doppler kỹ thuật số cao cấp'
-        : initialData?.code?.includes('XQ')
-        ? 'Hệ thống máy chụp X-quang kỹ thuật số (DR), buồng chì bảo vệ'
-        : initialData?.code?.includes('CT')
-        ? 'Hệ thống chụp cắt lớp vi tính CT đa dãy đầu dò thế hệ mới'
-        : initialData?.code?.includes('MRI')
-        ? 'Hệ thống chụp cộng hưởng từ 1.5 Tesla'
-        : initialData?.code?.includes('NS')
-        ? 'Hệ thống dàn nội soi dạ dày đại tràng ống mềm độ nét cao (NBI)'
-        : initialData?.code?.includes('DT')
-        ? 'Máy ghi điện tâm đồ 12 kênh kỹ thuật số'
-        : 'Hệ thống máy phân tích tự động, buồng an toàn sinh học cấp II'),
-  };
-}
-
 function buildInitialForm({ initialData, departments, isRoom }) {
-  const specs = getDefaultSpecs(initialData, isRoom);
-
   if (initialData) {
     return {
       code: initialData.code || '',
@@ -67,9 +33,6 @@ function buildInitialForm({ initialData, departments, isRoom }) {
       headPerson: initialData.headPerson || '',
       description: initialData.description || '',
       status: initialData.status || 'ACTIVE',
-      operatingHours: specs.operatingHours || '07:30 – 16:30 (Thứ 2 – Thứ 7)',
-      capacity: specs.capacity || '40 – 60 lượt/ngày',
-      deviceSetup: specs.deviceSetup || '',
     };
   }
   return {
@@ -81,11 +44,6 @@ function buildInitialForm({ initialData, departments, isRoom }) {
     headPerson: '',
     description: '',
     status: 'ACTIVE',
-    operatingHours: '07:30 – 16:30 (Thứ 2 – Thứ 7)',
-    capacity: isRoom ? '40 – 60 lượt khám/ngày' : '',
-    deviceSetup: isRoom
-      ? 'Bàn khám tiêu chuẩn, máy đo huyết áp điện tử, ống nghe y tế, đèn khám, giường khám bệnh'
-      : '',
   };
 }
 
@@ -475,58 +433,11 @@ function DepartmentFormModalContent({
             </div>
           </div>
 
-          {/* Section 2 (Chỉ cho ROOM): Thông số vận hành & Cơ sở vật chất */}
+          {/* Section 2 (Chỉ cho ROOM): Dịch vụ y tế phòng tiếp nhận phục vụ */}
           {isRoom && (
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200/90 space-y-3.5">
-              <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
-                <Clock className="w-3.5 h-3.5 text-[#0d9488]" />
-                <span>Thông số vận hành & Thiết bị buồng phòng</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Khung giờ tiếp nhận
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.operatingHours}
-                    onChange={(e) => handleChange('operatingHours', e.target.value)}
-                    placeholder="VD: 07:30 – 16:30 (Thứ 2 – Thứ 7)"
-                    className={INPUT_CLASS}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Công suất phục vụ dự kiến
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.capacity}
-                    onChange={(e) => handleChange('capacity', e.target.value)}
-                    placeholder="VD: 40 – 60 lượt/ngày"
-                    className={INPUT_CLASS}
-                  />
-                </div>
-              </div>
-
-              {/* Trang thiết bị */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Cơ sở vật chất & Trang thiết bị buồng phòng
-                </label>
-                <textarea
-                  rows={2}
-                  value={formData.deviceSetup}
-                  onChange={(e) => handleChange('deviceSetup', e.target.value)}
-                  placeholder="Khai báo các trang thiết bị y tế chính bố trí tại phòng..."
-                  className={`${INPUT_CLASS} resize-none`}
-                />
-              </div>
-
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200/90 space-y-3">
               {/* Khối: Dịch vụ y tế phòng tiếp nhận phục vụ */}
-              <div className="pt-1 space-y-3">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
                     <Stethoscope className="w-4 h-4 text-[#0d9488]" />
