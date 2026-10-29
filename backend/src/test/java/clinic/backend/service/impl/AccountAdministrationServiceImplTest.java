@@ -2,9 +2,12 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import clinic.backend.dto.response.AccountSummaryResponse;
+import clinic.backend.dto.response.PageResponse;
 import clinic.backend.dto.request.RoleChangeRequest;
 import clinic.backend.dto.request.UpdateAccountRequest;
 import clinic.backend.entity.StaffAccount;
@@ -21,6 +24,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.StaffAccountRepository.AccountSummaryView;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.PasswordHasher;
@@ -34,13 +38,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class AccountAdministrationServiceImplTest {
@@ -114,6 +123,41 @@ class AccountAdministrationServiceImplTest {
 
         verify(auditLogService, times(2)).recordAccountChange(
                 any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
+    }
+
+    @Test
+    void accountListUsesOneProjectedPageQuery() {
+        StaffAccount doctor = account(Role.DOCTOR);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        AccountSummaryView doctorView = summaryView(doctor, "Phòng 101", "Khoa Nội");
+        AccountSummaryView receptionistView = summaryView(receptionist, null, null);
+        when(accountRepository.searchSummaries(eq(""), isNull(), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(List.of(doctorView, receptionistView)));
+
+        PageResponse<AccountSummaryResponse> result = service.listAccounts(
+                null, null, null, null, 0, 20, "createdAt", true);
+
+        assertThat(result.content()).extracting(AccountSummaryResponse::roomName)
+                .containsExactly("Phòng 101", null);
+        verify(accountRepository).searchSummaries(eq(""), isNull(), isNull(), isNull(), any());
+        verifyNoInteractions(assignmentRepository);
+    }
+
+    private AccountSummaryView summaryView(StaffAccount account, String roomName, String departmentName) {
+        AccountSummaryView view = org.mockito.Mockito.mock(AccountSummaryView.class);
+        when(view.getId()).thenReturn(account.getId());
+        when(view.getUsername()).thenReturn(account.getUsername());
+        when(view.getFullName()).thenReturn(account.getFullName());
+        when(view.getPhoneNumber()).thenReturn(account.getPhoneNumber());
+        when(view.getEmail()).thenReturn(account.getEmail());
+        when(view.getRole()).thenReturn(account.getRole());
+        when(view.getStatus()).thenReturn(account.getStatus());
+        when(view.getRoomName()).thenReturn(roomName);
+        when(view.getDepartmentName()).thenReturn(departmentName);
+        when(view.getLastLoginAt()).thenReturn(account.getLastLoginAt());
+        when(view.getPasswordChangeRequired()).thenReturn(account.isPasswordChangeRequired());
+        when(view.getVersion()).thenReturn(account.getVersion());
+        return view;
     }
 
     private StaffAccount account(Role role) {
