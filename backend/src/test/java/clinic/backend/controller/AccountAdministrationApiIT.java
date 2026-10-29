@@ -6,10 +6,19 @@ import java.util.UUID;
 import java.time.temporal.ChronoUnit;
 
 import clinic.backend.dto.request.LoginRequest;
+import clinic.backend.entity.Department;
+import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.StaffRoomAssignment;
+import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.Role;
+import clinic.backend.enums.RoomType;
+import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.security.PasswordHasher;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
@@ -35,6 +44,9 @@ class AccountAdministrationApiIT extends PostgresIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired StaffAccountRepository accounts;
+    @Autowired StaffRoomAssignmentRepository assignments;
+    @Autowired RoomRepository rooms;
+    @Autowired DepartmentRepository departments;
     @Autowired PasswordHasher passwordHasher;
     @Autowired UuidV7Generator ids;
 
@@ -51,6 +63,33 @@ class AccountAdministrationApiIT extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/v1/accounts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(login(receptionist))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void accountListIncludesRoomAndDepartmentFromActiveAssignment() throws Exception {
+        StaffAccount admin = account(Role.ADMIN, false, null);
+        Instant now = Instant.now();
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Department department = departments.saveAndFlush(new Department(
+                ids.next(), "K-" + suffix, "Khoa " + suffix, DepartmentType.CLINICAL, null, true, now));
+        Room room = rooms.saveAndFlush(new Room(
+                ids.next(), now, department.getId(), null, "P-" + suffix, "Phòng " + suffix,
+                "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE));
+        for (int index = 0; index < 11; index++) {
+            StaffAccount doctor = account(Role.DOCTOR, false, null);
+            assignments.saveAndFlush(new StaffRoomAssignment(
+                    ids.next(), doctor.getId(), room.getId(), now, admin.getId(), null, null, null));
+        }
+
+        mockMvc.perform(get("/api/v1/accounts")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(login(admin)))
+                        .param("departmentId", department.getId().toString())
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].roomName").value(room.getRoomName()))
+                .andExpect(jsonPath("$.data.content[0].departmentName").value(department.getDepartmentName()))
+                .andExpect(jsonPath("$.data.page.totalElements").value(11))
+                .andExpect(jsonPath("$.data.page.totalPages").value(2));
     }
 
     @Test

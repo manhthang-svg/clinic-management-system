@@ -28,9 +28,7 @@ import clinic.backend.dto.response.TemporaryPasswordResponse;
 import clinic.backend.dto.response.WorkInProgressResponse;
 import clinic.backend.entity.AuditLog;
 import clinic.backend.entity.Department;
-import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
-import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.AuditOutcome;
@@ -51,6 +49,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.StaffAccountRepository.AccountSummaryView;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.PasswordHasher;
@@ -60,14 +59,11 @@ import clinic.backend.service.AccountAdministrationService;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.SecurityAuditService;
 import clinic.backend.utils.UuidV7Generator;
-import jakarta.persistence.criteria.Root;
-import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -117,13 +113,13 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         Sort.Direction direction = descending ? Sort.Direction.DESC : Sort.Direction.ASC;
         Sort sort = Sort.by(direction, sortProperty(sortField)).and(Sort.by(direction, "id"));
-        Page<StaffAccount> result = accountRepository.findAll(
-                accountSpecification(search, role, departmentId, status), PageRequest.of(page, size, sort));
+        String searchPattern = search == null || search.isBlank()
+                ? ""
+                : "%" + search.strip().toLowerCase(Locale.ROOT) + "%";
+        Page<AccountSummaryView> result = accountRepository.searchSummaries(
+                searchPattern, role, departmentId, status, PageRequest.of(page, size, sort));
         List<AccountSummaryResponse> content = result.getContent().stream()
-                .map(account -> {
-                    Location location = location(account.getId());
-                    return accountMapper.toSummary(account, location.roomName(), location.departmentName());
-                })
+                .map(this::toSummary)
                 .toList();
         return page(content, result);
     }
@@ -345,39 +341,6 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         return page(content, result);
     }
 
-    private Specification<StaffAccount> accountSpecification(
-            String search, Role role, UUID departmentId, AccountStatus status) {
-        return (root, query, cb) -> {
-            var predicate = cb.conjunction();
-            if (search != null && !search.isBlank()) {
-                String term = "%" + search.strip().toLowerCase(Locale.ROOT) + "%";
-                var searchable = cb.concat(cb.concat(cb.concat(root.get("username"), " "), root.get("fullName")),
-                        cb.concat(cb.concat(" ", cb.coalesce(root.get("phoneNumber"), "")),
-                                cb.concat(" ", cb.coalesce(root.get("email"), ""))));
-                predicate = cb.and(predicate, cb.like(cb.lower(cb.function("unaccent", String.class, searchable)),
-                        cb.function("unaccent", String.class, cb.literal(term))));
-            }
-            if (role != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("role"), role));
-            }
-            if (status != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("status"), status));
-            }
-            if (departmentId != null) {
-                Subquery<UUID> subquery = query.subquery(UUID.class);
-                Root<StaffRoomAssignment> assignment = subquery.from(StaffRoomAssignment.class);
-                Root<Room> room = subquery.from(Room.class);
-                subquery.select(assignment.get("id")).where(
-                        cb.equal(assignment.get("staffAccountId"), root.get("id")),
-                        cb.isNull(assignment.get("removedAt")),
-                        cb.equal(room.get("id"), assignment.get("roomId")),
-                        cb.equal(room.get("departmentId"), departmentId));
-                predicate = cb.and(predicate, cb.exists(subquery));
-            }
-            return predicate;
-        };
-    }
-
     private String sortProperty(String requested) {
         return switch (requested == null ? "createdAt" : requested) {
             case "username" -> "username";
@@ -403,6 +366,14 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 !protectedAccount && account.getStatus() == AccountStatus.LOCKED, !protectedAccount,
                 !protectedAccount && needsRoom(account.getRole()));
         return accountMapper.toDetail(account, location.roomName(), location.departmentName(), actions);
+    }
+
+    private AccountSummaryResponse toSummary(AccountSummaryView account) {
+        return new AccountSummaryResponse(
+                account.getId(), account.getUsername(), account.getFullName(), account.getPhoneNumber(),
+                account.getEmail(), account.getRole(), account.getStatus(), account.getRoomName(),
+                account.getDepartmentName(), account.getLastLoginAt(), account.getPasswordChangeRequired(),
+                account.getVersion());
     }
 
     private Location location(UUID accountId) {

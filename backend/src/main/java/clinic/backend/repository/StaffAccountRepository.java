@@ -1,12 +1,16 @@
 package clinic.backend.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -16,6 +20,61 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID>, JpaSpecificationExecutor<StaffAccount> {
+
+    @Query(value = """
+            select account.id as id,
+                   account.username as username,
+                   account.fullName as fullName,
+                   account.phoneNumber as phoneNumber,
+                   account.email as email,
+                   account.role as role,
+                   account.status as status,
+                   room.roomName as roomName,
+                   department.departmentName as departmentName,
+                   account.lastLoginAt as lastLoginAt,
+                   account.passwordChangeRequired as passwordChangeRequired,
+                   account.version as version
+            from StaffAccount account
+            left join StaffRoomAssignment assignment
+                   on assignment.staffAccountId = account.id and assignment.removedAt is null
+            left join Room room on room.id = assignment.roomId
+            left join Department department on department.id = room.departmentId
+            where (:searchPattern = '' or
+                   lower(function('unaccent',
+                       concat(concat(concat(account.username, ' '), account.fullName),
+                           concat(concat(' ', coalesce(account.phoneNumber, '')),
+                               concat(' ', coalesce(account.email, ''))))))
+                   like lower(function('unaccent', :searchPattern)))
+              and (:role is null or account.role = :role)
+              and (:status is null or account.status = :status)
+              and (:departmentId is null or department.id = :departmentId)
+            """,
+            countQuery = """
+            select count(account.id)
+            from StaffAccount account
+            where (:searchPattern = '' or
+                   lower(function('unaccent',
+                       concat(concat(concat(account.username, ' '), account.fullName),
+                           concat(concat(' ', coalesce(account.phoneNumber, '')),
+                               concat(' ', coalesce(account.email, ''))))))
+                   like lower(function('unaccent', :searchPattern)))
+              and (:role is null or account.role = :role)
+              and (:status is null or account.status = :status)
+              and (:departmentId is null or exists (
+                  select assignment.id
+                  from StaffRoomAssignment assignment, Room room
+                  where assignment.staffAccountId = account.id
+                    and assignment.removedAt is null
+                    and room.id = assignment.roomId
+                    and room.departmentId = :departmentId
+              ))
+            """)
+    Page<AccountSummaryView> searchSummaries(
+            @Param("searchPattern") String searchPattern,
+            @Param("role") Role role,
+            @Param("departmentId") UUID departmentId,
+            @Param("status") AccountStatus status,
+            Pageable pageable);
 
     Optional<StaffAccount> findByUsername(String username);
 
@@ -46,4 +105,30 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
     Optional<StaffAccount> findByRole(Role role);
 
     List<StaffAccount> findAllByPasswordHash(String passwordHash);
+
+    interface AccountSummaryView {
+        UUID getId();
+
+        String getUsername();
+
+        String getFullName();
+
+        String getPhoneNumber();
+
+        String getEmail();
+
+        Role getRole();
+
+        AccountStatus getStatus();
+
+        String getRoomName();
+
+        String getDepartmentName();
+
+        Instant getLastLoginAt();
+
+        boolean getPasswordChangeRequired();
+
+        Long getVersion();
+    }
 }
