@@ -120,16 +120,16 @@ const NAV_ITEMS = {
 
   TECHNICIAN: [
     {
-      id: 'overview',
-      label: 'Tổng quan',
+      id: 'dashboard',
+      label: 'Tổng Quan',
       iconName: 'LayoutDashboard',
       path: '/technician',
     },
     {
-      id: 'subclinical',
-      label: 'Thực hiện cận lâm sàng',
-      iconName: 'Microscope',
-      path: '/technician/subclinical',
+      id: 'queue',
+      label: 'Danh sách chờ & Phân loại',
+      iconName: 'ClipboardList',
+      path: '/technician/queue',
     },
   ],
 

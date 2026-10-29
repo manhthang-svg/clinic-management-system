@@ -94,6 +94,10 @@ export function App({
             navigate('/cashier', { replace: true });
           } else if (role === 'RECEPTIONIST') {
             navigate('/receptionist', { replace: true });
+          } else if (role === 'DOCTOR') {
+            navigate('/doctor', { replace: true });
+          } else if (role === 'TECHNICIAN') {
+            navigate('/technician', { replace: true });
           } else {
             navigate('/', { replace: true });
           }
@@ -179,7 +183,7 @@ export function App({
     ?.toUpperCase()
     .replace(/^ROLE_/, '');
 
-  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST'].includes(role)) {
+  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST', 'TECHNICIAN'].includes(role)) {
     return (
       <>
         <header className="app-header">

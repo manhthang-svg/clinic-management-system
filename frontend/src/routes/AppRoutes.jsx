@@ -25,6 +25,7 @@ import ReceptionistCreatePatientPage from '../pages/receptionist/ReceptionistCre
 import ReceptionistVisitRegisterPage from '../pages/receptionist/ReceptionistVisitRegisterPage.jsx';
 import PaymentResultPage from '../pages/payment/PaymentResultPage.jsx';
 import DoctorQueuePage from '../pages/doctor/DoctorQueuePage.jsx';
+import { TechnicianDashboardPage, TechnicianQueuePage } from '../pages/technician/index.js';
 
 export function AppRoutes({
     session,
@@ -245,6 +246,40 @@ export function AppRoutes({
                     <Route
                         path="appointments"
                         element={<DoctorQueuePage />}
+                    />
+                </Route>
+            </Route>
+
+            {/* TECHNICIAN */}
+            <Route
+                element={
+                    <ProtectRoute
+                        session={session}
+                        requiredRole="TECHNICIAN"
+                    />
+                }
+            >
+                <Route
+                    path="/technician"
+                    element={
+                        <DashboardLayout
+                            currentUser={session.account}
+                            onLogout={onLogout}
+                            onChangePassword={onChangePassword}
+                        />
+                    }
+                >
+                    <Route
+                        index
+                        element={<TechnicianDashboardPage />}
+                    />
+                    <Route
+                        path="dashboard"
+                        element={<TechnicianDashboardPage />}
+                    />
+                    <Route
+                        path="queue"
+                        element={<TechnicianQueuePage />}
                     />
                 </Route>
             </Route>
