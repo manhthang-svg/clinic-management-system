@@ -6,14 +6,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import clinic.backend.dto.response.AccountSummaryResponse;
-import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
 import clinic.backend.dto.request.UpdateAccountRequest;
+import clinic.backend.dto.response.AccountSummaryResponse;
+import clinic.backend.dto.response.PageResponse;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.Role;
+import clinic.backend.enums.TemporaryPasswordMode;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.mapper.AccountMapper;
@@ -43,13 +45,13 @@ import org.springframework.data.domain.PageImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AccountAdministrationServiceImplTest {
@@ -158,6 +160,38 @@ class AccountAdministrationServiceImplTest {
         when(view.getPasswordChangeRequired()).thenReturn(account.isPasswordChangeRequired());
         when(view.getVersion()).thenReturn(account.getVersion());
         return view;
+    }
+
+    @Test
+    void generatedPasswordResetRequiresPasswordChange() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(passwordGenerator.generate()).thenReturn("GeneratedPass1");
+        when(passwordHasher.hash("GeneratedPass1")).thenReturn("{bcrypt}generated");
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.resetPassword(admin, target.getId(),
+                new ResetAccountPasswordRequest(TemporaryPasswordMode.GENERATE, null, target.getVersion()));
+
+        assertThat(target.getPasswordHash()).isEqualTo("{bcrypt}generated");
+        assertThat(target.isPasswordChangeRequired()).isTrue();
+    }
+
+    @Test
+    void manualPasswordResetDoesNotRequirePasswordChange() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(passwordHasher.hash("AgreedPassword1")).thenReturn("{bcrypt}agreed");
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.resetPassword(admin, target.getId(),
+                new ResetAccountPasswordRequest(
+                        TemporaryPasswordMode.MANUAL, "AgreedPassword1", target.getVersion()));
+
+        assertThat(target.getPasswordHash()).isEqualTo("{bcrypt}agreed");
+        assertThat(target.isPasswordChangeRequired()).isFalse();
     }
 
     private StaffAccount account(Role role) {

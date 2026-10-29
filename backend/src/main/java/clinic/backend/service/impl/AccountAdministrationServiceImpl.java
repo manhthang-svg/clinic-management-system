@@ -303,7 +303,12 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         requireVersion(account, request.expectedVersion());
         String temporaryPassword = temporaryPassword(request.mode(), request.password());
         Instant now = clock.instant();
-        account.resetPassword(passwordHasher.hash(temporaryPassword), now);
+        String passwordHash = passwordHasher.hash(temporaryPassword);
+        if (request.mode() == TemporaryPasswordMode.GENERATE) {
+            account.resetPasswordForRecovery(passwordHash, now);
+        } else {
+            account.resetPasswordWithoutRequiredChange(passwordHash, now);
+        }
         accountRepository.saveAndFlush(account);
         sessionRepository.revokeAllForAccount(accountId, SessionRevocationReason.PASSWORD_RESET, now);
         securityAuditService.record(

@@ -306,8 +306,21 @@ public class StaffAccount {
      * This deliberately does not change the account's ACTIVE/LOCKED status.
      */
     public void resetPasswordForRecovery(String temporaryPasswordHash, Instant now) {
-        passwordHash = requireText(temporaryPasswordHash, "temporaryPasswordHash");
-        passwordChangeRequired = true;
+        replacePasswordAfterAdminReset(temporaryPasswordHash, true, now);
+    }
+
+    /**
+     * Replaces the password with a permanent password agreed between the Admin and the account owner.
+     * Unlike a generated temporary password, it does not force another password change at next login.
+     */
+    public void resetPasswordWithoutRequiredChange(String permanentPasswordHash, Instant now) {
+        replacePasswordAfterAdminReset(permanentPasswordHash, false, now);
+    }
+
+    private void replacePasswordAfterAdminReset(
+            String newPasswordHash, boolean requirePasswordChange, Instant now) {
+        passwordHash = requireText(newPasswordHash, "newPasswordHash");
+        passwordChangeRequired = requirePasswordChange;
         failedLoginAttempts = 0;
         loginBlockedUntil = null;
         passwordChangedAt = Objects.requireNonNull(now, "now");
@@ -369,10 +382,6 @@ public class StaffAccount {
         lockedAt = null;
         lockedByAccountId = null;
         updatedAt = Objects.requireNonNull(now, "now");
-    }
-
-    public void resetPassword(String temporaryPasswordHash, Instant now) {
-        resetPasswordForRecovery(temporaryPasswordHash, now);
     }
 
     private static String requireText(String value, String name) {
