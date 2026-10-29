@@ -459,9 +459,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     location: formData.location,
                     headPerson: formData.headPerson,
                     status: formData.status,
-                    operatingHours: formData.operatingHours,
-                    capacity: formData.capacity,
-                    deviceSetup: formData.deviceSetup,
                     assignedServices: formData.assignedServices || [],
                     serviceIds: formData.serviceIds || [],
                   }
@@ -493,9 +490,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             location: formData.location,
             headPerson: formData.headPerson || 'Chưa phân công',
             status: formData.status,
-            operatingHours: formData.operatingHours,
-            capacity: formData.capacity,
-            deviceSetup: formData.deviceSetup,
             assignedServices: formData.assignedServices || [],
             serviceIds: formData.serviceIds || [],
           };
@@ -556,9 +550,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     location: formData.location,
                     headPerson: formData.headPerson,
                     status: formData.status,
-                    operatingHours: formData.operatingHours,
-                    capacity: formData.capacity,
-                    deviceSetup: formData.deviceSetup,
                     assignedServices: formData.assignedServices || [],
                     serviceIds: formData.serviceIds || [],
                   }
@@ -578,9 +569,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             location: formData.location,
             headPerson: formData.headPerson || 'Chưa phân công',
             status: formData.status,
-            operatingHours: formData.operatingHours,
-            capacity: formData.capacity,
-            deviceSetup: formData.deviceSetup,
             assignedServices: formData.assignedServices || [],
             serviceIds: formData.serviceIds || [],
           };

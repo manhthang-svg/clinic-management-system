@@ -6,9 +6,6 @@ import {
   MapPin,
   User,
   FileText,
-  Clock,
-  Activity,
-  Layers,
   Stethoscope,
   CheckCircle2,
   DoorOpen,
@@ -53,31 +50,6 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
   const roomServices = useMemo(() => {
     if (isDept) return [];
     return getServicesForRoom(item);
-  }, [item, isDept]);
-
-  // Thông số kỹ thuật chi tiết của phòng
-  const roomSpecs = useMemo(() => {
-    if (isDept) return null;
-    const isExam = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
-    return {
-      operatingHours: '07:30 – 16:30 (Thứ 2 – Thứ 7)',
-      capacity: isExam ? '40 – 60 lượt khám/ngày' : '30 – 50 ca xét nghiệm/ngày',
-      deviceSetup: isExam
-        ? 'Bàn khám tiêu chuẩn, máy đo huyết áp điện tử, ống nghe y tế, đèn khám, giường khám bệnh'
-        : item.code?.includes('SA')
-        ? 'Hệ thống siêu âm 4D màu Doppler kỹ thuật số cao cấp'
-        : item.code?.includes('XQ')
-        ? 'Hệ thống máy chụp X-quang kỹ thuật số (DR), buồng chì bảo vệ'
-        : item.code?.includes('CT')
-        ? 'Hệ thống chụp cắt lớp vi tính CT đa dãy đầu dò thế hệ mới'
-        : item.code?.includes('MRI')
-        ? 'Hệ thống chụp cộng hưởng từ 1.5 Tesla'
-        : item.code?.includes('NS')
-        ? 'Hệ thống dàn nội soi dạ dày đại tràng ống mềm độ nét cao (NBI)'
-        : item.code?.includes('DT')
-        ? 'Máy ghi điện tâm đồ 12 kênh kỹ thuật số'
-        : 'Hệ thống máy phân tích tự động, buồng an toàn sinh học cấp II',
-    };
   }, [item, isDept]);
 
   return (
@@ -284,34 +256,6 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
           {/* Nếu là Phòng chức năng (ROOM) */}
           {!isDept && (
             <div className="space-y-4">
-              {/* Thẻ thông số chi tiết của phòng */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-slate-600 font-semibold text-[11px]">
-                    <Clock className="w-3.5 h-3.5 text-[#0d9488]" />
-                    <span>Thời gian tiếp nhận</span>
-                  </div>
-                  <p className="text-slate-800 font-medium">{roomSpecs?.operatingHours}</p>
-                </div>
-
-                <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-slate-600 font-semibold text-[11px]">
-                    <Activity className="w-3.5 h-3.5 text-[#0d9488]" />
-                    <span>Công suất phục vụ dự kiến</span>
-                  </div>
-                  <p className="text-slate-800 font-medium">{roomSpecs?.capacity}</p>
-                </div>
-              </div>
-
-              {/* Trang thiết bị buồng phòng */}
-              <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80 space-y-1">
-                <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px]">
-                  <Layers className="w-3.5 h-3.5 text-[#0d9488]" />
-                  <span>Cơ sở vật chất & Trang thiết bị buồng phòng</span>
-                </div>
-                <p className="text-slate-600 text-xs leading-relaxed">{roomSpecs?.deviceSetup}</p>
-              </div>
-
               {/* Bảng danh sách các dịch vụ y tế được phòng khám phục vụ */}
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between">
