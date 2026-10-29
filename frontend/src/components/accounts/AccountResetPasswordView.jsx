@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, Clipboard, KeyRound, Printer } from 'lucide-react';
+import { CheckCircle2, Clipboard, Eye, EyeOff, KeyRound, Printer } from 'lucide-react';
 import { AccountPageHeader, FormField, INPUT_CLASS } from './AccountFormParts';
 import { ConfirmModal } from '../ui';
 import { accountErrorMessage } from './accountErrors';
@@ -22,6 +22,8 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
   const [error, setError] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -56,7 +58,7 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
     <div className="space-y-6">
       <AccountPageHeader
         title="Đặt lại mật khẩu"
-        description={`Tạo mật khẩu tạm cho ${account.username}`}
+        description={mode === 'MANUAL' ? `Đặt mật khẩu chính thức cho ${account.username}` : `Tạo mật khẩu tạm cho ${account.username}`}
         onBack={onCancel}
         crumbs={[{ label: 'Quản lý tài khoản', onClick: onGoToList }, { label: 'Đặt lại mật khẩu' }]}
       />
@@ -81,19 +83,29 @@ export function AccountResetPasswordView({ account, onCancel, onGoToList, onRese
           </div>
           <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer">
             <input type="radio" name="password-mode" value="GENERATE" checked={mode === 'GENERATE'} onChange={(e) => setMode(e.target.value)} />
-            <span><span className="block font-semibold text-slate-800">Hệ thống tự sinh</span><span className="block text-xs text-slate-500">Backend tạo mật khẩu tạm 12 ký tự.</span></span>
+            <span><span className="block font-semibold text-slate-800">Hệ thống tự sinh</span><span className="block text-xs text-slate-500">Backend tạo mật khẩu tạm 12 ký tự; người dùng phải đổi khi đăng nhập.</span></span>
           </label>
           <label className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer">
             <input type="radio" name="password-mode" value="MANUAL" checked={mode === 'MANUAL'} onChange={(e) => setMode(e.target.value)} />
-            <span><span className="block font-semibold text-slate-800">Admin nhập thủ công</span><span className="block text-xs text-slate-500">Dùng khi cần bàn giao một mật khẩu đã thống nhất.</span></span>
+            <span><span className="block font-semibold text-slate-800">Admin nhập thủ công</span><span className="block text-xs text-slate-500">Mật khẩu chính thức đã thống nhất; người dùng không phải đổi khi đăng nhập.</span></span>
           </label>
           {mode === 'MANUAL' && (
             <div className="grid sm:grid-cols-2 gap-4">
-              <FormField id="reset-password" label="Mật khẩu tạm" required>
-                <input id="reset-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS} autoComplete="new-password" />
+              <FormField id="reset-password" label="Mật khẩu chính thức" required>
+                <div className="relative">
+                  <input id="reset-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS + ' pr-10'} autoComplete="new-password" />
+                  <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600" tabIndex={-1} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </FormField>
               <FormField id="reset-confirm" label="Xác nhận mật khẩu" required>
-                <input id="reset-confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={INPUT_CLASS} autoComplete="new-password" />
+                <div className="relative">
+                  <input id="reset-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={INPUT_CLASS + ' pr-10'} autoComplete="new-password" />
+                  <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600" tabIndex={-1} aria-label={showConfirm ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </FormField>
             </div>
           )}

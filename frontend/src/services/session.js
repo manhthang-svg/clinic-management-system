@@ -12,6 +12,7 @@ export const sessionManager = new SessionManager({ api: createAuthApi(authClient
 export const apiClient = new ApiClient({
     baseUrl: environment.apiBaseUrl,
     accessTokenProvider: sessionManager.getAccessToken,
+    onUnauthorized: () => sessionManager.clear(),
 });
 
 export function useSession(manager = sessionManager) {

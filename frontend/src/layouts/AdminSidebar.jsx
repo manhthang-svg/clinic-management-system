@@ -33,7 +33,7 @@ const ITEM_CLASS = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl tran
 const ACTIVE_CLASS = 'bg-[#d3ebe7] text-[#127e7a] font-semibold';
 const IDLE_CLASS = 'hover:bg-white hover:text-slate-800';
 
-export function AdminSidebar({ activeKey = 'accounts' }) {
+export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
   const navigate = useNavigate();
 
   const paths = {
@@ -47,6 +47,7 @@ export function AdminSidebar({ activeKey = 'accounts' }) {
     const path = paths[id];
 
     if (path) {
+      if (onNavigate?.(id) === false) return;
       navigate(path);
     }
   };

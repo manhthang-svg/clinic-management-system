@@ -3,14 +3,14 @@ import { Outlet } from 'react-router';
 import { AdminTopBar } from './AdminTopBar';
 import Sidebar from '../components/Sidebar';
 
-export function DashboardLayout({ currentUser, onLogout, onChangePassword, onOpenProfile, activeKey = 'overview' }) {
+export function DashboardLayout({ children, currentUser, onLogout, onChangePassword, onOpenProfile, onNavigate, activeKey = 'overview' }) {
     return (
-        <div className="flex min-h-screen bg-[#f2fafa] font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 antialiased">
+        <div className="flex h-screen overflow-hidden bg-[#f2fafa] font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 antialiased">
             {/* Sidebar dùng chung, tự chọn menu theo role */}
-            <Sidebar user={currentUser} activeKey={activeKey} />
+            <Sidebar user={currentUser} onNavigate={onNavigate} onLogout={onLogout} activeKey={activeKey} />
 
             {/* Nội dung chính */}
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 <AdminTopBar
                     currentAdmin={currentUser}
                     onLogout={onLogout}
@@ -18,8 +18,8 @@ export function DashboardLayout({ currentUser, onLogout, onChangePassword, onOpe
                     onOpenProfile={onOpenProfile}
                 />
 
-                <main className="min-w-0 flex-1 p-6">
-                    <Outlet />
+                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+                    {children ?? <Outlet />}
                 </main>
             </div>
         </div>

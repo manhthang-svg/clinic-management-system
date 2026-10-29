@@ -511,9 +511,12 @@ export function AccountManagementPage({
   };
 
   const resetPassword = async (account, request) => {
-    const result = await accountApi.resetPassword(account.id, {
+    // Fetch the latest version right before submitting to avoid CONCURRENT_MODIFICATION
+    // when the target account's version changed since the page was loaded (e.g. they logged in).
+    const fresh = fromApi(await accountApi.detail(account.id));
+    const result = await accountApi.resetPassword(fresh.id, {
       ...request,
-      expectedVersion: account.version,
+      expectedVersion: fresh.version,
     });
     const updated = fromApi(await accountApi.detail(account.id));
     setDetails((prev) => ({ ...prev, [account.id]: updated }));

@@ -143,17 +143,32 @@ class StaffAccountTest {
     }
 
     @Test
-    void adminResetClearsThrottleButPreservesLockedStatus() {
+    void generatedAdminResetRequiresPasswordChangeClearsThrottleAndPreservesLockedStatus() {
         StaffAccount account = newAccount();
         for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
             account.registerFailedLogin(NOW);
         }
         account.lock("Security review", UUID.randomUUID(), NOW.plusSeconds(1));
 
-        account.resetPassword("{bcrypt}replacement", NOW.plusSeconds(2));
+        account.resetPasswordForRecovery("{bcrypt}replacement", NOW.plusSeconds(2));
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
         assertThat(account.isPasswordChangeRequired()).isTrue();
+        assertThat(account.getFailedLoginAttempts()).isZero();
+        assertThat(account.getLoginBlockedUntil()).isNull();
+    }
+
+    @Test
+    void manualAdminResetDoesNotRequirePasswordChange() {
+        StaffAccount account = newAccount();
+        for (int attempt = 0; attempt < StaffAccount.MAX_CONSECUTIVE_FAILED_LOGINS; attempt++) {
+            account.registerFailedLogin(NOW);
+        }
+
+        account.resetPasswordWithoutRequiredChange("{bcrypt}agreed-password", NOW.plusSeconds(2));
+
+        assertThat(account.getPasswordHash()).isEqualTo("{bcrypt}agreed-password");
+        assertThat(account.isPasswordChangeRequired()).isFalse();
         assertThat(account.getFailedLoginAttempts()).isZero();
         assertThat(account.getLoginBlockedUntil()).isNull();
     }

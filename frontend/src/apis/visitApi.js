@@ -72,6 +72,12 @@ export const visitApi = {
             method: 'POST',
         });
     },
+
+    skipVisit(visitId) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/skip`, {
+            method: 'POST',
+        });
+    },
 };
 
 export default visitApi;
