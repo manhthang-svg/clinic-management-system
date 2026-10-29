@@ -25,5 +25,9 @@ export default function HomeRedirect({ session }) {
         return <Navigate to="/doctor" replace />;
     }
 
+    if (session.account?.role === 'TECHNICIAN') {
+        return <Navigate to="/technician" replace />;
+    }
+
     return <p>Role không được hỗ trợ: {session.account?.role}</p>;
 }

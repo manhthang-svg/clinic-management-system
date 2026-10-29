@@ -38,6 +38,12 @@ export const ROUTES = {
     PAYMENT_HISTORY: '/cashier/payment-history',
     PROFILE: '/cashier/profile',
   },
+
+  TECHNICIAN: {
+    OVERVIEW: '/technician',
+    DASHBOARD: '/technician/dashboard',
+    QUEUE: '/technician/queue',
+  },
 };
 
 export default ROUTES;
