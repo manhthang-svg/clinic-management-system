@@ -26,12 +26,14 @@ export class ApiClient {
     accessTokenProvider;
     credentials;
     fetchImplementation;
+    onUnauthorized;
     constructor(configuration) {
         this.baseUrl = configuration.baseUrl.replace(/\/+$/, '');
         this.accessTokenProvider = configuration.accessTokenProvider;
         this.credentials = configuration.credentials ?? 'same-origin';
         this.fetchImplementation =
             configuration.fetchImplementation ?? ((input, init) => globalThis.fetch(input, init));
+        this.onUnauthorized = configuration.onUnauthorized ?? null;
     }
     async request(path, options = {}) {
         assertRelativeApiPath(path);
@@ -64,6 +66,9 @@ export class ApiClient {
             throw new ApiError('Unable to reach the API.', { cause });
         }
         if (!response.ok) {
+            if (response.status === 401 && this.onUnauthorized) {
+                this.onUnauthorized();
+            }
             const errorResponse = await parseErrorResponse(response);
             throw new ApiError(errorResponse?.message || 'The API request failed.', {
                 status: response.status,

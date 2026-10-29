@@ -28,7 +28,7 @@ describe('App', () => {
         render(<MemoryRouter><App sessionManager={sessionManager}/></MemoryRouter>);
         expect(await screen.findByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument();
     });
-    it('restores an existing session and greets the user', async () => {
+    it('restores an existing doctor session and opens the waiting list', async () => {
         const sessionManager = manager({
             refresh: vi.fn().mockResolvedValue({
                 accessToken: 'access-1',
@@ -39,7 +39,7 @@ describe('App', () => {
             }),
         });
         render(<MemoryRouter><App sessionManager={sessionManager}/></MemoryRouter>);
-        expect(await screen.findByRole('heading', { name: 'Xin chào Nguyễn An (Bác sĩ)' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Quản lý khám bệnh' })).toBeInTheDocument();
     });
     it('lets a non-admin view and update their own profile', async () => {
         const sessionManager = manager({

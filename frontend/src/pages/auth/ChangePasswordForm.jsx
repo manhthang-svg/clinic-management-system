@@ -111,7 +111,7 @@ function Requirement({ met, children }) {
   );
 }
 
-export function ChangePasswordForm({ onSubmit, onChanged, onCancel }) {
+export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfile }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -166,7 +166,10 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel }) {
       <AccountPageHeader
         title="Đổi mật khẩu"
         description="Cập nhật mật khẩu để bảo vệ tài khoản của bạn."
-        crumbs={[{ label: 'Tài khoản' }, { label: 'Đổi mật khẩu' }]}
+        crumbs={[
+          { label: 'Hồ sơ cá nhân', onClick: onOpenProfile },
+          { label: 'Đổi mật khẩu' },
+        ]}
         onBack={onCancel}
       />
 

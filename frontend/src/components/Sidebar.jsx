@@ -14,6 +14,11 @@ import {
   ClipboardList,
   Settings,
   Plus,
+  ChevronDown,
+  FolderHeart,
+  UserCheck,
+  UserRound,
+  LogOut,
 } from 'lucide-react';
 
 const ICONS = {
@@ -28,6 +33,9 @@ const ICONS = {
   CreditCard,
   ClipboardList,
   Settings,
+  FolderHeart,
+  UserCheck,
+  UserRound,
 };
 
 const NAV_ITEMS = {
@@ -99,22 +107,28 @@ const NAV_ITEMS = {
       path: '/doctor',
     },
     {
-      id: 'appointments',
-      label: 'Danh sách khám',
-      iconName: 'CalendarDays',
-      path: '/doctor/appointments',
-    },
-    {
-      id: 'examinations',
-      label: 'Khám bệnh',
+      id: 'examination-management',
+      label: 'Quản lý khám bệnh',
       iconName: 'Stethoscope',
-      path: '/doctor/examinations',
+      path: '/doctor/appointments',
     },
     {
       id: 'medical-records',
       label: 'Hồ sơ bệnh án',
-      iconName: 'ClipboardList',
+      iconName: 'FolderHeart',
       path: '/doctor/medical-records',
+    },
+    {
+      id: 'examined-patients',
+      label: 'Bệnh nhân đã khám',
+      iconName: 'UserCheck',
+      path: '/doctor/examined-patients',
+    },
+    {
+      id: 'profile',
+      label: 'Hồ sơ cá nhân',
+      iconName: 'UserRound',
+      path: '/doctor/profile',
     },
   ],
 
@@ -164,10 +178,10 @@ const ACTIVE_CLASS =
 const IDLE_CLASS =
   'text-slate-500 hover:bg-white hover:text-slate-800';
 
-export function Sidebar({ user }) {
+export function Sidebar({ user, onNavigate, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [openGroups] = useState([]);
+  const [openGroups, setOpenGroups] = useState(['examination', 'medical-records', 'prescriptions']);
 
   const rawRole = user?.role?.toUpperCase();
   const role = rawRole?.replace(/^ROLE_/, '');
@@ -175,7 +189,8 @@ export function Sidebar({ user }) {
 
   const isActive = (path) => {
     const currentPath = location.pathname;
-    const matchedItems = items
+    const navigableItems = items.flatMap((item) => item.children ?? [item]);
+    const matchedItems = navigableItems
       .filter(
         (item) =>
           currentPath === item.path ||
@@ -187,7 +202,7 @@ export function Sidebar({ user }) {
   };
 
   return (
-    <aside className="w-[224px] bg-[#eef5f4] border-r border-[#dfeae8] flex flex-col shrink-0 select-none min-h-screen">
+    <aside className="h-full w-[224px] shrink-0 select-none overflow-y-auto border-r border-[#dfeae8] bg-[#eef5f4] flex flex-col">
       {/* Logo */}
       <div className="h-20 flex items-center gap-3 px-6">
         <div className="w-9 h-9 rounded-xl bg-[#127e7a] text-white flex items-center justify-center shadow-sm">
@@ -211,6 +226,47 @@ export function Sidebar({ user }) {
       >
         {items.map((item) => {
           const Icon = ICONS[item.iconName] ?? LayoutDashboard;
+          if (item.children) {
+            const open = openGroups.includes(item.id);
+            const groupActive = item.children.some((child) => isActive(child.path));
+            return (
+              <div key={item.id} className="border-b border-slate-200/70 pb-1">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => setOpenGroups((current) => current.includes(item.id)
+                    ? current.filter((id) => id !== item.id)
+                    : [...current, item.id])}
+                  className={`${ITEM_CLASS} ${groupActive ? 'text-[#127e7a] font-semibold' : IDLE_CLASS}`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1">{item.label}</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+                </button>
+                {open && (
+                  <div className="ml-7 space-y-0.5 pb-1">
+                    {item.children.map((child) => {
+                      const childActive = isActive(child.path);
+                      return (
+                        <button
+                          key={child.id}
+                          type="button"
+                          aria-current={childActive ? 'page' : undefined}
+                          onClick={() => {
+                            if (onNavigate?.(child.path) === false) return;
+                            navigate(child.path);
+                          }}
+                          className={`w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${childActive ? ACTIVE_CLASS : IDLE_CLASS}`}
+                        >
+                          {child.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
           const active = isActive(item.path);
 
           return (
@@ -218,7 +274,10 @@ export function Sidebar({ user }) {
               key={item.id}
               type="button"
               aria-current={active ? 'page' : undefined}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                if (onNavigate?.(item.path) === false) return;
+                navigate(item.path);
+              }}
               className={`${ITEM_CLASS} ${active ? ACTIVE_CLASS : IDLE_CLASS
                 }`}
             >
@@ -232,6 +291,17 @@ export function Sidebar({ user }) {
           <p className="px-3 py-4 text-xs text-slate-400">
             Không tìm thấy menu cho tài khoản này.
           </p>
+        )}
+
+        {role === 'DOCTOR' && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className={`${ITEM_CLASS} mt-4 border-t border-slate-200 pt-4 ${IDLE_CLASS}`}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Đăng xuất</span>
+          </button>
         )}
       </nav>
     </aside>

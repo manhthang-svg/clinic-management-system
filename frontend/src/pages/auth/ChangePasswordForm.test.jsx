@@ -12,6 +12,15 @@ async function fill(current, next, confirmation) {
 }
 
 describe('ChangePasswordForm', () => {
+    it('opens the personal profile from the breadcrumb', async () => {
+        const onOpenProfile = vi.fn();
+        render(<ChangePasswordForm onSubmit={vi.fn()} onChanged={vi.fn()} onOpenProfile={onOpenProfile}/>);
+
+        await userEvent.click(screen.getByRole('button', { name: 'Hồ sơ cá nhân' }));
+
+        expect(onOpenProfile).toHaveBeenCalledTimes(1);
+    });
+
     it('submits valid input and reports success', async () => {
         const onSubmit = vi.fn().mockResolvedValue(undefined);
         const onChanged = vi.fn();

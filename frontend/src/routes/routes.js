@@ -26,6 +26,7 @@ export const ROUTES = {
   
   RECEPTIONIST: {
     OVERVIEW: '/receptionist',
+    PROFILE: '/receptionist/profile',
     PATIENTS: '/receptionist/patients',
     PATIENT_CREATE: '/receptionist/patients/new',
     VISIT_REGISTER: '/receptionist/patients/:id/register',
@@ -37,6 +38,16 @@ export const ROUTES = {
     PAYMENT_DETAIL: '/cashier/payments/:id',
     PAYMENT_HISTORY: '/cashier/payment-history',
     PROFILE: '/cashier/profile',
+  },
+
+  DOCTOR: {
+    OVERVIEW: '/doctor/appointments',
+    PROFILE: '/doctor/profile',
+    WAITING_LIST: '/doctor/appointments',
+    CLINICAL_EXAMINATION: '/doctor/clinical-examination',
+    PARACLINICAL_ORDERS: '/doctor/paraclinical-orders',
+    ROOM_TRANSFERS: '/doctor/room-transfers',
+    SKIPPED_PATIENTS: '/doctor/skipped-patients',
   },
 
   TECHNICIAN: {

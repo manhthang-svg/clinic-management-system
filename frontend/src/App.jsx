@@ -11,7 +11,26 @@ import { apiClient, sessionManager as defaultSessionManager } from './services/s
 import { useSession } from './hooks/useSession';
 import { ROLE_LABELS } from './constants/accountData';
 import { AdminLayout } from './layouts';
+import DashboardLayout from './layouts/DashboardlLayout';
 import AppRoutes from './routes/AppRoutes';
+import { ownProfileFromApi } from './utils/ownProfile';
+
+function homePathForRole(role) {
+  switch (role?.toUpperCase().replace(/^ROLE_/, '')) {
+    case 'ADMIN':
+      return '/admin/accounts';
+    case 'CASHIER':
+      return '/cashier';
+    case 'RECEPTIONIST':
+      return '/receptionist';
+    case 'DOCTOR':
+      return '/doctor/appointments';
+    case 'TECHNICIAN':
+      return '/technician';
+    default:
+      return '/';
+  }
+}
 
 export function App({
   sessionManager = defaultSessionManager,
@@ -46,7 +65,7 @@ export function App({
     const controller = new AbortController();
 
     account.profile(controller.signal)
-      .then(setProfile)
+      .then((value) => setProfile(ownProfileFromApi(value)))
       .catch((error) => {
         if (error.name !== 'AbortError') {
           setProfileError(error.message);
@@ -86,21 +105,7 @@ export function App({
       <LoginPage
         onLogin={async (username, password) => {
           const loggedInSession = await sessionManager.login(username, password);
-          const role = loggedInSession.account?.role;
-
-          if (role === 'ADMIN') {
-            navigate('/admin/accounts', { replace: true });
-          } else if (role === 'CASHIER') {
-            navigate('/cashier', { replace: true });
-          } else if (role === 'RECEPTIONIST') {
-            navigate('/receptionist', { replace: true });
-          } else if (role === 'DOCTOR') {
-            navigate('/doctor', { replace: true });
-          } else if (role === 'TECHNICIAN') {
-            navigate('/technician', { replace: true });
-          } else {
-            navigate('/', { replace: true });
-          }
+          navigate(homePathForRole(loggedInSession.account?.role), { replace: true });
         }}
       />
     );
@@ -110,6 +115,7 @@ export function App({
     setChangingPassword(false);
     setNotice('Đã đổi mật khẩu.');
     await sessionManager.refresh();
+    navigate(homePathForRole(session.account?.role), { replace: true });
   }
 
   const showPasswordForm =
@@ -128,6 +134,11 @@ export function App({
         onOpenProfile={() => {
           setChangingPassword(false);
           navigate('/admin/profile');
+        }}
+        onNavigate={() => {
+          if (session.passwordChangeRequired) return false;
+          setChangingPassword(false);
+          return true;
         }}
         activeKey="accounts"
       >
@@ -148,6 +159,10 @@ export function App({
             }
             onChanged={() => void handlePasswordChanged()}
             onCancel={closePasswordForm}
+            onOpenProfile={() => {
+              setChangingPassword(false);
+              navigate('/admin/profile');
+            }}
           />
         </div>
       </AdminLayout>
@@ -155,27 +170,57 @@ export function App({
   }
 
   if (showPasswordForm) {
-    return (
-      <main className="app-main">
-        {session.passwordChangeRequired && (
-          <p role="alert" className="banner banner--warning">
-            Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
-            các chức năng khác.
-          </p>
-        )}
+    const closePasswordForm = session.passwordChangeRequired
+      ? undefined
+      : () => setChangingPassword(false);
 
-        <ChangePasswordForm
-          onSubmit={(currentPassword, newPassword) =>
-            account.changePassword(currentPassword, newPassword)
+    return (
+      <DashboardLayout
+        currentUser={session.account}
+        onLogout={() => void sessionManager.logout()}
+        onChangePassword={() => setChangingPassword(true)}
+        onOpenProfile={() => {
+          setChangingPassword(false);
+          const role = session.account?.role?.toUpperCase().replace(/^ROLE_/, '');
+          if (role === 'CASHIER') navigate('/cashier/profile');
+          else if (role === 'RECEPTIONIST') navigate('/receptionist/profile');
+          else if (role === 'DOCTOR') navigate('/doctor/profile');
+          else setShowProfile(true);
+        }}
+        onNavigate={() => {
+          if (session.passwordChangeRequired) return false;
+          setChangingPassword(false);
+          return true;
+        }}
+      >
+        <div className="space-y-5">
+          {session.passwordChangeRequired && (
+            <p
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+            >
+              Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
+              các chức năng khác.
+            </p>
+          )}
+
+          <ChangePasswordForm
+            onSubmit={(currentPassword, newPassword) =>
+              account.changePassword(currentPassword, newPassword)
           }
-          onChanged={() => void handlePasswordChanged()}
-          onCancel={
-            session.passwordChangeRequired
-              ? undefined
-              : () => setChangingPassword(false)
-          }
-        />
-      </main>
+            onChanged={() => void handlePasswordChanged()}
+            onCancel={closePasswordForm}
+            onOpenProfile={() => {
+              setChangingPassword(false);
+              const role = session.account?.role?.toUpperCase().replace(/^ROLE_/, '');
+              if (role === 'CASHIER') navigate('/cashier/profile');
+              else if (role === 'RECEPTIONIST') navigate('/receptionist/profile');
+              else if (role === 'DOCTOR') navigate('/doctor/profile');
+              else setShowProfile(true);
+            }}
+          />
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -183,7 +228,7 @@ export function App({
     ?.toUpperCase()
     .replace(/^ROLE_/, '');
 
-  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST', 'TECHNICIAN'].includes(role)) {
+  if (!['ADMIN', 'CASHIER', 'RECEPTIONIST', 'DOCTOR', 'TECHNICIAN'].includes(role)) {
     return (
       <>
         <header className="app-header">
@@ -243,7 +288,7 @@ export function App({
               accounts={[]}
               onSave={async (contact) => {
                 const updated = await account.updateProfile(contact.phone, contact.email);
-                setProfile(updated);
+                setProfile(ownProfileFromApi(updated));
               }}
               onCancel={() => setShowProfile(false)}
               onChangePassword={() => setChangingPassword(true)}
