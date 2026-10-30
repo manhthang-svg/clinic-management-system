@@ -47,14 +47,14 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             where (:status is null or p.status = :status)
               and (:type is null or p.type = :type)
               and (
-                    :search is null
-                    or lower(p.paymentCode) like lower(concat('%', :search, '%'))
-                    or lower(coalesce(p.receiptNumber, '')) like lower(concat('%', :search, '%'))
-                    or lower(coalesce(v.sovaovien, '')) like lower(concat('%', :search, '%'))
-                    or lower(patient.mabenhnhan) like lower(concat('%', :search, '%'))
-                    or lower(patient.hoten) like lower(concat('%', :search, '%'))
-                    or lower(coalesce(patient.cccdSo, '')) like lower(concat('%', :search, '%'))
-                    or lower(coalesce(patient.sodienthoai, '')) like lower(concat('%', :search, '%'))
+                    cast(:search as String) is null
+                    or lower(p.paymentCode) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(p.receiptNumber, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(v.sovaovien, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(patient.mabenhnhan) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(patient.hoten) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(patient.cccdSo, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(patient.sodienthoai, '')) like lower(concat('%', cast(:search as String), '%'))
                   )
             """)
     Page<Payment> search(

@@ -22,6 +22,7 @@ import ReceptionistPatientsPage from "../pages/receptionist/ReceptionistPatients
 import ReceptionistAppointmentsPage from "../pages/receptionist/ReceptionistAppointmentsPage.jsx";
 import ReceptionistCreatePatientPage from "../pages/receptionist/ReceptionistCreatePatientPage.jsx";
 import ReceptionistVisitRegisterPage from "../pages/receptionist/ReceptionistVisitRegisterPage.jsx";
+import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQueuePage.jsx";
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
 import DoctorWaitingListPage from "../pages/doctor/DoctorWaitingListPage.jsx";
@@ -184,6 +185,9 @@ export function AppRoutes({
             path="appointments"
             element={<ReceptionistAppointmentsPage />}
           />
+
+          {/* Tình trạng hàng đợi phòng khám (UC-42) */}
+          <Route path="room-queue" element={<ReceptionistRoomQueuePage />} />
           <Route
             path="profile"
             element={
