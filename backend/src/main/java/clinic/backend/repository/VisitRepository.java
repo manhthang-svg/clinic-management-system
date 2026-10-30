@@ -72,4 +72,31 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
     List<Visit> findAllByQueueDate(
             @Param("queueDate") LocalDate queueDate
     );
+
+    @Query("""
+            select v.roomId as roomId, v.status as status, v.isSkipped as skipped, count(v) as total
+            from Visit v
+            where v.queueDate = :queueDate
+              and v.status in (
+                  clinic.backend.enums.VisitStatus.WAITING,
+                  clinic.backend.enums.VisitStatus.IN_EXAMINATION,
+                  clinic.backend.enums.VisitStatus.WAITING_PARACLINICAL,
+                  clinic.backend.enums.VisitStatus.WAITING_CONCLUSION
+              )
+            group by v.roomId, v.status, v.isSkipped
+            """)
+    List<RoomQueueCount> countRoomQueues(
+            @Param("queueDate") LocalDate queueDate
+    );
+
+    /** Number of queued visits of one room per status and skip flag (UC-42). */
+    interface RoomQueueCount {
+        UUID getRoomId();
+
+        VisitStatus getStatus();
+
+        Boolean getSkipped();
+
+        long getTotal();
+    }
 }

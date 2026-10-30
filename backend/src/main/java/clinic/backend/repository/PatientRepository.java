@@ -27,10 +27,10 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     @Query("""
             select p from Patient p
-            where lower(p.mabenhnhan) like lower(concat('%', :keyword, '%'))
-               or lower(p.hoten) like lower(concat('%', :keyword, '%'))
-               or lower(coalesce(p.cccdSo, '')) like lower(concat('%', :keyword, '%'))
-               or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', :keyword, '%'))
+            where lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
+               or lower(p.hoten) like lower(concat('%', cast(:keyword as String), '%'))
+               or lower(coalesce(p.cccdSo, '')) like lower(concat('%', cast(:keyword as String), '%'))
+               or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', cast(:keyword as String), '%'))
             """)
     Page<Patient> search(
             @Param("keyword") String keyword,

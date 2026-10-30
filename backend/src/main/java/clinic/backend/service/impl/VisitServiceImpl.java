@@ -1,6 +1,7 @@
 package clinic.backend.service.impl;
 
 import clinic.backend.dto.request.CreateVisitRequest;
+import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
@@ -40,8 +41,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -350,6 +353,67 @@ public class VisitServiceImpl implements VisitService {
         visit.startExamination(doctorAccountId);
         Visit saved = visitRepository.save(visit);
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RoomQueueStatusResponse> getRoomQueueStatus(LocalDate date) {
+        LocalDate queryDate = date != null ? date : LocalDate.now(VIETNAM_ZONE);
+
+        Map<UUID, List<VisitRepository.RoomQueueCount>> countsByRoom = visitRepository
+                .countRoomQueues(queryDate)
+                .stream()
+                .collect(Collectors.groupingBy(VisitRepository.RoomQueueCount::getRoomId));
+
+        return roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
+                        RoomType.EXAMINATION,
+                        ActivationStatus.ACTIVE
+                )
+                .stream()
+                .map(room -> toQueueStatus(
+                        room,
+                        countsByRoom.getOrDefault(room.getId(), List.of())
+                ))
+                .toList();
+    }
+
+    private RoomQueueStatusResponse toQueueStatus(
+            Room room,
+            List<VisitRepository.RoomQueueCount> counts
+    ) {
+        long waiting = 0;
+        long inExamination = 0;
+        long waitingParaclinical = 0;
+        long waitingConclusion = 0;
+        long skipped = 0;
+
+        for (VisitRepository.RoomQueueCount count : counts) {
+            if (Boolean.TRUE.equals(count.getSkipped())) {
+                skipped += count.getTotal();
+                continue;
+            }
+            switch (count.getStatus()) {
+                case WAITING -> waiting += count.getTotal();
+                case IN_EXAMINATION -> inExamination += count.getTotal();
+                case WAITING_PARACLINICAL -> waitingParaclinical += count.getTotal();
+                case WAITING_CONCLUSION -> waitingConclusion += count.getTotal();
+                default -> {
+                    // Repository query only returns queued statuses.
+                }
+            }
+        }
+
+        return new RoomQueueStatusResponse(
+                room.getId(),
+                room.getRoomCode(),
+                room.getRoomName(),
+                room.getLocation(),
+                waiting,
+                inExamination,
+                waitingParaclinical,
+                waitingConclusion,
+                skipped
+        );
     }
 
     private VisitResponse toResponse(Visit visit) {
