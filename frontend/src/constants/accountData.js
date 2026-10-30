@@ -18,6 +18,7 @@ export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Tổng quan', iconName: 'LayoutGrid' },
   { id: 'reports', label: 'Báo cáo thống kê', iconName: 'ClipboardList' },
   { id: 'departments', label: 'Khoa / Phòng', iconName: 'Building2' },
+  { id: 'schedules', label: 'Lịch trực', iconName: 'CalendarDays' },
   { id: 'services', label: 'Dịch vụ', iconName: 'BriefcaseMedical' },
   { id: 'medicines', label: 'Danh mục thuốc', iconName: 'Pill' },
   { id: 'shared-catalogs', label: 'Danh mục dùng chung', iconName: 'BookOpen' },

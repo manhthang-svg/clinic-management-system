@@ -13,6 +13,7 @@ import {
   Settings,
   ChevronDown,
   Plus,
+  CalendarDays,
 } from 'lucide-react';
 import { NAV_ITEMS } from '../constants/accountData';
 
@@ -27,6 +28,7 @@ const ICONS = {
   Settings2,
   Hospital,
   Settings,
+  CalendarDays,
 };
 
 const ITEM_CLASS = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer';
@@ -41,6 +43,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
     departments: '/admin/departments',
     rooms: '/admin/rooms',
     services: '/admin/services',
+    schedules: '/admin/schedules',
   };
 
   const handleNavigate = (id) => {
