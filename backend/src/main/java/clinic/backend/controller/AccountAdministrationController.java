@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateAccountRequest;
+import clinic.backend.dto.request.AssignRoomRequest;
 import clinic.backend.dto.request.LockAccountRequest;
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
@@ -136,6 +137,15 @@ public class AccountAdministrationController {
             @PathVariable UUID accountId,
             @Valid @RequestBody RoleChangeRequest request) {
         return ApiResponse.success(service.changeRole(StaffPrincipal.from(jwt), accountId, request));
+    }
+
+    @Operation(summary = "UC-15 Assign a staff account to a room")
+    @PostMapping("/{accountId}/commands/assign-room")
+    public ApiResponse<AccountDetailResponse> assignRoom(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID accountId,
+            @Valid @RequestBody AssignRoomRequest request) {
+        return ApiResponse.success(service.assignRoom(StaffPrincipal.from(jwt), accountId, request));
     }
 
     @Operation(summary = "UC-10 Lock an account",

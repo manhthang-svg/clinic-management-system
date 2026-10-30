@@ -191,6 +191,12 @@ const NAV_ITEMS = {
       path: '/receptionist/appointments',
     },
     {
+      id: 'room-queue',
+      label: 'Hàng đợi phòng khám',
+      iconName: 'DoorOpen',
+      path: '/receptionist/room-queue',
+    },
+    {
       id: 'schedules',
       label: 'Lịch trực',
       iconName: 'CalendarDays',

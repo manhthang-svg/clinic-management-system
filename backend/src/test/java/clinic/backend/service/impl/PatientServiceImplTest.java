@@ -70,6 +70,7 @@ class PatientServiceImplTest {
         assertThat(response.cccdSo()).isEqualTo("012345678901");
         assertThat(response.nghenghiep()).isEqualTo("Nghề nghiệp");
         assertThat(response.sodienthoai()).isEqualTo("0901234567");
+        assertThat(response.email()).isEqualTo("patient@example.com");
         verify(patientRepository).save(any(Patient.class));
     }
 
@@ -151,6 +152,7 @@ class PatientServiceImplTest {
                 null,
                 null,
                 "0901234567",
+                "patient@example.com",
                 null,
                 null,
                 null,
@@ -184,6 +186,7 @@ class PatientServiceImplTest {
                 null,
                 null,
                 phone,
+                "patient@example.com",
                 null,
                 null,
                 null,
@@ -206,6 +209,7 @@ class PatientServiceImplTest {
                 null,
                 null,
                 "Ha Noi",
+                null,
                 null,
                 null,
                 null,

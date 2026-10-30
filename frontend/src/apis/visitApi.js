@@ -34,6 +34,11 @@ export const visitApi = {
         return apiClient.request(`/visits/queue${suffix}`, { signal });
     },
 
+    // UC-42: counts per active examination room, for the receptionist.
+    getQueueStatus(signal) {
+        return apiClient.request('/visits/queue-status', { signal });
+    },
+
     // TBD (UC-74): the backend has no insurance endpoint yet; path and response shape are a proposal.
     // Response: { status, fullName, dateOfBirth, benefitCode, coverageRate, validFrom, validTo, primaryCareFacility }.
     verifyInsurance(data) {

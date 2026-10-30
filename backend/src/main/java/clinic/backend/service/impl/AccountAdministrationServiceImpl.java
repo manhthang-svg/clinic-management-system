@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateAccountRequest;
+import clinic.backend.dto.request.AssignRoomRequest;
 import clinic.backend.dto.request.LockAccountRequest;
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
@@ -29,13 +30,16 @@ import clinic.backend.dto.response.WorkInProgressResponse;
 import clinic.backend.entity.AuditLog;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.AuditOutcome;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PasswordViolation;
 import clinic.backend.enums.Role;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.SecurityAuditEventType;
 import clinic.backend.enums.SessionRevocationReason;
 import clinic.backend.enums.TemporaryPasswordMode;
@@ -194,6 +198,45 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         securityAuditService.record(
                 SecurityAuditEventType.ACCOUNT_UPDATED, principal.accountId(), account.getId(),
                 AuditOutcome.SUCCESS, now);
+        return detail(account, principal.accountId());
+    }
+
+    @Override
+    @Transactional
+    public AccountDetailResponse assignRoom(
+            StaffPrincipal principal, UUID accountId, AssignRoomRequest request) {
+        StaffAccount account = requiredAccount(accountId);
+        rejectAdminOrSelf(principal, account);
+        if (!needsRoom(account.getRole())) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("role", "ROOM_NOT_APPLICABLE"));
+        }
+        var room = roomRepository.findById(request.roomId())
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        RoomType requiredType = account.getRole() == Role.DOCTOR ? RoomType.EXAMINATION : RoomType.PARACLINICAL;
+        if (room.getStatus() != ActivationStatus.ACTIVE || room.getType() != requiredType) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("roomId", "NOT_ELIGIBLE"));
+        }
+
+        Instant now = clock.instant();
+        StaffRoomAssignment current = assignmentRepository
+                .findByStaffAccountIdAndRemovedAtIsNull(accountId).orElse(null);
+        if (current != null && current.getRoomId().equals(room.getId())) {
+            return detail(account, principal.accountId());
+        }
+        UUID oldRoomId = current == null ? null : current.getRoomId();
+        if (current != null) {
+            current.remove(principal.accountId(), now);
+            assignmentRepository.save(current);
+        }
+        assignmentRepository.save(new StaffRoomAssignment(
+                ids.next(), accountId, room.getId(), now, principal.accountId(), null, null, null));
+
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        oldValues.put("roomId", oldRoomId);
+        newValues.put("roomId", room.getId());
+        auditLogService.recordAccountChange(
+                principal.accountId(), accountId, AuditLogAction.UPDATE, oldValues, newValues, now);
         return detail(account, principal.accountId());
     }
 

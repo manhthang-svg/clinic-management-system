@@ -14,6 +14,7 @@ export function createAccountApi(client) {
         update: (id, body) => client.request(`/accounts/${id}`, { method: 'PUT', body }),
         checkRoleChange: (id, body) => client.request(`/accounts/${id}/commands/check-role-change`, { method: 'POST', body }),
         changeRole: (id, body) => client.request(`/accounts/${id}/commands/change-role`, { method: 'POST', body }),
+        assignRoom: (id, body) => client.request(`/accounts/${id}/commands/assign-room`, { method: 'POST', body }),
         lock: (id, body) => client.request(`/accounts/${id}/commands/lock`, { method: 'POST', body }),
         unlock: (id, body) => client.request(`/accounts/${id}/commands/unlock`, { method: 'POST', body }),
         resetPassword: (id, body) => client.request(`/accounts/${id}/commands/reset-password`, { method: 'POST', body }),

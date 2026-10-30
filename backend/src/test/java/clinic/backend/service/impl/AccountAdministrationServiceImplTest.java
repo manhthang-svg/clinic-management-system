@@ -7,14 +7,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
+import clinic.backend.dto.request.AssignRoomRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
 import clinic.backend.dto.request.UpdateAccountRequest;
 import clinic.backend.dto.response.AccountSummaryResponse;
 import clinic.backend.dto.response.PageResponse;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.Room;
+import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.Role;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.TemporaryPasswordMode;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
@@ -111,6 +116,29 @@ class AccountAdministrationServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.ADMIN_ACCOUNT_PROTECTED));
+    }
+
+    @Test
+    void doctorCanBeAssignedToAnActiveExaminationRoom() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        UUID roomId = UUID.randomUUID();
+        UUID assignmentId = UUID.randomUUID();
+        Room room = new Room(roomId, NOW, UUID.randomUUID(), null, "P101", "Phòng 101", "Tầng 1",
+                RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(assignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(target.getId()))
+                .thenReturn(Optional.empty());
+        when(ids.next()).thenReturn(assignmentId);
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.assignRoom(admin, target.getId(), new AssignRoomRequest(roomId));
+
+        verify(assignmentRepository).save(org.mockito.ArgumentMatchers.argThat((StaffRoomAssignment assignment) ->
+                assignment.getId().equals(assignmentId)
+                        && assignment.getStaffAccountId().equals(target.getId())
+                        && assignment.getRoomId().equals(roomId)));
     }
 
     @Test

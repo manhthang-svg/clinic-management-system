@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateAccountRequest;
+import clinic.backend.dto.request.AssignRoomRequest;
 import clinic.backend.dto.request.LockAccountRequest;
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
@@ -42,6 +43,8 @@ public interface AccountAdministrationService {
     WorkInProgressResponse workInProgress(UUID accountId);
 
     AccountDetailResponse changeRole(StaffPrincipal principal, UUID accountId, RoleChangeRequest request);
+
+    AccountDetailResponse assignRoom(StaffPrincipal principal, UUID accountId, AssignRoomRequest request);
 
     AccountDetailResponse lock(StaffPrincipal principal, UUID accountId, LockAccountRequest request);
 

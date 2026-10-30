@@ -216,6 +216,7 @@ Table patients {
   gender varchar(20) [not null, note: 'MALE, FEMALE, OTHER']
   citizen_id varchar(12) [unique, note: 'Exactly 12 digits; required from age 14 (application); unique when present (I1-D13, I1-D14)']
   phone_number varchar(10) [note: '10 digits starting with 0; required from age 18 (application)']
+  email varchar(100) [note: 'Optional patient email address']
   address text [not null, note: 'Single free-text field (I1-D15)']
   occupation text
   ethnicity text [not null, note: 'Application default Kinh']
