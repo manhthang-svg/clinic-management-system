@@ -305,50 +305,6 @@ class StaffAccountServiceImplTest {
         }
     }
 
-    @Nested
-    class DemoAccountPassword {
-
-        @Test
-        void setsThePasswordOfAccountsThatStillHaveThePlaceholder() {
-            StaffAccount seeded = seededAccount("bs.demo");
-
-            assertThat(service.assignDemoAccountPassword("demo-password")).isEqualTo(1);
-
-            StaffAccount updated = fixture.accounts.get(seeded.getId());
-            assertThat(fixture.passwordHasher.matches("demo-password", updated.getPasswordHash())).isTrue();
-            assertThat(updated.isPasswordChangeRequired()).isFalse();
-        }
-
-        @Test
-        void keepsPasswordsThatWereAlreadyChanged() {
-            StaffAccount changed = fixture.activeAccount("lt.changed", "own-password", Role.RECEPTIONIST);
-            String passwordHash = changed.getPasswordHash();
-
-            assertThat(service.assignDemoAccountPassword("demo-password")).isZero();
-            assertThat(fixture.accounts.get(changed.getId()).getPasswordHash()).isEqualTo(passwordHash);
-        }
-
-        @Test
-        void refusesAPasswordThatViolatesThePolicy() {
-            seededAccount("bs.demo");
-
-            assertThatIllegalStateException().isThrownBy(() -> service.assignDemoAccountPassword("short"));
-        }
-
-        private StaffAccount seededAccount(String username) {
-            return fixture.save(StaffAccount.builder()
-                    .id(fixture.ids.next())
-                    .username(username)
-                    .passwordHash(StaffAccountService.UNSET_DEMO_PASSWORD_HASH)
-                    .fullName("Demo " + username)
-                    .role(Role.DOCTOR)
-                    .status(AccountStatus.ACTIVE)
-                    .createdAt(AccountTestFixture.START)
-                    .updatedAt(AccountTestFixture.START)
-                    .build());
-        }
-    }
-
     private static void assertRejectedWith(ErrorCode errorCode, ThrowingCallable call) {
         assertThatThrownBy(call).isInstanceOfSatisfying(AppException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(errorCode));

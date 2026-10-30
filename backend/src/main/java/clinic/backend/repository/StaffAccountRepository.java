@@ -1,7 +1,6 @@
 package clinic.backend.repository;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -103,8 +102,6 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
     boolean existsByRole(Role role);
 
     Optional<StaffAccount> findByRole(Role role);
-
-    List<StaffAccount> findAllByPasswordHash(String passwordHash);
 
     interface AccountSummaryView {
         UUID getId();
