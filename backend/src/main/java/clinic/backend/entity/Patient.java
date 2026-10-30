@@ -99,6 +99,9 @@ public class Patient extends VersionedEntity {
     @Column(name = "sodienthoai", length = 15)
     private String sodienthoai;
 
+    @Column(name = "email", length = 100)
+    private String email;
+
     /** CV 365 I.38. */
     @Column(name = "yeutorh", length = 5)
     private String yeutorh;
@@ -148,6 +151,7 @@ public class Patient extends VersionedEntity {
             String tinhthanhMa,
             String noilamviec,
             String sodienthoai,
+            String email,
             String yeutorh,
             String nhommau,
             String hotennguoithan,
@@ -177,6 +181,7 @@ public class Patient extends VersionedEntity {
         this.tinhthanhMa = tinhthanhMa;
         this.noilamviec = noilamviec;
         this.sodienthoai = sodienthoai;
+        this.email = email;
         this.yeutorh = yeutorh;
         this.nhommau = nhommau;
         this.hotennguoithan = hotennguoithan;
@@ -205,6 +210,7 @@ public class Patient extends VersionedEntity {
             String tinhthanhMa,
             String noilamviec,
             String sodienthoai,
+            String email,
             String yeutorh,
             String nhommau,
             String hotennguoithan,
@@ -231,6 +237,7 @@ public class Patient extends VersionedEntity {
         this.tinhthanhMa = tinhthanhMa;
         this.noilamviec = noilamviec;
         this.sodienthoai = sodienthoai;
+        this.email = email;
         this.yeutorh = yeutorh;
         this.nhommau = nhommau;
         this.hotennguoithan = hotennguoithan;
