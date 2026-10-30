@@ -7,6 +7,7 @@ import {
   DepartmentManagementPage,
   RoomManagementPage,
   ServiceManagementPage,
+  ScheduleManagementPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -110,6 +111,17 @@ export function AppRoutes({
               />
             }
           />
+
+          <Route
+            path="schedules"
+            element={
+              <ScheduleManagementPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
         </Route>
       </Route>
 
@@ -135,6 +147,15 @@ export function AppRoutes({
           <Route path="payments/:id" element={<PaymentDetailPage />} />
 
           <Route path="payment-history" element={<PaymentHistoryPage />} />
+          <Route
+            path="schedules"
+            element={
+              <ScheduleManagementPage
+                currentUser={session.account}
+                readOnly={true}
+              />
+            }
+          />
           <Route
             path="profile"
             element={
@@ -185,6 +206,15 @@ export function AppRoutes({
             element={<ReceptionistAppointmentsPage />}
           />
           <Route
+            path="schedules"
+            element={
+              <ScheduleManagementPage
+                currentUser={session.account}
+                readOnly={true}
+              />
+            }
+          />
+          <Route
             path="profile"
             element={
               <OwnProfilePage
@@ -228,6 +258,15 @@ export function AppRoutes({
           <Route path="follow-ups" element={<DoctorQueuePage />} />
           <Route path="examined-patients" element={<DoctorQueuePage />} />
           <Route
+            path="schedules"
+            element={
+              <ScheduleManagementPage
+                currentUser={session.account}
+                readOnly={true}
+              />
+            }
+          />
+          <Route
             path="profile"
             element={
               <OwnProfilePage
@@ -257,6 +296,15 @@ export function AppRoutes({
           <Route index element={<TechnicianDashboardPage />} />
           <Route path="dashboard" element={<TechnicianDashboardPage />} />
           <Route path="queue" element={<TechnicianQueuePage />} />
+          <Route
+            path="schedules"
+            element={
+              <ScheduleManagementPage
+                currentUser={session.account}
+                readOnly={true}
+              />
+            }
+          />
         </Route>
       </Route>
 

@@ -18,15 +18,17 @@ export const ROUTES = {
     EXAMINATIONS: '/admin/examinations',
     SUBCLINICAL: '/admin/subclinical',
     DEPARTMENTS: '/admin/departments',
+    SCHEDULES: '/admin/schedules',
     BILLING: '/admin/billing',
     STAFF: '/admin/staff',
     REPORTS: '/admin/reports',
     SETTINGS: '/admin/settings',
-  }, 
-  
+  },
+
   RECEPTIONIST: {
     OVERVIEW: '/receptionist',
     PROFILE: '/receptionist/profile',
+    SCHEDULES: '/receptionist/schedules',
     PATIENTS: '/receptionist/patients',
     PATIENT_CREATE: '/receptionist/patients/new',
     VISIT_REGISTER: '/receptionist/patients/:id/register',
@@ -34,6 +36,7 @@ export const ROUTES = {
 
   CASHIER: {
     OVERVIEW: '/cashier',
+    SCHEDULES: '/cashier/schedules',
     PAYMENTS: '/cashier/payments',
     PAYMENT_DETAIL: '/cashier/payments/:id',
     PAYMENT_HISTORY: '/cashier/payment-history',
@@ -43,6 +46,7 @@ export const ROUTES = {
   DOCTOR: {
     OVERVIEW: '/doctor/appointments',
     PROFILE: '/doctor/profile',
+    SCHEDULES: '/doctor/schedules',
     WAITING_LIST: '/doctor/appointments',
     CLINICAL_EXAMINATION: '/doctor/clinical-examination',
     PARACLINICAL_ORDERS: '/doctor/paraclinical-orders',
@@ -53,6 +57,7 @@ export const ROUTES = {
   TECHNICIAN: {
     OVERVIEW: '/technician',
     DASHBOARD: '/technician/dashboard',
+    SCHEDULES: '/technician/schedules',
     QUEUE: '/technician/queue',
   },
 };
