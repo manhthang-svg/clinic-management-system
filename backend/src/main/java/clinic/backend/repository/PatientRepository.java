@@ -31,6 +31,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                or lower(p.hoten) like lower(concat('%', :keyword, '%'))
                or lower(coalesce(p.cccdSo, '')) like lower(concat('%', :keyword, '%'))
                or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', :keyword, '%'))
+               or lower(coalesce(p.email, '')) like lower(concat('%', :keyword, '%'))
             """)
     Page<Patient> search(
             @Param("keyword") String keyword,

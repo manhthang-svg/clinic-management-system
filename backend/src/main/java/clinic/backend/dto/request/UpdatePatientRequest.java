@@ -2,6 +2,7 @@ package clinic.backend.dto.request;
 
 import java.time.LocalDate;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -30,6 +31,7 @@ public record UpdatePatientRequest(
         @Size(max = 3) String tinhthanhMa,
         @Size(max = 1024) String noilamviec,
         @Pattern(regexp = "^$|^[0-9]{9,15}$") @Size(max = 15) String sodienthoai,
+        @Email @Size(max = 100) String email,
         @Size(max = 5) String yeutorh,
         @Size(max = 5) String nhommau,
         @Size(max = 255) String hotennguoithan,

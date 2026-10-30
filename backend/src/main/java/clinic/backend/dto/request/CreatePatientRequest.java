@@ -70,6 +70,10 @@ public record CreatePatientRequest(
         @Size(max = 15)
         String sodienthoai,
 
+        @Email
+        @Size(max = 100)
+        String email,
+
         @Size(max = 5)
         String yeutorh,
 
