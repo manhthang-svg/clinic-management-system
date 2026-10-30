@@ -1,6 +1,7 @@
 package clinic.backend.service;
 
 import clinic.backend.dto.request.CreateVisitRequest;
+import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
 
 import java.time.LocalDate;
@@ -14,4 +15,6 @@ public interface VisitService {
     List<VisitResponse> getRoomQueue(UUID roomId, LocalDate date);
 
     VisitResponse startExamination(UUID visitId);
+
+    List<RoomQueueStatusResponse> getRoomQueueStatus(LocalDate date);
 }
