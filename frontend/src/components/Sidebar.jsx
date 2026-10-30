@@ -191,16 +191,17 @@ const NAV_ITEMS = {
       path: '/receptionist/appointments',
     },
     {
+<<<<<<<<< Temporary merge branch 1
       id: 'room-queue',
       label: 'Hàng đợi phòng khám',
       iconName: 'DoorOpen',
       path: '/receptionist/room-queue',
-    },
-    {
+=========
       id: 'schedules',
       label: 'Lịch trực',
       iconName: 'CalendarDays',
       path: '/receptionist/schedules',
+>>>>>>>>> Temporary merge branch 2
     },
   ],
 };
