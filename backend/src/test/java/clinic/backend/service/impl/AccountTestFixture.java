@@ -188,10 +188,6 @@ final class AccountTestFixture {
                     && !account.getId().equals(excludedId)
                     && account.getEmail().equalsIgnoreCase(email));
         });
-        when(repository.findAllByPasswordHash(anyString())).thenAnswer(invocation ->
-                accounts.values().stream()
-                        .filter(account -> account.getPasswordHash().equals(invocation.getArgument(0)))
-                        .toList());
         when(repository.save(any(StaffAccount.class))).thenAnswer(invocation -> save(invocation.getArgument(0)));
         when(repository.saveAndFlush(any(StaffAccount.class)))
                 .thenAnswer(invocation -> save(invocation.getArgument(0)));

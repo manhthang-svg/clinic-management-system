@@ -36,7 +36,7 @@ export const SERVICE_STATUS_LABELS = {
 };
 
 /**
- * Danh mục dịch vụ khám & cận lâm sàng chuẩn theo tài liệu demo master data (docs/demo-master-data.md)
+ * Danh mục dịch vụ khám và cận lâm sàng tĩnh dùng cho giao diện.
  */
 export const MASTER_SERVICES = [
   // Khám bệnh & Tiểu phẫu (dùng cho các phòng khám lâm sàng Khoa Nội & Khoa Ngoại)

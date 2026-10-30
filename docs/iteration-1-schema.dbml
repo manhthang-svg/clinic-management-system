@@ -440,8 +440,8 @@ Note implementation_requirements {
     3. Use application-generated UUIDv7 values; do not use database identity columns. Business codes use sequences
        patient_code_seq, registration_code_seq, invoice_number_seq.
     4. Money is numeric(15,0), whole VND (I1-D22, I1-D22a).
-    5. Production migrations contain no business reference data. Demo data for departments, service groups, services, rooms,
-       and staff lives in a separate Flyway location enabled only by the development profile (I1-D01, I1-D03).
+    5. Production migrations contain no business reference data. The application bundles no development seed;
+       integration-test fixtures live under test resources only (I1-D01, I1-D03).
     6. payment_items uses RESTRICT, not CASCADE: payments are never deleted (R3 §IV.2.3 No data deletion).
     7. Amounts follow the Money Calculation section of docs/iteration-1-decisions.md; the database checks that each line reconciles.
     8. simulated_insurance_cards is outside the domain model (I1-D38).

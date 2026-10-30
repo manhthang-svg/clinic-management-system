@@ -28,15 +28,15 @@ These four resolve contradictions inside Report 3.
 | I1-D06 / D20 / D21 | **One shared examination service.** A single `EXAMINATION` service without a department is used for the fee of every visit. At most one `EXAMINATION` service is active at a time. Rooms and departments are not linked to services for the examination fee. | §I.3.2 Entity Service and ExaminationRegistration say "shared"; UC-22 says an Examination service belongs to a Clinical department | UC-22 step 6 |
 | I1-D28 | **Queue numbers per room per day**, starting at 1. | §I.3.3 "Queue number per department per day" vs UC-40 step 12 "next queue number of the room for today" | §I.3.3 data rule, §III Background Job #3 |
 | I1-D26 | **Invoice number assigned when the payment is created.** Every payment, including `PENDING` and later `CANCELLED` ones, has a unique number, so the Cashier can search by it (UC-70). A cancelled payment keeps its number. | Not stated in Report 3 | — |
-| I1-D01 / D03 | **Demo seed for development only.** Demo reference data lives in a separate Flyway location that runs only with the development profile. Production reference data waits for the real lists and an owner (I1-D02). | — | — |
+| I1-D01 / D03 | **No bundled demo seed.** Development databases start without preloaded domain data. Production reference data waits for the real lists and an owner (I1-D02). | — | — |
 
 ## Register
 
 | ID | Topic | Resolution | Status | Source |
 | --- | --- | --- | --- | --- |
-| I1-D01 | How departments are first created | No create-department use case exists (OQ-07). Development uses the demo seed; production data is loaded by an approved migration once I1-D02 is settled. | Decided (team) | Phase 0 plan |
+| I1-D01 | How departments are first created | No create-department use case exists (OQ-07). Development starts without bundled departments; production data is loaded by an approved migration once I1-D02 is settled. | Decided (team) | Phase 0 plan |
 | I1-D02 | Owner of the department, room, service-group, service, and price lists | Nobody assigned yet. | Open — blocks production seed and go-live, not the schema | — |
-| I1-D03 | Demo or real data | Demo data for development only; it is never applied to production. | Decided (team) | — |
+| I1-D03 | Demo or real data | No demo data is bundled with the application. Test fixtures live under test resources only. | Decided (team) | — |
 | I1-D04 | Department identity | Name unique, at most 100 characters; description at most 500. No department code. The type cannot change once the department has a room. | Decided (R3) | R3 UC-14, Entity Department |
 | I1-D05 | Room code | Unique across all rooms, including inactive ones; at most 20 characters of letters, digits, and hyphen. | Decided (R3) | BR-06, R3 UC-17 |
 | I1-D06 | Examination service model | See the decisions above. | Decided (team) | — |

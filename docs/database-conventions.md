@@ -86,7 +86,7 @@ No domain indexes are defined yet.
 - Avoid environment-specific SQL and hidden dependencies on local database state.
 - Review destructive or long-running changes for backup, locking, compatibility, and rollback/roll-forward strategy before execution.
 - Tests must apply migrations to a clean PostgreSQL Testcontainers instance.
-- Production migrations must not invent business reference data. Demo data for development lives in a separate Flyway location enabled only by the development profile (I1-D01, I1-D03); production reference data waits for an owner (I1-D02).
+- Production migrations must not invent business reference data. The application bundles no development seed; test-only fixtures stay under test resources (I1-D01, I1-D03). Production reference data waits for an owner (I1-D02).
 
 ## JPA Conventions
 

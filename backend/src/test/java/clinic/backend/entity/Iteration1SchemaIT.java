@@ -8,7 +8,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
-import clinic.backend.dto.request.LoginRequest;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.AuditOutcome;
@@ -23,42 +22,32 @@ import clinic.backend.enums.SimulatedInsuranceCardStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.StaffAccountRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Applies all production migrations and the development seed to a fresh PostgreSQL with the real dev profile,
- * then checks the seed, entity mappings, and key database constraints of the Iteration 1 schema.
- *
- * <p>Uses its own container so the seed never leaks into other integration tests.
+ * Applies all production migrations to a fresh PostgreSQL, loads an isolated test fixture before each test,
+ * then checks entity mappings and key database constraints of the Iteration 1 schema.
  */
 @SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("dev")
 @Testcontainers(disabledWithoutDocker = true)
+@Sql("/db/iteration1-schema-fixture.sql")
 class Iteration1SchemaIT {
 
     private static final PostgreSQLContainer<?> POSTGRESQL = new PostgreSQLContainer<>("postgres:17-alpine");
-    private static final String DEMO_PASSWORD = "demo-password-for-tests";
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -68,7 +57,6 @@ class Iteration1SchemaIT {
         registry.add("spring.datasource.password", POSTGRESQL::getPassword);
         registry.add("clinic.security.jwt.signing-key", Iteration1SchemaIT::randomSigningKey);
         registry.add("clinic.security.password.bcrypt-strength", () -> "4");
-        registry.add("clinic.dev-seed.password", () -> DEMO_PASSWORD);
     }
 
     @Autowired
@@ -81,39 +69,7 @@ class Iteration1SchemaIT {
     private TransactionTemplate transactionTemplate;
 
     @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private StaffAccountRepository staffAccounts;
-
-    @Test
-    void loadsTheDemoMasterData() {
-        assertThat(count("departments")).isEqualTo(5);
-        assertThat(count("service_groups")).isEqualTo(9);
-        assertThat(count("services")).isEqualTo(17);
-        assertThat(count("rooms")).isEqualTo(16);
-        assertThat(count("staff_accounts where username like '%.%' and role <> 'ADMIN'")).isEqualTo(12);
-        assertThat(count("staff_room_assignments")).isEqualTo(5);
-        assertThat(count("simulated_insurance_cards")).isEqualTo(9);
-        assertThat(jdbcTemplate.queryForList("select mabenhnhan from patients order by mabenhnhan", String.class))
-                .containsExactly("BN00000001", "BN00000002", "BN00000003", "BN00000004",
-                        "BN00000005", "BN00000006", "BN00000007", "BN00000008");
-    }
-
-    @Test
-    void demoAccountsLogInWithTheConfiguredPassword() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new LoginRequest("bs.tranvanan", DEMO_PASSWORD))))
-                .andExpect(status().isOk());
-
-        assertThat(jdbcTemplate.queryForObject(
-                "select last_login_at is not null from staff_accounts where username = 'bs.tranvanan'",
-                Boolean.class)).isTrue();
-    }
 
     @Test
     void mapsAllStaffAccountFieldsToTheDatabase() {
@@ -183,7 +139,7 @@ class Iteration1SchemaIT {
         });
 
         Department department = entityManager
-                .createQuery("select department from Department department where department.departmentCode = 'DEMO-XN'",
+                .createQuery("select department from Department department where department.departmentCode = 'TEST-XN'",
                         Department.class)
                 .getSingleResult();
         assertThat(department.getDepartmentName()).isEqualTo("Khoa Xét nghiệm");
@@ -246,9 +202,9 @@ class Iteration1SchemaIT {
                 values (?, ?, ?, 'CLINICAL', now(), now(), 0)
                 """;
 
-        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "DEMO-NOI", "Khoa Mới"))
+        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "TEST-NOI", "Khoa Mới"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "DEMO-MOI", "khoa nội"))
+        assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), "TEST-MOI", "khoa nội"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -366,10 +322,6 @@ class Iteration1SchemaIT {
                 """, visit, sovaovien, patient, room, receptionist, doituongbnLoai, mabhyt, benefitCode,
                 coverageRate, priority, queueNumber);
         return visit;
-    }
-
-    private int count(String tableAndCondition) {
-        return jdbcTemplate.queryForObject("select count(*) from " + tableAndCondition, Integer.class);
     }
 
     private static String randomSigningKey() {

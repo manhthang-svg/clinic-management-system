@@ -3,7 +3,6 @@ package clinic.backend.service.impl;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -248,23 +247,4 @@ public class StaffAccountServiceImpl implements StaffAccountService {
         return Optional.of(admin);
     }
 
-    @Override
-    @Transactional
-    public int assignDemoAccountPassword(String rawPassword) {
-        if (StaffAccount.checkPasswordPolicy(rawPassword).isPresent()) {
-            throw new IllegalStateException("The demo account password does not satisfy the password policy");
-        }
-        List<StaffAccount> pending = staffAccountRepository.findAllByPasswordHash(UNSET_DEMO_PASSWORD_HASH);
-        if (pending.isEmpty()) {
-            return 0;
-        }
-        // One hash for all demo accounts keeps startup fast; this runs only with the dev profile.
-        String passwordHash = passwordHasher.hash(rawPassword);
-        Instant now = clock.instant();
-        for (StaffAccount account : pending) {
-            account.changePassword(passwordHash, now);
-            staffAccountRepository.saveAndFlush(account);
-        }
-        return pending.size();
-    }
 }
