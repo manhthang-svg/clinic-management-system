@@ -1943,6 +1943,16 @@ tables:
         - I.36
         standard: Có điều kiện – I.36
         description: SĐT người bệnh; bắt buộc từ 18 tuổi
+      email:
+        field: email
+        sql_type: text
+        base_type: text
+        nullable: true
+        java_type: String
+        optional: true
+        proposal: add
+        standard: Không
+        description: Email người bệnh; tối đa 100 ký tự khi có
       yeutorh:
         field: yeutorh
         sql_type: varchar(5)

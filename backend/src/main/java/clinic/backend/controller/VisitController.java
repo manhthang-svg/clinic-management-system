@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.service.VisitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,5 +58,14 @@ public class VisitController {
             @PathVariable UUID visitId
     ) {
         return ApiResponse.success(visitService.startExamination(visitId));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/queue-status")
+    @Operation(summary = "UC-42 Xem tình trạng hàng đợi theo phòng khám")
+    public ApiResponse<List<RoomQueueStatusResponse>> getRoomQueueStatus(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return ApiResponse.success(visitService.getRoomQueueStatus(date));
     }
 }

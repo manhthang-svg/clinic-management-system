@@ -32,6 +32,7 @@ export const ROUTES = {
     PATIENTS: '/receptionist/patients',
     PATIENT_CREATE: '/receptionist/patients/new',
     VISIT_REGISTER: '/receptionist/patients/:id/register',
+    ROOM_QUEUE: '/receptionist/room-queue',
   },
 
   CASHIER: {

@@ -15,6 +15,7 @@ import {
   LogIn,
   LogOut,
   CircleAlert,
+  Building2,
 } from 'lucide-react';
 import {
   ROLE_MAP,
@@ -217,8 +218,8 @@ function HeaderStat({ icon: Icon, label, iso, empty, note }) {
   );
 }
 
-/** UC-6 View Account Detail, with entry points to UC-8 … UC-11 (AQ-07, AQ-17). */
-export function AccountDetailView({ account, loginEvents, changeHistory = [], historyPage, onHistoryPageChange, accountNames, workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onToggleLock, onResetPassword }) {
+/** UC-6 View Account Detail, with entry points to UC-8 … UC-11 and room assignment (UC-15). */
+export function AccountDetailView({ account, loginEvents, changeHistory = [], historyPage, onHistoryPageChange, accountNames, workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onAssignRoom, onToggleLock, onResetPassword }) {
   const [loginHistoryState, setLoginHistoryState] = useState({ accountId: account.id, page: 0 });
   const locked = account.status === 'LOCKED';
   const permissions = ROLE_PERMISSIONS[account.role] || { modules: [], actions: [] };
@@ -227,6 +228,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
     ? { name: account.roomName, department: account.departmentName }
     : null;
   const actions = account.allowedActions || {};
+  const canAssignRoom = Boolean(actions.assignRoom && hasRoom && !isSelf);
   const loginHistoryTotalPages = Math.max(1, Math.ceil(loginEvents.length / HISTORY_PAGE_SIZE));
   const loginHistoryPage = loginHistoryState.accountId === account.id
     ? Math.min(loginHistoryState.page, loginHistoryTotalPages - 1)
@@ -327,11 +329,11 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 xl:w-80 xl:border-l xl:border-slate-100 xl:pl-5">
+        <div className="grid grid-cols-2 gap-2.5 w-full xl:w-96 xl:border-l xl:border-slate-100 xl:pl-5">
           {actions.update !== false && <button
             type="button"
             onClick={onEdit}
-            className="col-span-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+            className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
           >
             <Pencil className="w-4 h-4" />
             Chỉnh sửa tài khoản
@@ -340,17 +342,27 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             <button
               type="button"
               onClick={onAssignRole}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+              className={`${canAssignRoom ? '' : 'col-span-2'} min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer`}
             >
               <UserCog className="w-4 h-4" />
               Đổi vai trò
+            </button>
+          )}
+          {canAssignRoom && (
+            <button
+              type="button"
+              onClick={onAssignRoom}
+              className="min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <Building2 className="w-4 h-4" />
+              Phân công phòng
             </button>
           )}
           {actions.resetPassword && !isSelf && (
             <button
               type="button"
               onClick={onResetPassword}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium text-[#c27c0e] bg-[#fdf1dc] border border-[#f8e2b8] rounded-xl hover:bg-[#fbe8c6] transition-colors cursor-pointer"
+              className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-[#b56f08] bg-[#fff8e8] border border-[#f4d99f] rounded-xl hover:bg-[#fdf0d1] hover:border-[#edc978] transition-colors cursor-pointer"
             >
               <KeyRound className="w-4 h-4" />
               Đặt lại mật khẩu
@@ -360,7 +372,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             <button
               type="button"
               onClick={onToggleLock}
-              className={`col-span-2 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-xl border transition-colors cursor-pointer ${
+              className={`col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-xl border transition-colors cursor-pointer ${
                 locked
                   ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
                   : 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100'

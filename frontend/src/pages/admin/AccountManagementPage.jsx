@@ -34,6 +34,7 @@ import {
 import { percentOf } from "../../components/accounts/accountFormat";
 import { accountErrorMessage } from "../../components/accounts/accountErrors";
 import { createAccountApi } from "../../apis/accountApi";
+import { departmentApi } from "../../apis/departmentApi";
 import { apiClient } from "../../services/session";
 import {
   PAGE_SIZE_OPTIONS,
@@ -364,6 +365,9 @@ export function AccountManagementPage({
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [lockPrompt, setLockPrompt] = useState(null);
   const [lockReasonInput, setLockReasonInput] = useState("");
+  const [roomAssignment, setRoomAssignment] = useState(null);
+  const [roomOptions, setRoomOptions] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
 
   const requestConfirm = (options) => {
     setConfirmDialog(options);
@@ -420,10 +424,10 @@ export function AccountManagementPage({
           );
           setConfirmDialog(null);
 
-          // Department follows the room (BR-05): continue with room staff assignment (UC-15).
+          // Room assignment is a separate UC-15 action from the account detail screen.
           if (needsRoom) {
-            toast.info(`Hãy phân công phòng làm việc cho ${account.username}.`, { duration: 5000 });
-            navigate(ADMIN.DEPARTMENTS);
+            toast.info(`Có thể phân công phòng cho ${account.username} từ màn hình chi tiết tài khoản.`, { duration: 5000 });
+            showList();
           } else {
             openDetail(account.id);
           }
@@ -524,6 +528,37 @@ export function AccountManagementPage({
     return result;
   };
 
+  const openRoomAssignment = async (account) => {
+    try {
+      const items = await departmentApi.getItems();
+      const requiredType = account.role === "DOCTOR" ? "EXAMINATION" : "PARACLINICAL";
+      const eligibleRooms = items.filter((item) =>
+        item.unitType === "ROOM" && item.status === "ACTIVE" && item.type === requiredType);
+      setRoomOptions(eligibleRooms);
+      setSelectedRoomId(eligibleRooms.find((room) => room.name === account.roomName)?.id || "");
+      setRoomAssignment(account);
+    } catch {
+      toast.error("Không thể tải danh sách phòng. Vui lòng thử lại.");
+    }
+  };
+
+  const confirmRoomAssignment = async () => {
+    if (!roomAssignment || !selectedRoomId) {
+      toast.error("Vui lòng chọn phòng làm việc");
+      return;
+    }
+    try {
+      const updated = fromApi(await accountApi.assignRoom(roomAssignment.id, { roomId: selectedRoomId }));
+      setDetails((prev) => ({ ...prev, [updated.id]: updated }));
+      reloadAccounts();
+      toast.success(`Đã phân công phòng cho ${updated.username}`);
+      setRoomAssignment(null);
+      setSelectedRoomId("");
+    } catch (error) {
+      toast.error(accountErrorMessage(error));
+    }
+  };
+
   const selected = details[view.id];
   const accountNames = new Map(accounts.map((item) => [item.id, item.username]));
 
@@ -614,6 +649,7 @@ export function AccountManagementPage({
         onGoToList={showList}
         onEdit={() => openEdit(selected)}
         onAssignRole={() => openAssignRole(selected.id)}
+        onAssignRoom={() => openRoomAssignment(selected)}
         onToggleLock={() => toggleLock(selected)}
         onResetPassword={() => openResetPassword(selected.id)}
       />
@@ -709,6 +745,41 @@ export function AccountManagementPage({
               {lockReasonInput.length}/500 ký tự
             </div>
           </div>
+        </ConfirmModal>
+      )}
+
+      {roomAssignment && (
+        <ConfirmModal
+          isOpen
+          title={`Phân công phòng cho ${roomAssignment.username}`}
+          description={`${roomAssignment.fullName} — ${ROLE_LABELS[roomAssignment.role]}`}
+          confirmText="Phân công"
+          variant="mint"
+          onConfirm={confirmRoomAssignment}
+          onClose={() => {
+            setRoomAssignment(null);
+            setSelectedRoomId("");
+          }}
+        >
+          <label htmlFor="assigned-room" className="block text-xs font-semibold text-slate-700 mb-1.5">
+            Phòng làm việc <span className="text-rose-500">*</span>
+          </label>
+          <select
+            id="assigned-room"
+            value={selectedRoomId}
+            onChange={(event) => setSelectedRoomId(event.target.value)}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#127e7a]/20"
+          >
+            <option value="">Chọn phòng làm việc</option>
+            {roomOptions.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name} — {room.departmentName}
+              </option>
+            ))}
+          </select>
+          {roomOptions.length === 0 && (
+            <p className="mt-2 text-xs text-amber-600">Không có phòng hoạt động phù hợp với vai trò này.</p>
+          )}
         </ConfirmModal>
       )}
     </>

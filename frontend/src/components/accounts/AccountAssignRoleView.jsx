@@ -173,7 +173,7 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
         </section>
       )}
 
-      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hệ thống sẽ chuyển tới màn Khoa / Phòng để phân công phòng làm việc.' : ''}</span></div>}
+      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hệ thống sẽ quay về danh sách tài khoản. Có thể phân công phòng từ màn hình chi tiết tài khoản.' : ''}</span></div>}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 flex justify-end gap-2.5 sticky bottom-4">
         <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Hủy</button>
         <button type="submit" disabled={!roleChanged} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"><UserCog className="w-4 h-4" />Áp dụng vai trò<ChevronRight className="w-4 h-4" /></button>

@@ -24,6 +24,7 @@ public record PatientResponse(
         String tinhthanhMa,
         String noilamviec,
         String sodienthoai,
+        String email,
         String yeutorh,
         String nhommau,
         String hotennguoithan,

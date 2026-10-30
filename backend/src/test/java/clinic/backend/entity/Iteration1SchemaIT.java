@@ -187,6 +187,16 @@ class Iteration1SchemaIT {
     }
 
     @Test
+    void mapsPatientEmail() {
+        Patient patient = entityManager.createQuery(
+                        "select patient from Patient patient where patient.mabenhnhan = 'BN00000003'",
+                        Patient.class)
+                .getSingleResult();
+
+        assertThat(patient.getEmail()).isEqualTo("patient@example.com");
+    }
+
+    @Test
     void allowsOnlyOneActiveExaminationService() {
         assertThatThrownBy(() -> jdbcTemplate.update("""
                 insert into services (id, code, tenchidinh, type, clinic_price, status, created_at, updated_at, version)

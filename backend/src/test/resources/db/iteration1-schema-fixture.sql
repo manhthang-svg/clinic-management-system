@@ -51,15 +51,18 @@ INSERT INTO staff_room_assignments (id, staff_account_id, room_id, assigned_at, 
      '0192a000-0004-7000-8000-000000000004', now(), 0);
 
 INSERT INTO patients
-    (id, mabenhnhan, hoten, ngaysinh, gioitinh, cccd_so, sodienthoai, diachi, dantoc,
+    (id, mabenhnhan, hoten, ngaysinh, gioitinh, cccd_so, sodienthoai, email, diachi, dantoc,
      created_by_account_id, created_at, updated_at, version)
 VALUES
     ('0192a000-0007-7000-8000-000000000003', 'BN00000003', 'Lê Văn Dũng', DATE '1958-11-02', 1,
-     '079058000003', '0901000003', 'Test address', 'Kinh', '0192a000-0005-7000-8000-000000000007', now(), now(), 0),
+     '079058000003', '0901000003', 'patient@example.com', 'Test address', 'Kinh',
+     '0192a000-0005-7000-8000-000000000007', now(), now(), 0),
     ('0192a000-0007-7000-8000-000000000004', 'BN00000004', 'Phạm Thị Hoa', DATE '1990-05-18', 2,
-     '079190000004', '0901000004', 'Test address', 'Kinh', '0192a000-0005-7000-8000-000000000007', now(), now(), 0),
+     '079190000004', '0901000004', NULL, 'Test address', 'Kinh',
+     '0192a000-0005-7000-8000-000000000007', now(), now(), 0),
     ('0192a000-0007-7000-8000-000000000008', 'BN00000008', 'Nguyễn Thị Thảo', DATE '1995-10-10', 2,
-     '079195000012', '0901000012', 'Test address', 'Kinh', '0192a000-0005-7000-8000-000000000007', now(), now(), 0);
+     '079195000012', '0901000012', NULL, 'Test address', 'Kinh',
+     '0192a000-0005-7000-8000-000000000007', now(), now(), 0);
 
 INSERT INTO simulated_insurance_cards
     (card_number, full_name, date_of_birth, benefit_code, coverage_rate, valid_from, valid_to,
