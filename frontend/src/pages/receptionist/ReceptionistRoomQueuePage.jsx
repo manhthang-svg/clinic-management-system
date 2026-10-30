@@ -12,6 +12,16 @@ const COUNT_COLUMNS = [
     ['skippedCount', 'Bỏ lượt', 'text-rose-700'],
 ];
 
+function loadErrorMessage(error) {
+    if (error?.status === 401 || error?.status === 403) {
+        return 'Bạn không có quyền xem tình trạng hàng đợi phòng khám.';
+    }
+    if (error?.status >= 500) {
+        return 'Không thể tải tình trạng hàng đợi do lỗi hệ thống. Vui lòng thử lại sau.';
+    }
+    return 'Không thể tải tình trạng hàng đợi. Vui lòng thử lại.';
+}
+
 function formatTime(value) {
     return value ? value.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
 }
@@ -31,6 +41,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
 
     const fetchStatus = useCallback(async (signal) => {
         try {
@@ -39,11 +50,18 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
             setLoadError('');
             setLastUpdated(new Date());
         } catch (error) {
-            if (error?.name !== 'AbortError') setLoadError('Không thể tải tình trạng hàng đợi. Vui lòng thử lại.');
+            if (error?.name !== 'AbortError') setLoadError(loadErrorMessage(error));
         } finally {
             setLoading(false);
         }
     }, [visitApi]);
+
+    const refreshNow = async () => {
+        if (refreshing) return;
+        setRefreshing(true);
+        await fetchStatus();
+        setRefreshing(false);
+    };
 
     useEffect(() => {
         const controller = new AbortController();
@@ -72,9 +90,9 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                         <p className="mt-1 text-sm text-slate-500">Số bệnh nhân theo từng phòng trong ngày. Lượt khám dịch vụ chỉ được tính sau khi đã thanh toán phí khám.</p>
                     </div>
                 </div>
-                <button type="button" onClick={() => void fetchStatus()} className="flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50">
-                    <RefreshCw className="h-4 w-4" />
-                    Tải lại
+                <button type="button" disabled={refreshing || loading} onClick={() => void refreshNow()} className="flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? 'Đang tải…' : 'Tải lại'}
                 </button>
             </header>
 
@@ -85,7 +103,12 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                {loadError && <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">{loadError}</p>}
+                {loadError && (
+                    <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">
+                        {loadError}
+                        {lastUpdated && ` Số liệu bên dưới là lần cập nhật lúc ${formatTime(lastUpdated)}.`}
+                    </p>
+                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[760px] border-collapse text-left text-sm">
@@ -119,7 +142,10 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                     </table>
                     {rooms.length === 0 && (
                         <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">
-                            <h3 className="text-sm font-bold">{loading ? 'Đang tải…' : 'Chưa có phòng khám đang hoạt động'}</h3>
+                            <h3 className="text-sm font-bold">
+                                {loading ? 'Đang tải tình trạng hàng đợi…' : loadError && !lastUpdated ? 'Chưa tải được dữ liệu' : 'Chưa có phòng khám đang hoạt động'}
+                            </h3>
+                            {!loading && !loadError && <p className="mt-1.5 max-w-md text-xs leading-5 text-slate-500">Quản trị viên cần kích hoạt phòng khám bệnh để bệnh nhân được xếp vào hàng đợi.</p>}
                         </div>
                     )}
                 </div>
