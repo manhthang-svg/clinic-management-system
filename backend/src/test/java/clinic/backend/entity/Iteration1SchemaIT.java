@@ -198,12 +198,12 @@ class Iteration1SchemaIT {
     }
 
     @Test
-    void allowsOnlyOneActiveExaminationService() {
-        assertThatThrownBy(() -> jdbcTemplate.update("""
+    void allowsMultipleActiveExaminationServicesAtDatabaseLevel() {
+        assertThat(jdbcTemplate.update("""
                 insert into services (id, code, tenchidinh, type, clinic_price, status, created_at, updated_at, version)
                 values (?, 'KB-002', 'Khám bệnh 2', 'EXAMINATION', 100000, 'ACTIVE', now(), now(), 0)
                 """, UUID.randomUUID()))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isEqualTo(1);
     }
 
     @Test
@@ -323,15 +323,26 @@ class Iteration1SchemaIT {
         int queueNumber = jdbcTemplate.queryForObject(
                 "select coalesce(max(queue_number), 0) + 1 from visits", Integer.class);
         UUID visit = UUID.randomUUID();
+        boolean insured = "BHYT".equals(doituongbnLoai);
+        String socialNumber = insured ? mabhyt.substring(mabhyt.length() - 10) : null;
+        LocalDate validFrom = insured ? LocalDate.of(2026, 1, 1) : null;
+        LocalDate validTo = insured ? LocalDate.of(2026, 12, 31) : null;
+        String facilityCode = insured ? "79014" : null;
+        String facilityName = insured ? "Bệnh viện Đa khoa Sài Gòn" : null;
+        String verifyStatus = insured ? "VALID" : "NOT_APPLICABLE";
+        Instant verifiedAt = insured ? Instant.now() : null;
         // Completed, so the one-active-visit-per-patient index (BR-17) does not couple the tests.
         jdbcTemplate.update("""
                 insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
-                    doituongbn_loai, mabhyt, insurance_benefit_code, insurance_coverage_rate, lydovaovien,
+                    doituongbn_loai, mabhyt, insurance_benefit_code, insurance_coverage_rate,
+                    insurance_social_number, tungaybhyt, denngaybhyt, insurance_primary_facility_code,
+                    noidangkykcbbd, insurance_verify_status, insurance_verified_at, lydovaovien,
                     is_priority, queue_date, queue_number, status, created_at, updated_at, version)
-                values (?, ?, ?, ?, ?, now(), ?, ?, ?, ?, 'Khám định kỳ', ?, current_date, ?,
+                values (?, ?, ?, ?, ?, now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Khám định kỳ', ?, current_date, ?,
                     'COMPLETED', now(), now(), 0)
                 """, visit, sovaovien, patient, room, receptionist, doituongbnLoai, mabhyt, benefitCode,
-                coverageRate, priority, queueNumber);
+                coverageRate, socialNumber, validFrom, validTo, facilityCode, facilityName, verifyStatus, verifiedAt,
+                priority, queueNumber);
         return visit;
     }
 
