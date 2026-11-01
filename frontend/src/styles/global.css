@@ -748,8 +748,20 @@ p[role='alert']:not(.banner) {
   }
 
   .visit-ticket-print,
-  .visit-ticket-print * {
+  .visit-ticket-print *,
+  .paraclinical-result-print,
+  .paraclinical-result-print * {
     visibility: visible !important;
+  }
+
+  .paraclinical-result-print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 210mm;
+    min-height: 0 !important;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .visit-ticket-print {

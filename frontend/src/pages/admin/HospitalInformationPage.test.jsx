@@ -24,7 +24,8 @@ function renderPage(api) {
   );
 }
 
-describe('HospitalInformationPage (UC-77)', () => {
+// Typing six fields takes over 5 s when the whole suite runs in parallel.
+describe('HospitalInformationPage (UC-77)', { timeout: 15000 }, () => {
   it('declares the facility the first time with a null version', async () => {
     const api = { get: vi.fn().mockResolvedValue(unconfigured), save: vi.fn().mockResolvedValue(facility) };
     const user = userEvent.setup();

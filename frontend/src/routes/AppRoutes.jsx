@@ -31,6 +31,8 @@ import OwnProfilePage from "../pages/profile/OwnProfilePage.jsx";
 import {
   TechnicianDashboardPage,
   TechnicianQueuePage,
+  ParaclinicalResultListPage,
+  ParaclinicalResultPage,
 } from "../pages/technician/index.js";
 
 export function AppRoutes({
@@ -305,6 +307,8 @@ export function AppRoutes({
           <Route index element={<TechnicianDashboardPage />} />
           <Route path="dashboard" element={<TechnicianDashboardPage />} />
           <Route path="queue" element={<TechnicianQueuePage />} />
+          <Route path="results" element={<ParaclinicalResultListPage />} />
+          <Route path="results/:orderId" element={<ParaclinicalResultPage />} />
           <Route
             path="schedules"
             element={

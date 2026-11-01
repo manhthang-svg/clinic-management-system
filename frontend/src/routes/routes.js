@@ -61,6 +61,8 @@ export const ROUTES = {
     DASHBOARD: '/technician/dashboard',
     SCHEDULES: '/technician/schedules',
     QUEUE: '/technician/queue',
+    RESULTS: '/technician/results',
+    RESULT_DETAIL: '/technician/results/:orderId',
   },
 };
 

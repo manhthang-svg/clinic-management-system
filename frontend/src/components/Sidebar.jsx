@@ -158,6 +158,12 @@ const NAV_ITEMS = {
       path: '/technician/queue',
     },
     {
+      id: 'results',
+      label: 'Nhập kết quả',
+      iconName: 'Microscope',
+      path: '/technician/results',
+    },
+    {
       id: 'schedules',
       label: 'Lịch trực',
       iconName: 'CalendarDays',
