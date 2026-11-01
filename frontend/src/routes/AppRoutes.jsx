@@ -7,6 +7,7 @@ import {
   DepartmentManagementPage,
   ServiceManagementPage,
   ScheduleManagementPage,
+  HospitalInformationPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -110,6 +111,17 @@ export function AppRoutes({
             path="schedules"
             element={
               <ScheduleManagementPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="hospital-information"
+            element={
+              <HospitalInformationPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

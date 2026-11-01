@@ -7,14 +7,12 @@ import {
   CircleAlert,
   Clock3,
   Mail,
-  GraduationCap,
-  BadgeCheck,
   Phone,
   ShieldCheck,
   UserCog,
 } from 'lucide-react';
 import { ROLE_MAP, ROLE_PERMISSIONS, STATUS_LABELS } from '../../constants/accountData';
-import { AccountPageHeader, FormField, INPUT_CLASS } from './AccountFormParts';
+import { AccountPageHeader } from './AccountFormParts';
 import { avatarTone, formatDate, formatTime, initialsOf } from './accountFormat';
 
 const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
@@ -58,11 +56,6 @@ function SummaryItem({ icon: Icon, label, value, positive }) {
 /** UC-9 Assign Role. Doctor/Technician roles also require the academic title and practice license. */
 export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign }) {
   const [role, setRole] = useState(account.role);
-  const [professional, setProfessional] = useState({
-    academicTitle: account.title || '',
-    practiceLicenseNo: account.practiceLicenseNo || '',
-  });
-  const [errors, setErrors] = useState({});
   const permissions = useMemo(
     () => ROLE_PERMISSIONS[role] || { modules: [], actions: [] },
     [role],
@@ -71,7 +64,6 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
   const roleChanged = role !== account.role;
   const removesRoom = roleChanged && ['DOCTOR', 'TECHNICIAN'].includes(account.role) && account.roomName;
   const needsRoom = roleChanged && ['DOCTOR', 'TECHNICIAN'].includes(role);
-  const professionalRole = ['DOCTOR', 'TECHNICIAN'].includes(role);
   const permissionRows = useMemo(() => {
     const all = [...new Set([...permissions.modules, ...permissions.actions])];
     return all.slice(0, 8);
@@ -80,23 +72,7 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
   const submit = async (event) => {
     event.preventDefault();
     if (!roleChanged) return;
-    if (professionalRole) {
-      const nextErrors = {
-        academicTitle: professional.academicTitle.trim() ? '' : 'Vui lòng nhập học hàm / học vị.',
-        practiceLicenseNo: professional.practiceLicenseNo.trim() ? '' : 'Vui lòng nhập số giấy phép hành nghề.',
-      };
-      setErrors(nextErrors);
-      if (Object.values(nextErrors).some(Boolean)) return;
-    }
-    await onAssign(role, professionalRole ? {
-      academicTitle: professional.academicTitle.trim(),
-      practiceLicenseNo: professional.practiceLicenseNo.trim(),
-    } : {});
-  };
-
-  const updateProfessional = (field, value) => {
-    setProfessional((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: '' }));
+    await onAssign(role);
   };
 
   return (
@@ -156,24 +132,8 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
         </section>
       </div>
 
-      {roleChanged && professionalRole && (
-        <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5">
-          <div className="mb-5">
-            <h2 className="text-base! font-bold! text-[#1b2533]">Thông tin chuyên môn</h2>
-            <p className="text-xs text-slate-500 mt-1">Bắt buộc bổ sung trước khi cấp vai trò {ROLE_MAP[role]?.label}.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField id="role-academic-title" label="Học hàm / học vị" required error={errors.academicTitle} icon={GraduationCap}>
-              <input id="role-academic-title" value={professional.academicTitle} onChange={(event) => updateProfessional('academicTitle', event.target.value)} maxLength={50} placeholder="vd: BSCKI, ThS.BS" className={`${INPUT_CLASS} pl-10`} aria-invalid={errors.academicTitle ? true : undefined} />
-            </FormField>
-            <FormField id="role-license" label="Số giấy phép hành nghề" required error={errors.practiceLicenseNo} icon={BadgeCheck}>
-              <input id="role-license" value={professional.practiceLicenseNo} onChange={(event) => updateProfessional('practiceLicenseNo', event.target.value)} maxLength={255} placeholder="vd: 000123/HCM-CCHN" className={`${INPUT_CLASS} pl-10`} aria-invalid={errors.practiceLicenseNo ? true : undefined} />
-            </FormField>
-          </div>
-        </section>
-      )}
 
-      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hệ thống sẽ quay về danh sách tài khoản. Có thể phân công phòng từ màn hình chi tiết tài khoản.' : ''}</span></div>}
+      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hãy bổ sung thông tin chuyên môn còn thiếu qua Chỉnh sửa tài khoản và phân công phòng từ màn hình chi tiết tài khoản.' : ''}</span></div>}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 flex justify-end gap-2.5 sticky bottom-4">
         <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Hủy</button>
         <button type="submit" disabled={!roleChanged} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"><UserCog className="w-4 h-4" />Áp dụng vai trò<ChevronRight className="w-4 h-4" /></button>

@@ -192,6 +192,29 @@ public class StaffAccount {
             UUID creationSubmissionId,
             Instant now) {
 
+        return create(
+                id, username, temporaryPasswordHash, fullName, academicTitle, null, dateOfBirth, gender,
+                phoneNumber, email, address, role, createdByAccountId, creationSubmissionId, true, now);
+    }
+
+    public static StaffAccount create(
+            UUID id,
+            String username,
+            String temporaryPasswordHash,
+            String fullName,
+            String academicTitle,
+            String practiceLicenseNo,
+            LocalDate dateOfBirth,
+            Gender gender,
+            String phoneNumber,
+            String email,
+            String address,
+            Role role,
+            UUID createdByAccountId,
+            UUID creationSubmissionId,
+            boolean passwordChangeRequired,
+            Instant now) {
+
         if (username == null || !USERNAME_FORMAT.matcher(username).matches()) {
             throw new IllegalArgumentException("Username does not match the required format");
         }
@@ -201,6 +224,7 @@ public class StaffAccount {
                 .passwordHash(requireText(temporaryPasswordHash, "passwordHash"))
                 .fullName(requireText(fullName, "fullName"))
                 .academicTitle(academicTitle)
+                .practiceLicenseNo(normalizeOptional(practiceLicenseNo))
                 .dateOfBirth(dateOfBirth)
                 .gender(gender)
                 .phoneNumber(phoneNumber)
@@ -208,7 +232,7 @@ public class StaffAccount {
                 .address(address)
                 .role(Objects.requireNonNull(role, "role"))
                 .status(AccountStatus.ACTIVE)
-                .passwordChangeRequired(true)
+                .passwordChangeRequired(passwordChangeRequired)
                 .createdByAccountId(createdByAccountId)
                 .creationSubmissionId(creationSubmissionId)
                 .createdAt(Objects.requireNonNull(now, "now"))
@@ -337,6 +361,7 @@ public class StaffAccount {
     public void updatePersonalInformation(
             String newFullName,
             String newAcademicTitle,
+            String newPracticeLicenseNo,
             LocalDate newDateOfBirth,
             Gender newGender,
             String newPhoneNumber,
@@ -345,6 +370,7 @@ public class StaffAccount {
             Instant now) {
         fullName = requireText(newFullName, "fullName");
         academicTitle = normalizeOptional(newAcademicTitle);
+        practiceLicenseNo = normalizeOptional(newPracticeLicenseNo);
         dateOfBirth = newDateOfBirth;
         gender = newGender;
         phoneNumber = requireText(newPhoneNumber, "phoneNumber");
