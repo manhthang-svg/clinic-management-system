@@ -335,8 +335,8 @@ export function AccountManagementPage({
       username: form.username.trim().toLowerCase(),
       role: form.role,
       ...accountRequest(form),
-      passwordMode: "GENERATE",
-      initialPassword: null,
+      passwordMode: form.passwordMode || "GENERATE",
+      initialPassword: form.passwordMode === "MANUAL" ? form.initialPassword : null,
       submissionId: crypto.randomUUID(),
     });
     const account = fromApi(await accountApi.detail(created.accountId));
@@ -374,7 +374,7 @@ export function AccountManagementPage({
   };
 
   // UC-9: change an account role and remove any previous room assignment.
-  const assignRole = async (account, role, professional = {}) => {
+  const assignRole = async (account, role) => {
     const hadRoom =
       account.role === "DOCTOR" || account.role === "TECHNICIAN";
     const needsRoom = role === "DOCTOR" || role === "TECHNICIAN";
@@ -384,7 +384,6 @@ export function AccountManagementPage({
       check = await accountApi.checkRoleChange(account.id, {
         newRole: role,
         expectedRole: account.role,
-        ...professional,
       });
     } catch (error) {
       toast.error(accountErrorMessage(error));
@@ -414,7 +413,6 @@ export function AccountManagementPage({
           const updated = fromApi(await accountApi.changeRole(account.id, {
             newRole: role,
             expectedRole: account.role,
-            ...professional,
           }));
           setDetails((prev) => ({ ...prev, [account.id]: updated }));
           reloadAccounts();
@@ -426,11 +424,12 @@ export function AccountManagementPage({
 
           // Room assignment is a separate UC-15 action from the account detail screen.
           if (needsRoom) {
+            if (!updated.title?.trim() || !updated.practiceLicenseNo?.trim()) {
+              toast.info('Vui lòng chọn Chỉnh sửa tài khoản để bổ sung học hàm / học vị và số giấy phép hành nghề.', { duration: 8000 });
+            }
             toast.info(`Có thể phân công phòng cho ${account.username} từ màn hình chi tiết tài khoản.`, { duration: 5000 });
-            showList();
-          } else {
-            openDetail(account.id);
           }
+          openDetail(account.id);
         } catch (error) {
           toast.error(accountErrorMessage(error));
         }
@@ -622,7 +621,7 @@ export function AccountManagementPage({
         account={selected}
         onCancel={() => openDetail(selected.id)}
         onGoToList={showList}
-        onAssign={(role, professional) => assignRole(selected, role, professional)}
+        onAssign={(role) => assignRole(selected, role)}
       />
     );
   } else if (selected && view.name === "reset-password" && !isSelf(selected)) {
