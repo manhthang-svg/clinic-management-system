@@ -58,7 +58,7 @@ function CreatedResult({ result, onViewDetail, onCreateAnother, onBackToList }) 
       <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-left">
         <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
           <KeyRound className="w-4 h-4" />
-          Mật khẩu tạm thời
+          {result.account.passwordChangeRequired ? 'Mật khẩu tạm thời' : 'Mật khẩu chính thức'}
         </div>
         <div className="mt-2 flex items-center gap-2">
           <code className="flex-1 px-3 py-2 rounded-lg bg-white border border-amber-200 text-base font-mono tracking-wider text-slate-900">
@@ -74,7 +74,7 @@ function CreatedResult({ result, onViewDetail, onCreateAnother, onBackToList }) 
           </button>
         </div>
         <p className="text-xs text-amber-800 mt-2">
-          Mật khẩu chỉ hiển thị một lần. Hãy gửi cho nhân viên; họ phải đổi mật khẩu ở lần đăng nhập đầu tiên.
+          Mật khẩu chỉ hiển thị một lần. Hãy gửi cho nhân viên. {result.account.passwordChangeRequired ? 'Nhân viên phải đổi mật khẩu ở lần đăng nhập đầu tiên.' : 'Nhân viên không cần đổi mật khẩu ở lần đăng nhập đầu tiên.'}
         </p>
       </div>
 
@@ -107,6 +107,10 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [serverErrors, setServerErrors] = useState({});
+  const [mode, setMode] = useState('GENERATE');
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const errors = validateAccountForm(form, { accounts, fields: CREATE_FIELDS });
   const shownErrors = { ...(touched ? errors : {}), ...serverErrors };
@@ -125,11 +129,28 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
     if (Object.keys(errors).length > 0) return;
     setSubmitError('');
     setServerErrors({});
+    if (submitting) return;
+    if (mode === 'MANUAL') {
+      const length = [...password].length;
+      if (length < 8 || length > 64 || new TextEncoder().encode(password).length > 72 || !password.trim()) {
+        setSubmitError('Mật khẩu phải dài 8–64 ký tự và không quá 72 byte.');
+        return;
+      }
+      if (password !== confirmation) {
+        setSubmitError('Mật khẩu xác nhận không khớp.');
+        return;
+      }
+    }
+    setSubmitting(true);
     try {
-      setResult(await onCreate(form));
+      setResult(await onCreate({ ...form, passwordMode: mode, initialPassword: mode === 'MANUAL' ? password : null }));
+      setPassword('');
+      setConfirmation('');
     } catch (error) {
       setServerErrors(accountFieldErrors(error));
       setSubmitError(accountErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -151,6 +172,9 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
           onViewDetail={() => onViewDetail(result.account.id)}
           onCreateAnother={() => {
             setForm(EMPTY_ACCOUNT_FORM);
+            setMode('GENERATE');
+            setPassword('');
+            setConfirmation('');
             setTouched(false);
             setResult(null);
           }}
@@ -204,7 +228,20 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
             </div>
           </FormSection>
 
-          <FormSection icon={LockKeyhole} title="Thiết lập đăng nhập" description="Hệ thống tự thiết lập khi tạo tài khoản">
+          <FormSection icon={LockKeyhole} title="Thiết lập đăng nhập" description="Chọn cách tạo mật khẩu cho nhân viên">
+            <div className="space-y-3 mb-4">
+              <label className="flex items-center gap-3"><input type="radio" name="create-password-mode" checked={mode === 'GENERATE'} onChange={() => { setMode('GENERATE'); setPassword(''); setConfirmation(''); setSubmitError(''); }} />Hệ thống tự sinh</label>
+              <label className="flex items-center gap-3"><input type="radio" name="create-password-mode" checked={mode === 'MANUAL'} onChange={() => { setMode('MANUAL'); setSubmitError(''); }} />Admin nhập thủ công</label>
+              {mode === 'MANUAL' && <div className="grid md:grid-cols-2 gap-4">
+                <FormField id="create-password" label="Mật khẩu chính thức" required>
+                  <input id="create-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS} />
+                </FormField>
+                <FormField id="create-password-confirm" label="Xác nhận mật khẩu" required>
+                  <input id="create-password-confirm" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} className={INPUT_CLASS} />
+                </FormField>
+                <p className="text-xs text-slate-500">Mật khẩu dài 8–64 ký tự, tối đa 72 byte UTF-8.</p>
+              </div>}
+            </div>
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <li className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-500">Trạng thái ban đầu</div>
@@ -212,11 +249,11 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
               </li>
               <li className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-500">Mật khẩu</div>
-                <div className="font-medium text-slate-800 mt-1">Hệ thống tạo mật khẩu tạm 12 ký tự</div>
+                <div className="font-medium text-slate-800 mt-1">{mode === 'GENERATE' ? 'Hệ thống tạo mật khẩu tạm 12 ký tự' : 'Admin đặt mật khẩu chính thức'}</div>
               </li>
               <li className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-500">Lần đăng nhập đầu</div>
-                <div className="font-medium text-slate-800 mt-1">Bắt buộc đổi mật khẩu</div>
+                <div className="font-medium text-slate-800 mt-1">{mode === 'GENERATE' ? 'Bắt buộc đổi mật khẩu' : 'Không bắt buộc đổi mật khẩu'}</div>
               </li>
             </ul>
           </FormSection>
@@ -255,6 +292,7 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
             {submitError && <p role="alert" className="text-xs text-rose-600 text-center">{submitError}</p>}
             <button
               type="submit"
+              disabled={submitting}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
