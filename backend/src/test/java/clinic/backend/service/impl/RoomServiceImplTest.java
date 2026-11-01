@@ -16,6 +16,7 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,13 +46,17 @@ class RoomServiceImplTest {
     private ServiceGroupRepository serviceGroupRepository;
 
     @Mock
+    private StaffRoomAssignmentRepository staffRoomAssignmentRepository;
+
+    @Mock
     private UuidV7Generator ids;
 
     private final UUID departmentId = UUID.randomUUID();
 
     private RoomServiceImpl service() {
         return new RoomServiceImpl(
-                roomRepository, departmentRepository, serviceGroupRepository, ids);
+                roomRepository, departmentRepository, serviceGroupRepository,
+                staffRoomAssignmentRepository, ids);
     }
 
     @Test
@@ -93,6 +98,7 @@ class RoomServiceImplTest {
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                 RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room));
+        when(staffRoomAssignmentRepository.hasActiveDoctor(room.getId())).thenReturn(true);
 
         List<RoomResponse> response = service().getActiveExaminationRooms();
 

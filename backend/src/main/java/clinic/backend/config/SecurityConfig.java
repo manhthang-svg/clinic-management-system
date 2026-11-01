@@ -67,6 +67,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/patients", "/api/v1/patients/**").authenticated()
                         .requestMatchers("/api/v1/visits", "/api/v1/visits/**").authenticated()
                         .requestMatchers(
+                                "/api/v1/insurance/verifications",
+                                "/api/v1/insurance/verifications/**")
+                        .authenticated()
+                        .requestMatchers(
                                 "/api/v1/payments",
                                 "/api/v1/payments/**"
                         ).authenticated()

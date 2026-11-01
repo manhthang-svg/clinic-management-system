@@ -80,4 +80,19 @@ public class AuditLogServiceImpl implements AuditLogService {
                 objectMapper.valueToTree(newValues).toString(),
                 MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME)));
     }
+
+    @Override
+    public void recordBusinessChange(
+            UUID actorAccountId,
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt) {
+        auditLogRepository.save(AuditLog.businessChange(
+                ids.next(), actorAccountId, action, entityType, entityId, sovaovien, occurredAt,
+                objectMapper.valueToTree(values).toString(),
+                MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME)));
+    }
 }

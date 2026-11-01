@@ -30,4 +30,13 @@ public interface AuditLogService {
             Map<String, ?> oldValues,
             Map<String, ?> newValues,
             Instant occurredAt);
+
+    void recordBusinessChange(
+            UUID actorAccountId,
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt);
 }

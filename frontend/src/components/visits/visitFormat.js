@@ -3,6 +3,8 @@ import { PATIENT_GENDER_LABELS } from '../../constants/visitData';
 /** YYYY-MM-DD (or an ISO instant) as dd/mm/yyyy. */
 export function formatDate(value) {
   if (!value) return '—';
+  if (/^\d{4}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}$/.test(value)) return `${value.slice(5, 7)}/${value.slice(0, 4)}`;
   const date = value.length === 10 ? new Date(`${value}T00:00:00`) : new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('vi-VN');
 }

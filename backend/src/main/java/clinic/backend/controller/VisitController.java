@@ -9,6 +9,9 @@ import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
+import clinic.backend.dto.response.VisitFeePreviewResponse;
+import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.VisitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +26,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import java.net.URI;
 
 @RestController
 @RequestMapping("/api/v1/visits")
@@ -35,10 +42,32 @@ public class VisitController {
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @PostMapping
     @Operation(summary = "UC-40 Đăng ký lượt khám")
-    public ApiResponse<VisitResponse> createVisit(
+    public ResponseEntity<ApiResponse<VisitResponse>> createVisit(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateVisitRequest request
     ) {
-        return ApiResponse.success(visitService.createVisit(request));
+        VisitResponse created = visitService.createVisit(StaffPrincipal.from(jwt), request);
+        return ResponseEntity.created(URI.create("/api/v1/visits/" + created.id()))
+                .body(ApiResponse.success(created));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/active")
+    public ResponseEntity<ApiResponse<VisitResponse>> getActiveVisit(@RequestParam UUID patientId) {
+        VisitResponse activeVisit = visitService.getActiveVisit(patientId);
+        return activeVisit == null
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.ok(ApiResponse.success(activeVisit));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/fee-preview")
+    public ApiResponse<VisitFeePreviewResponse> previewFee(
+            @RequestParam UUID patientId,
+            @RequestParam VisitDoituongbnLoai doituongbnLoai,
+            @RequestParam(required = false) String mabhyt) {
+        return ApiResponse.success(
+                visitService.previewFee(patientId, doituongbnLoai, mabhyt));
     }
 
     @PreAuthorize("hasAnyRole('DOCTOR', 'RECEPTIONIST', 'ADMIN', 'CASHIER')")

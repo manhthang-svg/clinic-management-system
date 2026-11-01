@@ -34,6 +34,8 @@ management:
       show-details: never
 
 clinic:
+  insurance-simulator:
+    response-delay: ${INSURANCE_SIMULATOR_RESPONSE_DELAY:0ms}
   security:
     frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
     jwt:

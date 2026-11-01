@@ -6,6 +6,8 @@ import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PatientResponse;
+import clinic.backend.dto.response.FollowUpAppointmentResponse;
+import clinic.backend.service.FollowUpAppointmentService;
 import clinic.backend.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/api/v1/patients")
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PatientController {
 
     private final PatientService patientService;
+    private final FollowUpAppointmentService followUpAppointmentService;
 
     @PostMapping
     @PreAuthorize("hasRole('RECEPTIONIST')")
@@ -63,5 +67,14 @@ public class PatientController {
     @Operation(summary = "UC-36 Xem chi tiết hồ sơ bệnh nhân")
     public ApiResponse<PatientResponse> getPatientById(@PathVariable UUID id) {
         return ApiResponse.success(patientService.getPatientById(id));
+    }
+
+    @GetMapping("/{id}/follow-up-appointment")
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    public ResponseEntity<ApiResponse<FollowUpAppointmentResponse>> getFollowUpAppointment(@PathVariable UUID id) {
+        FollowUpAppointmentResponse appointment = followUpAppointmentService.findScheduledForPatient(id);
+        return appointment == null
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.ok(ApiResponse.success(appointment));
     }
 }

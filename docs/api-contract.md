@@ -43,6 +43,25 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `GET` | `/api/v1/services/{serviceId}/deactivation-check` | Admin bearer token | `200` + unfinished-order count |
 | `GET` | `/api/v1/services/{serviceId}/activation-check` | Admin bearer token | `200` when activation is allowed |
 | `PATCH` | `/api/v1/services/{serviceId}/status` | Admin bearer token | `200` + updated or unchanged service detail |
+| `GET` | `/api/v1/visits/active?patientId={patientId}` | Receptionist bearer token | `200` + active visit, or `204` |
+| `GET` | `/api/v1/visits/fee-preview` | Receptionist bearer token | `200` + examination fee breakdown |
+| `POST` | `/api/v1/insurance/verifications` | Receptionist bearer token | `200` + simulated insurance result |
+| `GET` | `/api/v1/patients/{patientId}/follow-up-appointment` | Receptionist bearer token | `200` + scheduled appointment, or `204` |
+| `POST` | `/api/v1/follow-up-appointments/{appointmentId}/cancel` | Receptionist bearer token | `200` + cancelled appointment |
+| `POST` | `/api/v1/visits` | Receptionist bearer token | `201` + registered visit |
+
+UC-74 accepts either a 10-digit social-insurance number or a legacy health-insurance card consisting of two uppercase
+letters followed by thirteen digits. The backend derives the 10-digit social-insurance number, queries the simulated
+portal data in `health_insurance_records`, compares the returned identity with the patient, and returns a verification
+status of `VALID`, `INVALID`, or `MISMATCH`. A completed lookup returns `200` even for an invalid or mismatched card;
+the response includes portal identity data for MSG18. Visit creation never trusts a client verification flag and
+repeats verification before applying the portal-provided coverage rate.
+
+Owner matching prefers identity data. When portal `identityNumber` and patient `cccdSo` are both present, they must be
+equal and the normalized name and date of birth must also match; unequal identity numbers never fall back. When either
+identity number is missing, the backend compares name, date of birth at the portal-reported precision, and gender. A
+successful fallback returns `verificationMethod=DEMOGRAPHIC` and `manualReviewRequired=true`; identity matching returns
+`verificationMethod=IDENTITY` and `manualReviewRequired=false`.
 
 The access token is held in memory and sent as `Authorization: Bearer <token>`. The refresh token is an HttpOnly
 cookie; browser calls to refresh and logout must include credentials and the configured frontend `Origin`.
