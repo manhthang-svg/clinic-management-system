@@ -297,9 +297,9 @@ class Iteration1SchemaIT {
     }
 
     @Test
-    void rejectsAnInsuranceCardWhoseBenefitCodeDoesNotMatch() {
-        assertThatThrownBy(() -> insertVisit("DK-TEST-3", "BN00000004", "BHYT", false, "DN4790000000004", 3, 80))
-                .isInstanceOf(DataIntegrityViolationException.class);
+    void acceptsPortalBenefitDataWithoutDerivingItFromTheCardPrefix() {
+        assertThat(insertVisit("DK-TEST-3", "BN00000004", "BHYT", false, "DN4790000000004", 3, 80))
+                .isNotNull();
     }
 
     private UUID insertPendingPayment() {
