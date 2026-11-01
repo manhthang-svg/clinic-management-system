@@ -14,9 +14,23 @@ import java.util.UUID;
 
 public interface VisitRepository extends JpaRepository<Visit, UUID> {
 
+    List<VisitStatus> FINISHED_STATUSES = List.of(
+            VisitStatus.COMPLETED, VisitStatus.CANCELLED, VisitStatus.ABANDONED);
+
     boolean existsBySovaovien(String sovaovien);
 
     Optional<Visit> findBySovaovien(String sovaovien);
+
+    Optional<Visit> findFirstByPatientIdAndStatusNotInOrderByThoigianvaovienDesc(
+            UUID patientId, Collection<VisitStatus> statuses);
+
+    boolean existsByPatientIdAndStatusNotIn(UUID patientId, Collection<VisitStatus> statuses);
+
+    @Query(value = "select nextval('registration_code_seq')", nativeQuery = true)
+    long nextRegistrationCode();
+
+    @Query(value = "select nextval('payment_code_seq')", nativeQuery = true)
+    long nextPaymentCode();
 
     boolean existsByPatientIdAndQueueDateAndRoomIdAndStatusIn(
             UUID patientId,

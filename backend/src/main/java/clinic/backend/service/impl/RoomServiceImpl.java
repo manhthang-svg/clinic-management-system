@@ -8,6 +8,7 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.service.RoomService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class RoomServiceImpl implements RoomService {
     private final RoomRepository roomRepository;
     private final DepartmentRepository departmentRepository;
     private final ServiceGroupRepository serviceGroupRepository;
+    private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final UuidV7Generator uuidV7Generator;
 
     @Override
@@ -115,7 +117,9 @@ public class RoomServiceImpl implements RoomService {
         return roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                 RoomType.EXAMINATION,
                 ActivationStatus.ACTIVE
-        ).stream().map(savedRoom -> new RoomResponse(
+        ).stream()
+        .filter(room -> staffRoomAssignmentRepository.hasActiveDoctor(room.getId()))
+        .map(savedRoom -> new RoomResponse(
                 savedRoom.getId(),
                 savedRoom.getDepartmentId(),
                 savedRoom.getServiceGroupId(),

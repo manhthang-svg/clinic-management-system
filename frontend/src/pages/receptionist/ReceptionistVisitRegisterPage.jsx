@@ -34,7 +34,6 @@ import {
 } from '../../components/visits/visitErrors';
 import { formatMoney, roomLabel } from '../../components/visits/visitFormat';
 import {
-  CLOSED_VISIT_STATUSES,
   PRIORITY_REASON_LABELS,
   REFERRAL_SOURCE_LABELS,
   VISIT_STATUS_LABELS,
@@ -46,8 +45,6 @@ const { RECEPTIONIST } = ROUTES;
 
 // UC-42 step 3: queue counts refresh at least every 10 seconds (UI-04).
 const QUEUE_REFRESH_MS = 10000;
-
-const sameText = (a, b) => (a ?? '').trim().toLocaleLowerCase('vi') === (b ?? '').trim().toLocaleLowerCase('vi');
 
 function countByRoom(visits) {
   const counts = {};
@@ -86,6 +83,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
 
   const [patientState, setPatientState] = useState({ id: null, patient: null, error: null });
   const [todayVisits, setTodayVisits] = useState({ loaded: false, list: [] });
+  const [activeVisitState, setActiveVisitState] = useState({ loaded: false, visit: null });
   const [queueKey, setQueueKey] = useState(0);
   const [rooms, setRooms] = useState({ loading: true, list: [], error: null });
   const [roomsKey, setRoomsKey] = useState(0);
@@ -125,6 +123,16 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   }, [visitApi, today, queueKey]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    visitApi.getActiveVisit(patientId, controller.signal)
+      .then((visit) => setActiveVisitState({ loaded: true, visit: visit ?? null }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setActiveVisitState({ loaded: true, visit: null });
+      });
+    return () => controller.abort();
+  }, [visitApi, patientId, queueKey]);
+
+  useEffect(() => {
     if (created) return undefined;
     const timer = setInterval(() => setQueueKey((key) => key + 1), QUEUE_REFRESH_MS);
     return () => clearInterval(timer);
@@ -153,10 +161,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
 
   const patient = patientState.id === patientId ? patientState.patient : null;
   const patientError = patientState.id === patientId ? patientState.error : null;
-  const activeVisit = useMemo(
-    () => todayVisits.list.find((v) => v.patientId === patientId && !CLOSED_VISIT_STATUSES.includes(v.status)),
-    [todayVisits.list, patientId],
-  );
+  const activeVisit = activeVisitState.visit;
   const counts = useMemo(() => countByRoom(todayVisits.list), [todayVisits.list]);
   const selectedRoom = rooms.list.find((room) => room.id === form.roomId);
 
@@ -185,41 +190,63 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     // Ignore an answer for a card number that has since been edited.
     const settle = (next) => setInsurance((prev) => (prev.cardNumber === cardNumber ? next : prev));
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
-      const card = await visitApi.verifyInsurance({ cardNumber, patientId });
-      if (card?.status !== 'VALID' || (card.validTo && card.validTo < today)) {
-        switchToSelfPaid(MSG17);
+      const card = await visitApi.verifyInsurance({ insuranceCode: cardNumber, patientId }, controller.signal);
+      if (card?.status === 'MISMATCH') {
+        settle({ cardNumber, status: 'MISMATCH', card });
         return;
       }
-      const mismatch =
-        (card.fullName && !sameText(card.fullName, patient.hoten)) ||
-        (card.dateOfBirth && card.dateOfBirth !== patient.ngaysinh);
-      if (mismatch) {
-        settle({ cardNumber, status: 'MISMATCH', card });
+      if (card?.status !== 'VALID') {
+        switchToSelfPaid(MSG17);
         return;
       }
       settle({ cardNumber, status: 'VALID', card });
     } catch (error) {
-      if (insuranceErrorKind(error) === 'invalid') switchToSelfPaid(MSG17);
-      else settle({ cardNumber, status: 'UNAVAILABLE', card: null });
+      if (error?.name === 'AbortError') {
+        settle({ cardNumber, status: 'UNAVAILABLE', card: null });
+        return;
+      }
+      const kind = insuranceErrorKind(error);
+      if (kind === 'invalid') switchToSelfPaid(MSG17);
+      else if (kind === 'mismatch') settle({ cardNumber, status: 'MISMATCH', card: null });
+      else settle({ cardNumber, status: 'ERROR', card: null, errorMessage: loadErrorMessage(error) });
+    } finally {
+      window.clearTimeout(timeout);
     }
   };
 
   const attachAppointment = () => {
     const suggested = rooms.list.some((room) => room.id === appointment.suggestedRoomId);
-    update({ followUpAppointmentId: appointment.id, ...(suggested ? { roomId: appointment.suggestedRoomId } : {}) });
+    update({
+      followUpAppointmentId: appointment.id,
+      followUpAppointmentVersion: appointment.version,
+      ...(suggested ? { roomId: appointment.suggestedRoomId } : {}),
+    });
   };
 
   const cancelAppointment = async (reason) => {
-    await visitApi.cancelFollowUpAppointment(appointment.id, reason);
+    await visitApi.cancelFollowUpAppointment(appointment.id, reason, appointment.version);
     toast.success('Đã hủy lịch hẹn tái khám');
-    update({ followUpAppointmentId: null });
+    update({ followUpAppointmentId: null, followUpAppointmentVersion: null });
     setAppointment(null);
   };
 
   const openConfirm = async () => {
     setTouched(true);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      const firstErrorId = {
+        priorityReason: 'visit-priority-reason',
+        cardNumber: 'visit-card-number',
+        reason: 'visit-reason',
+      }[Object.keys(errors)[0]];
+      requestAnimationFrame(() => {
+        if (firstErrorId) document.getElementById(firstErrorId)?.focus();
+        else if (errors.roomId) document.querySelector('input[name="visit-room"]')?.focus();
+      });
+      return;
+    }
 
     setConfirm({ fee: null, feeLoading: true, submitting: false, error: null });
     let fee = null;
@@ -267,9 +294,12 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         // EF-04: back to the appointment card, reloaded.
         setConfirm(null);
         setRoomNotice(null);
-        update({ followUpAppointmentId: null });
+        update({ followUpAppointmentId: null, followUpAppointmentVersion: null });
         setAppointmentKey((key) => key + 1);
         toast.error(result.message);
+      } else if (result.kind === 'insurance') {
+        setConfirm(null);
+        switchToSelfPaid(result.message);
       } else {
         // EF-05: stay on the confirmation.
         setConfirm((prev) => ({ ...prev, submitting: false, error: result.message }));
@@ -308,7 +338,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         onAction={goToPatients}
       />
     );
-  } else if (!patient || !todayVisits.loaded) {
+  } else if (!patient || !todayVisits.loaded || !activeVisitState.loaded) {
     content = <p role="status" className="p-10 text-center text-sm text-slate-400">Đang tải thông tin bệnh nhân…</p>;
   } else if (activeVisit) {
     // EF-01 / MSG22
@@ -333,7 +363,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
             today={today}
             attached={form.followUpAppointmentId === appointment.id}
             onAttach={attachAppointment}
-            onDetach={() => update({ followUpAppointmentId: null })}
+            onDetach={() => update({ followUpAppointmentId: null, followUpAppointmentVersion: null })}
             onCancel={cancelAppointment}
           />
         )}
@@ -419,7 +449,6 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                     insurance={insurance}
                     error={shownErrors.cardNumber}
                     onVerify={verifyCard}
-                    onRecordUnverified={() => setInsurance({ cardNumber: form.cardNumber, status: 'UNVERIFIED', card: null })}
                     onSwitchToSelfPaid={() => switchToSelfPaid(null)}
                   />
                 )}

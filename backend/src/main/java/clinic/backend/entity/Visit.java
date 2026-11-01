@@ -65,6 +65,9 @@ public class Visit extends VersionedEntity {
     @Column(name = "mabhyt", length = 15)
     private String mabhyt;
 
+    @Column(name = "insurance_social_number", length = 10)
+    private String insuranceSocialNumber;
+
     /** CV 365 I.23. */
     @Column(name = "tungaybhyt")
     private LocalDate tungaybhyt;
@@ -76,6 +79,9 @@ public class Visit extends VersionedEntity {
     /** CV 365 I.26. */
     @Column(name = "noidangkykcbbd", length = 255)
     private String noidangkykcbbd;
+
+    @Column(name = "insurance_primary_facility_code", length = 5)
+    private String insurancePrimaryFacilityCode;
 
     @Column(name = "insurance_benefit_code")
     private Short insuranceBenefitCode;
@@ -149,6 +155,40 @@ public class Visit extends VersionedEntity {
             VisitStatus status,
             VisitInsuranceVerifyStatus insuranceVerifyStatus
     ) {
+        this(
+                id, createdAt, sovaovien, patientId, roomId, registeredByAccountId, thoigianvaovien,
+                doituongbnLoai, mabhyt, null, null, null, null, null, null, null, lydotiepnhan,
+                noigioithieuLoai, lydovaovien, isPriority, priorityReason, queueDate, queueNumber,
+                status, insuranceVerifyStatus);
+    }
+
+    public Visit(
+            UUID id,
+            Instant createdAt,
+            String sovaovien,
+            UUID patientId,
+            UUID roomId,
+            UUID registeredByAccountId,
+            Instant thoigianvaovien,
+            VisitDoituongbnLoai doituongbnLoai,
+            String mabhyt,
+            String insuranceSocialNumber,
+            LocalDate tungaybhyt,
+            LocalDate denngaybhyt,
+            String insurancePrimaryFacilityCode,
+            String noidangkykcbbd,
+            Short insuranceBenefitCode,
+            Short insuranceCoverageRate,
+            String lydotiepnhan,
+            String noigioithieuLoai,
+            String lydovaovien,
+            boolean isPriority,
+            PriorityReason priorityReason,
+            LocalDate queueDate,
+            int queueNumber,
+            VisitStatus status,
+            VisitInsuranceVerifyStatus insuranceVerifyStatus
+    ) {
         super(id, createdAt);
 
         this.sovaovien = sovaovien;
@@ -158,6 +198,13 @@ public class Visit extends VersionedEntity {
         this.thoigianvaovien = thoigianvaovien;
         this.doituongbnLoai = doituongbnLoai;
         this.mabhyt = mabhyt;
+        this.insuranceSocialNumber = insuranceSocialNumber;
+        this.tungaybhyt = tungaybhyt;
+        this.denngaybhyt = denngaybhyt;
+        this.insurancePrimaryFacilityCode = insurancePrimaryFacilityCode;
+        this.noidangkykcbbd = noidangkykcbbd;
+        this.insuranceBenefitCode = insuranceBenefitCode;
+        this.insuranceCoverageRate = insuranceCoverageRate;
         this.lydotiepnhan = lydotiepnhan;
         this.noigioithieuLoai = noigioithieuLoai;
         this.lydovaovien = lydovaovien;
@@ -167,7 +214,12 @@ public class Visit extends VersionedEntity {
         this.queueNumber = queueNumber;
         this.status = status;
         this.insuranceVerifyStatus = insuranceVerifyStatus;
+        this.insuranceVerifiedAt = insuranceVerifyStatus == VisitInsuranceVerifyStatus.VALID ? createdAt : null;
         this.isSkipped = false;
+    }
+
+    public void linkFollowUpAppointment(UUID appointmentId) {
+        this.followupAppointmentId = appointmentId;
     }
 
     public void markAsWaiting() {

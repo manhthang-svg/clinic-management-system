@@ -5,7 +5,7 @@ TRUNCATE TABLE
     rooms,
     staff_accounts,
     patients,
-    simulated_insurance_cards
+    health_insurance_records
 RESTART IDENTITY CASCADE;
 
 INSERT INTO departments (id, makhoa, tenkhoa, type, description, created_at, updated_at, version) VALUES
@@ -64,11 +64,14 @@ VALUES
      '079195000012', '0901000012', NULL, 'Test address', 'Kinh',
      '0192a000-0005-7000-8000-000000000007', now(), now(), 0);
 
-INSERT INTO simulated_insurance_cards
-    (card_number, full_name, date_of_birth, benefit_code, coverage_rate, valid_from, valid_to,
-     primary_care_facility, status)
+INSERT INTO health_insurance_records
+    (id, ma_so_bhxh, ma_the_bhyt, identity_number, ho_ten, ngay_sinh, loai_ngay_sinh, gioi_tinh,
+     ma_tinh_ks, ma_huyen_ks, ma_xa_ks, ma_cskcb_bd, ten_cskcb_bd,
+     gt_the_tu, gt_the_den, ti_le_huong, trang_thai, error_code)
 VALUES
-    ('HT3790000000003', 'Lê Văn Dũng', DATE '1958-11-02', 3, 95, DATE '2026-01-01', DATE '2026-12-31',
-     'Test facility', 'VALID'),
-    ('DN4790000000004', 'Phạm Thị Hoa', DATE '1990-05-18', 4, 80, DATE '2026-01-01', DATE '2026-12-31',
-     'Test facility', 'VALID');
+    ('0192a000-0018-7000-8000-000000000003', '9000000003', 'HT3799000000003', '079058000003', 'Lê Văn Dũng',
+     '19581102', 0, 1, '79', '760', '26734', '79014', 'Test facility',
+     DATE '2026-01-01', DATE '2026-12-31', 95, 1, '00'),
+    ('0192a000-0018-7000-8000-000000000004', '9000000004', 'DN4799000000004', '079190000004', 'Phạm Thị Hoa',
+     '19900518', 0, 2, '79', '760', '26734', '79014', 'Test facility',
+     DATE '2026-01-01', DATE '2026-12-31', 80, 1, '00');

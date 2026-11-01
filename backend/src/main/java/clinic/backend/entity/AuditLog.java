@@ -125,4 +125,27 @@ public class AuditLog extends UuidEntity {
         auditLog.correlationId = correlationId;
         return auditLog;
     }
+
+    public static AuditLog businessChange(
+            UUID id,
+            UUID actorAccountId,
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Instant occurredAt,
+            String newValue,
+            String correlationId) {
+        AuditLog auditLog = new AuditLog(id);
+        auditLog.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
+        auditLog.actorAccountId = Objects.requireNonNull(actorAccountId, "actorAccountId");
+        auditLog.action = Objects.requireNonNull(action, "action");
+        auditLog.entityType = Objects.requireNonNull(entityType, "entityType");
+        auditLog.entityId = Objects.requireNonNull(entityId, "entityId");
+        auditLog.sovaovien = sovaovien;
+        auditLog.outcome = AuditOutcome.SUCCESS;
+        auditLog.newValue = newValue;
+        auditLog.correlationId = correlationId;
+        return auditLog;
+    }
 }

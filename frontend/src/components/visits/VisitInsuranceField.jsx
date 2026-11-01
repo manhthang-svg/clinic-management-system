@@ -30,12 +30,16 @@ export function VisitInsuranceField({
   insurance,
   error,
   onVerify,
-  onRecordUnverified,
   onSwitchToSelfPaid,
 }) {
   const current = insurance.cardNumber === value ? insurance.status : null;
   const verifying = current === 'VERIFYING';
   const card = insurance.card;
+  const mismatchSummary = card
+    ? [card.identityNumber ? `CCCD ${card.identityNumber}` : null, card.fullName, formatDate(card.dateOfBirth)]
+        .filter(Boolean)
+        .join(', ')
+    : null;
 
   return (
     <div className="space-y-3">
@@ -44,7 +48,7 @@ export function VisitInsuranceField({
         label="Số thẻ BHYT"
         required
         error={error}
-        hint={`${CARD_NUMBER_LENGTH} ký tự, ký tự thứ 3 là mã quyền lợi từ 1 đến 5`}
+        hint="Mã BHXH 10 chữ số hoặc thẻ BHYT gồm 2 chữ in hoa và 13 chữ số"
       >
         <div className="flex gap-2.5">
           <input
@@ -52,7 +56,7 @@ export function VisitInsuranceField({
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, CARD_NUMBER_LENGTH))}
-            placeholder="VD: CC1790000000001"
+            placeholder="VD: 0000000104 hoặc HS4560000000104"
             autoComplete="off"
             aria-invalid={Boolean(error)}
             aria-describedby={error ? 'visit-card-number-error' : undefined}
@@ -80,6 +84,11 @@ export function VisitInsuranceField({
           {card?.primaryCareFacility && (
             <p className="text-xs">Nơi đăng ký KCB ban đầu: {card.primaryCareFacility}</p>
           )}
+          {card?.manualReviewRequired && (
+            <p className="text-xs font-semibold text-amber-700">
+              Cổng chưa có CCCD đồng bộ. Vui lòng đối chiếu thẻ BHYT/VssID với bệnh nhân trước khi tiếp tục.
+            </p>
+          )}
         </Panel>
       )}
 
@@ -88,7 +97,9 @@ export function VisitInsuranceField({
         <Panel
           tone="warning"
           icon={ShieldAlert}
-          title={`Thông tin thẻ BHYT (${card?.fullName ?? '—'}, ${formatDate(card?.dateOfBirth)}) không khớp với hồ sơ bệnh nhân. Vui lòng kiểm tra lại.`}
+          title={card
+            ? `Thông tin thẻ BHYT (${mismatchSummary}) không khớp với hồ sơ bệnh nhân. Vui lòng kiểm tra lại.`
+            : 'Thông tin thẻ BHYT không khớp với hồ sơ bệnh nhân. Vui lòng kiểm tra lại.'}
         >
           <p className="text-xs">Sửa lại số thẻ rồi xác minh lại, hoặc chuyển sang lượt khám dịch vụ.</p>
           <button type="button" onClick={onSwitchToSelfPaid} className={`${SMALL_BUTTON_CLASS} bg-white border border-amber-300 text-amber-800 hover:bg-amber-100`}>
@@ -104,22 +115,22 @@ export function VisitInsuranceField({
               <RefreshCw className="w-3.5 h-3.5" />
               Xác minh lại
             </button>
-            <button type="button" onClick={onRecordUnverified} className={`${SMALL_BUTTON_CLASS} bg-amber-600 text-white hover:bg-amber-700`}>
-              Ghi nhận thẻ chưa xác minh
+            <button type="button" onClick={onSwitchToSelfPaid} className={`${SMALL_BUTTON_CLASS} bg-amber-600 text-white hover:bg-amber-700`}>
+              Chuyển sang Tự trả
             </button>
           </div>
         </Panel>
       )}
 
-      {current === 'UNVERIFIED' && (
-        <Panel tone="warning" icon={ShieldQuestion} title="Thẻ BHYT chưa xác minh">
-          <p className="text-xs">Lượt khám vẫn là BHYT; thẻ sẽ được xác minh lại trước khi bệnh nhân thanh toán tại quầy thu ngân.</p>
+      {current === 'ERROR' && (
+        <Panel tone="warning" icon={ShieldAlert} title={insurance.errorMessage}>
           <button type="button" onClick={onVerify} className={`${SMALL_BUTTON_CLASS} bg-white border border-amber-300 text-amber-800 hover:bg-amber-100`}>
             <RefreshCw className="w-3.5 h-3.5" />
-            Xác minh lại
+            Thử lại
           </button>
         </Panel>
       )}
+
     </div>
   );
 }

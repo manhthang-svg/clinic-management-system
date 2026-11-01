@@ -12,8 +12,7 @@ function Count({ icon: Icon, label, value, tone }) {
 
 /**
  * UC-40 steps 8-9 with UC-42: active examination rooms and today's queue counts.
- * TBD: the rooms endpoint returns no department name or assigned doctors yet, so
- * rooms without a doctor cannot be greyed out (UC-42 AF-01).
+ * The backend only returns active examination rooms that have an active assigned doctor.
  */
 export function VisitRoomPicker({ rooms, counts, value, onChange, error, loading, loadError, onReload, suggestedRoomId }) {
   if (loading && rooms.length === 0) {

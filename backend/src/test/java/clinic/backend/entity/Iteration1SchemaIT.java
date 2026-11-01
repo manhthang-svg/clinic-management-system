@@ -18,7 +18,6 @@ import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PriceType;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
-import clinic.backend.enums.SimulatedInsuranceCardStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.StaffAccountRepository;
@@ -160,9 +159,11 @@ class Iteration1SchemaIT {
         assertThat(examination.getDepartmentId()).isNull();
         assertThat(examination.getTenchidinh()).isEqualTo("Khám bệnh");
 
-        SimulatedInsuranceCard card = entityManager.find(SimulatedInsuranceCard.class, "HT3790000000003");
+        HealthInsuranceRecord card = entityManager.find(
+                HealthInsuranceRecord.class, UUID.fromString("0192a000-0018-7000-8000-000000000003"));
+        assertThat(card.getIdentityNumber()).isEqualTo("079058000003");
         assertThat(card.getCoverageRate()).isEqualTo((short) 95);
-        assertThat(card.getStatus()).isEqualTo(SimulatedInsuranceCardStatus.VALID);
+        assertThat(card.getStatus()).isEqualTo((short) 1);
     }
 
     @Test

@@ -251,9 +251,10 @@ Table visits {
   priority_reason varchar(20) [note: 'ELDERLY or FRAIL_DISABLED; set exactly when priority (I1-D39)']
   reason_for_visit varchar(500) [not null]
   initial_symptoms varchar(1000)
-  insurance_card_number varchar(15) [note: 'Set exactly when visit_type = INSURANCE (I1-D18)']
-  insurance_benefit_code smallint [note: '1 to 5']
+  insurance_card_number varchar(15) [note: 'Submitted 10-digit social-insurance number or 15-character legacy card (I1-D18)']
+  insurance_social_number varchar(10) [note: 'Portal lookup key derived from the submitted value']
   insurance_expiry_date date
+  insurance_primary_facility_code varchar(5)
   insurance_coverage_rate smallint [note: 'Percent returned by the portal, 1 to 100 (I1-D18)']
   insurance_verified_at timestamptz [note: 'When UC-74 verified the card for this visit']
   status varchar(30) [not null, note: 'WAITING_FEE_PAYMENT, WAITING, SKIPPED, IN_EXAMINATION, WAITING_PARACLINICAL, WAITING_CONCLUSION, COMPLETED, CANCELLED, ABANDONED']
@@ -379,20 +380,26 @@ Table business_audit_events {
 
 // Simulated external system (UC-74)
 
-Table simulated_insurance_cards {
-  card_number varchar(15) [pk, not null, note: 'Natural key: the portal looks cards up by number']
-  full_name varchar(100) [not null]
-  date_of_birth date [not null]
-  benefit_code smallint [not null, note: '1 to 5']
-  coverage_rate smallint [not null, note: 'Percent 1 to 100, returned as-is to the visit (I1-D18)']
-  valid_from date [not null]
-  valid_to date [not null]
-  primary_care_facility text [not null]
-  status varchar(20) [not null, note: 'VALID or REVOKED']
+Table health_insurance_records {
+  id uuid [pk, not null]
+  ma_so_bhxh varchar(10) [not null, unique, note: 'Portal lookup key']
+  ma_the_bhyt varchar(15) [unique, note: '10 digits or two uppercase letters followed by 13 digits']
+  identity_number varchar(12) [unique, note: 'Optional synchronized CCCD; preferred for owner matching']
+  ho_ten varchar(100) [not null]
+  ngay_sinh varchar(8) [not null, note: 'yyyyMMdd; precision is carried by loai_ngay_sinh']
+  loai_ngay_sinh smallint [not null, note: '0 full date, 1 year only, 2 year and month']
+  gioi_tinh smallint [not null]
+  ma_cskcb_bd varchar(5) [not null]
+  ten_cskcb_bd varchar(255) [not null]
+  gt_the_tu date [not null]
+  gt_the_den date [not null]
+  ti_le_huong smallint [not null, note: 'Portal-provided percent 1 to 100']
+  trang_thai smallint [not null, note: '1 active, 0 suspended/revoked']
+  error_code varchar(5) [not null, note: '00 valid, 01 expired, 02 revoked']
 
   Note: '''
-    Stands in for the insurance portal (I1-D38). Read only by the simulator adapter, never by domain code; no foreign keys to or from domain tables.
-    Demo rows come from the development seed.
+    Stands in for the insurance portal (I1-D38). Read only through the portal adapter.
+    Deterministic simulator rows are seeded by shared Flyway migrations.
   '''
 }
 
@@ -441,10 +448,10 @@ Note implementation_requirements {
     3. Use application-generated UUIDv7 values; do not use database identity columns. Business codes use sequences
        patient_code_seq, registration_code_seq, invoice_number_seq.
     4. Money is numeric(15,0), whole VND (I1-D22, I1-D22a).
-    5. Production migrations contain no business reference data. The application bundles no development seed;
-       integration-test fixtures live under test resources only (I1-D01, I1-D03).
+    5. Deterministic simulated-insurance data is seeded by shared Flyway migrations; integration-test fixtures may
+       replace it with test-specific rows.
     6. payment_items uses RESTRICT, not CASCADE: payments are never deleted (R3 §IV.2.3 No data deletion).
     7. Amounts follow the Money Calculation section of docs/iteration-1-decisions.md; the database checks that each line reconciles.
-    8. simulated_insurance_cards is outside the domain model (I1-D38).
+    8. health_insurance_records represents the simulated external portal and has no domain foreign keys (I1-D38).
   '''
 }

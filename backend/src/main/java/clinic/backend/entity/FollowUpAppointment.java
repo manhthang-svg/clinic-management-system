@@ -64,4 +64,25 @@ public class FollowUpAppointment extends VersionedEntity {
 
     @Column(name = "created_by_account_id", nullable = false)
     private UUID createdByAccountId;
+
+    public void markArrived(UUID visitId, Instant now) {
+        if (status != FollowUpAppointmentStatus.SCHEDULED) {
+            throw new IllegalStateException("Follow-up appointment is no longer scheduled");
+        }
+        status = FollowUpAppointmentStatus.ARRIVED;
+        arrivedVisitId = visitId;
+        touch(now);
+    }
+
+    public void cancel(String reason, Instant now) {
+        if (status != FollowUpAppointmentStatus.SCHEDULED) {
+            throw new IllegalStateException("Follow-up appointment is no longer scheduled");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Cancellation reason is required");
+        }
+        status = FollowUpAppointmentStatus.CANCELLED;
+        cancelReason = reason.strip();
+        touch(now);
+    }
 }

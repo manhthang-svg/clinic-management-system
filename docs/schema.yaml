@@ -2408,8 +2408,18 @@ tables:
         appendix:
         - I.25
         standard: Có – I.25 (BHXH VN)
-        description: Mã thẻ BHYT dùng cho lượt này
+        description: Mã BHXH 10 số hoặc thẻ BHYT 15 ký tự được nhập cho lượt này
         note: Field theo chuẩn/Phụ lục
+      insurance_social_number:
+        field: insuranceSocialNumber
+        sql_type: varchar(10)
+        base_type: varchar
+        length: 10
+        nullable: true
+        java_type: String
+        proposal: keep
+        standard: Không
+        description: Mã BHXH 10 số dùng để tra cứu portal
       tungaybhyt:
         field: tungaybhyt
         sql_type: date
@@ -2445,6 +2455,16 @@ tables:
         standard: Có – mã cơ sở KCB BHXH
         description: Nơi đăng ký KCB ban đầu
         note: Cần nếu có khám BHYT (xác định đúng/trái tuyến)
+      insurance_primary_facility_code:
+        field: insurancePrimaryFacilityCode
+        sql_type: varchar(5)
+        base_type: varchar
+        length: 5
+        nullable: true
+        java_type: String
+        proposal: keep
+        standard: Không
+        description: Mã cơ sở KCB ban đầu do portal trả về
       insurance_benefit_code:
         field: insuranceBenefitCode
         sql_type: smallint
@@ -2453,7 +2473,7 @@ tables:
         java_type: Short
         proposal: keep
         standard: Không
-        description: Mã mức hưởng 1–5
+        description: Cột tương thích cũ; UC-74 sửa đổi không sử dụng
       insurance_coverage_rate:
         field: insuranceCoverageRate
         sql_type: smallint
@@ -6882,111 +6902,127 @@ tables:
         proposal: keep
         standard: Không
         description: Thời điểm lưu trữ
-  simulated_insurance_cards:
+  health_insurance_records:
     number: 38
-    name: simulated_insurance_cards
-    entity: SimulatedInsuranceCard
-    label: Thẻ BHYT mô phỏng
+    name: health_insurance_records
+    entity: HealthInsuranceRecord
+    label: Hồ sơ BHXH mô phỏng
     source_tag: GIỮ TỪ CODE HIỆN TẠI
     proposal: Giữ
-    proposal_note: Mô phỏng cổng BHYT; bỏ khi nối cổng thật
-    description: Thay cổng giám định BHYT (I1-D38). Không có FK với bảng nghiệp vụ.
+    proposal_note: Mô phỏng cổng BHXH theo UC-74 sửa đổi; bỏ khi nối cổng thật
+    description: Tra cứu bằng mã BHXH 10 số; không có FK với bảng nghiệp vụ.
     append_only: false
     primary_key:
-    - card_number
+    - id
     columns:
-      card_number:
+      id:
+        field: id
+        sql_type: uuid
+        base_type: uuid
+        nullable: false
+        primary_key: true
+        java_type: UUID
+        description: ID bản ghi mô phỏng
+      ma_so_bhxh:
+        field: socialInsuranceNumber
+        sql_type: varchar(10)
+        base_type: varchar
+        length: 10
+        nullable: false
+        unique: true
+        java_type: String
+        description: Mã BHXH 10 số dùng để tra cứu
+      ma_the_bhyt:
         field: cardNumber
         sql_type: varchar(15)
         base_type: varchar
         length: 15
-        nullable: false
-        primary_key: true
+        nullable: true
+        unique: true
         java_type: String
-        proposal: keep
-        standard: Không
-        description: Số thẻ (khóa tự nhiên)
-      full_name:
+        description: Mã 10 số hoặc thẻ cũ 15 ký tự
+      identity_number:
+        field: identityNumber
+        sql_type: varchar(12)
+        base_type: varchar
+        length: 12
+        nullable: true
+        unique: true
+        java_type: String
+        description: CCCD do cổng mô phỏng trả về nếu đã đồng bộ; ưu tiên để đối chiếu chủ thẻ
+      ho_ten:
         field: fullName
         sql_type: varchar(100)
         base_type: varchar
         length: 100
         nullable: false
         java_type: String
-        proposal: keep
-        standard: Không
-        description: Họ tên trên thẻ
-      date_of_birth:
+      ngay_sinh:
         field: dateOfBirth
-        sql_type: date
-        base_type: date
+        sql_type: varchar(8)
+        base_type: varchar
+        length: 8
         nullable: false
-        java_type: LocalDate
-        proposal: keep
-        standard: Không
-        description: Ngày sinh
-      benefit_code:
-        field: benefitCode
+        java_type: String
+        description: yyyyMMdd
+      loai_ngay_sinh:
+        field: dateOfBirthType
         sql_type: smallint
         base_type: smallint
         nullable: false
         java_type: Short
-        proposal: keep
-        standard: Không
-        description: Mức hưởng 1–5
-      coverage_rate:
-        field: coverageRate
+        description: 0 đủ ngày, 1 chỉ năm, 2 tháng và năm
+      gioi_tinh:
+        field: gender
         sql_type: smallint
         base_type: smallint
         nullable: false
         java_type: Short
-        proposal: keep
-        standard: Không
-        description: Tỷ lệ hưởng %
-      valid_from:
+      ma_cskcb_bd:
+        field: primaryCareFacilityCode
+        sql_type: varchar(5)
+        base_type: varchar
+        length: 5
+        nullable: false
+        java_type: String
+      ten_cskcb_bd:
+        field: primaryCareFacilityName
+        sql_type: varchar(255)
+        base_type: varchar
+        length: 255
+        nullable: false
+        java_type: String
+      gt_the_tu:
         field: validFrom
         sql_type: date
         base_type: date
         nullable: false
         java_type: LocalDate
-        proposal: keep
-        standard: Không
-        description: Hạn từ
-      valid_to:
+      gt_the_den:
         field: validTo
         sql_type: date
         base_type: date
         nullable: false
         java_type: LocalDate
-        proposal: keep
-        standard: Không
-        description: Hạn đến
-      primary_care_facility:
-        field: primaryCareFacility
-        sql_type: text
-        base_type: text
+      ti_le_huong:
+        field: coverageRate
+        sql_type: smallint
+        base_type: smallint
+        nullable: false
+        java_type: Short
+      trang_thai:
+        field: status
+        sql_type: smallint
+        base_type: smallint
+        nullable: false
+        java_type: Short
+      error_code:
+        field: resultCode
+        sql_type: varchar(5)
+        base_type: varchar
+        length: 5
         nullable: false
         java_type: String
-        proposal: keep
-        standard: Không
-        description: Nơi đăng ký KCB ban đầu
-      status:
-        field: status
-        sql_type: varchar(20)
-        base_type: varchar
-        length: 20
-        nullable: false
-        java_type: SimulatedInsuranceCardStatus
-        enumerated: STRING
-        enum_name: SimulatedInsuranceCardStatus
-        enum_values:
-        - VALID
-        - REVOKED
-        checks:
-        - (status IN ('VALID', 'REVOKED'))
-        proposal: keep
-        standard: Không
-        description: VALID / REVOKED
   clinic_facility:
     number: 39
     name: clinic_facility

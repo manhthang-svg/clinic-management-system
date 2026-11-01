@@ -108,6 +108,39 @@ public class PaymentItem extends CreatedOnlyEntity {
         return item;
     }
 
+    public static PaymentItem createInsuranceItem(
+            UUID id,
+            Instant createdAt,
+            Payment payment,
+            MedicalService service,
+            short coverageRate
+    ) {
+        if (id == null || createdAt == null || payment == null || service == null
+                || coverageRate < 1 || coverageRate > 100 || service.getInsurancePrice() == null) {
+            throw new IllegalArgumentException("Thông tin chi tiết BHYT không hợp lệ");
+        }
+
+        BigDecimal appliedPrice = service.getInsurancePrice();
+        BigDecimal insuranceAmount = appliedPrice
+                .multiply(BigDecimal.valueOf(coverageRate))
+                .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP);
+
+        PaymentItem item = new PaymentItem(id, createdAt);
+        item.payment = payment;
+        item.serviceId = service.getId();
+        item.serviceCodeSnapshot = service.getCode();
+        item.tenchidinh = service.getTenchidinh();
+        item.soluong = BigDecimal.ONE;
+        item.priceType = PriceType.INSURANCE;
+        item.dongia = appliedPrice;
+        item.coverageRate = coverageRate;
+        item.thanhtien = appliedPrice;
+        item.bhytChitra = insuranceAmount;
+        item.benhnhanphaitra = appliedPrice.subtract(insuranceAmount);
+        item.isCancelled = false;
+        return item;
+    }
+
     public static PaymentItem createParaclinicalItem(
             UUID id,
             Instant createdAt,

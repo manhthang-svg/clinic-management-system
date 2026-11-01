@@ -3,7 +3,7 @@ import { ApiError } from '../../apis/apiError';
 // Message texts follow the SRS message list (MSG12, MSG17, MSG20, MSG22, MSG56, MSG99).
 export const MSG12 = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
 export const MSG17 = 'Thẻ BHYT không hợp lệ hoặc đã hết hạn. Lượt khám sẽ được đăng ký dạng Dịch vụ.';
-export const MSG20 = 'Không kết nối được cổng BHYT. Vui lòng xác minh lại hoặc ghi nhận thẻ chưa xác minh.';
+export const MSG20 = 'Cổng BHYT không trả lời trong 10 giây. Vui lòng thử lại hoặc chuyển sang Tự trả.';
 export const MSG99 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 // ASSUMPTION: MSG91 is not in the SRS message list available in docs/.
 export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt khám khác. Thông tin lịch hẹn đã được tải lại.';
@@ -30,6 +30,7 @@ function isNetworkError(error) {
 const ACTIVE_VISIT_CODES = ['ACTIVE_VISIT_EXISTS'];
 const ROOM_CODES = ['ROOM_NOT_AVAILABLE', 'ROOM_NOT_ACTIVE', 'ROOM_HAS_NO_DOCTOR'];
 const APPOINTMENT_CODES = ['FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED'];
+const INSURANCE_CODES = ['INSURANCE_CARD_INVALID'];
 
 /**
  * Classifies a failed POST /visits:
@@ -40,6 +41,7 @@ export function visitCreateError(error) {
   if (ACTIVE_VISIT_CODES.includes(code)) return { kind: 'activeVisit' };
   if (ROOM_CODES.includes(code)) return { kind: 'room' };
   if (APPOINTMENT_CODES.includes(code)) return { kind: 'appointment', message: MSG91 };
+  if (INSURANCE_CODES.includes(code)) return { kind: 'insurance', message: MSG17 };
   if (code === 'UNAUTHORIZED' || error?.status === 401) return { kind: 'session', message: MSG12 };
   if (isNetworkError(error)) return { kind: 'system', message: NETWORK_MESSAGE };
   return { kind: 'system', message: MSG99 };
@@ -48,9 +50,10 @@ export function visitCreateError(error) {
 // ASSUMPTION: card-not-valid codes of the proposed verification endpoint.
 const INVALID_CARD_CODES = ['INSURANCE_CARD_NOT_FOUND', 'INSURANCE_CARD_INVALID', 'INSURANCE_CARD_EXPIRED'];
 
-/** 'invalid' (AF-02, MSG17) or 'unavailable' (AF-03, MSG20) for a failed verification. */
+/** Classifies a non-timeout failure from POST /insurance/verifications. */
 export function insuranceErrorKind(error) {
-  return INVALID_CARD_CODES.includes(codeOf(error)) ? 'invalid' : 'unavailable';
+  if (codeOf(error) === 'INSURANCE_PATIENT_MISMATCH') return 'mismatch';
+  return INVALID_CARD_CODES.includes(codeOf(error)) ? 'invalid' : 'system';
 }
 
 export function loadErrorMessage(error) {

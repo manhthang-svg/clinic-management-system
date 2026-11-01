@@ -16,9 +16,8 @@ function Row({ label, children }) {
 
 function FeeSummary({ fee, loading }) {
   if (loading) return <p role="status" className="text-sm text-slate-400">Đang tính phí khám…</p>;
-  // TBD: fee preview endpoint; until it exists the receipt amount is known only after creation.
   if (!fee) {
-    return <p className="text-sm text-slate-500">Phí khám sẽ được tính theo bảng giá hiện hành khi tạo lượt khám.</p>;
+    return <p role="alert" className="text-sm text-rose-600">Không tải được phí khám. Vui lòng quay lại và thử lại.</p>;
   }
   return (
     <dl className="grid grid-cols-3 gap-3">
@@ -76,6 +75,7 @@ export function VisitConfirmModal({
             <ClipboardCheck className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#127e7a]">Bước 2/2</p>
             <h2 id="visit-confirm-title" className="text-base! leading-6! font-bold! text-[#1b2533]">Xác nhận đăng ký khám</h2>
             <p className="text-xs text-slate-500 mt-0.5">Kiểm tra lại thông tin cùng bệnh nhân trước khi đăng ký</p>
           </div>
@@ -150,7 +150,7 @@ export function VisitConfirmModal({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={submitting}
+              disabled={submitting || feeLoading || !fee}
               className="px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {submitting ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}

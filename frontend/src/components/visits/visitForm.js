@@ -14,6 +14,7 @@ export const EMPTY_VISIT_FORM = {
   roomId: '',
   // Set when the receptionist attaches a follow-up appointment (AF-04).
   followUpAppointmentId: null,
+  followUpAppointmentVersion: null,
 };
 
 // No insurance check has run for the current card number.
@@ -32,24 +33,16 @@ export function daysBetween(from, to) {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 }
 
-/** UC-74 step 1: exactly 15 characters, benefit code (3rd character) from 1 to 5. */
+/** BR-50: a 10-digit social-insurance number or a 15-character legacy card number. */
 export function isCardNumberFormatValid(cardNumber) {
-  return cardNumber.length === CARD_NUMBER_LENGTH && /^[A-Z0-9]+$/.test(cardNumber) && /[1-5]/.test(cardNumber[2]);
+  return /^(?:\d{10}|[A-Z]{2}\d{13})$/.test(cardNumber);
 }
 
-/** UC-74 step 6: coverage rate from the benefit code. */
-export function coverageRateOf(card) {
-  if (typeof card?.coverageRate === 'number') return card.coverageRate;
-  const code = String(card?.benefitCode ?? '');
-  if (['1', '2', '5'].includes(code)) return 100;
-  if (code === '3') return 95;
-  if (code === '4') return 80;
-  return null;
-}
+export const coverageRateOf = (card) => typeof card?.coverageRate === 'number' ? card.coverageRate : null;
 
-/** The card was verified, or recorded as unverified (AF-03), for the number now in the field. */
+/** The current code has a successful portal verification. */
 export function isInsuranceSettled(form, insurance) {
-  return insurance.cardNumber === form.cardNumber && (insurance.status === 'VALID' || insurance.status === 'UNVERIFIED');
+  return insurance.cardNumber === form.cardNumber && insurance.status === 'VALID';
 }
 
 export function validateVisitForm(form, insurance) {
@@ -86,8 +79,7 @@ export function formToVisitRequest(form, patientId, insurance) {
     noigioithieuLoai: form.referralSource,
     isPriority: form.isPriority,
     priorityReason: form.isPriority ? form.priorityReason : null,
-    // ASSUMPTION: not in CreateVisitRequest yet; needed for AF-03 (BR-45) and AF-04 (BR-34).
-    insuranceVerified: insured ? insurance.status === 'VALID' : null,
     followUpAppointmentId: form.followUpAppointmentId,
+    followUpAppointmentVersion: form.followUpAppointmentVersion,
   };
 }
