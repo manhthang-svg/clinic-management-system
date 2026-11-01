@@ -1,4 +1,4 @@
-import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, UserCheck, DoorOpen } from 'lucide-react';
+import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, DoorOpen } from 'lucide-react';
 
 const ACTION_CLASS =
   'w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center transition-colors cursor-pointer';
@@ -40,7 +40,6 @@ export function DepartmentTable({
               <th className="px-4 py-3.5">Mã khoa</th>
               <th className="px-3 py-3.5">Tên chuyên khoa</th>
               <th className="px-3 py-3.5">Phân loại</th>
-              <th className="px-3 py-3.5">Trưởng khoa</th>
               <th className="px-3 py-3.5">Phòng trực thuộc</th>
               <th className="px-3 py-3.5">Trạng thái</th>
               <th className="px-4 py-3.5 text-center">Thao tác</th>
@@ -49,7 +48,7 @@ export function DepartmentTable({
           <tbody className="divide-y divide-slate-100 text-[11px]">
             {items.length === 0 ? (
               <tr>
-                <td colSpan="7" className="p-10 text-center text-slate-400">
+                <td colSpan="6" className="p-10 text-center text-slate-400">
                   Không tìm thấy chuyên khoa nào phù hợp với điều kiện lọc.
                 </td>
               </tr>
@@ -58,8 +57,6 @@ export function DepartmentTable({
                 const isActive = dept.status === 'ACTIVE';
                 const isClinical =
                   dept.type === 'CLINICAL' ||
-                  dept.code === 'DEMO-NOI' ||
-                  dept.code === 'DEMO-NGOAI' ||
                   dept.name?.toLowerCase().includes('nội') ||
                   dept.name?.toLowerCase().includes('ngoại');
 
@@ -103,14 +100,6 @@ export function DepartmentTable({
                           Cận lâm sàng
                         </span>
                       )}
-                    </td>
-
-                    {/* Trưởng khoa */}
-                    <td className="px-3 py-3 text-slate-700 font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{dept.headPerson || 'Chưa bổ nhiệm'}</span>
-                      </div>
                     </td>
 
                     {/* Số lượng phòng trực thuộc (Link tương tác được) */}

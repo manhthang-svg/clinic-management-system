@@ -10,11 +10,14 @@ import {
   ChevronDown,
   Trash2,
 } from 'lucide-react';
-import {
-  getServicesForRoom,
-  getAvailableServicesForDepartment,
-} from '../../constants/serviceData';
+import { useDepartmentServices } from '../../hooks';
+import { describeApiError } from '../../utils/describeApiError';
 import { formatPrice } from '../services/serviceFormat';
+import { apiClient } from '../../services/session';
+import { createServiceApi } from '../../apis/serviceApi';
+import { SERVICE_GROUP_TYPES } from '../../constants/serviceData';
+
+const serviceApi = createServiceApi(apiClient);
 
 const INPUT_CLASS =
   'w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400';
@@ -22,24 +25,93 @@ const INPUT_CLASS =
 const SELECT_CLASS =
   'w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400';
 
+function getDepartmentCategory(dept) {
+  if (!dept) return 'CLINICAL';
+  if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
+  const name = (dept.name || dept.tenkhoa || '').toLowerCase();
+  if (
+    name.includes('chẩn đoán') ||
+    name.includes('xét nghiệm') ||
+    name.includes('hình ảnh') ||
+    name.includes('thăm dò') ||
+    name.includes('nội soi') ||
+    name.includes('huyết học') ||
+    name.includes('sinh hóa') ||
+    name.includes('vi sinh')
+  ) {
+    return 'PARACLINICAL';
+  }
+  return 'CLINICAL';
+}
+
+function getParaclinicalDepartmentType(dept) {
+  if (!dept) return null;
+  const code = (dept.code || dept.departmentCode || dept.makhoa || '').toUpperCase();
+  const name = (dept.name || dept.departmentName || dept.tenkhoa || '').toLowerCase();
+
+  // LAB: Khoa Xét nghiệm (Huyết học, Sinh hóa, Vi sinh)
+  if (
+    code.includes('XN') ||
+    code.includes('LAB') ||
+    name.includes('xét nghiệm') ||
+    name.includes('huyết học') ||
+    name.includes('sinh hóa') ||
+    name.includes('vi sinh')
+  ) {
+    return 'LAB';
+  }
+
+  // IMAGING: Khoa Chẩn đoán hình ảnh (CT, MRI, X-quang, Siêu âm)
+  if (
+    code.includes('CDHA') ||
+    code.includes('IMAGE') ||
+    code.includes('IMAGING') ||
+    code.includes('XQ') ||
+    name.includes('chẩn đoán') ||
+    name.includes('hình ảnh') ||
+    name.includes('x-quang') ||
+    name.includes('siêu âm')
+  ) {
+    return 'IMAGING';
+  }
+
+  // FUNCTIONAL: Khoa Thăm dò chức năng (Nội soi, Điện tim)
+  if (
+    code.includes('TDCN') ||
+    code.includes('FUNC') ||
+    name.includes('thăm dò') ||
+    name.includes('chức năng') ||
+    name.includes('nội soi') ||
+    name.includes('điện tim')
+  ) {
+    return 'FUNCTIONAL';
+  }
+
+  return null;
+}
+
 function buildInitialForm({ initialData, departments, isRoom }) {
   if (initialData) {
     return {
       code: initialData.code || '',
       name: initialData.name || '',
       departmentId: initialData.departmentId || (departments[0]?.id || ''),
-      type: initialData.type || (isRoom ? 'EXAMINATION' : 'CLINICAL'),
+      serviceGroupId: initialData.serviceGroupId || '',
+      type: initialData.type || (isRoom ? '' : 'CLINICAL'),
       location: initialData.location || '',
       headPerson: initialData.headPerson || '',
       description: initialData.description || '',
       status: initialData.status || 'ACTIVE',
     };
   }
+
+  // Khi THÊM MỚI PHÒNG: mặc định là chưa chọn loại phòng ('')
   return {
     code: '',
     name: '',
-    departmentId: departments[0]?.id || '',
-    type: isRoom ? 'EXAMINATION' : 'CLINICAL',
+    departmentId: '',
+    serviceGroupId: '',
+    type: isRoom ? '' : 'CLINICAL',
     location: '',
     headPerson: '',
     description: '',
@@ -79,55 +151,164 @@ function DepartmentFormModalContent({
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  // Danh sách dịch vụ được gán cho phòng
-  const [assignedServices, setAssignedServices] = useState(() => {
+  // Danh sách các nhóm dịch vụ kỹ thuật (service_groups) từ backend
+  const [serviceGroups, setServiceGroups] = useState([]);
+  useEffect(() => {
+    let isMounted = true;
+    serviceApi.formOptions()
+      .then((data) => {
+        if (isMounted && Array.isArray(data?.serviceGroups)) {
+          setServiceGroups(data.serviceGroups);
+        }
+      })
+      .catch((err) => {
+        console.error('Không thể tải nhóm dịch vụ:', err);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Lấy dịch vụ thật từ backend theo đúng loại phòng và nhóm dịch vụ (không dùng mock)
+  const { services: deptServices, loading: deptServicesLoading, error: deptServicesError } =
+    useDepartmentServices(
+      isRoom
+        ? {
+            departmentId: formData.departmentId || null,
+            serviceGroupId: formData.serviceGroupId || null,
+            roomType: formData.type || 'EXAMINATION',
+          }
+        : null
+    );
+
+  // Danh sách dịch vụ tùy chỉnh do người dùng thao tác (thêm/xóa)
+  const [customServices, setCustomServices] = useState(null);
+
+  // Danh sách dịch vụ được gán cho phòng:
+  // 1. Nếu người dùng đã tự sửa (thêm/bớt) -> dùng customServices
+  // 2. Nếu có sẵn trong initialData -> dùng initialData.assignedServices
+  // 3. Nếu là chế độ EDIT phòng -> tự động lấy theo deptServices tải từ backend
+  // 4. Mặc định là []
+  const assignedServices = useMemo(() => {
     if (!isRoom) return [];
-    if (initialData) {
-      return getServicesForRoom(initialData);
+    if (customServices !== null) return customServices;
+    if (Array.isArray(initialData?.assignedServices) && initialData.assignedServices.length > 0) {
+      return initialData.assignedServices;
     }
-    // Khi tạo phòng mới: ban đầu chưa gán dịch vụ nào
+    if (isEdit && Array.isArray(deptServices) && deptServices.length > 0) {
+      return deptServices;
+    }
     return [];
-  });
+  }, [isRoom, customServices, initialData?.assignedServices, isEdit, deptServices]);
+
+  // Nhóm dịch vụ kỹ thuật: nếu ban đầu null nhưng dịch vụ hiện tại có nhóm, tự động suy luận
+  const effectiveServiceGroupId = useMemo(() => {
+    if (formData.serviceGroupId) return formData.serviceGroupId;
+    if (isEdit && isRoom && formData.type === 'PARACLINICAL') {
+      const fromServices = assignedServices[0]?.serviceGroupId || deptServices[0]?.serviceGroupId;
+      if (fromServices) return fromServices;
+    }
+    return '';
+  }, [formData.serviceGroupId, isEdit, isRoom, formData.type, assignedServices, deptServices]);
 
   // State các mã dịch vụ được tick tạm thời trong dropdown
-  const [selectedCodes, setSelectedCodes] = useState(() => {
+  const [customSelectedCodes, setCustomSelectedCodes] = useState(null);
+  const selectedCodes = useMemo(() => {
     if (!isRoom) return new Set();
-    if (initialData) {
-      const init = getServicesForRoom(initialData);
-      return new Set(init.map((s) => s.code));
-    }
-    return new Set();
-  });
+    if (customSelectedCodes !== null) return customSelectedCodes;
+    return new Set(assignedServices.map((s) => s.code));
+  }, [isRoom, customSelectedCodes, assignedServices]);
 
   // State tìm kiếm dịch vụ
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Đóng dropdown khi click ra ngoài ô chọn và khôi phục tick theo assignedServices
+  // Đóng dropdown khi click ra ngoài ô chọn
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setServiceDropdownOpen(false);
-        setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+        setCustomSelectedCodes(null);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [assignedServices]);
+  }, []);
 
   // Khoa hiện tại mà phòng trực thuộc
   const currentDeptObj = useMemo(() => {
     return departments.find((d) => d.id === formData.departmentId) || null;
   }, [departments, formData.departmentId]);
 
-  // Toàn bộ dịch vụ thuộc Chuyên khoa đã chọn
-  const deptServices = useMemo(() => {
-    if (!isRoom) return [];
-    return getAvailableServicesForDepartment(currentDeptObj);
-  }, [isRoom, currentDeptObj]);
+  // Hiển thị đầy đủ cả Khoa lâm sàng và Khoa cận lâm sàng trong danh sách chọn
+  const clinicalDepartments = useMemo(() => {
+    return departments.filter((d) => getDepartmentCategory(d) === 'CLINICAL');
+  }, [departments]);
+
+  const paraclinicalDepartments = useMemo(() => {
+    return departments.filter((d) => getDepartmentCategory(d) === 'PARACLINICAL');
+  }, [departments]);
+
+  // Lọc nhóm dịch vụ kỹ thuật tương ứng chính xác với Chuyên khoa cận lâm sàng đang chọn
+  const filteredServiceGroups = useMemo(() => {
+    if (!formData.departmentId) return [];
+    const selectedDept = departments.find((d) => d.id === formData.departmentId);
+    if (!selectedDept) return serviceGroups;
+
+    const deptType = getParaclinicalDepartmentType(selectedDept);
+    if (!deptType) return serviceGroups;
+
+    const matched = serviceGroups.filter((g) => {
+      // 1. Kiểm tra trường type từ API backend (LAB, IMAGING, FUNCTIONAL)
+      if (g.type && String(g.type).toUpperCase() === deptType) return true;
+      // 2. Kiểm tra theo bảng mapping mã code nhóm (HEMATOLOGY -> LAB, ...)
+      const groupCodeType = SERVICE_GROUP_TYPES[g.code];
+      if (groupCodeType && groupCodeType === deptType) return true;
+      // 3. Fallback theo tên nhóm
+      const groupName = (g.name || '').toLowerCase();
+      if (deptType === 'LAB') {
+        return (
+          groupName.includes('huyết học') ||
+          groupName.includes('sinh hóa') ||
+          groupName.includes('vi sinh') ||
+          groupName.includes('xét nghiệm')
+        );
+      }
+      if (deptType === 'IMAGING') {
+        return (
+          groupName.includes('cắt lớp') ||
+          groupName.includes('cộng hưởng') ||
+          groupName.includes('x-quang') ||
+          groupName.includes('siêu âm') ||
+          groupName.includes('hình ảnh')
+        );
+      }
+      if (deptType === 'FUNCTIONAL') {
+        return (
+          groupName.includes('nội soi') ||
+          groupName.includes('điện tim') ||
+          groupName.includes('thăm dò')
+        );
+      }
+      return false;
+    });
+
+    // Khi edit, nếu phòng đã có nhóm kỹ thuật mà không nằm trong danh sách lọc thì vẫn bảo toàn
+    if (isEdit && effectiveServiceGroupId) {
+      const current = serviceGroups.find((g) => g.id === effectiveServiceGroupId);
+      if (current && !matched.some((g) => g.id === current.id)) {
+        return [current, ...matched];
+      }
+    }
+
+    return matched;
+  }, [departments, formData.departmentId, serviceGroups, isEdit, effectiveServiceGroupId]);
+
+  // Nhóm dịch vụ kỹ thuật hiện tại của phòng cận lâm sàng
+  const currentGroupObj = useMemo(() => {
+    return serviceGroups.find((g) => g.id === effectiveServiceGroupId) || null;
+  }, [serviceGroups, effectiveServiceGroupId]);
 
   // Danh sách dịch vụ lọc theo từ khóa tìm kiếm
   const filteredDeptServices = useMemo(() => {
@@ -135,40 +316,117 @@ function DepartmentFormModalContent({
     if (!term) return deptServices;
     return deptServices.filter(
       (s) =>
-        s.code.toLowerCase().includes(term) ||
-        s.name.toLowerCase().includes(term)
+        s.code?.toLowerCase().includes(term) ||
+        s.name?.toLowerCase().includes(term)
     );
   }, [deptServices, serviceSearchQuery]);
 
+  // Xử lý đổi chuyên khoa trực thuộc -> tự động cập nhật loại phòng theo chuyên khoa đã chọn
+  const handleDepartmentChange = (deptId) => {
+    if (isEdit) return; // Không được sửa chuyên khoa khi edit
+    if (!deptId) {
+      setFormData((prev) => ({
+        ...prev,
+        departmentId: '',
+        type: '',
+        serviceGroupId: '',
+      }));
+      setCustomServices([]);
+      setCustomSelectedCodes(new Set());
+      return;
+    }
+
+    const selectedDept = departments.find((d) => d.id === deptId);
+    const category = getDepartmentCategory(selectedDept);
+
+    if (category === 'PARACLINICAL') {
+      setFormData((prev) => ({
+        ...prev,
+        departmentId: deptId,
+        type: 'PARACLINICAL',
+        serviceGroupId: '', // Reset nhóm kỹ thuật để chọn đúng nhóm của chuyên khoa này
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        departmentId: deptId,
+        type: 'EXAMINATION',
+        serviceGroupId: '',
+      }));
+    }
+    setCustomServices([]);
+    setCustomSelectedCodes(new Set());
+    if (errors.departmentId || errors.type || errors.serviceGroupId) {
+      setErrors((prev) => ({ ...prev, departmentId: null, type: null, serviceGroupId: null }));
+    }
+  };
+
+  // Xử lý đổi loại phòng -> kiểm tra tính tương thích với chuyên khoa
+  const handleRoomTypeChange = (newType) => {
+    if (isEdit) return; // Không được sửa loại phòng khi edit
+
+    if (!newType) {
+      setFormData((prev) => ({
+        ...prev,
+        type: '',
+        serviceGroupId: '',
+      }));
+      setCustomServices([]);
+      setCustomSelectedCodes(new Set());
+      return;
+    }
+
+    const currentDept = departments.find((d) => d.id === formData.departmentId);
+    const currentCategory = currentDept ? getDepartmentCategory(currentDept) : null;
+
+    let targetDeptId = formData.departmentId;
+    // Nếu loại phòng chọn không tương thích với khoa hiện tại thì reset để người dùng chọn lại từ danh mục đầy đủ
+    if (newType === 'EXAMINATION' && currentCategory === 'PARACLINICAL') {
+      targetDeptId = '';
+    } else if (newType === 'PARACLINICAL' && currentCategory === 'CLINICAL') {
+      targetDeptId = '';
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      type: newType,
+      departmentId: targetDeptId,
+      serviceGroupId: newType === 'PARACLINICAL' ? prev.serviceGroupId : '',
+    }));
+    setCustomServices([]);
+    setCustomSelectedCodes(new Set());
+    if (errors.type) {
+      setErrors((prev) => ({ ...prev, type: null }));
+    }
+  };
+
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'type' && value !== 'PARACLINICAL') {
+        next.serviceGroupId = '';
+      }
+      return next;
+    });
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
-    // Nếu đổi chuyên khoa trực thuộc -> lọc bỏ các dịch vụ không còn phù hợp với khoa mới
-    if (field === 'departmentId') {
-      const selectedDept = departments.find((d) => d.id === value);
-      const newDeptServices = getAvailableServicesForDepartment(selectedDept);
-      const allowedCodes = new Set(newDeptServices.map((s) => s.code));
-      setAssignedServices((prev) => prev.filter((s) => allowedCodes.has(s.code)));
-      setSelectedCodes((prev) => {
-        const next = new Set();
-        prev.forEach((c) => {
-          if (allowedCodes.has(c)) next.add(c);
-        });
-        return next;
-      });
+    // Nếu đổi nhóm kỹ thuật -> reset danh sách dịch vụ đã chọn
+    if (field === 'serviceGroupId') {
+      setCustomServices([]);
+      setCustomSelectedCodes(new Set());
     }
   };
 
   const handleOpenDropdown = () => {
-    setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+    setCustomSelectedCodes(new Set(assignedServices.map((s) => s.code)));
     setServiceDropdownOpen(true);
   };
 
   const handleToggleService = (serviceCode) => {
-    setSelectedCodes((prev) => {
-      const next = new Set(prev);
+    setCustomSelectedCodes((prev) => {
+      const base = prev !== null ? prev : new Set(assignedServices.map((s) => s.code));
+      const next = new Set(base);
       if (next.has(serviceCode)) {
         next.delete(serviceCode);
       } else {
@@ -180,10 +438,14 @@ function DepartmentFormModalContent({
 
   const handleToggleAll = () => {
     const displayedCodes = filteredDeptServices.map((s) => s.code);
-    const allChecked = displayedCodes.every((c) => selectedCodes.has(c));
+    const base =
+      customSelectedCodes !== null
+        ? customSelectedCodes
+        : new Set(assignedServices.map((s) => s.code));
+    const allChecked = displayedCodes.every((c) => base.has(c));
 
-    setSelectedCodes((prev) => {
-      const next = new Set(prev);
+    setCustomSelectedCodes(() => {
+      const next = new Set(base);
       if (allChecked) {
         displayedCodes.forEach((c) => next.delete(c));
       } else {
@@ -195,24 +457,22 @@ function DepartmentFormModalContent({
 
   const handleSaveSelectedServices = () => {
     const newAssigned = deptServices.filter((s) => selectedCodes.has(s.code));
-    setAssignedServices(newAssigned);
+    setCustomServices(newAssigned);
+    setCustomSelectedCodes(null);
     setServiceDropdownOpen(false);
     setServiceSearchQuery('');
   };
 
   const handleCancelSelection = () => {
-    setSelectedCodes(new Set(assignedServices.map((s) => s.code)));
+    setCustomSelectedCodes(null);
     setServiceDropdownOpen(false);
     setServiceSearchQuery('');
   };
 
   const handleRemoveService = (serviceCode) => {
-    setAssignedServices((prev) => prev.filter((s) => s.code !== serviceCode));
-    setSelectedCodes((prev) => {
-      const next = new Set(prev);
-      next.delete(serviceCode);
-      return next;
-    });
+    const next = assignedServices.filter((s) => s.code !== serviceCode);
+    setCustomServices(next);
+    setCustomSelectedCodes(null);
   };
 
   const validate = () => {
@@ -226,6 +486,21 @@ function DepartmentFormModalContent({
     if (isRoom) {
       if (!formData.departmentId) {
         newErrors.departmentId = 'Vui lòng chọn chuyên khoa trực thuộc';
+      }
+      if (!formData.type) {
+        newErrors.type = 'Vui lòng chọn loại phòng';
+      }
+      if (formData.departmentId && formData.type) {
+        const dept = departments.find((d) => d.id === formData.departmentId);
+        const deptCat = getDepartmentCategory(dept);
+        if (formData.type === 'EXAMINATION' && deptCat !== 'CLINICAL') {
+          newErrors.type = 'Phòng khám lâm sàng phải trực thuộc Khoa lâm sàng';
+        } else if (formData.type === 'PARACLINICAL' && deptCat !== 'PARACLINICAL') {
+          newErrors.type = 'Phòng khám cận lâm sàng phải trực thuộc Khoa cận lâm sàng';
+        }
+      }
+      if (formData.type === 'PARACLINICAL' && !effectiveServiceGroupId) {
+        newErrors.serviceGroupId = 'Vui lòng chọn nhóm dịch vụ kỹ thuật cho phòng cận lâm sàng';
       }
       if (!formData.location.trim()) {
         newErrors.location = 'Vui lòng nhập vị trí/buồng (ví dụ: Tòa A - Tầng 1 - P.102)';
@@ -244,6 +519,10 @@ function DepartmentFormModalContent({
       await onSave(
         {
           ...formData,
+          serviceGroupId:
+            isRoom && formData.type === 'PARACLINICAL'
+              ? (effectiveServiceGroupId || null)
+              : null,
           assignedServices: isRoom ? assignedServices : [],
           serviceIds: isRoom ? assignedServices.map((s) => s.id || s.code) : [],
           unitType: targetType,
@@ -292,7 +571,7 @@ function DepartmentFormModalContent({
                 {isEdit
                   ? `Cập nhật thông số chi tiết & danh mục dịch vụ cho ${formData.name || formData.code}`
                   : isRoom
-                  ? 'Khai báo buồng khám, phòng cận lâm sàng hoặc quầy tiếp đón'
+                  ? 'Khai báo buồng khám chuyên khoa hoặc phòng khám cận lâm sàng'
                   : 'Tạo mới danh mục chuyên khoa cấp cao'}
               </p>
             </div>
@@ -347,177 +626,314 @@ function DepartmentFormModalContent({
               </div>
             </div>
 
-            {/* Chuyên khoa trực thuộc (khi là phòng) */}
-            {isRoom && (
+            {/* Chuyên khoa trực thuộc & Loại phòng (khi là phòng) */}
+            {isRoom ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Cột trái: Chuyên khoa trực thuộc */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Chuyên khoa trực thuộc <span className="text-rose-500">*</span>
+                      </label>
+                      {isEdit && (
+                        <span className="text-[10.5px] text-slate-400 italic">
+                          (Cố định khi chỉnh sửa)
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={formData.departmentId}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                      disabled={isEdit}
+                      className={`${SELECT_CLASS} ${
+                        isEdit
+                          ? 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200 opacity-90'
+                          : ''
+                      }`}
+                    >
+                      <option value="">-- Chọn chuyên khoa trực thuộc --</option>
+                      {clinicalDepartments.length > 0 && (
+                        <optgroup label="Khoa lâm sàng (Khám chữa bệnh)">
+                          {clinicalDepartments.map((dept) => (
+                            <option key={dept.id || dept.code} value={dept.id}>
+                              {dept.name} ({dept.code}) - Khoa lâm sàng
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {paraclinicalDepartments.length > 0 && (
+                        <optgroup label="Khoa cận lâm sàng (Kỹ thuật / Xét nghiệm)">
+                          {paraclinicalDepartments.map((dept) => (
+                            <option key={dept.id || dept.code} value={dept.id}>
+                              {dept.name} ({dept.code}) - Khoa cận lâm sàng
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    {errors.departmentId && (
+                      <p className="text-[11px] text-rose-500 mt-1">{errors.departmentId}</p>
+                    )}
+                  </div>
+
+                  {/* Cột phải: Loại phòng (thay thế vị trí của Vị trí / Tầng buồng) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Loại phòng <span className="text-rose-500">*</span>
+                      </label>
+                      {isEdit && (
+                        <span className="text-[10.5px] text-slate-400 italic">
+                          (Cố định khi chỉnh sửa)
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => handleRoomTypeChange(e.target.value)}
+                      disabled={isEdit}
+                      className={`${SELECT_CLASS} ${
+                        isEdit
+                          ? 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200 opacity-90'
+                          : ''
+                      }`}
+                    >
+                      <option value="">-- Chưa chọn loại phòng --</option>
+                      <option value="EXAMINATION">Phòng khám lâm sàng</option>
+                      <option value="PARACLINICAL">Phòng khám cận lâm sàng</option>
+                    </select>
+                    {errors.type && (
+                      <p className="text-[11px] text-rose-500 mt-1">{errors.type}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hàng 3: Vị trí / Tầng buồng (nằm ở chỗ Loại phòng cũ) & Nhóm dịch vụ kỹ thuật & Trạng thái */}
+                <div
+                  className={`grid grid-cols-1 ${
+                    formData.type === 'PARACLINICAL' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+                  } gap-3.5`}
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Vị trí / Tầng buồng <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => handleChange('location', e.target.value)}
+                      placeholder="VD: Tòa A - Tầng 1 - P.102"
+                      className={INPUT_CLASS}
+                    />
+                    {errors.location && (
+                      <p className="text-[11px] text-rose-500 mt-1">{errors.location}</p>
+                    )}
+                  </div>
+
+                  {/* Nhóm dịch vụ kỹ thuật (chỉ xuất hiện cho phòng Cận lâm sàng) */}
+                  {formData.type === 'PARACLINICAL' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Nhóm dịch vụ kỹ thuật <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={effectiveServiceGroupId || ''}
+                        onChange={(e) => handleChange('serviceGroupId', e.target.value)}
+                        className={SELECT_CLASS}
+                      >
+                        <option value="">
+                          {filteredServiceGroups.length > 0
+                            ? '-- Chọn nhóm dịch vụ --'
+                            : '-- Không có nhóm dịch vụ phù hợp --'}
+                        </option>
+                        {filteredServiceGroups.map((g) => (
+                          <option key={g.id || g.code} value={g.id}>
+                            {g.name} ({g.code})
+                          </option>
+                        ))}
+                      </select>
+                      {errors.serviceGroupId && (
+                        <p className="text-[11px] text-rose-500 mt-1">{errors.serviceGroupId}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Trạng thái</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => handleChange('status', e.target.value)}
+                      className={SELECT_CLASS}
+                    >
+                      <option value="ACTIVE">Đang hoạt động</option>
+                      <option value="INACTIVE">Tạm ngưng</option>
+                      <option value="MAINTENANCE">Đang bảo trì thiết bị</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Dành cho CHUYÊN KHOA */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Chuyên khoa trực thuộc <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={formData.departmentId}
-                    onChange={(e) => handleChange('departmentId', e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">-- Chọn chuyên khoa trực thuộc --</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id || dept.code} value={dept.id}>
-                        {dept.name} ({dept.code})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.departmentId && (
-                    <p className="text-[11px] text-rose-500 mt-1">{errors.departmentId}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Vị trí / Tầng buồng <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => handleChange('location', e.target.value)}
-                    placeholder="VD: Tòa A - Tầng 1 - P.102"
-                    className={INPUT_CLASS}
-                  />
-                  {errors.location && (
-                    <p className="text-[11px] text-rose-500 mt-1">{errors.location}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Phân loại & Trạng thái */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {isRoom ? 'Loại phòng' : 'Phân loại chuyên khoa'}
-                </label>
-                {isRoom ? (
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Phân loại chuyên khoa
+                    </label>
+                    {isEdit && (
+                      <span className="text-[10.5px] text-slate-400 italic">
+                        (Cố định khi chỉnh sửa)
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={formData.type}
                     onChange={(e) => handleChange('type', e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="EXAMINATION">Phòng khám lâm sàng</option>
-                    <option value="PARACLINICAL">Phòng cận lâm sàng</option>
-                    <option value="ADMINISTRATIVE">Phòng thu ngân / Lễ tân / Hành chính</option>
-                  </select>
-                ) : (
-                  <select
-                    value={formData.type}
-                    onChange={(e) => handleChange('type', e.target.value)}
-                    className={SELECT_CLASS}
+                    disabled={isEdit}
+                    className={`${SELECT_CLASS} ${
+                      isEdit
+                        ? 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200 opacity-90'
+                        : ''
+                    }`}
                   >
                     <option value="CLINICAL">Lâm sàng (Khám chữa bệnh)</option>
                     <option value="PARACLINICAL">Cận lâm sàng (Xét nghiệm/CĐHA/TDCN)</option>
-                    <option value="ADMINISTRATIVE">Hành chính / Quản trị</option>
                   </select>
-                )}
-              </div>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Trạng thái</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => handleChange('status', e.target.value)}
-                  className={SELECT_CLASS}
-                >
-                  <option value="ACTIVE">Đang hoạt động</option>
-                  <option value="INACTIVE">{isRoom ? 'Tạm ngưng' : 'Đang khóa'}</option>
-                  {isRoom && <option value="MAINTENANCE">Đang bảo trì thiết bị</option>}
-                </select>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Trạng thái</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => handleChange('status', e.target.value)}
+                    className={SELECT_CLASS}
+                  >
+                    <option value="ACTIVE">Đang hoạt động</option>
+                    <option value="INACTIVE">Đang khóa</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Section 2 (Chỉ cho ROOM): Dịch vụ y tế phòng tiếp nhận phục vụ */}
           {isRoom && (
             <div className="p-3.5 bg-white rounded-xl border border-slate-200/90 space-y-3">
-              {/* Khối: Dịch vụ y tế phòng tiếp nhận phục vụ */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
-                    <Stethoscope className="w-4 h-4 text-[#0d9488]" />
-                    <span>Dịch vụ y tế phòng tiếp nhận phục vụ ({assignedServices.length})</span>
-                  </div>
-                  <span className="text-[10.5px] text-slate-400">Đơn vị: VNĐ</span>
+              {!formData.type ? (
+                <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex items-center justify-center gap-2">
+                  <Info className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>
+                    Vui lòng chọn <strong>Loại phòng</strong> ở trên để cấu hình danh mục dịch vụ tiếp nhận.
+                  </span>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                      <Stethoscope className="w-4 h-4 text-[#0d9488]" />
+                      <span>
+                        {formData.type === 'EXAMINATION'
+                          ? `Dịch vụ khám bệnh tiếp nhận (${assignedServices.length})`
+                          : `Dịch vụ kỹ thuật phòng thực hiện (${assignedServices.length})`}
+                      </span>
+                    </div>
+                    <span className="text-[10.5px] text-slate-400">Đơn vị: VNĐ</span>
+                  </div>
 
-                {/* Thanh tìm kiếm & chọn dịch vụ (Search & Select Dropdown) */}
-                <div ref={dropdownRef} className="relative">
-                  <div className="relative flex items-center">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={serviceSearchQuery}
-                      onChange={(e) => {
-                        setServiceSearchQuery(e.target.value);
-                        if (!serviceDropdownOpen) handleOpenDropdown();
-                      }}
-                      onFocus={handleOpenDropdown}
-                      placeholder="Tìm và gán dịch vụ y tế (chọn một hoặc nhiều)..."
-                      className="w-full pl-9 pr-14 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 placeholder:text-slate-400"
-                    />
-                    <div className="absolute right-2.5 flex items-center gap-1">
-                      {serviceSearchQuery && (
+                  {formData.type === 'PARACLINICAL' && !effectiveServiceGroupId && assignedServices.length === 0 ? (
+                    <div className="p-3.5 text-center text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        Vui lòng chọn <strong>Nhóm dịch vụ kỹ thuật</strong> ở trên để tải danh mục dịch vụ phù hợp cho phòng.
+                      </span>
+                    </div>
+                  ) : (
+                  /* Thanh tìm kiếm & chọn dịch vụ (Search & Select Dropdown) */
+                  <div ref={dropdownRef} className="relative">
+                    <div className="relative flex items-center">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={serviceSearchQuery}
+                        onChange={(e) => {
+                          setServiceSearchQuery(e.target.value);
+                          if (!serviceDropdownOpen) handleOpenDropdown();
+                        }}
+                        onFocus={handleOpenDropdown}
+                        placeholder="Tìm và gán dịch vụ y tế (chọn một hoặc nhiều)..."
+                        className="w-full pl-9 pr-14 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 placeholder:text-slate-400"
+                      />
+                      <div className="absolute right-2.5 flex items-center gap-1">
+                        {serviceSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setServiceSearchQuery('');
+                            }}
+                            className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Xóa tìm kiếm"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setServiceSearchQuery('');
+                          onClick={() => {
+                            if (serviceDropdownOpen) {
+                              handleCancelSelection();
+                            } else {
+                              handleOpenDropdown();
+                            }
                           }}
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Xóa tìm kiếm"
+                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title={serviceDropdownOpen ? 'Đóng danh sách' : 'Mở danh sách'}
                         >
-                          <X className="w-3 h-3" />
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                              serviceDropdownOpen ? 'rotate-180' : ''
+                            }`}
+                          />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (serviceDropdownOpen) {
-                            handleCancelSelection();
-                          } else {
-                            handleOpenDropdown();
-                          }
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                        title={serviceDropdownOpen ? 'Đóng danh sách' : 'Mở danh sách'}
-                      >
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                            serviceDropdownOpen ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Dropdown danh sách gợi ý kèm checkbox bên trái và nút Lưu ở góc dưới bên phải */}
-                  {serviceDropdownOpen && (
-                    <div
-                      className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white rounded-xl border border-slate-200 shadow-xl max-h-72 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
-                    >
-                      {/* Dropdown Header */}
-                      <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center justify-between shrink-0">
-                        <span>
-                          Dịch vụ chuyên khoa {currentDeptObj ? currentDeptObj.name : ''} ({filteredDeptServices.length})
-                        </span>
-                        <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
-                          Đã tick: {selectedCodes.size}
-                        </span>
                       </div>
+                    </div>
 
-                      {/* Danh sách các dịch vụ kèm ô checkbox bên trái */}
-                      <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-                        {filteredDeptServices.length === 0 ? (
-                          <div className="p-4 text-center text-slate-400 text-xs">
-                            Không tìm thấy dịch vụ nào phù hợp với chuyên khoa này.
-                          </div>
-                        ) : (
+                    {/* Dropdown danh sách gợi ý kèm checkbox bên trái và nút Lưu ở góc dưới bên phải */}
+                    {serviceDropdownOpen && (
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white rounded-xl border border-slate-200 shadow-xl max-h-72 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+                      >
+                        {/* Dropdown Header */}
+                        <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center justify-between shrink-0">
+                          <span>
+                            {formData.type === 'EXAMINATION'
+                              ? `Danh mục khám lâm sàng (${filteredDeptServices.length})`
+                              : `Dịch vụ nhóm ${currentGroupObj ? currentGroupObj.name : ''} (${filteredDeptServices.length})`}
+                          </span>
+                          <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                            Đã tick: {selectedCodes.size}
+                          </span>
+                        </div>
+
+                        {/* Danh sách các dịch vụ kèm ô checkbox bên trái */}
+                        <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+                          {deptServicesLoading ? (
+                            <div className="p-4 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                              <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                              <span>Đang tải danh mục dịch vụ từ máy chủ...</span>
+                            </div>
+                          ) : deptServicesError ? (
+                            <div className="p-4 text-center text-rose-500 text-xs">
+                              {describeApiError(deptServicesError, 'Lỗi tải dịch vụ')}
+                            </div>
+                          ) : filteredDeptServices.length === 0 ? (
+                            <div className="p-4 text-center text-slate-400 text-xs">
+                              {formData.type === 'EXAMINATION'
+                                ? 'Không tìm thấy dịch vụ khám bệnh nào phù hợp.'
+                                : 'Không tìm thấy dịch vụ nào thuộc nhóm kỹ thuật này.'}
+                            </div>
+                          ) : (
                           filteredDeptServices.map((srv) => {
                             const isChecked = selectedCodes.has(srv.code);
                             return (
@@ -606,6 +1022,7 @@ function DepartmentFormModalContent({
                     </div>
                   )}
                 </div>
+              )}
 
                 {/* Bảng danh sách dịch vụ đã chọn */}
                 <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white">
@@ -669,24 +1086,11 @@ function DepartmentFormModalContent({
                   </table>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {/* Người phụ trách (Chỉ dành cho Chuyên khoa) */}
-          {!isRoom && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Trưởng khoa phụ trách
-              </label>
-              <input
-                type="text"
-                value={formData.headPerson}
-                onChange={(e) => handleChange('headPerson', e.target.value)}
-                placeholder="VD: BSCKII Trần Văn An"
-                className={INPUT_CLASS}
-              />
-            </div>
-          )}
+
 
           {/* Mô tả (cho Chuyên khoa) */}
           {!isRoom && (

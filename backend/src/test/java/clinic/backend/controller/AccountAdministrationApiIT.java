@@ -58,7 +58,7 @@ class AccountAdministrationApiIT extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/v1/accounts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(login(admin))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.page.size").value(20));
+                .andExpect(jsonPath("$.data.page.size").value(10));
 
         mockMvc.perform(get("/api/v1/accounts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(login(receptionist))))

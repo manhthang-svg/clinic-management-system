@@ -17,11 +17,13 @@ import clinic.backend.dto.response.DepartmentRoomItemResponse;
 import clinic.backend.dto.response.DepartmentStatsResponse;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.service.DepartmentService;
@@ -37,6 +39,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final RoomRepository roomRepository;
+    private final ServiceGroupRepository serviceGroupRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final Clock clock;
@@ -47,6 +50,9 @@ public class DepartmentServiceImpl implements DepartmentService {
     public List<DepartmentRoomItemResponse> getAllItems() {
         List<Department> departments = departmentRepository.findAll();
         List<Room> rooms = roomRepository.findAll();
+        List<ServiceGroup> serviceGroups = serviceGroupRepository.findAll();
+        Map<UUID, String> serviceGroupMap = serviceGroups.stream()
+                .collect(Collectors.toMap(ServiceGroup::getId, ServiceGroup::getServiceGroupName, (s1, s2) -> s1));
         List<StaffRoomAssignment> activeAssignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
         Map<UUID, StaffAccount> staffMap = staffAccountRepository.findAll().stream()
                 .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
@@ -79,7 +85,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .departmentName(dept.getDepartmentName())
                     .type(dept.getType() != null ? dept.getType().name() : null)
                     .location("Khu trung tâm")
-                    .headPerson(resolveDepartmentHead(dept.getDepartmentCode(), dept.getDepartmentName()))
+                    .headPerson(null)
                     .status(dept.isActive() ? "ACTIVE" : "INACTIVE")
                     .description(dept.getDescription())
                     .roomCount(roomCountByDept.getOrDefault(dept.getId(), 0L).intValue())
@@ -96,6 +102,9 @@ public class DepartmentServiceImpl implements DepartmentService {
             if (staffName == null) {
                 staffName = "Chưa phân công";
             }
+            String serviceGroupName = room.getServiceGroupId() != null
+                    ? serviceGroupMap.get(room.getServiceGroupId())
+                    : null;
 
             items.add(DepartmentRoomItemResponse.builder()
                     .id(room.getId())
@@ -104,6 +113,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .name(room.getRoomName())
                     .departmentId(room.getDepartmentId())
                     .departmentName(deptName)
+                    .serviceGroupId(room.getServiceGroupId())
+                    .serviceGroupName(serviceGroupName)
                     .type(room.getType() != null ? room.getType().name() : null)
                     .location(room.getLocation())
                     .headPerson(staffName)
@@ -202,9 +213,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
                 .location("Khu trung tâm")
-                .headPerson(request.getHeadPerson() != null && !request.getHeadPerson().isBlank()
-                        ? request.getHeadPerson()
-                        : resolveDepartmentHead(saved.getDepartmentCode(), saved.getDepartmentName()))
+                .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
                 .roomCount(0)
@@ -223,7 +232,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         department.update(
                 request.getDepartmentName().trim(),
-                request.getType(),
+                department.getType(),
                 request.getDescription(),
                 active,
                 now
@@ -241,9 +250,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
                 .location("Khu trung tâm")
-                .headPerson(request.getHeadPerson() != null && !request.getHeadPerson().isBlank()
-                        ? request.getHeadPerson()
-                        : resolveDepartmentHead(saved.getDepartmentCode(), saved.getDepartmentName()))
+                .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
                 .roomCount(roomCount)
@@ -271,7 +278,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
                 .location("Khu trung tâm")
-                .headPerson(resolveDepartmentHead(saved.getDepartmentCode(), saved.getDepartmentName()))
+                .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
                 .roomCount(roomCount)
@@ -310,6 +317,12 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Room saved = roomRepository.save(room);
 
+        String serviceGroupName = saved.getServiceGroupId() != null
+                ? serviceGroupRepository.findById(saved.getServiceGroupId())
+                        .map(ServiceGroup::getServiceGroupName)
+                        .orElse(null)
+                : null;
+
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
                 .unitType("ROOM")
@@ -317,6 +330,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .name(saved.getRoomName())
                 .departmentId(saved.getDepartmentId())
                 .departmentName(department.getDepartmentName())
+                .serviceGroupId(saved.getServiceGroupId())
+                .serviceGroupName(serviceGroupName)
                 .type(saved.getType().name())
                 .location(saved.getLocation())
                 .headPerson(request.getHeadPerson() != null && !request.getHeadPerson().isBlank()
@@ -341,6 +356,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         room.update(
                 request.getDepartmentId(),
+                request.getServiceGroupId(),
                 request.getRoomName().trim(),
                 request.getLocation().trim(),
                 request.getType(),
@@ -349,6 +365,12 @@ public class DepartmentServiceImpl implements DepartmentService {
         );
 
         Room saved = roomRepository.save(room);
+
+        String serviceGroupName = saved.getServiceGroupId() != null
+                ? serviceGroupRepository.findById(saved.getServiceGroupId())
+                        .map(ServiceGroup::getServiceGroupName)
+                        .orElse(null)
+                : null;
 
         String staffName = staffRoomAssignmentRepository.findByRoomIdAndRemovedAtIsNull(saved.getId())
                 .flatMap(assignment -> staffAccountRepository.findById(assignment.getStaffAccountId()))
@@ -362,6 +384,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .name(saved.getRoomName())
                 .departmentId(saved.getDepartmentId())
                 .departmentName(department.getDepartmentName())
+                .serviceGroupId(saved.getServiceGroupId())
+                .serviceGroupName(serviceGroupName)
                 .type(saved.getType().name())
                 .location(saved.getLocation())
                 .headPerson(staffName)
@@ -406,20 +430,5 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
-    }
-
-    private String resolveDepartmentHead(String makhoa, String tenkhoa) {
-        if ("DEMO-NOI".equalsIgnoreCase(makhoa) || (tenkhoa != null && tenkhoa.toLowerCase().contains("nội"))) {
-            return "BSCKII Trần Văn An";
-        } else if ("DEMO-NGOAI".equalsIgnoreCase(makhoa) || (tenkhoa != null && tenkhoa.toLowerCase().contains("ngoại"))) {
-            return "BSCKI Phạm Minh Châu";
-        } else if ("DEMO-XN".equalsIgnoreCase(makhoa) || (tenkhoa != null && tenkhoa.toLowerCase().contains("xét nghiệm"))) {
-            return "KTV Nguyễn Văn Bảo";
-        } else if ("DEMO-CDHA".equalsIgnoreCase(makhoa) || (tenkhoa != null && tenkhoa.toLowerCase().contains("chẩn đoán"))) {
-            return "KTV Trần Thị Cúc";
-        } else if ("DEMO-TDCN".equalsIgnoreCase(makhoa) || (tenkhoa != null && tenkhoa.toLowerCase().contains("thăm dò"))) {
-            return "KTV Lê Thị Đào";
-        }
-        return "BS Trưởng khoa";
     }
 }

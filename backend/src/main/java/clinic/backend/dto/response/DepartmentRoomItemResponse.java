@@ -21,6 +21,8 @@ public class DepartmentRoomItemResponse {
     private String name;     // tenkhoa or phongkham
     private UUID departmentId;
     private String departmentName;
+    private UUID serviceGroupId;
+    private String serviceGroupName;
     private String type;     // CLINICAL, PARACLINICAL, EXAMINATION
     private String location;
     private String headPerson;

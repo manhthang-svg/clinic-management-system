@@ -4,7 +4,6 @@ import {
   Building2,
   Home,
   MapPin,
-  User,
   FileText,
   Stethoscope,
   CheckCircle2,
@@ -12,17 +11,16 @@ import {
   Sun,
   Sunset,
   CalendarDays,
-  UserCheck,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
-  getServicesForRoom,
   SERVICE_TYPE_MAP,
   SERVICE_GROUP_LABELS,
 } from '../../constants/serviceData';
-import { INITIAL_DEPARTMENT_ITEMS } from '../../apis/departmentApi';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { formatPrice } from '../services/serviceFormat';
+import { useDepartmentServices } from '../../hooks';
+import { describeApiError } from '../../utils/describeApiError';
 
 const ROLE_LABELS = {
   ADMIN: 'Quản trị viên',
@@ -49,8 +47,8 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
   const isDept = item.unitType === 'DEPARTMENT';
   const isActive = item.status === 'ACTIVE';
 
-  // Lấy lịch trực thực tế hôm nay của phòng từ phân ca trực
-  const [roomDuties, setRoomDuties] = useState({ morning: [], afternoon: [], loading: false });
+  // Lấy lịch trực thực tế hôm nay của phòng từ phân ca trực backend (không mock fallback)
+  const [roomDuties, setRoomDuties] = useState({ morning: [], afternoon: [], loading: false, error: null });
 
   useEffect(() => {
     if (isDept || !item?.id) return;
@@ -58,57 +56,34 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
     const todayStr = new Date().toISOString().split('T')[0];
 
     async function loadTodayRoomDuties() {
-      setRoomDuties(prev => ({ ...prev, loading: true }));
+      setRoomDuties(prev => ({ ...prev, loading: true, error: null }));
       try {
-        // Lấy lịch tuần theo phòng hoặc lịch tuần chung
-        let duties = [];
-        try {
-          const res = await dutyScheduleApi.getWeeklyScheduleByRoom(item.id, todayStr, todayStr);
-          duties = res?.items || [];
-        } catch {
-          // fallback query tuần
-          const fallbackRes = await dutyScheduleApi.getWeeklySchedule(todayStr, todayStr);
-          duties = (fallbackRes?.items || []).filter(
-            it => it.roomId === item.id || it.roomCode === item.code
-          );
-        }
-
-        if (duties.length === 0) {
-          // Kiểm tra thêm theo roomId / roomCode
-          const allRes = await dutyScheduleApi.getWeeklySchedule(todayStr, todayStr);
-          duties = (allRes?.items || []).filter(
-            it => it.roomId === item.id || (item.code && it.roomCode === item.code)
-          );
-        }
-
+        const res = await dutyScheduleApi.getWeeklyScheduleByRoom(item.id, todayStr, todayStr);
+        const duties = res?.items || [];
         if (isMounted) {
-          const morningDuties = duties.filter(d => d.shift === 'MORNING');
-          const afternoonDuties = duties.filter(d => d.shift === 'AFTERNOON');
           setRoomDuties({
-            morning: morningDuties,
-            afternoon: afternoonDuties,
+            morning: duties.filter(d => d.shift === 'MORNING'),
+            afternoon: duties.filter(d => d.shift === 'AFTERNOON'),
             loading: false,
+            error: null,
           });
         }
       } catch (err) {
-        console.warn('Could not fetch room duties for today:', err);
+        console.error('Không thể tải ca trực hôm nay của phòng:', err);
         if (isMounted) {
-          setRoomDuties({ morning: [], afternoon: [], loading: false });
+          setRoomDuties({ morning: [], afternoon: [], loading: false, error: err });
         }
       }
     }
 
     loadTodayRoomDuties();
     return () => { isMounted = false; };
-  }, [isDept, item?.id, item?.code]);
+  }, [isDept, item?.id]);
 
-  // Lấy danh sách các phòng trực thuộc chuyên khoa này
+  // Lấy danh sách các phòng trực thuộc chuyên khoa này từ props truyền vào (dữ liệu thật từ API)
   const departmentRooms = useMemo(() => {
     if (!isDept) return [];
-    const sourceRooms =
-      rooms && rooms.length > 0
-        ? rooms
-        : INITIAL_DEPARTMENT_ITEMS.filter((i) => i.unitType === 'ROOM');
+    const sourceRooms = Array.isArray(rooms) ? rooms : [];
 
     return sourceRooms.filter((r) => {
       return (
@@ -120,11 +95,25 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
     });
   }, [isDept, item, rooms]);
 
-  // Lấy danh sách dịch vụ thực hiện tại phòng
+  // Lấy danh sách dịch vụ y tế của phòng từ API backend theo đúng loại phòng & nhóm dịch vụ
+  const { services: fetchedServices, loading: servicesLoading, error: servicesError } =
+    useDepartmentServices(
+      isDept
+        ? null
+        : {
+            departmentId: item.departmentId || null,
+            serviceGroupId: item.serviceGroupId || null,
+            roomType: item.type || 'EXAMINATION',
+          }
+    );
+
   const roomServices = useMemo(() => {
     if (isDept) return [];
-    return getServicesForRoom(item);
-  }, [item, isDept]);
+    if (Array.isArray(item.assignedServices) && item.assignedServices.length > 0) {
+      return item.assignedServices;
+    }
+    return fetchedServices || [];
+  }, [isDept, item.assignedServices, fetchedServices]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
@@ -191,8 +180,6 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                 <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Phân loại</span>
                 <span className="font-semibold text-slate-800">
                   {item.type === 'CLINICAL' ||
-                  item.code === 'DEMO-NOI' ||
-                  item.code === 'DEMO-NGOAI' ||
                   item.name?.toLowerCase().includes('nội') ||
                   item.name?.toLowerCase().includes('ngoại')
                     ? 'Lâm sàng'
@@ -207,7 +194,7 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f8faf9] p-3.5 rounded-xl border border-slate-100">
+            <div className={`grid grid-cols-2 ${item.serviceGroupName ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-3 bg-[#f8faf9] p-3.5 rounded-xl border border-slate-100`}>
               <div>
                 <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Trạng thái</span>
                 <span
@@ -238,6 +225,14 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                   {item.departmentName || '—'}
                 </span>
               </div>
+              {item.serviceGroupName && (
+                <div>
+                  <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Nhóm kỹ thuật</span>
+                  <span className="font-semibold text-[#0d9488] line-clamp-1" title={item.serviceGroupName}>
+                    {item.serviceGroupName}
+                  </span>
+                </div>
+              )}
               <div>
                 <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Vị trí / Tầng</span>
                 <span className="font-semibold text-slate-800 line-clamp-1">
@@ -250,16 +245,8 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
           {/* Nếu là Chuyên khoa (DEPARTMENT) */}
           {isDept && (
             <div className="space-y-3.5 pt-1">
-              <div className="flex items-start gap-2.5 text-slate-700">
-                <User className="w-4 h-4 text-[#127e7a] shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-semibold text-slate-500 block text-[11px]">Trưởng khoa</span>
-                  <span className="font-medium text-slate-800">{item.headPerson || 'Chưa bổ nhiệm'}</span>
-                </div>
-              </div>
-
               {/* Danh sách phòng chức năng trực thuộc khoa */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
                     <DoorOpen className="w-4 h-4 text-[#0d9488]" />
@@ -360,6 +347,10 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                         <span className="text-xs text-slate-400 italic block mt-0.5">
                           Đang tải lịch trực...
                         </span>
+                      ) : roomDuties.error ? (
+                        <span className="text-[11px] text-rose-500 font-medium block mt-0.5">
+                          {describeApiError(roomDuties.error, 'Lỗi tải')}
+                        </span>
                       ) : roomDuties.morning.length > 0 ? (
                         <div className="space-y-1.5 mt-1">
                           {roomDuties.morning.map((duty, idx) => (
@@ -397,6 +388,10 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                       {roomDuties.loading ? (
                         <span className="text-xs text-slate-400 italic block mt-0.5">
                           Đang tải lịch trực...
+                        </span>
+                      ) : roomDuties.error ? (
+                        <span className="text-[11px] text-rose-500 font-medium block mt-0.5">
+                          {describeApiError(roomDuties.error, 'Lỗi tải')}
                         </span>
                       ) : roomDuties.afternoon.length > 0 ? (
                         <div className="space-y-1.5 mt-1">
@@ -452,7 +447,22 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {roomServices.length === 0 ? (
+                      {servicesLoading ? (
+                        <tr>
+                          <td colSpan="6" className="p-6 text-center text-slate-400">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                              <span>Đang tải danh sách dịch vụ y tế...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : servicesError ? (
+                        <tr>
+                          <td colSpan="6" className="p-6 text-center text-rose-500 font-medium">
+                            {describeApiError(servicesError, 'Lỗi tải danh mục dịch vụ')}
+                          </td>
+                        </tr>
+                      ) : roomServices.length === 0 ? (
                         <tr>
                           <td colSpan="6" className="p-6 text-center text-slate-400">
                             Chưa có dịch vụ nào liên kết với phòng khám này.
@@ -522,7 +532,12 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
             size="sm"
             onClick={() => {
               onClose();
-              onEdit?.(item);
+              onEdit?.({
+                ...item,
+                serviceGroupId: item.serviceGroupId || (roomServices[0]?.serviceGroupId ?? null),
+                serviceGroupName: item.serviceGroupName || (roomServices[0]?.serviceGroupName ?? null),
+                assignedServices: roomServices,
+              });
             }}
           >
             Chỉnh sửa
