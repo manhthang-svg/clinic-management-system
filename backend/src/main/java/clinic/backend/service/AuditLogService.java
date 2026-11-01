@@ -14,6 +14,15 @@ public interface AuditLogService {
             Map<String, String> newValues,
             Instant occurredAt);
 
+    /** {@code oldValues} is empty when the facility is declared for the first time. */
+    void recordFacilityChange(
+            UUID actorAccountId,
+            UUID facilityId,
+            AuditLogAction action,
+            Map<String, ?> oldValues,
+            Map<String, ?> newValues,
+            Instant occurredAt);
+
     void recordAccountChange(
             UUID actorAccountId,
             UUID targetAccountId,

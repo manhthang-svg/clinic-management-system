@@ -16,6 +16,10 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
 
     boolean existsBySovaovien(String sovaovien);
 
+    /** UC-77 BR-77-02: the facility code is locked once any visit exists. */
+    @Query("select count(v) > 0 from Visit v")
+    boolean existsAny();
+
     Optional<Visit> findBySovaovien(String sovaovien);
 
     boolean existsByPatientIdAndQueueDateAndRoomIdAndStatusIn(
