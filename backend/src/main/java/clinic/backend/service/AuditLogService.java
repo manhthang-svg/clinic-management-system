@@ -39,4 +39,6 @@ public interface AuditLogService {
             String sovaovien,
             Map<String, ?> values,
             Instant occurredAt);
+
+    boolean hasAction(AuditLogAction action, String entityType, UUID entityId);
 }

@@ -59,6 +59,16 @@ export const visitApi = {
         return apiClient.request(`/visits/fee-preview?${query.toString()}`, { signal });
     },
 
+    getTicket(visitId, signal) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/ticket`, { signal });
+    },
+
+    prepareTicketPrint(visitId) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/commands/prepare-ticket-print`, {
+            method: 'POST',
+        });
+    },
+
     getFollowUpAppointment(patientId, signal) {
         return apiClient.request(`/patients/${encodeURIComponent(patientId)}/follow-up-appointment`, { signal });
     },

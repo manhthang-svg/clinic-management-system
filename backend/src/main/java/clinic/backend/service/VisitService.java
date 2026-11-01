@@ -4,6 +4,7 @@ import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
+import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.security.user.StaffPrincipal;
 
@@ -27,4 +28,8 @@ public interface VisitService {
     VisitResponse startExamination(UUID visitId);
 
     List<RoomQueueStatusResponse> getRoomQueueStatus(LocalDate date);
+
+    VisitTicketResponse getTicket(UUID visitId);
+
+    VisitTicketResponse prepareTicketPrint(StaffPrincipal principal, UUID visitId);
 }

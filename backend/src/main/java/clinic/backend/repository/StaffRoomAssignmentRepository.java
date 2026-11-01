@@ -26,6 +26,8 @@ public interface StaffRoomAssignmentRepository extends JpaRepository<StaffRoomAs
     // tim kiem phong co roomId cho nhân viên nào
     Optional<StaffRoomAssignment> findByRoomIdAndRemovedAtIsNull(UUID roomId);
 
+    List<StaffRoomAssignment> findAllByRoomIdAndRemovedAtIsNull(UUID roomId);
+
     @Query("""
             select case when count(assignment) > 0 then true else false end
             from StaffRoomAssignment assignment, StaffAccount account

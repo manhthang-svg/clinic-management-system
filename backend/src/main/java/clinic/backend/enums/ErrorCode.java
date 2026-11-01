@@ -46,6 +46,8 @@ public enum ErrorCode {
             "The examination room is not active or has no assigned doctor.", HttpStatus.CONFLICT),
     EXAMINATION_SERVICE_NOT_CONFIGURED("EXAMINATION_SERVICE_NOT_CONFIGURED",
             "No active examination service is configured.", HttpStatus.CONFLICT),
+    CLINIC_FACILITY_NOT_CONFIGURED("CLINIC_FACILITY_NOT_CONFIGURED",
+            "Clinic facility information must be configured before printing documents.", HttpStatus.CONFLICT),
     INSURANCE_CARD_INVALID("INSURANCE_CARD_INVALID", "The insurance card is invalid or expired.",
             HttpStatus.UNPROCESSABLE_ENTITY),
     INSURANCE_PATIENT_MISMATCH("INSURANCE_PATIENT_MISMATCH",

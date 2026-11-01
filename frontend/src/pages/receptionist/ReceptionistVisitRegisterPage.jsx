@@ -19,7 +19,6 @@ import {
   MAX_REASON_LENGTH,
   NO_INSURANCE_CHECK,
   clinicToday,
-  coverageRateOf,
   formToVisitRequest,
   isCardNumberFormatValid,
   validateVisitForm,
@@ -32,7 +31,7 @@ import {
   msg56,
   visitCreateError,
 } from '../../components/visits/visitErrors';
-import { formatMoney, roomLabel } from '../../components/visits/visitFormat';
+import { roomLabel } from '../../components/visits/visitFormat';
 import {
   PRIORITY_REASON_LABELS,
   REFERRAL_SOURCE_LABELS,
@@ -258,7 +257,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         mabhyt: form.visitType === 'BHYT' ? form.cardNumber : undefined,
       });
     } catch {
-      // TBD endpoint: the confirmation shows that the fee is calculated on creation.
+      // The preview is advisory; visit creation recalculates the authoritative fee.
     }
     setConfirm((prev) => prev && { ...prev, fee, feeLoading: false });
   };
@@ -267,17 +266,20 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     setConfirm((prev) => ({ ...prev, submitting: true, error: null }));
     try {
       const visit = await visitApi.create(formToVisitRequest(form, patientId, insurance));
-      const fee = confirm.fee;
-      const amount = typeof fee?.patientAmount === 'number' ? ` Bệnh nhân cần trả: ${formatMoney(fee.patientAmount)}.` : '';
       // MSG21
-      toast.success(`Đã tạo lượt khám ${visit.sovaovien}. Số thứ tự ${visit.queueNumber} – ${visit.roomName ?? selectedRoom?.name}.${amount}`);
-      setCreated({
-        visit,
-        room: selectedRoom,
-        fee,
-        coverageRate: form.visitType === 'BHYT' && insurance.status === 'VALID' ? coverageRateOf(insurance.card) : null,
-      });
+      toast.success(`Đã tạo lượt khám ${visit.sovaovien}. Số thứ tự ${visit.queueNumber} – ${visit.roomName ?? selectedRoom?.name}.`);
+      setCreated({ visit, ticket: null, loading: true, error: null });
       setConfirm(null);
+      try {
+        const ticket = await visitApi.getTicket(visit.id);
+        setCreated((current) => current?.visit.id === visit.id
+          ? { ...current, ticket, loading: false, error: null }
+          : current);
+      } catch (ticketError) {
+        setCreated((current) => current?.visit.id === visit.id
+          ? { ...current, loading: false, error: loadErrorMessage(ticketError) }
+          : current);
+      }
     } catch (error) {
       const result = visitCreateError(error);
       if (result.kind === 'activeVisit') {
@@ -307,6 +309,29 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     }
   };
 
+  const reloadTicket = async () => {
+    if (!created) return;
+    setCreated((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const ticket = await visitApi.getTicket(created.visit.id);
+      setCreated((current) => ({ ...current, ticket, loading: false, error: null }));
+    } catch (error) {
+      setCreated((current) => ({ ...current, loading: false, error: loadErrorMessage(error) }));
+    }
+  };
+
+  const printTicket = async () => {
+    if (!created?.ticket) return;
+    setCreated((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const ticket = await visitApi.prepareTicketPrint(created.visit.id);
+      setCreated((current) => ({ ...current, ticket, loading: false, error: null }));
+      window.setTimeout(() => window.print(), 0);
+    } catch (error) {
+      setCreated((current) => ({ ...current, loading: false, error: loadErrorMessage(error) }));
+    }
+  };
+
   const header = (
     <AccountPageHeader
       title="Đăng ký khám"
@@ -320,11 +345,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     content = (
       <VisitTicket
         visit={created.visit}
-        patient={patient}
-        room={created.room}
-        coverageRate={created.coverageRate}
-        fee={created.fee}
-        onPrint={() => window.print()}
+        ticket={created.ticket}
+        loading={created.loading}
+        error={created.error}
+        onReload={reloadTicket}
+        onPrint={printTicket}
         onDone={goToPatients}
       />
     );

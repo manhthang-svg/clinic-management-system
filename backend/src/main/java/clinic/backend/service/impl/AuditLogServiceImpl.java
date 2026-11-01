@@ -95,4 +95,9 @@ public class AuditLogServiceImpl implements AuditLogService {
                 objectMapper.valueToTree(values).toString(),
                 MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME)));
     }
+
+    @Override
+    public boolean hasAction(AuditLogAction action, String entityType, UUID entityId) {
+        return auditLogRepository.existsByActionAndEntityTypeAndEntityId(action, entityType, entityId);
+    }
 }
