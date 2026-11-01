@@ -76,7 +76,7 @@ public class AccountAdministrationController {
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false) AccountStatus status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "createdAt,desc")
             @Pattern(regexp = "(?:username|fullName|role|status|createdAt|lastLoginAt),(?:asc|desc)") String sort) {
         String[] parts = sort.split(",", -1);

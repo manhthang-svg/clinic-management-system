@@ -17,6 +17,7 @@ public record AccountDetailResponse(
         String departmentName,
         String fullName,
         String academicTitle,
+        String practiceLicenseNo,
         LocalDate dateOfBirth,
         Gender gender,
         String phoneNumber,

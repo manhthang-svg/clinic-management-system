@@ -19,6 +19,7 @@ public record CreateAccountRequest(
         @Pattern(regexp = "^[\\p{L}\\p{M} ]+$", message = "Full name may contain letters and spaces only.")
         String fullName,
         @Size(max = 50) String academicTitle,
+        @Size(max = 255) String practiceLicenseNo,
         @Past LocalDate dateOfBirth,
         Gender gender,
         @NotBlank @Pattern(regexp = "^(?:03[2-9]|05[2689]|07[06789]|08[1-689]|09[0-46-9])[0-9]{7}$")

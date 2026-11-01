@@ -10,7 +10,6 @@ import {
     Stethoscope,
     UserRound,
     UsersRound,
-    Volume2,
     X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -181,8 +180,6 @@ export default function DoctorWaitingListPage({
     const nextPatient = activeTab === 'waiting' || activeTab === 'conclusion'
         ? filtered.find((visit) => ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped) ?? null
         : null;
-    const canCall = Boolean(nextPatient);
-
     const resetFilters = () => {
         setSearch('');
         setPriority('ALL');
@@ -226,17 +223,6 @@ export default function DoctorWaitingListPage({
             setCalling(false);
         }
     }, [calling, callingVisit, fetchQueue, visitApi]);
-
-    useEffect(() => {
-        const onKeyDown = (event) => {
-            if (event.key === 'F2' && canCall) {
-                event.preventDefault();
-                void callPatient(nextPatient);
-            }
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [callPatient, canCall, nextPatient]);
 
     const [updatedTime, updatedDate] = formatDateTime(lastUpdated);
     const doctorName = profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—';
@@ -311,9 +297,6 @@ export default function DoctorWaitingListPage({
                             <SelectFilter id="waiting-priority" label="Lọc ưu tiên" value={priority} onChange={(value) => { setPriority(value); setPage(1); }} options={[['ALL', 'Tất cả ưu tiên'], ['PRIORITY', 'Ưu tiên'], ['NORMAL', 'Thường']]} />
                             <SelectFilter id="waiting-type" label="Lọc loại khám" value={visitType} onChange={(value) => { setVisitType(value); setPage(1); }} options={[['ALL', 'Tất cả loại khám'], ['BHYT', 'BHYT'], ['DV', 'Dịch vụ']]} />
                             <button type="button" onClick={resetFilters} className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-teal-300 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50"><FilterX className="h-4 w-4" />Xóa bộ lọc</button>
-                            <button type="button" disabled={!canCall || calling} onClick={() => void callPatient(nextPatient)} className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-teal-700 px-4 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">
-                                <Volume2 className="h-4 w-4" />{calling ? 'Đang gọi…' : 'Gọi tiếp theo (F2)'}
-                            </button>
                         </div>
 
                         {loadError && <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">{loadError}</p>}

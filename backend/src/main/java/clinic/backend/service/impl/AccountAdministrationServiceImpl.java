@@ -142,19 +142,21 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
             return new CreatedAccountResponse(prior.getId(), prior.getUsername(), null, true, needsRoom(prior.getRole()));
         }
         requireNonAdminRole(request.role());
-        requireAcademicTitle(request.role(), request.academicTitle());
+        requireProfessionalInformation(request.role(), request.academicTitle(), request.practiceLicenseNo());
         String username = StaffAccount.normalizeUsername(request.username())
                 .orElseThrow(() -> new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
                         Map.of("username", "INVALID_FORMAT")));
         String email = normalizeEmail(request.email());
-        checkUniqueForCreate(username, request.phoneNumber(), email);
+        String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
+        checkUniqueForCreate(username, request.phoneNumber(), email, practiceLicenseNo);
         String temporaryPassword = temporaryPassword(request.passwordMode(), request.initialPassword());
         Instant now = clock.instant();
         StaffAccount account = StaffAccount.create(
                 ids.next(), username, passwordHasher.hash(temporaryPassword), request.fullName().strip(),
-                normalizeOptional(request.academicTitle()), request.dateOfBirth(), request.gender(),
+                normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(), request.gender(),
                 request.phoneNumber(), email, normalizeOptional(request.address()), request.role(),
-                principal.accountId(), request.submissionId(), now);
+                principal.accountId(), request.submissionId(),
+                request.passwordMode() == TemporaryPasswordMode.GENERATE, now);
         try {
             accountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException exception) {
@@ -175,9 +177,10 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         StaffAccount account = requiredAccount(accountId);
         rejectAdminOrSelf(principal, account);
         requireVersion(account, request.version());
-        requireAcademicTitle(account.getRole(), request.academicTitle());
+        requireProfessionalInformation(account.getRole(), request.academicTitle(), request.practiceLicenseNo());
         String email = normalizeEmail(request.email());
-        checkUniqueForUpdate(account, request.phoneNumber(), email);
+        String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
+        checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo);
 
         Map<String, Object> oldValues = editableValues(account);
         Map<String, Object> newValues = editableValues(request, email);
@@ -187,7 +190,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         Instant now = clock.instant();
         account.updatePersonalInformation(
-                request.fullName().strip(), normalizeOptional(request.academicTitle()), request.dateOfBirth(),
+                request.fullName().strip(), normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(),
                 request.gender(), request.phoneNumber(), email, normalizeOptional(request.address()), now);
         try {
             accountRepository.saveAndFlush(account);
@@ -293,6 +296,13 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         requireState(account, request.expectedStatus(), request.expectedVersion());
         if (account.getStatus() != AccountStatus.ACTIVE) {
             throw new AppException(ErrorCode.ACCOUNT_STATE_CONFLICT);
+        }
+        long visits = visitsInProgress(account);
+        long orders = ordersInProgress(account);
+        if (visits + orders > 0) {
+            throw new AppException(ErrorCode.WORK_IN_PROGRESS, Map.of(
+                    "visits", Long.toString(visits),
+                    "orders", Long.toString(orders)));
         }
         Instant now = clock.instant();
         account.lock(request.reason().strip(), principal.accountId(), now);
@@ -469,11 +479,15 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 account.getId(), ParaclinicalOrderDetailStatus.IN_PROGRESS);
     }
 
-    private void checkUniqueForCreate(String username, String phone, String email) {
+    private void checkUniqueForCreate(
+            String username, String phone, String email, String practiceLicenseNo) {
         Map<String, String> conflicts = new LinkedHashMap<>();
         if (accountRepository.existsByUsername(username)) conflicts.put("username", "ALREADY_EXISTS");
         if (accountRepository.existsByPhoneNumber(phone)) conflicts.put("phoneNumber", "ALREADY_EXISTS");
         if (email != null && accountRepository.existsByEmailIgnoreCase(email)) conflicts.put("email", "ALREADY_EXISTS");
+        if (practiceLicenseNo != null && accountRepository.existsByPracticeLicenseNo(practiceLicenseNo)) {
+            conflicts.put("practiceLicenseNo", "ALREADY_EXISTS");
+        }
         if (!conflicts.isEmpty()) throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, conflicts);
     }
 
@@ -493,13 +507,18 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         });
     }
 
-    private void checkUniqueForUpdate(StaffAccount account, String phone, String email) {
+    private void checkUniqueForUpdate(
+            StaffAccount account, String phone, String email, String practiceLicenseNo) {
         Map<String, String> conflicts = new LinkedHashMap<>();
         if (accountRepository.existsByPhoneNumberAndIdNot(phone, account.getId())) {
             conflicts.put("phoneNumber", "ALREADY_EXISTS");
         }
         if (email != null && accountRepository.existsByEmailIgnoreCaseAndIdNot(email, account.getId())) {
             conflicts.put("email", "ALREADY_EXISTS");
+        }
+        if (practiceLicenseNo != null
+                && accountRepository.existsByPracticeLicenseNoAndIdNot(practiceLicenseNo, account.getId())) {
+            conflicts.put("practiceLicenseNo", "ALREADY_EXISTS");
         }
         if (!conflicts.isEmpty()) throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, conflicts);
     }
@@ -517,9 +536,13 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         return value;
     }
 
-    private void requireAcademicTitle(Role role, String title) {
+    private void requireProfessionalInformation(Role role, String title, String practiceLicenseNo) {
         if (needsRoom(role) && (title == null || title.isBlank())) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("academicTitle", "REQUIRED"));
+        }
+        if (needsRoom(role) && (practiceLicenseNo == null || practiceLicenseNo.isBlank())) {
+            throw new AppException(
+                    ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("practiceLicenseNo", "REQUIRED"));
         }
     }
 
@@ -542,6 +565,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("fullName", account.getFullName());
         values.put("academicTitle", account.getAcademicTitle());
+        values.put("practiceLicenseNo", account.getPracticeLicenseNo());
         values.put("dateOfBirth", account.getDateOfBirth());
         values.put("gender", account.getGender());
         values.put("phoneNumber", account.getPhoneNumber());
@@ -554,6 +578,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("fullName", request.fullName().strip());
         values.put("academicTitle", normalizeOptional(request.academicTitle()));
+        values.put("practiceLicenseNo", normalizeOptional(request.practiceLicenseNo()));
         values.put("dateOfBirth", request.dateOfBirth());
         values.put("gender", request.gender());
         values.put("phoneNumber", request.phoneNumber());

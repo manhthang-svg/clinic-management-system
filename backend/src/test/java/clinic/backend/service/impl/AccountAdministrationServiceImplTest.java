@@ -8,6 +8,8 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.AssignRoomRequest;
+import clinic.backend.dto.request.CreateAccountRequest;
+import clinic.backend.dto.request.LockAccountRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
 import clinic.backend.dto.request.UpdateAccountRequest;
 import clinic.backend.dto.response.AccountSummaryResponse;
@@ -105,6 +107,43 @@ class AccountAdministrationServiceImplTest {
                                 .isEqualTo(ErrorCode.WORK_IN_PROGRESS));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(TemporaryPasswordMode.class)
+    void creationRequiresPasswordChangeOnlyForGeneratedPasswords(TemporaryPasswordMode mode) {
+        String password = "InitialPass1";
+        when(ids.next()).thenReturn(UUID.randomUUID());
+        when(clock.instant()).thenReturn(NOW);
+        when(passwordHasher.hash(password)).thenReturn("{bcrypt}test-hash");
+        if (mode == TemporaryPasswordMode.GENERATE) {
+            when(passwordGenerator.generate()).thenReturn(password);
+        }
+        service.createAccount(new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateAccountRequest("staff.new", "New Staff", null, null, null, null,
+                        "0901234567", null, null, Role.RECEPTIONIST, mode,
+                        mode == TemporaryPasswordMode.MANUAL ? password : null, UUID.randomUUID()));
+
+        var saved = org.mockito.ArgumentCaptor.forClass(StaffAccount.class);
+        verify(accountRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().isPasswordChangeRequired())
+                .isEqualTo(mode == TemporaryPasswordMode.GENERATE);
+        assertThat(saved.getValue().getPasswordHash()).isEqualTo("{bcrypt}test-hash");
+        assertThat(saved.getValue().getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void lockIsRejectedWhileTheTargetHasAVisitInExamination() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(visitRepository.countByDoctorAccountIdAndStatus(target.getId(), VisitStatus.IN_EXAMINATION))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() -> service.lock(admin, target.getId(),
+                new LockAccountRequest("Đang nghỉ việc", AccountStatus.ACTIVE, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.WORK_IN_PROGRESS));
+    }
+
     @Test
     void seededAdminCannotBeChangedByRoleCommand() {
         StaffAccount target = account(Role.ADMIN);
@@ -149,8 +188,24 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Updated User", null, null, null, "0909876543", null, null, target.getVersion()));
+                "Updated User", null, null, null, null, "0909876543", null, null, target.getVersion()));
 
+        verify(auditLogService, times(2)).recordAccountChange(
+                any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
+    }
+
+    @Test
+    void doctorPracticeLicenseIsUpdatedAndWrittenToHistory() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, null,
+                "0901234567", null, null, target.getVersion()));
+
+        assertThat(target.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
         verify(auditLogService, times(2)).recordAccountChange(
                 any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
     }
