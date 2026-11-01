@@ -81,6 +81,16 @@ From Điều 39 NĐ 96/2023/NĐ-CP, limited to forms that examine outpatients (*
 | `PHONG_CHAN_TRI_Y_HOC_CO_TRUYEN` | Phòng chẩn trị y học cổ truyền |
 | `CO_SO_Y_HOC_GIA_DINH` | Cơ sở khám bệnh, chữa bệnh y học gia đình |
 
+## Frontend
+
+Page `/admin/hospital-information` (`HospitalInformationPage`), sidebar item "Thông tin bệnh viện".
+
+- When the facility is not declared, the page shows an empty form and the button "Khai báo cơ sở"; it sends `version = null`.
+- The facility-code field is disabled when `maCskcbLocked = true`.
+- Save stays disabled until a field changes. A phone edit that only adds spaces or dots is not a change.
+- When the address or organization form changes, the page shows the licence reminder (BR-77-03) and asks for confirmation before saving. The Admin can still save.
+- On `FACILITY_CODE_LOCKED` the page reloads the facility, restores the saved code, keeps the other edits and shows the message. On `CONCURRENT_MODIFICATION` it reloads the latest data.
+
 ## Known limitation
 
 The check "no visit exists" and the first visit are not serialized. A code change saved at the same moment as the very first visit could slip through. This can only happen during initial setup and is accepted.
