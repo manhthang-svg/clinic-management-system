@@ -2,6 +2,7 @@ package clinic.backend.entity;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Base64;
@@ -330,7 +331,7 @@ class Iteration1SchemaIT {
         String facilityCode = insured ? "79014" : null;
         String facilityName = insured ? "Bệnh viện Đa khoa Sài Gòn" : null;
         String verifyStatus = insured ? "VALID" : "NOT_APPLICABLE";
-        Instant verifiedAt = insured ? Instant.now() : null;
+        Timestamp verifiedAt = insured ? Timestamp.from(Instant.now()) : null;
         // Completed, so the one-active-visit-per-patient index (BR-17) does not couple the tests.
         jdbcTemplate.update("""
                 insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,

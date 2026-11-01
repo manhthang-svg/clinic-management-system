@@ -64,7 +64,7 @@ class InsuranceVerificationApiIT extends PostgresIntegrationTest {
 
     private StaffAccount account(Role role) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        String username = role.name().toLowerCase() + ".insurance." + suffix;
+        String username = "ins." + role.name().toLowerCase() + "." + suffix;
         Instant now = Instant.now();
         return accounts.saveAndFlush(StaffAccount.builder()
                 .id(ids.next())
