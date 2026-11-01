@@ -19,201 +19,7 @@ import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { departmentApi } from '../../apis/departmentApi';
 import { apiClient } from '../../services/session';
 import { createAccountApi } from '../../apis/accountApi';
-
-// Fallback staff list matching database V1000__demo_master_data.sql (Only DOCTOR and TECHNICIAN are assigned to room duty schedules)
-const FALLBACK_STAFF = [
-  { id: '0192a000-0005-7000-8000-000000000001', fullName: 'BSCKII Trần Văn An', role: 'DOCTOR' },
-  { id: '0192a000-0005-7000-8000-000000000002', fullName: 'ThS.BS Lê Thị Bình', role: 'DOCTOR' },
-  { id: '0192a000-0005-7000-8000-000000000003', fullName: 'BSCKI Phạm Minh Châu', role: 'DOCTOR' },
-  { id: '0192a000-0005-7000-8000-000000000004', fullName: 'KTV Nguyễn Văn Bảo', role: 'TECHNICIAN' },
-  { id: '0192a000-0005-7000-8000-000000000005', fullName: 'KTV Trần Thị Cúc', role: 'TECHNICIAN' },
-  { id: '0192a000-0005-7000-8000-000000000006', fullName: 'KTV Lê Thị Đào', role: 'TECHNICIAN' },
-];
-
-// Fallback rooms list matching database V1000__demo_master_data.sql (16 standard rooms)
-const FALLBACK_ROOMS = [
-  // Khoa Nội
-  {
-    id: '0192a000-0004-7000-8000-000000000001',
-    code: 'PK-NOI-CXK',
-    name: 'Phòng khám Cơ xương khớp',
-    departmentId: '0192a000-0001-7000-8000-000000000001',
-    departmentName: 'Khoa Nội',
-    location: 'Tòa A - Tầng 1 - P.101',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000002',
-    code: 'PK-NOI-NT',
-    name: 'Phòng khám Nội tiết',
-    departmentId: '0192a000-0001-7000-8000-000000000001',
-    departmentName: 'Khoa Nội',
-    location: 'Tòa A - Tầng 1 - P.102',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000003',
-    code: 'PK-NOI-TH',
-    name: 'Phòng khám Tiêu hóa',
-    departmentId: '0192a000-0001-7000-8000-000000000001',
-    departmentName: 'Khoa Nội',
-    location: 'Tòa A - Tầng 1 - P.103',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000004',
-    code: 'PK-NOI-TQ',
-    name: 'Phòng khám Nội tổng quát',
-    departmentId: '0192a000-0001-7000-8000-000000000001',
-    departmentName: 'Khoa Nội',
-    location: 'Tòa A - Tầng 1 - P.104',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000006',
-    code: 'PK-NOI-TQ-2',
-    name: 'Phòng khám Nội tổng quát 2',
-    departmentId: '0192a000-0001-7000-8000-000000000001',
-    departmentName: 'Khoa Nội',
-    location: 'Tòa A - Tầng 1 - P.105',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'INACTIVE',
-  },
-  // Khoa Ngoại
-  {
-    id: '0192a000-0004-7000-8000-000000000005',
-    code: 'PK-NGOAI',
-    name: 'Phòng khám Ngoại',
-    departmentId: '0192a000-0001-7000-8000-000000000002',
-    departmentName: 'Khoa Ngoại',
-    location: 'Tòa A - Tầng 2 - P.201',
-    unitType: 'ROOM',
-    type: 'EXAMINATION',
-    status: 'ACTIVE',
-  },
-  // Khoa Xét nghiệm
-  {
-    id: '0192a000-0004-7000-8000-000000000007',
-    code: 'XN-HH',
-    name: 'Phòng Xét nghiệm Huyết học',
-    departmentId: '0192a000-0001-7000-8000-000000000003',
-    departmentName: 'Khoa Xét nghiệm',
-    location: 'Tòa B - Tầng 1 - P.B101',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000008',
-    code: 'XN-SH',
-    name: 'Phòng Xét nghiệm Sinh hóa',
-    departmentId: '0192a000-0001-7000-8000-000000000003',
-    departmentName: 'Khoa Xét nghiệm',
-    location: 'Tòa B - Tầng 1 - P.B102',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000009',
-    code: 'XN-VS',
-    name: 'Phòng Xét nghiệm Vi sinh',
-    departmentId: '0192a000-0001-7000-8000-000000000003',
-    departmentName: 'Khoa Xét nghiệm',
-    location: 'Tòa B - Tầng 1 - P.B103',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  // Khoa Chẩn đoán hình ảnh
-  {
-    id: '0192a000-0004-7000-8000-00000000000a',
-    code: 'CDHA-SA-1',
-    name: 'Phòng Siêu âm 1',
-    departmentId: '0192a000-0001-7000-8000-000000000004',
-    departmentName: 'Khoa Chẩn đoán hình ảnh',
-    location: 'Tòa B - Tầng 2 - P.B201',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-00000000000b',
-    code: 'CDHA-SA-2',
-    name: 'Phòng Siêu âm 2',
-    departmentId: '0192a000-0001-7000-8000-000000000004',
-    departmentName: 'Khoa Chẩn đoán hình ảnh',
-    location: 'Tòa B - Tầng 2 - P.B202',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-00000000000c',
-    code: 'CDHA-XQ',
-    name: 'Phòng X-quang',
-    departmentId: '0192a000-0001-7000-8000-000000000004',
-    departmentName: 'Khoa Chẩn đoán hình ảnh',
-    location: 'Tòa B - Tầng 2 - P.B203',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-00000000000d',
-    code: 'CDHA-CT',
-    name: 'Phòng CT',
-    departmentId: '0192a000-0001-7000-8000-000000000004',
-    departmentName: 'Khoa Chẩn đoán hình ảnh',
-    location: 'Tòa B - Tầng 2 - P.B204',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-00000000000e',
-    code: 'CDHA-MRI',
-    name: 'Phòng MRI',
-    departmentId: '0192a000-0001-7000-8000-000000000004',
-    departmentName: 'Khoa Chẩn đoán hình ảnh',
-    location: 'Tòa B - Tầng 2 - P.B205',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  // Khoa Thăm dò chức năng
-  {
-    id: '0192a000-0004-7000-8000-00000000000f',
-    code: 'TDCN-NS',
-    name: 'Phòng Nội soi',
-    departmentId: '0192a000-0001-7000-8000-000000000005',
-    departmentName: 'Khoa Thăm dò chức năng',
-    location: 'Tòa B - Tầng 3 - P.B301',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-  {
-    id: '0192a000-0004-7000-8000-000000000010',
-    code: 'TDCN-DT',
-    name: 'Phòng Điện tim',
-    departmentId: '0192a000-0001-7000-8000-000000000005',
-    departmentName: 'Khoa Thăm dò chức năng',
-    location: 'Tòa B - Tầng 3 - P.B302',
-    unitType: 'ROOM',
-    type: 'PARACLINICAL',
-    status: 'ACTIVE',
-  },
-];
+import { describeApiError } from '../../utils/describeApiError';
 
 function getMondayOfDate(d) {
   const date = new Date(d);
@@ -248,9 +54,9 @@ export function ScheduleManagementPage({
   const [scheduleItems, setScheduleItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Available staff & rooms
-  const [staffList, setStaffList] = useState(FALLBACK_STAFF);
-  const [roomList, setRoomList] = useState(FALLBACK_ROOMS);
+  // Available staff & rooms (tải thật từ API, không dùng mock)
+  const [staffList, setStaffList] = useState([]);
+  const [roomList, setRoomList] = useState([]);
 
 
   // Modal states (Admin CRUD)
@@ -293,11 +99,17 @@ export function ScheduleManagementPage({
     async function loadMetadata() {
       try {
         const accountApi = createAccountApi(apiClient);
-        const accRes = await accountApi.list({ size: 100 });
-        const accounts = accRes?.data?.content || accRes?.content || accRes?.items || [];
-        if (accounts.length > 0 && isMounted) {
+        const allAccounts = [];
+        for (let page = 0; ; page += 1) {
+          const accRes = await accountApi.list({ page, size: 50 });
+          const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
+          allAccounts.push(...items);
+          const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
+          if (page + 1 >= totalPages || items.length === 0) break;
+        }
+        if (allAccounts.length > 0 && isMounted) {
           // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN cho lịch trực phòng
-          const dutyStaff = accounts
+          const dutyStaff = allAccounts
             .filter(a => a.role === 'DOCTOR' || a.role === 'TECHNICIAN')
             .map(a => ({
               id: a.id,
@@ -305,7 +117,7 @@ export function ScheduleManagementPage({
               role: a.role,
               username: a.username,
             }));
-          setStaffList(dutyStaff.length > 0 ? dutyStaff : accounts.map(a => ({
+          setStaffList(dutyStaff.length > 0 ? dutyStaff : allAccounts.map(a => ({
             id: a.id,
             fullName: (a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName,
             role: a.role,
@@ -313,7 +125,8 @@ export function ScheduleManagementPage({
           })));
         }
       } catch (e) {
-        console.warn('Could not fetch staff accounts list, using fallback:', e);
+        console.error('Lỗi tải danh sách nhân viên:', e);
+        toast.error(describeApiError(e, 'Không thể tải danh sách nhân viên'));
       }
 
       try {
@@ -321,11 +134,12 @@ export function ScheduleManagementPage({
         const items = deptRes?.data || deptRes || [];
         // CHỈ LẤY PHÒNG (unitType === 'ROOM'), TUYỆT ĐỐI LOẠI BỎ CÁC KHOA (unitType === 'DEPARTMENT')
         const rooms = items.filter(it => it.unitType === 'ROOM');
-        if (rooms.length > 0 && isMounted) {
+        if (isMounted) {
           setRoomList(rooms);
         }
       } catch (e) {
-        console.warn('Could not fetch room items list:', e);
+        console.error('Lỗi tải danh sách phòng:', e);
+        toast.error(describeApiError(e, 'Không thể tải danh sách phòng'));
       }
     }
     loadMetadata();
@@ -342,7 +156,7 @@ export function ScheduleManagementPage({
       setScheduleItems(res?.items || []);
     } catch (e) {
       console.error('Failed to load duty schedules:', e);
-      toast.error('Không thể tải lịch trực tuần này.');
+      toast.error(describeApiError(e, 'Không thể tải lịch trực tuần này'));
     } finally {
       setLoading(false);
     }
@@ -435,8 +249,8 @@ export function ScheduleManagementPage({
       // Silent background sync
       void fetchSchedules(true);
     } catch (e) {
-      console.error('Failed to save duty:', e);
-      toast.error(e?.message || 'Không thể lưu lịch trực');
+      console.error('Lỗi lưu lịch trực:', e);
+      toast.error(describeApiError(e, 'Không thể lưu ca trực'));
     }
   };
 
@@ -473,8 +287,8 @@ export function ScheduleManagementPage({
       // Silent background sync
       void fetchSchedules(true);
     } catch (e) {
-      console.error('Failed to delete duty:', e);
-      toast.error('Không thể xoá ca trực');
+      console.error('Lỗi xoá ca trực:', e);
+      toast.error(describeApiError(e, 'Không thể xoá ca trực'));
       // Re-fetch to restore state if delete failed
       void fetchSchedules(true);
     }
@@ -558,8 +372,8 @@ export function ScheduleManagementPage({
       toast.success(`Đã sao chép thành công ${newItems.length} ca trực từ tuần trước sang tuần này`);
       void fetchSchedules(true);
     } catch (e) {
-      console.error('Failed to copy previous week schedule:', e);
-      toast.error(e?.message || 'Không thể sao chép lịch trực từ tuần trước');
+      console.error('Lỗi sao chép lịch trực từ tuần trước:', e);
+      toast.error(describeApiError(e, 'Không thể sao chép lịch trực từ tuần trước'));
     } finally {
       setCopying(false);
     }

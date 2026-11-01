@@ -13,7 +13,8 @@ import {
   DepartmentFormModal,
   DepartmentDetailModal,
 } from '../../components/departments';
-import { departmentApi, INITIAL_DEPARTMENT_ITEMS } from '../../apis/departmentApi';
+import { departmentApi } from '../../apis/departmentApi';
+import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
 
 const { ADMIN } = ROUTES;
@@ -24,17 +25,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   // Active Tab: 'rooms' (Mặc định) | 'departments'
   const [activeTab, setActiveTab] = useState('rooms');
 
-  const [items, setItems] = useState(INITIAL_DEPARTMENT_ITEMS);
-  const [stats, setStats] = useState({
-    totalDepartments: 5,
-    totalRooms: 16,
-    activeRooms: 15,
-    maintenanceRooms: 1,
-    activeRate: 93.8,
-    maintenanceNote: '1 phòng đang kiểm tra thiết bị',
-    activeCount: 15,
-    maintenanceCount: 1,
-  });
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
 
   // Filter & Search states cho TAB 1: PHÒNG CHỨC NĂNG
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
@@ -66,19 +59,26 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     let cancelled = false;
     (async () => {
       try {
+        setLoading(true);
         const [fetchedItems, fetchedStats] = await Promise.all([
           departmentApi.getItems(),
           departmentApi.getStats(),
         ]);
         if (cancelled) return;
-        if (Array.isArray(fetchedItems) && fetchedItems.length > 0) {
+        if (Array.isArray(fetchedItems)) {
           setItems(fetchedItems);
         }
         if (fetchedStats) {
           setStats(fetchedStats);
         }
-      } catch {
-        // Giữ mock fallback
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Lỗi tải dữ liệu khoa/phòng:', err);
+        toast.error(describeApiError(err, 'Không thể tải danh sách khoa/phòng'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -102,8 +102,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     const clinicalDepts = departmentsList.filter(
       (dept) =>
         dept.type === 'CLINICAL' ||
-        dept.code === 'DEMO-NOI' ||
-        dept.code === 'DEMO-NGOAI' ||
         dept.name?.toLowerCase().includes('nội') ||
         dept.name?.toLowerCase().includes('ngoại')
     ).length;
@@ -178,12 +176,11 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const filteredDepartments = useMemo(() => {
     const query = deptSearchQuery.trim().toLowerCase();
     return departmentsList.filter((dept) => {
-      // Tìm kiếm theo mã khoa, tên chuyên khoa, trưởng khoa
+      // Tìm kiếm theo mã khoa, tên chuyên khoa
       const matchSearch =
         !query ||
         dept.code?.toLowerCase().includes(query) ||
         dept.name?.toLowerCase().includes(query) ||
-        dept.headPerson?.toLowerCase().includes(query) ||
         dept.location?.toLowerCase().includes(query);
 
       // Lọc theo Trạng thái
@@ -273,9 +270,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-            } catch {
-              // Mock fallback
-            } finally {
               // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang INACTIVE
               setItems((prev) =>
                 prev.map((i) => {
@@ -298,6 +292,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 `Đã tạm ngưng chuyên khoa "${item.name}" và toàn bộ các phòng trực thuộc!`
               );
               setConfirmDialog(null);
+            } catch (err) {
+              console.error('Lỗi tạm ngưng chuyên khoa:', err);
+              toast.error(describeApiError(err, 'Không thể tạm ngưng chuyên khoa'));
             }
           },
         });
@@ -312,9 +309,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-            } catch {
-              // Mock fallback
-            } finally {
               // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang ACTIVE
               setItems((prev) =>
                 prev.map((i) => {
@@ -337,6 +331,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 `Đã kích hoạt lại chuyên khoa "${item.name}" và toàn bộ phòng trực thuộc!`
               );
               setConfirmDialog(null);
+            } catch (err) {
+              console.error('Lỗi kích hoạt chuyên khoa:', err);
+              toast.error(describeApiError(err, 'Không thể kích hoạt lại chuyên khoa'));
             }
           },
         });
@@ -355,9 +352,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       onConfirm: async () => {
         try {
           await departmentApi.toggleRoomStatus(item.id);
-        } catch {
-          // Fallback UI
-        } finally {
           const newStatus = isDeactivating ? 'INACTIVE' : 'ACTIVE';
           setItems((prev) =>
             prev.map((i) =>
@@ -370,6 +364,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               : `Đã kích hoạt "${item.name}" thành công!`
           );
           setConfirmDialog(null);
+        } catch (err) {
+          console.error('Lỗi đổi trạng thái phòng:', err);
+          toast.error(describeApiError(err, 'Không thể thay đổi trạng thái phòng'));
         }
       },
     });
@@ -381,12 +378,11 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     try {
       if (isDept) {
         if (isEdit) {
-          await departmentApi.updateDepartment(editingItem.id, {
+          const res = await departmentApi.updateDepartment(editingItem.id, {
             departmentName: formData.name,
             tenkhoa: formData.name,
-            type: formData.type,
+            type: editingItem?.type || formData.type,
             description: formData.description,
-            headPerson: formData.headPerson,
             active: formData.status === 'ACTIVE',
           });
           setItems((prev) =>
@@ -394,10 +390,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               i.id === editingItem.id && i.unitType === 'DEPARTMENT'
                 ? {
                     ...i,
+                    ...(res || {}),
                     name: formData.name,
-                    type: formData.type,
+                    type: editingItem?.type || i.type,
                     description: formData.description,
-                    headPerson: formData.headPerson,
                     location: formData.location || i.location,
                     status: formData.status,
                   }
@@ -406,7 +402,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           );
           toast.success(`Đã cập nhật chuyên khoa "${formData.name}" thành công!`);
         } else {
-          await departmentApi.createDepartment({
+          const res = await departmentApi.createDepartment({
             departmentCode: formData.code,
             departmentName: formData.name,
             makhoa: formData.code,
@@ -417,30 +413,33 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             active: formData.status === 'ACTIVE',
           });
           const newDept = {
-            id: `dept-${Date.now()}`,
+            ...(res || {}),
+            id: res?.id,
             unitType: 'DEPARTMENT',
-            code: formData.code,
-            name: formData.name,
-            departmentId: `dept-${Date.now()}`,
-            departmentName: formData.name,
-            type: formData.type,
-            location: '',
-            headPerson: formData.headPerson || 'Chưa bổ nhiệm',
-            status: formData.status,
+            code: res?.code || formData.code,
+            name: res?.name || formData.name,
+            departmentId: res?.id,
+            departmentName: res?.name || formData.name,
+            type: res?.type || formData.type,
+            location: 'Khu trung tâm',
+            headPerson: res?.headPerson || formData.headPerson || 'Chưa bổ nhiệm',
+            status: res?.status || formData.status,
             description: formData.description,
             roomCount: 0,
           };
           setItems((prev) => [newDept, ...prev]);
+          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã thêm mới chuyên khoa "${formData.name}" thành công!`);
         }
       } else {
         // Handle ROOM
         const targetDept = departmentsList.find((d) => d.id === formData.departmentId);
         if (isEdit) {
-          await departmentApi.updateRoom(editingItem.id, {
+          const res = await departmentApi.updateRoom(editingItem.id, {
             roomName: formData.name,
             phongkham: formData.name,
             departmentId: formData.departmentId,
+            serviceGroupId: formData.serviceGroupId || null,
             serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
@@ -452,9 +451,12 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               i.id === editingItem.id && i.unitType === 'ROOM'
                 ? {
                     ...i,
+                    ...(res || {}),
                     name: formData.name,
                     departmentId: formData.departmentId,
                     departmentName: targetDept?.name || i.departmentName,
+                    serviceGroupId: formData.serviceGroupId || res?.serviceGroupId || null,
+                    serviceGroupName: res?.serviceGroupName || i.serviceGroupName || null,
                     type: formData.type,
                     location: formData.location,
                     headPerson: formData.headPerson,
@@ -465,14 +467,16 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 : i
             )
           );
+          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã cập nhật phòng "${formData.name}" thành công!`);
         } else {
-          await departmentApi.createRoom({
+          const res = await departmentApi.createRoom({
             roomCode: formData.code,
             roomName: formData.name,
             maphongkham: formData.code,
             phongkham: formData.name,
             departmentId: formData.departmentId,
+            serviceGroupId: formData.serviceGroupId || null,
             serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
@@ -480,102 +484,31 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             status: formData.status,
           });
           const newRoom = {
-            id: `room-${Date.now()}`,
+            ...(res || {}),
+            id: res?.id,
             unitType: 'ROOM',
-            code: formData.code,
-            name: formData.name,
-            departmentId: formData.departmentId,
-            departmentName: targetDept?.name || 'Khoa Nội',
-            type: formData.type,
-            location: formData.location,
-            headPerson: formData.headPerson || 'Chưa phân công',
-            status: formData.status,
+            code: res?.code || formData.code,
+            name: res?.name || formData.name,
+            departmentId: res?.departmentId || formData.departmentId,
+            departmentName: res?.departmentName || targetDept?.name || 'Chưa phân khoa',
+            serviceGroupId: res?.serviceGroupId || formData.serviceGroupId || null,
+            serviceGroupName: res?.serviceGroupName || null,
+            type: res?.type || formData.type,
+            location: res?.location || formData.location,
+            headPerson: res?.headPerson || formData.headPerson || 'Chưa phân công',
+            status: res?.status || formData.status,
             assignedServices: formData.assignedServices || [],
             serviceIds: formData.serviceIds || [],
           };
           setItems((prev) => [newRoom, ...prev]);
+          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
         }
       }
-    } catch {
-      // Mock fallback nếu backend offline
-      if (isDept) {
-        if (isEdit) {
-          setItems((prev) =>
-            prev.map((i) =>
-              i.id === editingItem.id && i.unitType === 'DEPARTMENT'
-                ? {
-                    ...i,
-                    name: formData.name,
-                    type: formData.type,
-                    description: formData.description,
-                    headPerson: formData.headPerson,
-                    location: formData.location || i.location,
-                    status: formData.status,
-                  }
-                : i
-            )
-          );
-          toast.success(`Đã cập nhật chuyên khoa "${formData.name}" thành công!`);
-        } else {
-          const newDept = {
-            id: `dept-${Date.now()}`,
-            unitType: 'DEPARTMENT',
-            code: formData.code,
-            name: formData.name,
-            departmentId: `dept-${Date.now()}`,
-            departmentName: formData.name,
-            type: formData.type,
-            location: '',
-            headPerson: formData.headPerson || 'Chưa bổ nhiệm',
-            status: formData.status,
-            description: formData.description,
-            roomCount: 0,
-          };
-          setItems((prev) => [newDept, ...prev]);
-          toast.success(`Đã thêm mới chuyên khoa "${formData.name}" thành công!`);
-        }
-      } else {
-        const targetDept = departmentsList.find((d) => d.id === formData.departmentId);
-        if (isEdit) {
-          setItems((prev) =>
-            prev.map((i) =>
-              i.id === editingItem.id && i.unitType === 'ROOM'
-                ? {
-                    ...i,
-                    name: formData.name,
-                    departmentId: formData.departmentId,
-                    departmentName: targetDept?.name || i.departmentName,
-                    type: formData.type,
-                    location: formData.location,
-                    headPerson: formData.headPerson,
-                    status: formData.status,
-                    assignedServices: formData.assignedServices || [],
-                    serviceIds: formData.serviceIds || [],
-                  }
-                : i
-            )
-          );
-          toast.success(`Đã cập nhật phòng "${formData.name}" thành công!`);
-        } else {
-          const newRoom = {
-            id: `room-${Date.now()}`,
-            unitType: 'ROOM',
-            code: formData.code,
-            name: formData.name,
-            departmentId: formData.departmentId,
-            departmentName: targetDept?.name || 'Khoa Nội',
-            type: formData.type,
-            location: formData.location,
-            headPerson: formData.headPerson || 'Chưa phân công',
-            status: formData.status,
-            assignedServices: formData.assignedServices || [],
-            serviceIds: formData.serviceIds || [],
-          };
-          setItems((prev) => [newRoom, ...prev]);
-          toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
-        }
-      }
+    } catch (err) {
+      console.error('Lỗi lưu form khoa/phòng:', err);
+      toast.error(describeApiError(err, isEdit ? 'Không thể cập nhật' : 'Không thể thêm mới'));
+      throw err;
     }
   };
 
@@ -753,7 +686,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                   setDeptPage(1);
                 }}
                 onReset={handleResetDeptFilters}
-                onAdd={handleOpenCreateDept}
               />
 
               {/* Bảng dữ liệu Khoa */}

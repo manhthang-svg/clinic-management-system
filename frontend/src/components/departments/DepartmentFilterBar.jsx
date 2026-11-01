@@ -1,4 +1,4 @@
-import { Search, ChevronDown, RotateCcw, Plus } from 'lucide-react';
+import { Search, ChevronDown, RotateCcw } from 'lucide-react';
 
 const SELECT_CLASS =
   'appearance-none w-full pl-3.5 pr-8 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 cursor-pointer transition-all';
@@ -9,7 +9,6 @@ export function DepartmentFilterBar({
   statusFilter,
   setStatusFilter,
   onReset,
-  onAdd,
 }) {
   const isFiltered = Boolean(searchQuery) || statusFilter !== 'ALL';
 
@@ -25,7 +24,7 @@ export function DepartmentFilterBar({
             aria-label="Tìm kiếm chuyên khoa"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo mã khoa, tên chuyên khoa, trưởng khoa..."
+            placeholder="Tìm theo mã khoa, tên chuyên khoa..."
             className="w-full pl-9 pr-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all placeholder:text-slate-400"
           />
         </div>
@@ -57,20 +56,9 @@ export function DepartmentFilterBar({
           </button>
         )}
       </div>
-
-      {/* Nút chính bên phải */}
-      <div className="shrink-0">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Thêm chuyên khoa</span>
-        </button>
-      </div>
     </div>
   );
 }
 
 export default DepartmentFilterBar;
+
