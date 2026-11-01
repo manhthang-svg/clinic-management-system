@@ -71,17 +71,29 @@ public class Room extends VersionedEntity {
 
     public void update(
             UUID departmentId,
+            UUID serviceGroupId,
             String roomName,
             String location,
             RoomType type,
             ActivationStatus status,
             Instant now) {
         this.departmentId = departmentId;
+        this.serviceGroupId = serviceGroupId;
         this.roomName = roomName;
         this.location = location;
         this.type = type;
         this.status = status;
         touch(now);
+    }
+
+    public void update(
+            UUID departmentId,
+            String roomName,
+            String location,
+            RoomType type,
+            ActivationStatus status,
+            Instant now) {
+        update(departmentId, this.serviceGroupId, roomName, location, type, status, now);
     }
 
     public void setStatus(ActivationStatus status, Instant now) {

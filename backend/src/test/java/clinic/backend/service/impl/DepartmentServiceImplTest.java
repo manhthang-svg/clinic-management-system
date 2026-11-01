@@ -18,6 +18,7 @@ import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.utils.UuidV7Generator;
@@ -44,6 +45,9 @@ class DepartmentServiceImplTest {
     private RoomRepository roomRepository;
 
     @Mock
+    private ServiceGroupRepository serviceGroupRepository;
+
+    @Mock
     private StaffRoomAssignmentRepository staffRoomAssignmentRepository;
 
     @Mock
@@ -62,6 +66,7 @@ class DepartmentServiceImplTest {
         departmentService = new DepartmentServiceImpl(
                 departmentRepository,
                 roomRepository,
+                serviceGroupRepository,
                 staffRoomAssignmentRepository,
                 staffAccountRepository,
                 clock,
@@ -166,6 +171,54 @@ class DepartmentServiceImplTest {
         assertThat(response.getDepartmentName()).isEqualTo("Khoa Nội");
         assertThat(response.getUnitType()).isEqualTo("ROOM");
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("Tạo phòng cận lâm sàng thành công kèm nhóm dịch vụ kỹ thuật")
+    void createRoom_Paraclinical_WithServiceGroup_Success() {
+        UUID deptId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+
+        Department dept = new Department(deptId, "K-CDHA", "Khoa Chẩn Đoán Hình Ảnh", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(uuidV7Generator.next()).thenReturn(roomId);
+
+        clinic.backend.entity.ServiceGroup group = org.mockito.Mockito.mock(clinic.backend.entity.ServiceGroup.class);
+        when(group.getServiceGroupName()).thenReturn("Chẩn đoán hình ảnh (X-Quang, CT)");
+        when(serviceGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
+
+        Room savedRoom = new Room(
+                roomId,
+                now,
+                deptId,
+                groupId,
+                "PK-XQ-01",
+                "Phòng Chụp X-Quang 1",
+                "Tòa B - P.102",
+                RoomType.PARACLINICAL,
+                ActivationStatus.ACTIVE
+        );
+        when(roomRepository.save(any(Room.class))).thenReturn(savedRoom);
+
+        RoomRequest request = RoomRequest.builder()
+                .roomCode("PK-XQ-01")
+                .roomName("Phòng Chụp X-Quang 1")
+                .departmentId(deptId)
+                .serviceGroupId(groupId)
+                .location("Tòa B - P.102")
+                .type(RoomType.PARACLINICAL)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        DepartmentRoomItemResponse response = departmentService.createRoom(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(roomId);
+        assertThat(response.getCode()).isEqualTo("PK-XQ-01");
+        assertThat(response.getServiceGroupId()).isEqualTo(groupId);
+        assertThat(response.getServiceGroupName()).isEqualTo("Chẩn đoán hình ảnh (X-Quang, CT)");
+        assertThat(response.getType()).isEqualTo("PARACLINICAL");
     }
 
     @Test

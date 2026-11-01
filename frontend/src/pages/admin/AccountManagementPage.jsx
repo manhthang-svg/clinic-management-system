@@ -33,6 +33,7 @@ import {
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
 import { accountErrorMessage } from "../../components/accounts/accountErrors";
+import { describeApiError } from "../../utils/describeApiError";
 import { createAccountApi } from "../../apis/accountApi";
 import { departmentApi } from "../../apis/departmentApi";
 import { apiClient } from "../../services/session";
@@ -537,8 +538,8 @@ export function AccountManagementPage({
       setRoomOptions(eligibleRooms);
       setSelectedRoomId(eligibleRooms.find((room) => room.name === account.roomName)?.id || "");
       setRoomAssignment(account);
-    } catch {
-      toast.error("Không thể tải danh sách phòng. Vui lòng thử lại.");
+    } catch (err) {
+      toast.error(describeApiError(err, "Không thể tải danh sách phòng"));
     }
   };
 

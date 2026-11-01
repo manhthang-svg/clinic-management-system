@@ -54,7 +54,7 @@ const NAV_ITEMS = {
     },
     {
       id: 'departments',
-      label: 'Quản lý khoa',
+      label: 'Khoa / Phòng',
       iconName: 'Building2',
       path: '/admin/departments',
     },
@@ -63,12 +63,6 @@ const NAV_ITEMS = {
       label: 'Quản lý dịch vụ',
       iconName: 'BriefcaseMedical',
       path: '/admin/services',
-    },
-    {
-      id: 'rooms',
-      label: 'Quản lý phòng',
-      iconName: 'DoorOpen',
-      path: '/admin/rooms',
     },
     {
       id: 'schedules',

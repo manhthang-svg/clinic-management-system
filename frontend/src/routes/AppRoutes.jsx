@@ -5,7 +5,6 @@ import { ROUTES } from "./routes.js";
 import {
   AccountManagementPage,
   DepartmentManagementPage,
-  RoomManagementPage,
   ServiceManagementPage,
   ScheduleManagementPage,
 } from "../pages/admin/index.js";
@@ -93,13 +92,7 @@ export function AppRoutes({
 
           <Route
             path="rooms"
-            element={
-              <RoomManagementPage
-                currentAdmin={session.account}
-                onLogout={onLogout}
-                onChangePassword={onChangePassword}
-              />
-            }
+            element={<Navigate to="/admin/departments" replace />}
           />
 
           <Route
