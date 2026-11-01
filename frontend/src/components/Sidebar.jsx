@@ -71,6 +71,12 @@ const NAV_ITEMS = {
       path: '/admin/rooms',
     },
     {
+      id: 'schedules',
+      label: 'Lịch trực',
+      iconName: 'CalendarDays',
+      path: '/admin/schedules',
+    },
+    {
       id: 'settings',
       label: 'Cài đặt',
       iconName: 'Settings',
@@ -96,6 +102,12 @@ const NAV_ITEMS = {
       label: 'Lịch sử thanh toán',
       iconName: 'ClipboardList',
       path: '/cashier/payment-history',
+    },
+    {
+      id: 'schedules',
+      label: 'Lịch trực',
+      iconName: 'CalendarDays',
+      path: '/cashier/schedules',
     },
   ],
 
@@ -130,6 +142,12 @@ const NAV_ITEMS = {
       iconName: 'UserRound',
       path: '/doctor/profile',
     },
+    {
+      id: 'schedules',
+      label: 'Lịch trực',
+      iconName: 'CalendarDays',
+      path: '/doctor/schedules',
+    },
   ],
 
   TECHNICIAN: [
@@ -144,6 +162,12 @@ const NAV_ITEMS = {
       label: 'Danh sách chờ & Phân loại',
       iconName: 'ClipboardList',
       path: '/technician/queue',
+    },
+    {
+      id: 'schedules',
+      label: 'Lịch trực',
+      iconName: 'CalendarDays',
+      path: '/technician/schedules',
     },
   ],
 
@@ -171,6 +195,12 @@ const NAV_ITEMS = {
       label: 'Hàng đợi phòng khám',
       iconName: 'DoorOpen',
       path: '/receptionist/room-queue',
+    },
+    {
+      id: 'schedules',
+      label: 'Lịch trực',
+      iconName: 'CalendarDays',
+      path: '/receptionist/schedules',
     },
   ],
 };

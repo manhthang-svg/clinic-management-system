@@ -63,6 +63,8 @@ public enum ErrorCode {
     WORK_IN_PROGRESS("WORK_IN_PROGRESS", "The account has work in progress.", HttpStatus.CONFLICT),
     ACCOUNT_STATE_CONFLICT("ACCOUNT_STATE_CONFLICT", "The account state changed. Reload it and try again.",
             HttpStatus.CONFLICT),
+    FACILITY_CODE_LOCKED("FACILITY_CODE_LOCKED",
+            "The facility code cannot change after the first visit.", HttpStatus.CONFLICT),
     CONCURRENT_MODIFICATION("CONCURRENT_MODIFICATION",
             "The resource was changed by another request. Reload it and try again.", HttpStatus.CONFLICT),
     CURRENT_PASSWORD_INCORRECT("CURRENT_PASSWORD_INCORRECT", "The current password is incorrect.",

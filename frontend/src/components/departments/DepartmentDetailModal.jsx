@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   X,
   Building2,
@@ -9,6 +9,10 @@ import {
   Stethoscope,
   CheckCircle2,
   DoorOpen,
+  Sun,
+  Sunset,
+  CalendarDays,
+  UserCheck,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -17,7 +21,24 @@ import {
   SERVICE_GROUP_LABELS,
 } from '../../constants/serviceData';
 import { INITIAL_DEPARTMENT_ITEMS } from '../../apis/departmentApi';
+import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { formatPrice } from '../services/serviceFormat';
+
+const ROLE_LABELS = {
+  ADMIN: 'Quản trị viên',
+  DOCTOR: 'Bác sĩ',
+  TECHNICIAN: 'Kỹ thuật viên',
+  NURSE: 'Điều dưỡng',
+  RECEPTIONIST: 'Tiếp đón',
+  CASHIER: 'Thu ngân',
+};
+
+const ROLE_COLORS = {
+  DOCTOR: 'bg-teal-50 text-teal-700 border-teal-200',
+  TECHNICIAN: 'bg-purple-50 text-purple-700 border-purple-200',
+  NURSE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  ADMIN: 'bg-blue-50 text-blue-700 border-blue-200',
+};
 
 export function DepartmentDetailModal(props) {
   if (!props.isOpen || !props.item) return null;
@@ -27,6 +48,59 @@ export function DepartmentDetailModal(props) {
 function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
   const isDept = item.unitType === 'DEPARTMENT';
   const isActive = item.status === 'ACTIVE';
+
+  // Lấy lịch trực thực tế hôm nay của phòng từ phân ca trực
+  const [roomDuties, setRoomDuties] = useState({ morning: [], afternoon: [], loading: false });
+
+  useEffect(() => {
+    if (isDept || !item?.id) return;
+    let isMounted = true;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    async function loadTodayRoomDuties() {
+      setRoomDuties(prev => ({ ...prev, loading: true }));
+      try {
+        // Lấy lịch tuần theo phòng hoặc lịch tuần chung
+        let duties = [];
+        try {
+          const res = await dutyScheduleApi.getWeeklyScheduleByRoom(item.id, todayStr, todayStr);
+          duties = res?.items || [];
+        } catch {
+          // fallback query tuần
+          const fallbackRes = await dutyScheduleApi.getWeeklySchedule(todayStr, todayStr);
+          duties = (fallbackRes?.items || []).filter(
+            it => it.roomId === item.id || it.roomCode === item.code
+          );
+        }
+
+        if (duties.length === 0) {
+          // Kiểm tra thêm theo roomId / roomCode
+          const allRes = await dutyScheduleApi.getWeeklySchedule(todayStr, todayStr);
+          duties = (allRes?.items || []).filter(
+            it => it.roomId === item.id || (item.code && it.roomCode === item.code)
+          );
+        }
+
+        if (isMounted) {
+          const morningDuties = duties.filter(d => d.shift === 'MORNING');
+          const afternoonDuties = duties.filter(d => d.shift === 'AFTERNOON');
+          setRoomDuties({
+            morning: morningDuties,
+            afternoon: afternoonDuties,
+            loading: false,
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch room duties for today:', err);
+        if (isMounted) {
+          setRoomDuties({ morning: [], afternoon: [], loading: false });
+        }
+      }
+    }
+
+    loadTodayRoomDuties();
+    return () => { isMounted = false; };
+  }, [isDept, item?.id, item?.code]);
 
   // Lấy danh sách các phòng trực thuộc chuyên khoa này
   const departmentRooms = useMemo(() => {
@@ -256,8 +330,103 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
           {/* Nếu là Phòng chức năng (ROOM) */}
           {!isDept && (
             <div className="space-y-4">
-              {/* Bảng danh sách các dịch vụ y tế được phòng khám phục vụ */}
+              {/* Bác sĩ trực tại phòng (Ca Sáng & Ca Chiều) */}
               <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-teal-50 text-[#0d9488] flex items-center justify-center font-bold">
+                      <CalendarDays className="w-3.5 h-3.5" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-800 tracking-tight">
+                      Bác sĩ / Kỹ thuật viên trực phòng (Hôm nay)
+                    </h4>
+                  </div>
+                  <span className="text-[10.5px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                    Theo lịch trực tuần
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Ca Sáng */}
+                  <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-200/80 flex items-start gap-2.5">
+                    <div className="p-2 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+                      <Sun className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                        Ca Sáng (08:00 - 11:30)
+                      </span>
+                      {roomDuties.loading ? (
+                        <span className="text-xs text-slate-400 italic block mt-0.5">
+                          Đang tải lịch trực...
+                        </span>
+                      ) : roomDuties.morning.length > 0 ? (
+                        <div className="space-y-1.5 mt-1">
+                          {roomDuties.morning.map((duty, idx) => (
+                            <div key={duty.id || idx} className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-slate-800 truncate" title={duty.staffName}>
+                                {duty.staffName}
+                              </span>
+                              <span
+                                className={`text-[9.5px] px-1.5 py-0.2 rounded border font-medium shrink-0 ${
+                                  ROLE_COLORS[duty.staffRole] || 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                {ROLE_LABELS[duty.staffRole] || duty.staffRole || 'Nhân sự'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic block mt-0.5">
+                          Chưa phân công trực
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ca Chiều */}
+                  <div className="p-3 rounded-xl bg-sky-50/50 border border-sky-200/80 flex items-start gap-2.5">
+                    <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
+                      <Sunset className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-bold text-sky-900 uppercase tracking-wider block">
+                        Ca Chiều (13:00 - 17:30)
+                      </span>
+                      {roomDuties.loading ? (
+                        <span className="text-xs text-slate-400 italic block mt-0.5">
+                          Đang tải lịch trực...
+                        </span>
+                      ) : roomDuties.afternoon.length > 0 ? (
+                        <div className="space-y-1.5 mt-1">
+                          {roomDuties.afternoon.map((duty, idx) => (
+                            <div key={duty.id || idx} className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-slate-800 truncate" title={duty.staffName}>
+                                {duty.staffName}
+                              </span>
+                              <span
+                                className={`text-[9.5px] px-1.5 py-0.2 rounded border font-medium shrink-0 ${
+                                  ROLE_COLORS[duty.staffRole] || 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                {ROLE_LABELS[duty.staffRole] || duty.staffRole || 'Nhân sự'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic block mt-0.5">
+                          Chưa phân công trực
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bảng danh sách các dịch vụ y tế được phòng khám phục vụ */}
+              <div className="space-y-2 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-teal-50 text-[#0d9488] flex items-center justify-center font-bold">

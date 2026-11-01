@@ -29,6 +29,7 @@ import org.hibernate.type.SqlTypes;
 public class AuditLog extends UuidEntity {
 
     private static final String STAFF_ACCOUNT_ENTITY = "staff_accounts";
+    private static final String CLINIC_FACILITY_ENTITY = "clinic_facility";
 
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private Instant occurredAt;
@@ -97,6 +98,31 @@ public class AuditLog extends UuidEntity {
         auditLog.outcome = AuditOutcome.SUCCESS;
         auditLog.changedFields = Objects.requireNonNull(changedFields, "changedFields").clone();
         auditLog.oldValue = Objects.requireNonNull(oldValue, "oldValue");
+        auditLog.newValue = Objects.requireNonNull(newValue, "newValue");
+        auditLog.correlationId = correlationId;
+        return auditLog;
+    }
+
+    /** UC-77: the Admin declared (CREATE) or changed (UPDATE) the clinic facility information. */
+    public static AuditLog facilityChanged(
+            UUID id,
+            UUID actorAccountId,
+            UUID facilityId,
+            AuditLogAction action,
+            Instant occurredAt,
+            String[] changedFields,
+            String oldValue,
+            String newValue,
+            String correlationId) {
+        AuditLog auditLog = new AuditLog(id);
+        auditLog.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
+        auditLog.actorAccountId = Objects.requireNonNull(actorAccountId, "actorAccountId");
+        auditLog.action = Objects.requireNonNull(action, "action");
+        auditLog.entityType = CLINIC_FACILITY_ENTITY;
+        auditLog.entityId = Objects.requireNonNull(facilityId, "facilityId");
+        auditLog.outcome = AuditOutcome.SUCCESS;
+        auditLog.changedFields = Objects.requireNonNull(changedFields, "changedFields").clone();
+        auditLog.oldValue = oldValue;
         auditLog.newValue = Objects.requireNonNull(newValue, "newValue");
         auditLog.correlationId = correlationId;
         return auditLog;
