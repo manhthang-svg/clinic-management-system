@@ -49,6 +49,8 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `GET` | `/api/v1/patients/{patientId}/follow-up-appointment` | Receptionist bearer token | `200` + scheduled appointment, or `204` |
 | `POST` | `/api/v1/follow-up-appointments/{appointmentId}/cancel` | Receptionist bearer token | `200` + cancelled appointment |
 | `POST` | `/api/v1/visits` | Receptionist bearer token | `201` + registered visit |
+| `GET` | `/api/v1/visits/{visitId}/ticket` | Receptionist bearer token | `200` + canonical examination-ticket data |
+| `POST` | `/api/v1/visits/{visitId}/commands/prepare-ticket-print` | Receptionist bearer token | `200` + initial/reprint ticket data; writes audit |
 
 UC-74 accepts either a 10-digit social-insurance number or a legacy health-insurance card consisting of two uppercase
 letters followed by thirteen digits. The backend derives the 10-digit social-insurance number, queries the simulated
@@ -56,6 +58,11 @@ portal data in `health_insurance_records`, compares the returned identity with t
 status of `VALID`, `INVALID`, or `MISMATCH`. A completed lookup returns `200` even for an invalid or mismatched card;
 the response includes portal identity data for MSG18. Visit creation never trusts a client verification flag and
 repeats verification before applying the portal-provided coverage rate.
+
+The examination visit enters `WAITING` only when the persisted examination-fee receipt has a patient amount of zero.
+Any positive patient amount, including insurance co-payment, leaves the visit in `WAITING_FEE_PAYMENT`. Ticket data is
+assembled from the persisted visit and receipt rather than from the earlier fee preview. The print command records every
+print attempt; responses after the first recorded print set `reprint: true`.
 
 Owner matching prefers identity data. When portal `identityNumber` and patient `cccdSo` are both present, they must be
 equal and the normalized name and date of birth must also match; unequal identity numbers never fall back. When either

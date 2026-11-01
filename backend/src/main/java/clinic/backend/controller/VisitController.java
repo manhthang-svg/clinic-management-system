@@ -10,6 +10,7 @@ import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
+import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.VisitService;
@@ -96,5 +97,22 @@ public class VisitController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return ApiResponse.success(visitService.getRoomQueueStatus(date));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/{visitId}/ticket")
+    @Operation(summary = "UC-41 Lấy dữ liệu phiếu khám")
+    public ApiResponse<VisitTicketResponse> getTicket(@PathVariable UUID visitId) {
+        return ApiResponse.success(visitService.getTicket(visitId));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @PostMapping("/{visitId}/commands/prepare-ticket-print")
+    @Operation(summary = "UC-41 Chuẩn bị in hoặc in lại phiếu khám và ghi audit")
+    public ApiResponse<VisitTicketResponse> prepareTicketPrint(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID visitId) {
+        return ApiResponse.success(
+                visitService.prepareTicketPrint(StaffPrincipal.from(jwt), visitId));
     }
 }

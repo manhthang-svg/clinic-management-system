@@ -10,6 +10,8 @@ import java.util.UUID;
 import java.math.BigDecimal;
 
 import clinic.backend.dto.request.CreateVisitRequest;
+import clinic.backend.dto.response.InsuranceVerificationResponse;
+import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
@@ -17,6 +19,7 @@ import clinic.backend.entity.Room;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
+import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.RoomType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
@@ -27,8 +30,10 @@ import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
+import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.security.user.StaffPrincipal;
@@ -74,6 +79,12 @@ class VisitServiceImplTest {
     private StaffRoomAssignmentRepository staffRoomAssignmentRepository;
 
     @Mock
+    private StaffAccountRepository staffAccountRepository;
+
+    @Mock
+    private ClinicFacilityRepository clinicFacilityRepository;
+
+    @Mock
     private UuidV7Generator uuidV7Generator;
 
     @Mock
@@ -102,6 +113,8 @@ class VisitServiceImplTest {
                 roomRepository,
                 visitRepository,
                 staffRoomAssignmentRepository,
+                staffAccountRepository,
+                clinicFacilityRepository,
                 followUpAppointmentRepository,
                 insuranceVerificationService,
                 roomQueueCounterRepository,
@@ -239,6 +252,24 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void insuredVisitWithPatientShareWaitsForPayment() {
+        var result = registerInsuredVisit((short) 80);
+
+        assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING_FEE_PAYMENT);
+        assertThat(result.payment().getPatientTotalAmount()).isEqualByComparingTo("20000");
+        assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void fullyCoveredInsuredVisitGoesDirectlyToWaitingRoom() {
+        var result = registerInsuredVisit((short) 100);
+
+        assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING);
+        assertThat(result.payment().getPatientTotalAmount()).isZero();
+        assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.FEE_EXEMPT);
+    }
+
+    @Test
     void rejectsRegistrationWhenPatientAlreadyHasActiveVisit() {
         UUID patientId = UUID.randomUUID();
         when(visitRepository.existsByPatientIdAndStatusNotIn(patientId, VisitRepository.FINISHED_STATUSES))
@@ -260,6 +291,51 @@ class VisitServiceImplTest {
         when(room.getId()).thenReturn(id);
         when(room.getRoomCode()).thenReturn(code);
         return room;
+    }
+
+    private RegistrationResult registerInsuredVisit(short coverageRate) {
+        UUID patientId = UUID.randomUUID();
+        UUID receptionistId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng khám 01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        MedicalService examination = MedicalService.create(
+                UUID.randomUUID(), clock.instant(), "KB", "Khám bệnh", MedicalServiceType.EXAMINATION,
+                null, null, new BigDecimal("150000"), new BigDecimal("100000"), null);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getHoten()).thenReturn("Nguyễn Văn A");
+        when(patient.getMabenhnhan()).thenReturn("BN00000001");
+        when(patient.getNgaysinh()).thenReturn(LocalDate.of(1990, 1, 1));
+        when(patient.getGioitinh()).thenReturn((short) 1);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(staffRoomAssignmentRepository.hasActiveDoctor(BUSY_ROOM_ID)).thenReturn(true);
+        when(medicalServiceRepository.findByTypeAndDepartmentIdIsNullAndServiceGroupIdIsNullAndStatus(
+                MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(Optional.of(examination));
+        when(insuranceVerificationService.verify(any())).thenReturn(new InsuranceVerificationResponse(
+                "VALID", "1234567890", "1234567890", "00", true, null, null,
+                "CCCD", false, "Nguyễn Văn A", "1990-01-01", (short) 3, (short) 1,
+                coverageRate, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+                "79001", "Cơ sở đăng ký ban đầu"));
+        when(roomQueueCounterRepository.takeNext(BUSY_ROOM_ID, QUEUE_DATE)).thenReturn(1);
+        when(visitRepository.nextRegistrationCode()).thenReturn(1L);
+        when(visitRepository.nextPaymentCode()).thenReturn(1L);
+        when(uuidV7Generator.next()).thenReturn(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        when(visitRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createVisit(
+                new StaffPrincipal(receptionistId, UUID.randomUUID()),
+                new CreateVisitRequest(
+                        patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.BHYT, "1234567890",
+                        "Đau đầu", "EXAMINATION", "TU_DEN", false, null, null, null));
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        return new RegistrationResult(response, captor.getValue());
+    }
+
+    private record RegistrationResult(VisitResponse response, Payment payment) {
     }
 
     private static VisitRepository.RoomQueueCount count(

@@ -15,6 +15,7 @@ import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitResponse;
+import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
@@ -23,23 +24,28 @@ import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalServiceType;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.PriorityReason;
+import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.user.StaffPrincipal;
@@ -60,6 +66,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class VisitServiceImpl implements VisitService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String VISIT_AUDIT_ENTITY = "visits";
 
     private final MedicalServiceRepository medicalServiceRepository;
     private final PaymentRepository paymentRepository;
@@ -67,6 +74,8 @@ public class VisitServiceImpl implements VisitService {
     private final RoomRepository roomRepository;
     private final VisitRepository visitRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
+    private final StaffAccountRepository staffAccountRepository;
+    private final ClinicFacilityRepository clinicFacilityRepository;
     private final FollowUpAppointmentRepository appointmentRepository;
     private final InsuranceVerificationService insuranceVerificationService;
     private final RoomQueueCounterRepository queueCounterRepository;
@@ -100,8 +109,7 @@ public class VisitServiceImpl implements VisitService {
                 normalize(request.lydotiepnhan()), normalize(request.noigioithieuLoai()),
                 request.lydovaovien().strip(), Boolean.TRUE.equals(request.isPriority()), priorityReason,
                 queueDate, queueNumber,
-                request.doituongbnLoai() == VisitDoituongbnLoai.DV
-                        ? VisitStatus.WAITING_FEE_PAYMENT : VisitStatus.WAITING,
+                initialStatusFor(fee),
                 insurance.status());
 
         if (appointment != null) {
@@ -124,7 +132,7 @@ public class VisitServiceImpl implements VisitService {
         }
 
         auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.CREATE, "visits", savedVisit.getId(),
+                principal.accountId(), AuditLogAction.CREATE, VISIT_AUDIT_ENTITY, savedVisit.getId(),
                 savedVisit.getSovaovien(),
                 Map.of("status", savedVisit.getStatus().name(), "roomId", savedVisit.getRoomId()), now);
         return toResponse(savedVisit);
@@ -315,6 +323,83 @@ public class VisitServiceImpl implements VisitService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public VisitTicketResponse getTicket(UUID visitId) {
+        Visit visit = visitRepository.findById(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        return toTicketResponse(visit, false);
+    }
+
+    @Override
+    @Transactional
+    public VisitTicketResponse prepareTicketPrint(StaffPrincipal principal, UUID visitId) {
+        Visit visit = visitRepository.findById(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId);
+        auditLogService.recordBusinessChange(
+                principal.accountId(), AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId,
+                visit.getSovaovien(), Map.of("reprint", reprint), clock.instant());
+        return toTicketResponse(visit, reprint);
+    }
+
+    private VisitTicketResponse toTicketResponse(Visit visit, boolean reprint) {
+        Patient patient = patientRepository.findById(visit.getPatientId())
+                .orElseThrow(() -> new AppException(ErrorCode.PATIENT_NOT_FOUND));
+        Room room = roomRepository.findById(visit.getRoomId())
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_AVAILABLE));
+        Payment payment = paymentRepository.findByVisitIdAndType(visit.getId(), PaymentType.EXAMINATION_FEE)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        List<String> doctorNames = activeDoctorNames(room.getId());
+        String facilityName = requireFacilityName();
+        return new VisitTicketResponse(
+                visit.getId(), facilityName, visit.getSovaovien(), patient.getMabenhnhan(),
+                patient.getHoten(), patient.getNgaysinh().getYear(), patientGender(patient), visit.getQueueNumber(),
+                room.getRoomName(), room.getLocation(), doctorNames, visit.getDoituongbnLoai(),
+                visit.getInsuranceCoverageRate(), visit.isPriority(),
+                visit.getPriorityReason() == null ? null : visit.getPriorityReason().name(),
+                visit.getThoigianvaovien(), payment.getPatientTotalAmount(), visit.getStatus(), reprint);
+    }
+
+    private static VisitStatus initialStatusFor(FeeCalculation fee) {
+        return fee.patientAmount().signum() == 0
+                ? VisitStatus.WAITING
+                : VisitStatus.WAITING_FEE_PAYMENT;
+    }
+
+    private List<String> activeDoctorNames(UUID roomId) {
+        List<UUID> assignedAccountIds = staffRoomAssignmentRepository
+                .findAllByRoomIdAndRemovedAtIsNull(roomId).stream()
+                .map(StaffRoomAssignment::getStaffAccountId)
+                .toList();
+        return staffAccountRepository.findAllById(assignedAccountIds).stream()
+                .filter(account -> account.getRole() == Role.DOCTOR)
+                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
+                .map(account -> staffDisplayName(account.getAcademicTitle(), account.getFullName()))
+                .sorted()
+                .toList();
+    }
+
+    private String requireFacilityName() {
+        return clinicFacilityRepository.findCurrent()
+                .map(facility -> facility.getTenCskcb())
+                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
+    }
+
+    private static String staffDisplayName(String academicTitle, String fullName) {
+        return academicTitle == null || academicTitle.isBlank()
+                ? fullName
+                : academicTitle.strip() + " " + fullName;
+    }
+
+    private static String patientGender(Patient patient) {
+        return switch (patient.getGioitinh()) {
+            case 1 -> "Nam";
+            case 2 -> "Nữ";
+            default -> "Khác";
+        };
+    }
+
     private RoomQueueStatusResponse toQueueStatus(Room room, List<VisitRepository.RoomQueueCount> counts) {
         long waiting = 0;
         long inExamination = 0;
@@ -342,11 +427,7 @@ public class VisitServiceImpl implements VisitService {
     private VisitResponse toResponse(Visit visit) {
         Patient patient = patientRepository.findById(visit.getPatientId()).orElse(null);
         Room room = roomRepository.findById(visit.getRoomId()).orElse(null);
-        String gender = patient == null ? null : switch (patient.getGioitinh()) {
-            case 1 -> "Nam";
-            case 2 -> "Nữ";
-            default -> "Khác";
-        };
+        String gender = patient == null ? null : patientGender(patient);
         return new VisitResponse(
                 visit.getId(), visit.getSovaovien(), visit.getPatientId(),
                 patient == null ? "—" : patient.getHoten(), patient == null ? "—" : patient.getMabenhnhan(),

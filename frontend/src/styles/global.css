@@ -741,3 +741,23 @@ p[role='alert']:not(.banner) {
     padding: var(--space-4);
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .visit-ticket-print,
+  .visit-ticket-print * {
+    visibility: visible !important;
+  }
+
+  .visit-ticket-print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 80mm;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+}
