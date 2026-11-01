@@ -23,6 +23,7 @@ export const ROUTES = {
     STAFF: '/admin/staff',
     REPORTS: '/admin/reports',
     SETTINGS: '/admin/settings',
+    HOSPITAL_INFORMATION: '/admin/hospital-information',
   },
 
   RECEPTIONIST: {

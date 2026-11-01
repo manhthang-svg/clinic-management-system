@@ -3,3 +3,4 @@ export { DepartmentManagementPage } from './DepartmentManagementPage';
 export { RoomManagementPage } from './RoomManagementPage';
 export { ServiceManagementPage } from './ServiceManagementPage';
 export { ScheduleManagementPage } from './ScheduleManagementPage';
+export { HospitalInformationPage } from './HospitalInformationPage';
