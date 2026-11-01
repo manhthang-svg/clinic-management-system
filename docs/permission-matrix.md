@@ -56,6 +56,7 @@ Status values:
 | Admin | Service | Activate, deactivate | UC-25 | — | Source |
 | Admin | Statistics | View dashboard and visit, doctor, department/room, paraclinical, revenue, diagnosis statistics | UC-26 → UC-32 | Revenue split insurance/patient (BR-38). Contains aggregated clinical data. | Source |
 | Admin | Statistics report | Export (Excel/PDF) | UC-33 | — | Source |
+| Admin | Clinic facility | View, declare, update | UC-77 | Facility code locked once a visit exists (BR-77-02). See [`uc-77-clinic-facility.md`](uc-77-clinic-facility.md). | **ASSUMPTION** (UC-77 not yet in `usecases.xlsx`) |
 | Doctor | Examined-patient list | View | UC-34 | Only patients examined by the logged-in doctor (BR-39). | Source |
 | Receptionist | Patient profile | Search, view administrative data and visit history | UC-35, UC-36 | — | Source |
 | Receptionist | Patient profile | Create, update administrative data | UC-37, UC-38 | One profile per citizen ID (BR-12); no medical history or allergies (BR-23). | Source |
@@ -100,3 +101,4 @@ Explicit consequences of the matrix, useful for authorization tests:
 | Date | Change | Source |
 | --- | --- | --- |
 | 14/10/2026 | Initial matrix transcribed from `usecases.xlsx` sheet `Mới` and `Business_flow.xlsx` sheet `BR`. | Team decision to treat these sheets as authoritative |
+| 01/11/2026 | Added Admin UC-77 clinic facility row. | **ASSUMPTION** until UC-77 is added to `usecases.xlsx` |

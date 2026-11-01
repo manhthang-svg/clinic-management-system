@@ -7071,7 +7071,7 @@ tables:
         base_type: varchar
         length: 50
         nullable: false
-        java_type: String
+        java_type: FacilityOrganizationForm
         proposal: new
         standard: Không
         description: Hình thức tổ chức, ví dụ PHONG_KHAM_DA_KHOA
