@@ -31,3 +31,8 @@ Desktop.ini
 *.tmp
 *.swp
 *~
+
+# Local notes and sample images (sample slips contain real patient data)
+image/
+docs/paraclinical-db-guide.md
+docs/paraclinical-results-db.md

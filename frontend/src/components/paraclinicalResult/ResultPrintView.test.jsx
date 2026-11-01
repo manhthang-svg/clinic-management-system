@@ -1,0 +1,81 @@
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { code128Values, code128Widths } from './code128';
+import { MOCK_RESULT_ORDERS, RESULT_TEMPLATES } from './resultMockData';
+import { resultToForm } from './resultForm';
+import { ResultPrintView } from './ResultPrintView';
+
+function order(id, patch = {}) {
+  return { ...MOCK_RESULT_ORDERS.find((item) => item.id === id), ...patch };
+}
+
+function descriptive(id, extra = {}) {
+  const base = order(id);
+  const template = RESULT_TEMPLATES[base.serviceCode];
+  const form = {
+    ...resultToForm({ ...base, result: null }),
+    ...template,
+    recommendation: 'Tái khám sau 1 tháng.',
+    files: [{ id: 'f1', name: 'a.jpg', type: 'image/jpeg', size: 1, url: 'blob:a', caption: 'Hang vị' }],
+    ...extra,
+  };
+  return { order: { ...base, result: { status: 'SUBMITTED', submittedAt: '2026-11-01T10:00:00Z' } }, form };
+}
+
+describe('code128', () => {
+  it('adds start, checksum and stop symbols', () => {
+    expect(code128Values('A')).toEqual([104, 33, 34, 106]);
+  });
+
+  it('uses 11 modules per symbol and 13 for stop', () => {
+    const widths = code128Widths('CLS-2026-000101');
+    const symbols = 'CLS-2026-000101'.length + 2;
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBe(symbols * 11 + 13);
+  });
+});
+
+describe('ResultPrintView', () => {
+  it('prints the lab slip with header, barcode, times, flagged values and two signatures', () => {
+    const lab = order('cls-002', { result: { status: 'SUBMITTED', submittedAt: '2026-11-01T08:09:00Z' } });
+    render(<ResultPrintView order={lab} form={{ ...resultToForm(lab), values: { GLU: '11.4' }, receivedAt: '2026-11-01T07:14', conclusion: 'Tăng' }} />);
+
+    const slip = screen.getByRole('article', { name: 'Phiếu kết quả in' });
+    expect(slip).toHaveTextContent('PHIẾU KẾT QUẢ XÉT NGHIỆM');
+    expect(slip).toHaveTextContent('MS: 17/BV2');
+    expect(slip).toHaveTextContent('TG nhận mẫu');
+    expect(slip).toHaveTextContent('XÉT NGHIỆM SINH HÓA');
+    expect(slip).toHaveTextContent('Cử nhân xét nghiệm');
+    expect(slip).toHaveTextContent('Bác sĩ điều trị');
+    expect(screen.getByRole('img', { name: 'Mã vạch CLS-2026-000102' })).toBeInTheDocument();
+    expect(screen.getByText('11.4')).toHaveClass('text-red-600');
+  });
+
+  it('numbers the parent group of a blood count like the paper form', () => {
+    const cbc = order('cls-001', { result: { status: 'SUBMITTED' } });
+    render(<ResultPrintView order={cbc} form={resultToForm(cbc)} />);
+    expect(screen.getByRole('article')).toHaveTextContent('Tổng phân tích tế bào máu ngoại vi');
+  });
+
+  it.each([
+    ['cls-004', 'PHIẾU SIÊU ÂM', 'Lời dặn của BS chuyên khoa'],
+    ['cls-005', 'PHIẾU NỘI SOI', 'Hang vị'],
+    ['cls-006', 'PHIẾU CHỤP CẮT LỚP VI TÍNH', 'Quét mã QR truy cập hình ảnh'],
+    ['cls-009', 'PHIẾU CHỤP CỘNG HƯỞNG TỪ', 'dị vật kim loại'],
+    ['cls-008', 'PHIẾU CHIẾU/CHỤP X-QUANG', 'Mô tả kết quả chiếu/chụp'],
+    ['cls-007', 'PHIẾU ĐIỆN TIM', '2. Kết luận:'],
+  ])('prints %s as %s', (id, title, marker) => {
+    const { order: slipOrder, form } = descriptive(id);
+    render(<ResultPrintView order={slipOrder} form={form} />);
+    const slip = screen.getByRole('article', { name: 'Phiếu kết quả in' });
+    expect(slip).toHaveTextContent(title);
+    expect(slip).toHaveTextContent(marker);
+    expect(slip).toHaveTextContent(slipOrder.patient.name);
+  });
+
+  it('marks a reprint as a copy and prints the reading doctor', () => {
+    const { order: slipOrder, form } = descriptive('cls-004', { readingDoctor: 'BS Nguyễn Thị Nhàn' });
+    render(<ResultPrintView order={{ ...slipOrder, printCount: 1 }} form={form} />);
+    expect(screen.getByText('BẢN SAO')).toBeInTheDocument();
+    expect(screen.getByText('BS Nguyễn Thị Nhàn')).toBeInTheDocument();
+  });
+});

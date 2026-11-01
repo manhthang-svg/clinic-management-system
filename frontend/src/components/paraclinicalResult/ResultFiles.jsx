@@ -1,0 +1,128 @@
+import { useRef, useState } from 'react';
+import { FileText, ImagePlus, Trash2 } from 'lucide-react';
+import { ACCEPTED_TYPES, MAX_FILES, checkFiles, formatFileSize } from './resultForm';
+
+let nextId = 0;
+
+function previewUrl(file) {
+  try {
+    return URL.createObjectURL(file);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * UC-67 attached files: images or PDF, at most 10 files of 20 MB each.
+ * TBD: upload to the file storage (Cloudinary Upload API in the SRS); demo mode keeps a local preview link.
+ */
+export function ResultFiles({ files, readOnly, onChange }) {
+  const inputRef = useRef(null);
+  const [errors, setErrors] = useState([]);
+
+  const add = (event) => {
+    const { accepted, errors: rejected } = checkFiles(event.target.files ?? [], files.length);
+    setErrors(rejected);
+    if (accepted.length > 0) {
+      onChange([
+        ...files,
+        ...accepted.map((file) => ({
+          id: `file-${Date.now()}-${(nextId += 1)}`,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: previewUrl(file),
+          caption: '',
+        })),
+      ]);
+    }
+    event.target.value = '';
+  };
+
+  const update = (id, patch) => onChange(files.map((file) => (file.id === id ? { ...file, ...patch } : file)));
+  const remove = (id) => onChange(files.filter((file) => file.id !== id));
+
+  return (
+    <div className="space-y-3">
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={files.length >= MAX_FILES}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#127e7a] bg-[#e6f5f3] hover:bg-[#d8efec] rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ImagePlus className="w-4 h-4" />
+            Thêm ảnh / PDF
+          </button>
+          <span className="text-xs text-slate-500">
+            {files.length}/{MAX_FILES} file · JPG, PNG, PDF · tối đa 20 MB mỗi file
+          </span>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={ACCEPTED_TYPES.join(',')}
+            onChange={add}
+            className="hidden"
+            aria-label="Chọn file đính kèm"
+          />
+        </div>
+      )}
+
+      {errors.length > 0 && (
+        <ul role="alert" className="text-xs text-rose-600 space-y-0.5">
+          {errors.map((message) => <li key={message}>{message}</li>)}
+        </ul>
+      )}
+
+      {files.length === 0 ? (
+        <p className="text-sm text-slate-400">Chưa có file đính kèm.</p>
+      ) : (
+        <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {files.map((file, index) => (
+            <li key={file.id} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+              <div className="aspect-[4/3] bg-slate-900 flex items-center justify-center">
+                {file.type.startsWith('image/') && file.url ? (
+                  <img src={file.url} alt={file.caption || `Ảnh ${index + 1}`} className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <FileText className="w-10 h-10 text-slate-300" />
+                )}
+              </div>
+              <div className="p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-700 truncate" title={file.name}>{file.name}</span>
+                  <span className="text-[11px] text-slate-400 shrink-0">{formatFileSize(file.size)}</span>
+                </div>
+                {readOnly ? (
+                  file.caption && <p className="text-xs text-slate-600">{file.caption}</p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={file.caption}
+                      onChange={(event) => update(file.id, { caption: event.target.value })}
+                      placeholder="Chú thích (vd: Hang vị)"
+                      aria-label={`Chú thích ${file.name}`}
+                      maxLength={255}
+                      className="flex-1 min-w-0 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#127e7a]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => remove(file.id)}
+                      aria-label={`Xóa ${file.name}`}
+                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default ResultFiles;
