@@ -178,14 +178,31 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     public DepartmentRoomItemResponse createDepartment(DepartmentRequest request) {
+        if (request.getDepartmentCode() == null || request.getDepartmentCode().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập mã chuyên khoa");
+        }
         String code = request.getDepartmentCode().trim().toUpperCase();
+        if (code.length() < 2 || code.length() > 50 || !code.matches("^[A-Z0-9-]+$")) {
+            throw new IllegalArgumentException("Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+        }
+
+        if (request.getDepartmentName() == null || request.getDepartmentName().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên chuyên khoa");
+        }
         String name = request.getDepartmentName().trim();
+        if (name.length() < 2 || name.length() > 100) {
+            throw new IllegalArgumentException("Tên khoa phải từ 2 đến 100 ký tự");
+        }
 
         if (departmentRepository.existsByDepartmentCode(code)) {
             throw new IllegalArgumentException("Mã khoa đã tồn tại: " + code);
         }
         if (departmentRepository.existsByDepartmentNameIgnoreCase(name)) {
             throw new IllegalArgumentException("Tên khoa đã tồn tại: " + name);
+        }
+
+        if (request.getDescription() != null && request.getDescription().trim().length() > 500) {
+            throw new IllegalArgumentException("Mô tả chuyên khoa tối đa 500 ký tự");
         }
 
         Instant now = clock.instant();
@@ -227,11 +244,27 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khoa với mã ID: " + id));
 
+        if (request.getDepartmentName() == null || request.getDepartmentName().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên chuyên khoa");
+        }
+        String name = request.getDepartmentName().trim();
+        if (name.length() < 2 || name.length() > 100) {
+            throw new IllegalArgumentException("Tên khoa phải từ 2 đến 100 ký tự");
+        }
+        if (departmentRepository.existsByDepartmentNameIgnoreCase(name)
+                && !name.equalsIgnoreCase(department.getDepartmentName())) {
+            throw new IllegalArgumentException("Tên khoa đã tồn tại: " + name);
+        }
+
+        if (request.getDescription() != null && request.getDescription().trim().length() > 500) {
+            throw new IllegalArgumentException("Mô tả chuyên khoa tối đa 500 ký tự");
+        }
+
         Instant now = clock.instant();
         boolean active = request.getActive() == null ? department.isActive() : request.getActive();
 
         department.update(
-                request.getDepartmentName().trim(),
+                name,
                 department.getType(),
                 request.getDescription(),
                 active,
@@ -289,8 +322,29 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     public DepartmentRoomItemResponse createRoom(RoomRequest request) {
+        if (request.getRoomCode() == null || request.getRoomCode().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập mã phòng khám");
+        }
         String roomCode = request.getRoomCode().trim().toUpperCase();
+        if (roomCode.length() < 2 || roomCode.length() > 20 || !roomCode.matches("^[A-Z0-9-]+$")) {
+            throw new IllegalArgumentException("Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+        }
+
+        if (request.getRoomName() == null || request.getRoomName().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên phòng khám");
+        }
         String roomName = request.getRoomName().trim();
+        if (roomName.length() < 2 || roomName.length() > 100) {
+            throw new IllegalArgumentException("Tên phòng phải từ 2 đến 100 ký tự");
+        }
+
+        if (request.getLocation() == null || request.getLocation().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập vị trí buồng");
+        }
+        String location = request.getLocation().trim();
+        if (location.length() < 2 || location.length() > 255) {
+            throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
+        }
 
         if (roomRepository.existsByRoomCode(roomCode)) {
             throw new IllegalArgumentException("Mã phòng đã tồn tại: " + roomCode);
@@ -310,7 +364,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 request.getServiceGroupId(),
                 roomCode,
                 roomName,
-                request.getLocation().trim(),
+                location,
                 request.getType(),
                 status
         );
@@ -351,14 +405,30 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
 
+        if (request.getRoomName() == null || request.getRoomName().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên phòng khám");
+        }
+        String roomName = request.getRoomName().trim();
+        if (roomName.length() < 2 || roomName.length() > 100) {
+            throw new IllegalArgumentException("Tên phòng phải từ 2 đến 100 ký tự");
+        }
+
+        if (request.getLocation() == null || request.getLocation().isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập vị trí buồng");
+        }
+        String location = request.getLocation().trim();
+        if (location.length() < 2 || location.length() > 255) {
+            throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
+        }
+
         Instant now = clock.instant();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : room.getStatus();
 
         room.update(
                 request.getDepartmentId(),
                 request.getServiceGroupId(),
-                request.getRoomName().trim(),
-                request.getLocation().trim(),
+                roomName,
+                location,
                 request.getType(),
                 status,
                 now

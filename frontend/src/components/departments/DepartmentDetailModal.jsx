@@ -19,7 +19,6 @@ import {
 } from '../../constants/serviceData';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { formatPrice } from '../services/serviceFormat';
-import { useDepartmentServices } from '../../hooks';
 import { describeApiError } from '../../utils/describeApiError';
 
 const ROLE_LABELS = {
@@ -95,25 +94,14 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
     });
   }, [isDept, item, rooms]);
 
-  // Lấy danh sách dịch vụ y tế của phòng từ API backend theo đúng loại phòng & nhóm dịch vụ
-  const { services: fetchedServices, loading: servicesLoading, error: servicesError } =
-    useDepartmentServices(
-      isDept
-        ? null
-        : {
-            departmentId: item.departmentId || null,
-            serviceGroupId: item.serviceGroupId || null,
-            roomType: item.type || 'EXAMINATION',
-          }
-    );
-
+  // Danh sách dịch vụ y tế được gán cho phòng khám
   const roomServices = useMemo(() => {
     if (isDept) return [];
-    if (Array.isArray(item.assignedServices) && item.assignedServices.length > 0) {
+    if (Array.isArray(item.assignedServices)) {
       return item.assignedServices;
     }
-    return fetchedServices || [];
-  }, [isDept, item.assignedServices, fetchedServices]);
+    return [];
+  }, [isDept, item.assignedServices]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
@@ -447,22 +435,7 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {servicesLoading ? (
-                        <tr>
-                          <td colSpan="6" className="p-6 text-center text-slate-400">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                              <span>Đang tải danh sách dịch vụ y tế...</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : servicesError ? (
-                        <tr>
-                          <td colSpan="6" className="p-6 text-center text-rose-500 font-medium">
-                            {describeApiError(servicesError, 'Lỗi tải danh mục dịch vụ')}
-                          </td>
-                        </tr>
-                      ) : roomServices.length === 0 ? (
+                      {roomServices.length === 0 ? (
                         <tr>
                           <td colSpan="6" className="p-6 text-center text-slate-400">
                             Chưa có dịch vụ nào liên kết với phòng khám này.
@@ -534,8 +507,8 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
               onClose();
               onEdit?.({
                 ...item,
-                serviceGroupId: item.serviceGroupId || (roomServices[0]?.serviceGroupId ?? null),
-                serviceGroupName: item.serviceGroupName || (roomServices[0]?.serviceGroupName ?? null),
+                serviceGroupId: item.serviceGroupId ?? null,
+                serviceGroupName: item.serviceGroupName ?? null,
                 assignedServices: roomServices,
               });
             }}

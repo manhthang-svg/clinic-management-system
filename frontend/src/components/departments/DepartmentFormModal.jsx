@@ -185,29 +185,26 @@ function DepartmentFormModalContent({
   // Danh sách dịch vụ được gán cho phòng:
   // 1. Nếu người dùng đã tự sửa (thêm/bớt) -> dùng customServices
   // 2. Nếu có sẵn trong initialData -> dùng initialData.assignedServices
-  // 3. Nếu là chế độ EDIT phòng -> tự động lấy theo deptServices tải từ backend
-  // 4. Mặc định là []
+  // 3. Mặc định là [] (chưa chọn dịch vụ nào)
   const assignedServices = useMemo(() => {
     if (!isRoom) return [];
     if (customServices !== null) return customServices;
-    if (Array.isArray(initialData?.assignedServices) && initialData.assignedServices.length > 0) {
+    if (Array.isArray(initialData?.assignedServices)) {
       return initialData.assignedServices;
     }
-    if (isEdit && Array.isArray(deptServices) && deptServices.length > 0) {
-      return deptServices;
-    }
     return [];
-  }, [isRoom, customServices, initialData?.assignedServices, isEdit, deptServices]);
+  }, [isRoom, customServices, initialData?.assignedServices]);
 
-  // Nhóm dịch vụ kỹ thuật: nếu ban đầu null nhưng dịch vụ hiện tại có nhóm, tự động suy luận
+  // Nhóm dịch vụ kỹ thuật của phòng cận lâm sàng
   const effectiveServiceGroupId = useMemo(() => {
     if (formData.serviceGroupId) return formData.serviceGroupId;
+    if (initialData?.serviceGroupId) return initialData.serviceGroupId;
     if (isEdit && isRoom && formData.type === 'PARACLINICAL') {
-      const fromServices = assignedServices[0]?.serviceGroupId || deptServices[0]?.serviceGroupId;
+      const fromServices = assignedServices[0]?.serviceGroupId;
       if (fromServices) return fromServices;
     }
     return '';
-  }, [formData.serviceGroupId, isEdit, isRoom, formData.type, assignedServices, deptServices]);
+  }, [formData.serviceGroupId, initialData, isEdit, isRoom, formData.type, assignedServices]);
 
   // State các mã dịch vụ được tick tạm thời trong dropdown
   const [customSelectedCodes, setCustomSelectedCodes] = useState(null);
@@ -456,7 +453,16 @@ function DepartmentFormModalContent({
   };
 
   const handleSaveSelectedServices = () => {
-    const newAssigned = deptServices.filter((s) => selectedCodes.has(s.code));
+    const currentCodes = selectedCodes;
+    const existingMap = new Map(assignedServices.map((s) => [s.code, s]));
+    const deptMap = new Map((deptServices || []).map((s) => [s.code, s]));
+
+    const newAssigned = [];
+    currentCodes.forEach((code) => {
+      const srv = deptMap.get(code) || existingMap.get(code);
+      if (srv) newAssigned.push(srv);
+    });
+
     setCustomServices(newAssigned);
     setCustomSelectedCodes(null);
     setServiceDropdownOpen(false);
@@ -477,12 +483,35 @@ function DepartmentFormModalContent({
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.code.trim()) {
+    const code = (formData.code || '').trim().toUpperCase();
+    const name = (formData.name || '').trim();
+
+    // BR-67 (Khoa: 2-50 ký tự, regex ^[A-Z0-9-]+$) & BR-71 (Phòng: 2-20 ký tự, regex ^[A-Z0-9-]+$)
+    if (!code) {
       newErrors.code = isRoom ? 'Vui lòng nhập mã phòng' : 'Vui lòng nhập mã chuyên khoa';
+    } else if (isRoom) {
+      if (code.length < 2 || code.length > 20) {
+        newErrors.code = 'Mã phòng phải từ 2 đến 20 ký tự';
+      } else if (!/^[A-Z0-9-]+$/.test(code)) {
+        newErrors.code = 'Mã phòng chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)';
+      }
+    } else {
+      if (code.length < 2 || code.length > 50) {
+        newErrors.code = 'Mã chuyên khoa phải từ 2 đến 50 ký tự';
+      } else if (!/^[A-Z0-9-]+$/.test(code)) {
+        newErrors.code = 'Mã chuyên khoa chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)';
+      }
     }
-    if (!formData.name.trim()) {
+
+    // BR-68 (Khoa: 2-100 ký tự) & BR-72 (Phòng: 2-100 ký tự)
+    if (!name) {
       newErrors.name = isRoom ? 'Vui lòng nhập tên phòng' : 'Vui lòng nhập tên chuyên khoa';
+    } else if (name.length < 2 || name.length > 100) {
+      newErrors.name = isRoom
+        ? 'Tên phòng phải từ 2 đến 100 ký tự'
+        : 'Tên chuyên khoa phải từ 2 đến 100 ký tự';
     }
+
     if (isRoom) {
       if (!formData.departmentId) {
         newErrors.departmentId = 'Vui lòng chọn chuyên khoa trực thuộc';
@@ -502,8 +531,17 @@ function DepartmentFormModalContent({
       if (formData.type === 'PARACLINICAL' && !effectiveServiceGroupId) {
         newErrors.serviceGroupId = 'Vui lòng chọn nhóm dịch vụ kỹ thuật cho phòng cận lâm sàng';
       }
-      if (!formData.location.trim()) {
+      // BR-73 (Vị trí: 2-255 ký tự)
+      const location = (formData.location || '').trim();
+      if (!location) {
         newErrors.location = 'Vui lòng nhập vị trí/buồng (ví dụ: Tòa A - Tầng 1 - P.102)';
+      } else if (location.length < 2 || location.length > 255) {
+        newErrors.location = 'Vị trí buồng phải từ 2 đến 255 ký tự';
+      }
+    } else {
+      // BR-70 (Mô tả khoa: tối đa 500 ký tự)
+      if (formData.description && formData.description.length > 500) {
+        newErrors.description = 'Mô tả chuyên khoa tối đa 500 ký tự';
       }
     }
     setErrors(newErrors);
@@ -603,6 +641,7 @@ function DepartmentFormModalContent({
                 <input
                   type="text"
                   disabled={isEdit}
+                  maxLength={isRoom ? 20 : 50}
                   value={formData.code}
                   onChange={(e) => handleChange('code', e.target.value.toUpperCase())}
                   placeholder={isRoom ? 'VD: PK-NOI-01' : 'VD: KHOA-NOI'}
@@ -617,6 +656,7 @@ function DepartmentFormModalContent({
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
                   placeholder={isRoom ? 'VD: Phòng khám Nội 1' : 'VD: Khoa Nội Tổng Hợp'}
@@ -638,7 +678,7 @@ function DepartmentFormModalContent({
                       </label>
                       {isEdit && (
                         <span className="text-[10.5px] text-slate-400 italic">
-                          (Cố định khi chỉnh sửa)
+                          (Cố định)
                         </span>
                       )}
                     </div>
@@ -685,7 +725,7 @@ function DepartmentFormModalContent({
                       </label>
                       {isEdit && (
                         <span className="text-[10.5px] text-slate-400 italic">
-                          (Cố định khi chỉnh sửa)
+                          (Cố định)
                         </span>
                       )}
                     </div>
@@ -721,6 +761,7 @@ function DepartmentFormModalContent({
                     </label>
                     <input
                       type="text"
+                      maxLength={255}
                       value={formData.location}
                       onChange={(e) => handleChange('location', e.target.value)}
                       placeholder="VD: Tòa A - Tầng 1 - P.102"
@@ -783,7 +824,7 @@ function DepartmentFormModalContent({
                     </label>
                     {isEdit && (
                       <span className="text-[10.5px] text-slate-400 italic">
-                        (Cố định khi chỉnh sửa)
+                        (Cố định)
                       </span>
                     )}
                   </div>
@@ -1095,16 +1136,25 @@ function DepartmentFormModalContent({
           {/* Mô tả (cho Chuyên khoa) */}
           {!isRoom && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Mô tả chức năng & nhiệm vụ
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Mô tả chức năng & nhiệm vụ
+                </label>
+                <span className="text-[10.5px] text-slate-400">
+                  {formData.description?.length || 0}/500
+                </span>
+              </div>
               <textarea
                 rows={3}
+                maxLength={500}
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
                 placeholder="Mô tả các lĩnh vực khám chữa bệnh, điều trị chuyên sâu của khoa..."
                 className={`${INPUT_CLASS} resize-none`}
               />
+              {errors.description && (
+                <p className="text-[11px] text-rose-500 mt-1">{errors.description}</p>
+              )}
             </div>
           )}
 

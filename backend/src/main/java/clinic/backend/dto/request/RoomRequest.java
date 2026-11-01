@@ -4,6 +4,7 @@ import java.util.UUID;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.RoomType;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,12 +19,18 @@ import lombok.Setter;
 @AllArgsConstructor
 public class RoomRequest {
 
-    @Size(max = 255, message = "Mã phòng tối đa 255 ký tự")
+    @Size(min = 2, max = 20, message = "Mã phòng phải từ 2 đến 20 ký tự")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Mã phòng chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)")
     private String roomCode;
+
+    @Size(min = 2, max = 20, message = "Mã phòng phải từ 2 đến 20 ký tự")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Mã phòng chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)")
     private String maphongkham;
 
-    @Size(max = 255, message = "Tên phòng tối đa 255 ký tự")
+    @Size(min = 2, max = 100, message = "Tên phòng phải từ 2 đến 100 ký tự")
     private String roomName;
+
+    @Size(min = 2, max = 100, message = "Tên phòng phải từ 2 đến 100 ký tự")
     private String phongkham;
 
     @NotNull(message = "Khoa trực thuộc không được để trống")
@@ -31,7 +38,7 @@ public class RoomRequest {
 
     private UUID serviceGroupId;
 
-    @Size(max = 255, message = "Vị trí tối đa 255 ký tự")
+    @Size(min = 2, max = 255, message = "Vị trí buồng phải từ 2 đến 255 ký tự")
     private String location;
 
     @NotNull(message = "Loại phòng không được để trống")
