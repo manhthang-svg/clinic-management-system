@@ -259,4 +259,139 @@ class DepartmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo("INACTIVE");
         assertThat(room.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
     }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi mã khoa vi phạm BR-67 (dưới 2 ký tự hoặc chứa ký tự đặc biệt)")
+    void createDepartment_InvalidCode_ThrowsException() {
+        DepartmentRequest shortCode = DepartmentRequest.builder()
+                .departmentCode("A")
+                .departmentName("Khoa Nội")
+                .type(DepartmentType.CLINICAL)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createDepartment(shortCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mã khoa phải từ 2 đến 50 ký tự");
+
+        DepartmentRequest specialCharCode = DepartmentRequest.builder()
+                .departmentCode("KHOA_NOI@")
+                .departmentName("Khoa Nội")
+                .type(DepartmentType.CLINICAL)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createDepartment(specialCharCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tên khoa vi phạm BR-68 (dưới 2 hoặc trên 100 ký tự)")
+    void createDepartment_InvalidName_ThrowsException() {
+        DepartmentRequest shortName = DepartmentRequest.builder()
+                .departmentCode("K-NOI")
+                .departmentName("A")
+                .type(DepartmentType.CLINICAL)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createDepartment(shortName))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Tên khoa phải từ 2 đến 100 ký tự");
+
+        DepartmentRequest longName = DepartmentRequest.builder()
+                .departmentCode("K-NOI")
+                .departmentName("A".repeat(101))
+                .type(DepartmentType.CLINICAL)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createDepartment(longName))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Tên khoa phải từ 2 đến 100 ký tự");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi mô tả khoa vi phạm BR-70 (vượt quá 500 ký tự)")
+    void createDepartment_DescriptionTooLong_ThrowsException() {
+        DepartmentRequest longDesc = DepartmentRequest.builder()
+                .departmentCode("K-NOI")
+                .departmentName("Khoa Nội")
+                .type(DepartmentType.CLINICAL)
+                .description("X".repeat(501))
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createDepartment(longDesc))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mô tả chuyên khoa tối đa 500 ký tự");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi mã phòng vi phạm BR-71 (độ dài ngoài [2,20] hoặc regex không hợp lệ)")
+    void createRoom_InvalidCode_ThrowsException() {
+        RoomRequest shortCode = RoomRequest.builder()
+                .roomCode("R")
+                .roomName("Phòng 1")
+                .departmentId(UUID.randomUUID())
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(shortCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự");
+
+        RoomRequest longCode = RoomRequest.builder()
+                .roomCode("A".repeat(21))
+                .roomName("Phòng 1")
+                .departmentId(UUID.randomUUID())
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(longCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự");
+
+        RoomRequest specialCharCode = RoomRequest.builder()
+                .roomCode("PK#01")
+                .roomName("Phòng 1")
+                .departmentId(UUID.randomUUID())
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(specialCharCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tên phòng vi phạm BR-72 (độ dài ngoài [2,100])")
+    void createRoom_InvalidName_ThrowsException() {
+        RoomRequest shortName = RoomRequest.builder()
+                .roomCode("PK-01")
+                .roomName("P")
+                .departmentId(UUID.randomUUID())
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(shortName))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Tên phòng phải từ 2 đến 100 ký tự");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi vị trí buồng vi phạm BR-73 (độ dài ngoài [2,255])")
+    void createRoom_InvalidLocation_ThrowsException() {
+        RoomRequest shortLocation = RoomRequest.builder()
+                .roomCode("PK-01")
+                .roomName("Phòng khám 1")
+                .departmentId(UUID.randomUUID())
+                .location("X")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(shortLocation))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Vị trí buồng phải từ 2 đến 255 ký tự");
+    }
 }

@@ -2,6 +2,7 @@ package clinic.backend.dto.request;
 
 import clinic.backend.enums.DepartmentType;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,12 +17,18 @@ import lombok.Setter;
 @AllArgsConstructor
 public class DepartmentRequest {
 
-    @Size(max = 50, message = "Mã khoa tối đa 50 ký tự")
+    @Size(min = 2, max = 50, message = "Mã khoa phải từ 2 đến 50 ký tự")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Mã khoa chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)")
     private String departmentCode;
+
+    @Size(min = 2, max = 50, message = "Mã khoa phải từ 2 đến 50 ký tự")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Mã khoa chỉ bao gồm chữ in hoa, chữ số hoặc gạch ngang (-)")
     private String makhoa;
 
-    @Size(max = 255, message = "Tên khoa tối đa 255 ký tự")
+    @Size(min = 2, max = 100, message = "Tên khoa phải từ 2 đến 100 ký tự")
     private String departmentName;
+
+    @Size(min = 2, max = 100, message = "Tên khoa phải từ 2 đến 100 ký tự")
     private String tenkhoa;
 
     @NotNull(message = "Loại khoa không được để trống")
