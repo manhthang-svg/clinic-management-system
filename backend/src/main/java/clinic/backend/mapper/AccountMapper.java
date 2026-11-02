@@ -10,6 +10,8 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface AccountMapper {
 
+    @Mapping(target = "roomId", ignore = true)
+    @Mapping(target = "roomCode", ignore = true)
     @Mapping(target = "roomName", source = "roomName")
     @Mapping(target = "departmentName", source = "departmentName")
     AccountSummaryResponse toSummary(StaffAccount account, String roomName, String departmentName);

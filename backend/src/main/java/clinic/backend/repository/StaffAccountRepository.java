@@ -28,6 +28,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
                    account.email as email,
                    account.role as role,
                    account.status as status,
+                   room.id as roomId,
+                   room.roomCode as roomCode,
                    room.roomName as roomName,
                    department.departmentName as departmentName,
                    account.lastLoginAt as lastLoginAt,
@@ -121,6 +123,10 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
         Role getRole();
 
         AccountStatus getStatus();
+
+        UUID getRoomId();
+
+        String getRoomCode();
 
         String getRoomName();
 
