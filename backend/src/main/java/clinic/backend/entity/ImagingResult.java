@@ -13,6 +13,8 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * The result of one imaging or functional service (export group VI).
@@ -35,10 +37,6 @@ public class ImagingResult extends VersionedEntity {
     /** CV 365 VI.2.1. */
     @Column(name = "sophieu", nullable = false, updatable = false, length = 100)
     private String sophieu;
-
-    /** CV 365 VI.2.3. */
-    @Column(name = "ngayketqua")
-    private Instant ngayketqua;
 
     /** CV 365 VI.2.8. */
     @Column(name = "chandoan")
@@ -66,4 +64,21 @@ public class ImagingResult extends VersionedEntity {
 
     @Column(name = "submitted_at")
     private Instant submittedAt;
+
+    /** "Ky thuat" line of the CT and MRI slips (V32). */
+    @Column(name = "kqcls_kythuat")
+    private String kqclsKythuat;
+
+    /** Per-organ / per-site fields as a JSON object keyed by field code (V32); kqcls_mota is the printed text. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "kqcls_mota_chitiet")
+    private String kqclsMotaChitiet;
+
+    /** Specialist doctor who signs the slip (V32). */
+    @Column(name = "reading_doctor_name", length = 255)
+    private String readingDoctorName;
+
+    /** Prints so far; the second and later prints are marked as a copy (UC-68). */
+    @Column(name = "print_count", nullable = false)
+    private int printCount;
 }

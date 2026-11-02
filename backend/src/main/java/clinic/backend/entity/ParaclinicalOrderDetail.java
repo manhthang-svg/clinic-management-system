@@ -112,6 +112,14 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
+    /** MRI screening: metal object in the body; null when not asked (V32). */
+    @Column(name = "has_metal_implant")
+    private Boolean hasMetalImplant;
+
+    /** MRI screening: earlier lab and imaging results (V32). */
+    @Column(name = "prior_results")
+    private String priorResults;
+
     public ParaclinicalOrderDetail(
             UUID id,
             Instant createdAt,

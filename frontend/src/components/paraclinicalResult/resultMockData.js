@@ -106,7 +106,7 @@ const URINE = [
   { code: 'U_NIT', name: 'Nitrit', valueType: 'QUALITATIVE', unit: '', ref: { type: 'QUALITATIVE', normal: ['NEGATIVE'] } },
 ].map((p) => ({ ...p, group: 'Tổng phân tích nước tiểu' }));
 
-/** Text that pre-fills the description of a descriptive result (proposed imaging_result_templates). */
+/** Text that pre-fills the description of a descriptive result; no database table until a use case exists (V34). */
 export const RESULT_TEMPLATES = {
   'SA-OB': {
     description: [
