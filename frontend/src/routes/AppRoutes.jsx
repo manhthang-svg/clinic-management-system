@@ -116,6 +116,7 @@ export function AppRoutes({
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}
+                onOpenProfile={() => navigate(ROUTES.ADMIN.PROFILE)}
               />
             }
           />
@@ -301,6 +302,7 @@ export function AppRoutes({
               currentUser={session.account}
               onLogout={onLogout}
               onChangePassword={onChangePassword}
+              onOpenProfile={() => navigate(ROUTES.TECHNICIAN.PROFILE)}
             />
           }
         >
@@ -309,6 +311,16 @@ export function AppRoutes({
           <Route path="queue" element={<TechnicianQueuePage />} />
           <Route path="results" element={<ParaclinicalResultListPage />} />
           <Route path="results/:orderId" element={<ParaclinicalResultPage />} />
+          <Route
+            path="profile"
+            element={
+              <OwnProfilePage
+                accountApi={account}
+                onBack={() => navigate(ROUTES.TECHNICIAN.OVERVIEW)}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
           <Route
             path="schedules"
             element={

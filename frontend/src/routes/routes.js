@@ -59,6 +59,7 @@ export const ROUTES = {
   TECHNICIAN: {
     OVERVIEW: '/technician',
     DASHBOARD: '/technician/dashboard',
+    PROFILE: '/technician/profile',
     SCHEDULES: '/technician/schedules',
     QUEUE: '/technician/queue',
     RESULTS: '/technician/results',
