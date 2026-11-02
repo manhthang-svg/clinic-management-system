@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     ChevronDown,
     ChevronLeft,
@@ -21,10 +21,10 @@ const REFRESH_MS = 10_000;
 const PAGE_SIZES = [10, 20, 50];
 
 const TABS = [
-    { id: 'waiting', label: 'Chờ khám', match: (v) => v.status === 'WAITING' && !v.isSkipped },
-    { id: 'in-examination', label: 'Đang khám', match: (v) => v.status === 'IN_EXAMINATION' },
-    { id: 'conclusion', label: 'Chờ kết luận', match: (v) => v.status === 'WAITING_CONCLUSION' },
-    { id: 'skipped', label: 'Vắng mặt', match: (v) => v.isSkipped },
+    { id: 'waiting', apiValue: 'WAITING', countKey: 'waitingCount', label: 'Chờ khám' },
+    { id: 'in-examination', apiValue: 'IN_EXAMINATION', countKey: 'inExaminationCount', label: 'Đang khám' },
+    { id: 'conclusion', apiValue: 'WAITING_CONCLUSION', countKey: 'waitingConclusionCount', label: 'Chờ kết luận' },
+    { id: 'skipped', apiValue: 'SKIPPED', countKey: 'skippedCount', label: 'Vắng mặt' },
 ];
 
 const EMPTY_COPY = {
@@ -114,6 +114,9 @@ export default function DoctorWaitingListPage({
 }) {
     const [profile, setProfile] = useState(null);
     const [visits, setVisits] = useState([]);
+    const [queueInfo, setQueueInfo] = useState(null);
+    const [totalElements, setTotalElements] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -132,19 +135,30 @@ export default function DoctorWaitingListPage({
         return () => controller.abort();
     }, [loadProfile]);
 
-    // Without roomId the backend uses the signed-in doctor's assigned room.
     const fetchQueue = useCallback(async (signal) => {
         try {
-            const list = await visitApi.getQueue({}, signal);
-            setVisits(Array.isArray(list) ? list : []);
+            const tab = TABS.find(({ id }) => id === activeTab) ?? TABS[0];
+            const response = await visitApi.getDoctorQueue({
+                tab: tab.apiValue,
+                keyword: search.trim(),
+                priority: priority === 'ALL' ? undefined : priority === 'PRIORITY',
+                visitType,
+                page: page - 1,
+                size: pageSize,
+            }, signal);
+            const pageData = response?.visits;
+            setVisits(Array.isArray(pageData?.content) ? pageData.content : []);
+            setQueueInfo(response ?? null);
+            setTotalElements(pageData?.page?.totalElements ?? 0);
+            setTotalPages(pageData?.page?.totalPages ?? 0);
             setLoadError('');
-            setLastUpdated(new Date());
+            setLastUpdated(response?.refreshedAt ? new Date(response.refreshedAt) : new Date());
         } catch (error) {
             if (error?.name !== 'AbortError') setLoadError('Không thể tải danh sách chờ khám. Vui lòng thử lại.');
         } finally {
             setLoading(false);
         }
-    }, [visitApi]);
+    }, [activeTab, page, pageSize, priority, search, visitApi, visitType]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -157,28 +171,12 @@ export default function DoctorWaitingListPage({
         };
     }, [fetchQueue]);
 
-    const counts = useMemo(
-        () => Object.fromEntries(TABS.map((tab) => [tab.id, visits.filter(tab.match).length])),
-        [visits],
-    );
-
-    const filtered = useMemo(() => {
-        const tab = TABS.find(({ id }) => id === activeTab);
-        const query = search.trim().toLowerCase();
-        return visits
-            .filter(tab.match)
-            .filter((v) => priority === 'ALL' || (priority === 'PRIORITY') === v.isPriority)
-            .filter((v) => visitType === 'ALL' || v.doituongbnLoai === visitType)
-            .filter((v) => !query || [v.patientName, v.patientCode, v.mabhyt, v.patientPhone]
-                .some((field) => field && String(field).toLowerCase().includes(query)))
-            .sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
-    }, [visits, activeTab, search, priority, visitType]);
-
-    const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const counts = Object.fromEntries(TABS.map((tab) => [tab.id, queueInfo?.[tab.countKey] ?? 0]));
+    const pageCount = Math.max(1, totalPages);
     const currentPage = Math.min(page, pageCount);
-    const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const rows = visits;
     const nextPatient = activeTab === 'waiting' || activeTab === 'conclusion'
-        ? filtered.find((visit) => ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped) ?? null
+        ? visits.find((visit) => ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped) ?? null
         : null;
     const resetFilters = () => {
         setSearch('');
@@ -225,26 +223,25 @@ export default function DoctorWaitingListPage({
     }, [calling, callingVisit, fetchQueue, visitApi]);
 
     const [updatedTime, updatedDate] = formatDateTime(lastUpdated);
-    const doctorName = profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—';
+    const doctorName = queueInfo?.doctorName || (profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—');
+    const roomName = queueInfo?.roomName || profile?.roomName;
     const emptyCopy = EMPTY_COPY[activeTab];
 
     return (
         <div className="mx-auto max-w-[1600px] space-y-4 pb-8 text-slate-800">
-            <header className="flex flex-wrap items-start justify-between gap-3">
+            <header className="space-y-3">
+                <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-slate-500">
+                    <Home className="h-4 w-4" />
+                    <ChevronRight className="h-3.5 w-3.5" />
+                    <span className="font-semibold text-[#142534]">Quản lý khám bệnh</span>
+                </nav>
                 <div className="flex items-start gap-3">
                     <UsersRound className="mt-1 h-7 w-7 text-teal-600" />
                     <div>
                         <h1 className="text-2xl font-extrabold tracking-tight text-[#142534]">Quản lý khám bệnh</h1>
-                        <p className="mt-1 text-sm text-slate-500">{profile?.roomName || 'Chưa được phân công phòng khám'}</p>
+                        <p className="mt-1 text-sm text-slate-500">{roomName || 'Chưa được phân công phòng khám'}</p>
                     </div>
                 </div>
-                <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-slate-500">
-                    <Home className="h-4 w-4" />
-                    <ChevronRight className="h-3.5 w-3.5" />
-                    <span>Khám bệnh</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                    <span className="font-semibold text-[#142534]">Quản lý khám bệnh</span>
-                </nav>
             </header>
 
             <section>
@@ -254,7 +251,7 @@ export default function DoctorWaitingListPage({
                             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600"><Stethoscope className="h-7 w-7" /></div>
                             <div className="min-w-0">
                                 <p className="text-xs text-slate-500">Phòng khám hiện tại</p>
-                                <p className="mt-1 truncate text-base font-bold text-[#142534]">{profile?.roomName || 'Chưa được phân công'}</p>
+                                <p className="mt-1 truncate text-base font-bold text-[#142534]">{roomName || 'Chưa được phân công'}</p>
                             </div>
                         </div>
                         <div className="border-b border-slate-100 p-4 md:border-b-0 md:border-r">
@@ -277,7 +274,7 @@ export default function DoctorWaitingListPage({
                     <div className="flex flex-wrap gap-2" role="tablist">
                         {TABS.map((tab) => (
                             <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => { setActiveTab(tab.id); setPage(1); }} className={`cursor-pointer rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${activeTab === tab.id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-700'}`}>
-                                {tab.label}
+                                {tab.label} ({counts[tab.id]})
                             </button>
                         ))}
                     </div>
@@ -348,7 +345,7 @@ export default function DoctorWaitingListPage({
 
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
                             <span>
-                                {filtered.length === 0 ? 'Hiển thị 0 bệnh nhân' : `Hiển thị ${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, filtered.length)} / ${filtered.length}`}
+                                {totalElements === 0 ? 'Hiển thị 0 bệnh nhân' : `Hiển thị ${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, totalElements)} / ${totalElements}`}
                             </span>
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1">
@@ -416,7 +413,7 @@ export default function DoctorWaitingListPage({
                                 <div><dt className="text-xs text-slate-500">Lý do khám</dt><dd className="mt-1 font-medium text-slate-700">{callingVisit.lydovaovien || '—'}</dd></div>
                                 <div><dt className="text-xs text-slate-500">Thời gian đăng ký</dt><dd className="mt-1 font-medium text-slate-700">{formatDateTime(callingVisit.thoigianvaovien).join(' · ')}</dd></div>
                                 <div><dt className="text-xs text-slate-500">Bước hiện tại</dt><dd className="mt-1 font-medium text-slate-700">{callingVisit.status === 'WAITING_CONCLUSION' ? 'Chờ kết luận' : 'Chờ khám'}</dd></div>
-                                <div><dt className="text-xs text-slate-500">Phòng khám</dt><dd className="mt-1 font-medium text-slate-700">{profile?.roomName || '—'}</dd></div>
+                                <div><dt className="text-xs text-slate-500">Phòng khám</dt><dd className="mt-1 font-medium text-slate-700">{roomName || '—'}</dd></div>
                             </dl>
 
                             <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Sau khi gọi, chọn “Có mặt” để tiếp tục hoặc “Vắng / Bỏ lượt” nếu bệnh nhân chưa đến.</p>
