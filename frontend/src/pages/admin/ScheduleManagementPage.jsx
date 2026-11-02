@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   RotateCcw,
   Copy,
   Eye,
@@ -20,9 +21,16 @@ import { departmentApi } from '../../apis/departmentApi';
 import { apiClient } from '../../services/session';
 import { createAccountApi } from '../../apis/accountApi';
 import { describeApiError } from '../../utils/describeApiError';
+import { getVietnamTodayStr, isShiftPast } from '../../utils/vietnamTimeUtils';
 
 function getMondayOfDate(d) {
-  const date = new Date(d);
+  let date;
+  if (typeof d === 'string' && d.includes('-')) {
+    const [y, m, day] = d.split('-').map(Number);
+    date = new Date(y, m - 1, day);
+  } else {
+    date = new Date(d);
+  }
   const day = date.getDay();
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(date.setDate(diff));
@@ -47,8 +55,11 @@ export function ScheduleManagementPage({
   const effectiveUser = currentAdmin || currentUser;
   const isAdmin = !readOnly && effectiveUser?.role === 'ADMIN';
 
-  // Current Week Monday
-  const [currentMonday, setCurrentMonday] = useState(() => getMondayOfDate(new Date()));
+  // Current Week Monday (theo chuẩn múi giờ Việt Nam)
+  const [currentMonday, setCurrentMonday] = useState(() => getMondayOfDate(getVietnamTodayStr()));
+
+  // Bộ lọc Ca làm việc: 'ALL' (Tất cả ca) | 'MORNING' (Ca Sáng) | 'AFTERNOON' (Ca Chiều)
+  const [shiftFilter, setShiftFilter] = useState('ALL');
 
   // Schedules state
   const [scheduleItems, setScheduleItems] = useState([]);
@@ -57,6 +68,8 @@ export function ScheduleManagementPage({
   // Available staff & rooms (tải thật từ API, không dùng mock)
   const [staffList, setStaffList] = useState([]);
   const [roomList, setRoomList] = useState([]);
+
+  // Modal states (Admin CRUD)
 
 
   // Modal states (Admin CRUD)
@@ -93,58 +106,89 @@ export function ScheduleManagementPage({
   const startDateStr = days[0].dateStr;
   const endDateStr = days[6].dateStr;
 
-  // Load Staff & Rooms metadata
+  // Load Staff & Rooms metadata (Hỗ trợ tất cả role xem lịch trực, chỉ Admin mới tải toàn bộ danh sách account để phân công)
   useEffect(() => {
     let isMounted = true;
     async function loadMetadata() {
       try {
-        const accountApi = createAccountApi(apiClient);
-        const allAccounts = [];
-        for (let page = 0; ; page += 1) {
-          const accRes = await accountApi.list({ page, size: 50 });
-          const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
-          allAccounts.push(...items);
-          const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
-          if (page + 1 >= totalPages || items.length === 0) break;
+        const promises = [
+          departmentApi.getAllItems().catch((err) => {
+            console.warn('Không thể tải danh mục khoa phòng qua departmentApi:', err);
+            return [];
+          }),
+        ];
+
+        // Chỉ Admin mới có quyền gọi accountApi.list (tránh lỗi 403 Forbidden cho Bác sĩ, KTV, Lễ tân)
+        if (isAdmin) {
+          const accountApi = createAccountApi(apiClient);
+          promises.push(
+            (async () => {
+              const allAccounts = [];
+              for (let page = 0; ; page += 1) {
+                const accRes = await accountApi.list({ page, size: 50 });
+                const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
+                allAccounts.push(...items);
+                const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
+                if (page + 1 >= totalPages || items.length === 0) break;
+              }
+              return allAccounts;
+            })().catch((err) => {
+              console.warn('Không thể tải danh sách tài khoản (chỉ admin):', err);
+              return [];
+            })
+          );
+        } else {
+          promises.push(Promise.resolve([]));
         }
-        if (allAccounts.length > 0 && isMounted) {
-          // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN cho lịch trực phòng
-          const dutyStaff = allAccounts
-            .filter(a => a.role === 'DOCTOR' || a.role === 'TECHNICIAN')
-            .map(a => ({
-              id: a.id,
-              fullName: (a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName,
-              role: a.role,
-              username: a.username,
-            }));
-          setStaffList(dutyStaff.length > 0 ? dutyStaff : allAccounts.map(a => ({
+
+        const [deptRes, accResPages] = await Promise.all(promises);
+
+        const rawRooms = (deptRes?.data || deptRes || []).filter((it) => it.unitType === 'ROOM');
+
+        // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN cho lịch trực phòng (Không fallback sang vai trò khác)
+        const filteredAccounts = (accResPages || []).filter((a) => a.role === 'DOCTOR' || a.role === 'TECHNICIAN');
+        const sourceAccounts = filteredAccounts;
+
+        const dutyStaff = sourceAccounts.map((a) => {
+          const matchedRoom = rawRooms.find((r) =>
+            (a.roomId && r.id === a.roomId) ||
+            (a.roomName && (r.name === a.roomName || r.roomName === a.roomName))
+          );
+          return {
             id: a.id,
             fullName: (a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName,
             role: a.role,
             username: a.username,
-          })));
-        }
-      } catch (e) {
-        console.error('Lỗi tải danh sách nhân viên:', e);
-        toast.error(describeApiError(e, 'Không thể tải danh sách nhân viên'));
-      }
+            roomId: a.roomId || matchedRoom?.id || null,
+            roomCode: a.roomCode || matchedRoom?.code || matchedRoom?.roomCode || null,
+            roomName: a.roomName || matchedRoom?.name || matchedRoom?.roomName || null,
+            departmentName: a.departmentName || matchedRoom?.departmentName || null,
+          };
+        });
 
-      try {
-        const deptRes = await departmentApi.getAllItems();
-        const items = deptRes?.data || deptRes || [];
-        // CHỈ LẤY PHÒNG (unitType === 'ROOM'), TUYỆT ĐỐI LOẠI BỎ CÁC KHOA (unitType === 'DEPARTMENT')
-        const rooms = items.filter(it => it.unitType === 'ROOM');
+        // Gắn danh sách nhân viên trực thuộc cho từng phòng để liên kết 2 chiều
+        const enrichedRooms = rawRooms.map((r) => {
+          const assignedStaff = dutyStaff.filter((s) => s.roomId === r.id);
+          return {
+            ...r,
+            assignedStaff,
+            assignedStaffNames: assignedStaff.map((s) => s.fullName).join(', '),
+          };
+        });
+
         if (isMounted) {
-          setRoomList(rooms);
+          setStaffList(dutyStaff);
+          if (enrichedRooms.length > 0) {
+            setRoomList(enrichedRooms);
+          }
         }
       } catch (e) {
-        console.error('Lỗi tải danh sách phòng:', e);
-        toast.error(describeApiError(e, 'Không thể tải danh sách phòng'));
+        console.warn('Lỗi xử lý metadata phòng ban:', e);
       }
     }
     loadMetadata();
     return () => { isMounted = false; };
-  }, []);
+  }, [isAdmin]);
 
   // Fetch Schedules for current week (supports silent mode to prevent screen flickering/layout jumps)
   const fetchSchedules = useCallback(async (isSilent = false) => {
@@ -153,7 +197,29 @@ export function ScheduleManagementPage({
     }
     try {
       const res = await dutyScheduleApi.getWeeklySchedule(startDateStr, endDateStr);
-      setScheduleItems(res?.items || []);
+      const items = res?.items || [];
+      setScheduleItems(items);
+
+      // Nếu danh sách phòng chưa có, tự động trích xuất từ các ca trực đã có
+      if (items.length > 0) {
+        setRoomList((prev) => {
+          if (prev.length > 0) return prev;
+          const roomMap = new Map();
+          items.forEach((it) => {
+            if (it.roomId && !roomMap.has(it.roomId)) {
+              roomMap.set(it.roomId, {
+                id: it.roomId,
+                code: it.roomCode || it.roomName,
+                name: it.roomName || it.roomCode,
+                departmentName: it.departmentName || 'Khoa Khám Bệnh',
+                type: 'CLINICAL',
+                assignedStaff: [],
+              });
+            }
+          });
+          return Array.from(roomMap.values());
+        });
+      }
     } catch (e) {
       console.error('Failed to load duty schedules:', e);
       toast.error(describeApiError(e, 'Không thể tải lịch trực tuần này'));
@@ -184,38 +250,94 @@ export function ScheduleManagementPage({
   };
 
   const handleCurrentWeek = () => {
-    setCurrentMonday(getMondayOfDate(new Date()));
+    setCurrentMonday(getMondayOfDate(getVietnamTodayStr()));
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getVietnamTodayStr();
 
-  // Open Add Duty Modal for cell (Admin only)
-  const handleOpenAddForCell = (dateStr, shift) => {
-    if (!isAdmin) return;
-    if (dateStr < todayStr) {
-      toast.error('Không thể phân công lịch trực cho ngày trong quá khứ');
+  // Open Add Duty Modal for a specific room and shift slot (Admin: phân công, Role khác: xem chi tiết)
+  const handleOpenAddForSlot = (roomId, dateStr, shift) => {
+    if (isShiftPast(dateStr, shift)) {
+      toast.error('Ca trực trong quá khứ chưa phân công không thể thao tác');
       return;
     }
+
+    if (!isAdmin) {
+      // Role khác chỉ được phép xem chi tiết ca trực ô này (nếu chưa trong quá khứ)
+      const targetRoom = roomList.find((r) => r.id === roomId);
+      setEditingItem({
+        id: null,
+        workDate: dateStr,
+        shift,
+        roomId,
+        roomName: targetRoom?.name || targetRoom?.roomName || '',
+        roomCode: targetRoom?.code || targetRoom?.roomCode || '',
+        staffAccountId: '',
+        notes: '',
+      });
+      setModalDefaultDate(dateStr);
+      setModalOpen(true);
+      return;
+    }
+
+    const targetRoom = roomList.find((r) => r.id === roomId);
+
+    const busyAccountIds = new Set(
+      scheduleItems
+        .filter((s) => s.workDate === dateStr && s.shift === shift)
+        .map((s) => s.staffAccountId)
+    );
+
+    const roomCode = (targetRoom?.code || targetRoom?.roomCode || '').toUpperCase();
+    const deptName = (targetRoom?.departmentName || '').toLowerCase();
+    const roomType = (targetRoom?.type || '').toUpperCase();
+
+    const isParaclinical =
+      roomType === 'PARACLINICAL' ||
+      deptName.includes('hình ảnh') ||
+      deptName.includes('chẩn đoán') ||
+      deptName.includes('xét nghiệm') ||
+      deptName.includes('cận lâm sàng') ||
+      roomCode.startsWith('CDHA') ||
+      roomCode.startsWith('XN') ||
+      roomCode.startsWith('CLS');
+
+    const requiredRole = isParaclinical ? 'TECHNICIAN' : 'DOCTOR';
+
+    const staffOfRoom = staffList.filter((s) =>
+      s.role === requiredRole && (
+        s.roomId === roomId ||
+        (targetRoom && (s.roomCode === targetRoom.code || s.roomName === targetRoom.name))
+      )
+    );
+    const freeStaffOfRoom = staffOfRoom.find((s) => !busyAccountIds.has(s.id));
+    const defaultStaff = freeStaffOfRoom || staffOfRoom[0] || null;
+
     setEditingItem({
       id: null,
       workDate: dateStr,
       shift,
-      staffAccountId: staffList[0]?.id || '',
-      roomId: '',
+      roomId,
+      roomName: targetRoom?.name || targetRoom?.roomName || '',
+      roomCode: targetRoom?.code || targetRoom?.roomCode || '',
+      staffAccountId: defaultStaff?.id || '',
       notes: '',
     });
     setModalDefaultDate(dateStr);
     setModalOpen(true);
   };
 
-  // Open Edit Duty Modal (Admin only)
+  // Open Edit / View Detail Duty Modal (Admin: sửa/gỡ ca trực, Role khác: chỉ xem chi tiết)
   const handleOpenEdit = (item) => {
-    if (!isAdmin) return;
-    if (item.workDate < todayStr) {
-      toast.error('Không thể chỉnh sửa lịch trực trong quá khứ');
-      return;
+    let roomId = item.roomId;
+    if (!roomId && item.staffAccountId) {
+      const staff = staffList.find((s) => s.id === item.staffAccountId);
+      if (staff?.roomId) roomId = staff.roomId;
     }
-    setEditingItem(item);
+    setEditingItem({
+      ...item,
+      roomId: roomId || roomList[0]?.id || '',
+    });
     setModalDefaultDate(item.workDate);
     setModalOpen(true);
   };
@@ -223,8 +345,8 @@ export function ScheduleManagementPage({
   // Save Duty Handler (Admin only)
   const handleSaveDuty = async (formData) => {
     if (!isAdmin) return;
-    if (formData.workDate < todayStr) {
-      toast.error('Không thể phân công hoặc chỉnh sửa lịch trực trong quá khứ');
+    if (isShiftPast(formData.workDate, formData.shift)) {
+      toast.error('Không thể phân công hoặc chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ');
       return;
     }
     try {
@@ -257,8 +379,8 @@ export function ScheduleManagementPage({
   // Delete Duty Handlers (Admin only)
   const handleConfirmDelete = (item) => {
     if (!isAdmin) return;
-    if (item.workDate < todayStr) {
-      toast.error('Không thể xoá lịch trực trong quá khứ');
+    if (isShiftPast(item.workDate, item.shift)) {
+      toast.error('Không thể xoá ca trực đã kết thúc hoặc trong quá khứ');
       return;
     }
     setItemToDelete(item);
@@ -268,8 +390,8 @@ export function ScheduleManagementPage({
 
   const executeDeleteDuty = async () => {
     if (!isAdmin || !itemToDelete) return;
-    if (itemToDelete.workDate < todayStr) {
-      toast.error('Không thể xoá lịch trực trong quá khứ');
+    if (isShiftPast(itemToDelete.workDate, itemToDelete.shift)) {
+      toast.error('Không thể xoá ca trực đã kết thúc hoặc trong quá khứ');
       setDeleteConfirmOpen(false);
       setItemToDelete(null);
       return;
@@ -356,10 +478,10 @@ export function ScheduleManagementPage({
             notes: item.notes || '',
           };
         })
-        .filter(item => item.workDate >= todayStr);
+        .filter(item => !isShiftPast(item.workDate, item.shift));
 
       if (newItems.length === 0) {
-        toast.warning('Tất cả các ngày tương ứng trong tuần này đều đã qua, không thể sao chép.');
+        toast.warning('Tất cả các ngày tương ứng trong tuần này đều đã qua hoặc đã kết thúc, không thể sao chép.');
         return;
       }
 
@@ -381,50 +503,44 @@ export function ScheduleManagementPage({
 
   const pageContent = (
     <div className="p-3.5 sm:p-5 max-w-full space-y-4">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-1">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
-              <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6" />
+      {/* Page Header (Chuẩn Image 2: Tiêu đề bên trái, Điều hướng tuần & Sao chép bên phải) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-1">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-600 border border-teal-100 shadow-2xs shrink-0">
+            <CalendarDays className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
+                Lịch trực nhân viên
+              </h1>
+              {isAdmin ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Quản trị viên (Toàn quyền thay đổi)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                  <Eye className="w-3.5 h-3.5" />
+                  Chế độ xem
+                </span>
+              )}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-                  Lịch trực nhân viên
-                </h1>
-                {isAdmin ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Quản trị viên (Toàn quyền thay đổi)
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                    <Eye className="w-3.5 h-3.5" />
-                    Chế độ xem
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isAdmin
-                  ? 'Quản lý, phân công và thiết lập lịch làm việc theo tuần (Ca Sáng: 08:00 - 11:30 & Ca Chiều: 13:00 - 17:30)'
-                  : 'Xem lịch phân công làm việc theo tuần của các khoa phòng (Ca Sáng & Ca Chiều)'}
-              </p>
-            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {isAdmin
+                ? 'Quản lý, phân công và thiết lập lịch làm việc theo tuần (Ca Sáng: 08:00 - 11:30 & Ca Chiều: 13:00 - 17:30)'
+                : 'Xem lịch phân công làm việc theo tuần của các khoa phòng (Ca Sáng & Ca Chiều)'}
+            </p>
           </div>
         </div>
-      </div>
 
-
-      {/* Week Selector Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-3.5 shadow-sm flex items-center justify-between flex-wrap gap-3">
-        {/* Week Navigation */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/60">
+        {/* Nút điều hướng tuần & Nút sao chép tuần trước (Góc trên bên phải) */}
+        <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0 flex-wrap">
+          <div className="flex items-center bg-white rounded-full p-1 border border-slate-200/90 shadow-2xs">
             <button
               type="button"
               onClick={handlePrevWeek}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-xs cursor-pointer"
+              className="p-1.5 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
               title="Tuần trước"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -432,41 +548,77 @@ export function ScheduleManagementPage({
             <button
               type="button"
               onClick={handleCurrentWeek}
-              className="px-3 py-1 rounded-lg text-xs font-bold text-slate-700 hover:text-teal-700 hover:bg-white transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1 rounded-full text-xs font-semibold text-slate-700 hover:text-teal-700 hover:bg-teal-50 transition-all flex items-center gap-1 cursor-pointer"
               title="Về tuần hiện tại"
             >
-              <RotateCcw className="w-3 h-3 text-slate-400" />
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
               <span>Tuần này</span>
             </button>
             <button
               type="button"
               onClick={handleNextWeek}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-xs cursor-pointer"
+              className="p-1.5 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
               title="Tuần sau"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="text-sm font-bold text-slate-800 px-3 py-1.5 bg-teal-50/50 rounded-xl border border-teal-100/80">
-            Tuần: <span className="text-teal-700">{days[0].displayDate}</span> đến{' '}
-            <span className="text-teal-700">{days[6].displayDate}/{days[6].date.getFullYear()}</span>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleRequestCopy}
+              disabled={copying || endDateStr < todayStr}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-teal-300 bg-white hover:bg-teal-50 text-teal-700 text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Sao chép toàn bộ phân công ca trực từ tuần trước sang tuần này"
+            >
+              <Copy className="w-3.5 h-3.5 text-teal-600" />
+              <span>{copying ? 'Đang sao chép...' : 'Sao chép tuần trước'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Card Bộ Lọc Ca làm việc */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <span className="font-semibold text-slate-700">Ca làm việc:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShiftFilter('ALL')}
+              className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                shiftFilter === 'ALL'
+                  ? 'bg-[#e8f6f3] text-teal-800 border border-teal-500 font-bold shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              [Tất cả ca]
+            </button>
+            <button
+              type="button"
+              onClick={() => setShiftFilter('MORNING')}
+              className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                shiftFilter === 'MORNING'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-500 font-bold shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              Ca Sáng (08:00 - 11:30)
+            </button>
+            <button
+              type="button"
+              onClick={() => setShiftFilter('AFTERNOON')}
+              className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                shiftFilter === 'AFTERNOON'
+                  ? 'bg-teal-50 text-teal-800 border border-teal-500 font-bold shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              Ca Chiều (13:00 - 17:30)
+            </button>
           </div>
         </div>
-
-        {/* Nút Sao chép tuần trước (Bên phải ngoài cùng ngang hàng) */}
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={handleRequestCopy}
-            disabled={copying || endDateStr < todayStr}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-teal-200 bg-teal-50/80 hover:bg-teal-100/80 text-teal-800 text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Sao chép toàn bộ phân công ca trực từ tuần trước sang tuần này"
-          >
-            <Copy className="w-3.5 h-3.5 text-teal-600" />
-            <span>{copying ? 'Đang sao chép...' : 'Sao chép tuần trước'}</span>
-          </button>
-        )}
       </div>
 
       {/* Weekly Matrix Schedule Grid */}
@@ -481,30 +633,33 @@ export function ScheduleManagementPage({
         )}
         <DutyWeeklyMatrix
           days={days}
+          roomList={roomList}
+          staffList={staffList}
           scheduleItems={scheduleItems}
+          shiftFilter={shiftFilter}
           canEdit={isAdmin}
-          onAddDuty={handleOpenAddForCell}
+          onAddDutySlot={handleOpenAddForSlot}
           onEditDuty={handleOpenEdit}
           onDeleteDuty={handleConfirmDelete}
         />
       </div>
 
-      {/* Modal Phân công / Chỉnh sửa (Admin only) */}
-      {isAdmin && (
-        <DutyScheduleModal
-          isOpen={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setEditingItem(null);
-          }}
-          onSave={handleSaveDuty}
-          initialData={editingItem}
-          weekStartDate={modalDefaultDate || startDateStr}
-          staffList={staffList}
-          roomList={roomList}
-          existingSchedules={scheduleItems}
-        />
-      )}
+      {/* Modal Phân công / Chỉnh sửa (Admin) hoặc Xem chi tiết (Role khác) */}
+      <DutyScheduleModal
+        isOpen={modalOpen}
+        readOnly={!isAdmin}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingItem(null);
+        }}
+        onSave={handleSaveDuty}
+        onDelete={handleConfirmDelete}
+        initialData={editingItem}
+        weekStartDate={modalDefaultDate || startDateStr}
+        staffList={staffList}
+        roomList={roomList}
+        existingSchedules={scheduleItems}
+      />
 
       {/* Modal Xác nhận Xoá (Admin only) */}
       {isAdmin && (
