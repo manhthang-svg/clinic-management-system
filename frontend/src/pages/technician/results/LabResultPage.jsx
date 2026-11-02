@@ -1,7 +1,7 @@
 import { Field, INPUT_CLASS } from '../../../components/shared/FormFields';
 import { LabResultTable } from '../../../components/paraclinicalResult';
 import { ResultEditor, ResultSection } from '../../../components/paraclinicalResult/ResultEditor';
-import { ConclusionSection, FilesSection } from '../../../components/paraclinicalResult/ResultFields';
+import { ConclusionSection } from '../../../components/paraclinicalResult/ResultFields';
 
 /** UC-67 Phiếu kết quả xét nghiệm (MS 17/BV2): blood, biochemistry and urine tests. */
 export function LabResultPage({ order, api }) {
@@ -34,13 +34,6 @@ export function LabResultPage({ order, api }) {
             />
           </ResultSection>
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly} label="Nhận xét" />
-          <FilesSection
-            form={form}
-            set={set}
-            readOnly={readOnly}
-            title="File đính kèm"
-            description="PDF kết quả từ máy hoặc phòng xét nghiệm đối tác (nếu có). Không in lên phiếu."
-          />
         </>
       )}
     </ResultEditor>

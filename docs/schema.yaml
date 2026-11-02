@@ -4356,6 +4356,26 @@ tables:
         proposal: keep
         standard: Không
         description: Thời điểm hủy
+      has_metal_implant:
+        field: hasMetalImplant
+        sql_type: boolean
+        base_type: boolean
+        nullable: true
+        java_type: Boolean
+        proposal: add
+        standard: Không
+        description: 'Sàng lọc MRI: có dị vật kim loại trong cơ thể; null khi không hỏi'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      prior_results:
+        field: priorResults
+        sql_type: text
+        base_type: text
+        nullable: true
+        java_type: String
+        proposal: add
+        standard: Không
+        description: 'Sàng lọc MRI: các kết quả xét nghiệm, chẩn đoán hình ảnh đã có'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
       created_at:
         field: createdAt
         sql_type: timestamptz
@@ -4453,18 +4473,6 @@ tables:
         standard: Có – VI.2.1
         description: Số phiếu kết quả
         note: Field theo chuẩn/Phụ lục
-      ngayketqua:
-        field: ngayketqua
-        sql_type: timestamptz
-        base_type: timestamptz
-        nullable: true
-        java_type: OffsetDateTime
-        proposal: required
-        appendix:
-        - VI.2.3
-        standard: Có – VI.2.3
-        description: Thời điểm có kết quả
-        note: Field theo chuẩn/Phụ lục
       chandoan:
         field: chandoan
         sql_type: text
@@ -4553,6 +4561,49 @@ tables:
         proposal: keep
         standard: Không
         description: Thời điểm gửi
+        note: Xuất làm ngayketqua (VI.2.3); cột ngayketqua đã bỏ (V34)
+      kqcls_kythuat:
+        field: kqclsKythuat
+        sql_type: text
+        base_type: text
+        nullable: true
+        java_type: String
+        proposal: add
+        standard: Không
+        description: 'Kỹ thuật chụp (phiếu CT, MRI)'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      kqcls_mota_chitiet:
+        field: kqclsMotaChitiet
+        sql_type: jsonb
+        base_type: jsonb
+        nullable: true
+        java_type: String
+        proposal: add
+        standard: Không
+        description: 'Ô mô tả theo cơ quan/vị trí (siêu âm, nội soi, điện tim), JSON object; kqcls_mota là văn bản in'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      reading_doctor_name:
+        field: readingDoctorName
+        sql_type: varchar(255)
+        base_type: varchar
+        length: 255
+        nullable: true
+        java_type: String
+        proposal: add
+        standard: Không
+        description: 'Bác sĩ chuyên khoa ký phiếu (văn bản tự do)'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      print_count:
+        field: printCount
+        sql_type: integer
+        base_type: integer
+        nullable: false
+        java_type: int
+        default: 0
+        proposal: add
+        standard: Không
+        description: 'Số lần in; từ lần thứ hai in chữ Bản sao (UC-68)'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
       created_at:
         field: createdAt
         sql_type: timestamptz
@@ -4749,6 +4800,17 @@ tables:
         proposal: keep
         standard: Không
         description: Thời điểm gửi
+      print_count:
+        field: printCount
+        sql_type: integer
+        base_type: integer
+        nullable: false
+        java_type: int
+        default: 0
+        proposal: add
+        standard: Không
+        description: 'Số lần in; từ lần thứ hai in chữ Bản sao (UC-68)'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
       created_at:
         field: createdAt
         sql_type: timestamptz
@@ -4970,7 +5032,7 @@ tables:
         field: imagingResultId
         sql_type: uuid
         base_type: uuid
-        nullable: true
+        nullable: false
         fk:
           table: imaging_results
           column: id
@@ -4980,21 +5042,7 @@ tables:
         proposal: keep
         standard: Không – khóa ngoại nội bộ
         description: Kết quả hình ảnh
-      lab_result_id:
-        field: labResultId
-        sql_type: uuid
-        base_type: uuid
-        nullable: true
-        fk:
-          table: lab_results
-          column: id
-          on_delete: RESTRICT
-        relation: none
-        java_type: UUID
-        proposal: keep
-        standard: Không – khóa ngoại nội bộ
-        description: Kết quả xét nghiệm
-        note: Kết quả XN từ lab đối tác thường là file PDF
+        note: Chỉ kết quả hình ảnh, thăm dò chức năng có file; lab_result_id đã bỏ (V33)
       hinhanh:
         field: hinhanh
         sql_type: varchar(1024)
@@ -5062,6 +5110,38 @@ tables:
         proposal: keep
         standard: Không
         description: Thời điểm tải lên
+      display_order:
+        field: displayOrder
+        sql_type: integer
+        base_type: integer
+        nullable: true
+        java_type: Integer
+        proposal: add
+        standard: Không
+        description: 'Thứ tự ảnh trên phiếu, duy nhất trong một kết quả'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      caption:
+        field: caption
+        sql_type: varchar(255)
+        base_type: varchar
+        length: 255
+        nullable: true
+        java_type: String
+        proposal: add
+        standard: Không
+        description: 'Chú thích ảnh, ví dụ Hang vị'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
+      print_on_slip:
+        field: printOnSlip
+        sql_type: boolean
+        base_type: boolean
+        nullable: false
+        java_type: boolean
+        default: true
+        proposal: add
+        standard: Không
+        description: 'Có in ảnh lên phiếu không'
+        note: 'V32 – ASSUMPTION, chờ nhóm xác nhận.'
   prescriptions:
     number: 29
     name: prescriptions

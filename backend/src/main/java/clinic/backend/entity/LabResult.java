@@ -68,6 +68,10 @@ public class LabResult extends VersionedEntity {
     @Column(name = "submitted_at")
     private Instant submittedAt;
 
+    /** Prints so far; the second and later prints are marked as a copy (UC-68). */
+    @Column(name = "print_count", nullable = false)
+    private int printCount;
+
     @Getter(AccessLevel.NONE)
     @OneToMany(mappedBy = "labResult", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<LabResultItem> items = new ArrayList<>();
