@@ -38,6 +38,18 @@ export const visitApi = {
         return apiClient.request(`/visits/queue${suffix}`, { signal });
     },
 
+    // UC-43: authenticated doctor's assigned-room queue with server-side filtering and pagination.
+    getDoctorQueue(params = {}, signal) {
+        const query = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '' && value !== 'ALL') {
+                query.set(key, value);
+            }
+        });
+        const suffix = query.size ? `?${query.toString()}` : '';
+        return apiClient.request(`/visits/doctor-queue${suffix}`, { signal });
+    },
+
     // UC-42: counts per active examination room, for the receptionist.
     getQueueStatus(signal) {
         return apiClient.request('/visits/queue-status', { signal });

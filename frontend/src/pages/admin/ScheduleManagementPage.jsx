@@ -50,6 +50,7 @@ export function ScheduleManagementPage({
   currentUser,
   onLogout,
   onChangePassword,
+  onOpenProfile,
   readOnly = false,
 }) {
   const effectiveUser = currentAdmin || currentUser;
@@ -702,6 +703,7 @@ export function ScheduleManagementPage({
         currentAdmin={currentAdmin}
         onLogout={onLogout}
         onChangePassword={onChangePassword}
+        onOpenProfile={onOpenProfile}
       >
         {pageContent}
       </AdminLayout>
