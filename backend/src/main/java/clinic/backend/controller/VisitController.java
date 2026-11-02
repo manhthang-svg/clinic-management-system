@@ -8,15 +8,19 @@ import java.util.UUID;
 import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
+import clinic.backend.dto.response.DoctorQueueResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.VisitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,11 +32,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import java.net.URI;
 
 @RestController
+@Validated
 @RequestMapping("/api/v1/visits")
 @RequiredArgsConstructor
 @Tag(name = "Lượt khám", description = "Đăng ký lượt khám và quản lý hàng đợi khám")
@@ -71,7 +77,7 @@ public class VisitController {
                 visitService.previewFee(patientId, doituongbnLoai, mabhyt));
     }
 
-    @PreAuthorize("hasAnyRole('DOCTOR', 'RECEPTIONIST', 'ADMIN', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RECEPTIONIST')")
     @GetMapping("/queue")
     @Operation(summary = "UC-42, UC-43 Xem hàng đợi lượt khám")
     public ApiResponse<List<VisitResponse>> getRoomQueue(
@@ -79,6 +85,21 @@ public class VisitController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return ApiResponse.success(visitService.getRoomQueue(roomId, date));
+    }
+
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @GetMapping("/doctor-queue")
+    @Operation(summary = "UC-43 Xem danh sách bệnh nhân của phòng khám được phân công")
+    public ApiResponse<DoctorQueueResponse> getDoctorQueue(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "WAITING") DoctorQueueTab tab,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean priority,
+            @RequestParam(required = false) VisitDoituongbnLoai visitType,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ApiResponse.success(visitService.getDoctorQueue(
+                StaffPrincipal.from(jwt), tab, keyword, priority, visitType, page, size));
     }
 
     @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
