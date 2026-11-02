@@ -5,29 +5,43 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
+import clinic.backend.dto.response.DoctorQueueItemResponse;
+import clinic.backend.dto.response.DoctorQueueResponse;
+import clinic.backend.dto.response.PageResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.entity.FollowUpAppointment;
+import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffRoomAssignment;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
+import clinic.backend.entity.VisitTransfer;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.DutyShift;
+import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.PaymentType;
@@ -40,6 +54,7 @@ import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
@@ -48,6 +63,7 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
@@ -67,13 +83,23 @@ public class VisitServiceImpl implements VisitService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String VISIT_AUDIT_ENTITY = "visits";
+    private static final List<VisitStatus> DOCTOR_QUEUE_STATUSES = List.of(
+            VisitStatus.WAITING,
+            VisitStatus.IN_EXAMINATION,
+            VisitStatus.WAITING_CONCLUSION);
+    private static final LocalTime MORNING_START = LocalTime.of(8, 0);
+    private static final LocalTime MORNING_END = LocalTime.of(11, 30);
+    private static final LocalTime AFTERNOON_START = LocalTime.of(13, 0);
+    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 30);
 
     private final MedicalServiceRepository medicalServiceRepository;
     private final PaymentRepository paymentRepository;
     private final PatientRepository patientRepository;
     private final RoomRepository roomRepository;
     private final VisitRepository visitRepository;
+    private final VisitTransferRepository visitTransferRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
+    private final DutyScheduleRepository dutyScheduleRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
     private final FollowUpAppointmentRepository appointmentRepository;
@@ -274,11 +300,234 @@ public class VisitServiceImpl implements VisitService {
     @Transactional(readOnly = true)
     public List<VisitResponse> getRoomQueue(UUID roomId, LocalDate date) {
         LocalDate queryDate = date != null ? date : LocalDate.now(clock.withZone(CLINIC_ZONE));
-        UUID targetRoomId = roomId != null ? roomId : currentAssignedRoom();
+        UUID targetRoomId;
+        if (currentCallerIsDoctor()) {
+            targetRoomId = currentAssignedRoom();
+            if (targetRoomId == null) {
+                throw new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED);
+            }
+        } else {
+            targetRoomId = roomId;
+        }
         List<Visit> visits = targetRoomId == null
                 ? visitRepository.findAllByQueueDate(queryDate)
                 : visitRepository.findRoomQueue(targetRoomId, queryDate);
         return visits.stream().map(this::toResponse).toList();
+    }
+
+    private static boolean currentCallerIsDoctor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_DOCTOR".equals(authority.getAuthority()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DoctorQueueResponse getDoctorQueue(
+            StaffPrincipal principal,
+            DoctorQueueTab tab,
+            String keyword,
+            Boolean priority,
+            VisitDoituongbnLoai visitType,
+            int page,
+            int size) {
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+        LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
+        StaffAccount doctor = staffAccountRepository.findById(principal.accountId())
+                .filter(account -> account.getRole() == Role.DOCTOR && account.canAuthenticate())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCESS_DENIED));
+        Room room = staffRoomAssignmentRepository
+                .findByStaffAccountIdAndRemovedAtIsNull(principal.accountId())
+                .flatMap(assignment -> roomRepository.findById(assignment.getRoomId()))
+                .filter(candidate -> candidate.getType() == RoomType.EXAMINATION)
+                .filter(candidate -> candidate.getStatus() == ActivationStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
+
+        List<Visit> visits = visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
+                room.getId(), today, DOCTOR_QUEUE_STATUSES);
+        Map<UUID, Patient> patientsById = patientRepository.findAllById(
+                        visits.stream().map(Visit::getPatientId).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(Patient::getId, patient -> patient));
+        Map<UUID, VisitTransfer> latestTransfers = latestTransfers(visits, room.getId());
+        Map<UUID, String> sourceRoomNames = sourceRoomNames(latestTransfers.values());
+
+        List<DoctorQueueItemResponse> allItems = visits.stream()
+                .map(visit -> toDoctorQueueItem(
+                        visit,
+                        patientsById.get(visit.getPatientId()),
+                        latestTransfers.get(visit.getId()),
+                        sourceRoomNames))
+                .sorted(this::compareDoctorQueueItems)
+                .toList();
+
+        String normalizedKeyword = keyword == null ? "" : keyword.strip().toLowerCase(Locale.ROOT);
+        List<DoctorQueueItemResponse> filtered = allItems.stream()
+                .filter(item -> matchesTab(item, tab))
+                .filter(item -> priority == null || item.isPriority() == priority)
+                .filter(item -> visitType == null || item.doituongbnLoai() == visitType)
+                .filter(item -> matchesKeyword(item, normalizedKeyword))
+                .toList();
+        int fromIndex = (int) Math.min((long) page * size, filtered.size());
+        int toIndex = Math.min(fromIndex + size, filtered.size());
+        int totalPages = filtered.isEmpty() ? 0 : (int) Math.ceil((double) filtered.size() / size);
+        PageResponse<DoctorQueueItemResponse> pageResponse = new PageResponse<>(
+                filtered.subList(fromIndex, toIndex),
+                new PageResponse.PageMetadata(page, size, filtered.size(), totalPages));
+
+        return new DoctorQueueResponse(
+                room.getId(), room.getRoomCode(), room.getRoomName(),
+                staffDisplayName(doctor.getAcademicTitle(), doctor.getFullName()),
+                isOnDuty(principal.accountId(), room.getId(), today, localTime),
+                now,
+                countTab(allItems, DoctorQueueTab.WAITING),
+                countTab(allItems, DoctorQueueTab.IN_EXAMINATION),
+                countTab(allItems, DoctorQueueTab.WAITING_CONCLUSION),
+                countTab(allItems, DoctorQueueTab.SKIPPED),
+                pageResponse);
+    }
+
+    private static long countTab(List<DoctorQueueItemResponse> items, DoctorQueueTab tab) {
+        return items.stream().filter(item -> matchesTab(item, tab)).count();
+    }
+
+    private static boolean matchesTab(DoctorQueueItemResponse item, DoctorQueueTab tab) {
+        return switch (tab) {
+            case WAITING -> !item.isSkipped() && item.status() == VisitStatus.WAITING;
+            case IN_EXAMINATION -> !item.isSkipped() && item.status() == VisitStatus.IN_EXAMINATION;
+            case WAITING_CONCLUSION -> !item.isSkipped() && item.status() == VisitStatus.WAITING_CONCLUSION;
+            case SKIPPED -> item.isSkipped();
+        };
+    }
+
+    private static boolean matchesKeyword(DoctorQueueItemResponse item, String keyword) {
+        if (keyword.isEmpty()) {
+            return true;
+        }
+        return containsIgnoreCase(item.patientName(), keyword)
+                || containsIgnoreCase(item.patientCode(), keyword)
+                || containsIgnoreCase(item.mabhyt(), keyword);
+    }
+
+    private static boolean containsIgnoreCase(String value, String normalizedKeyword) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedKeyword);
+    }
+
+    private Map<UUID, VisitTransfer> latestTransfers(List<Visit> visits, UUID roomId) {
+        if (visits.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> visitIds = visits.stream().map(Visit::getId).toList();
+        Map<UUID, VisitTransfer> latest = new HashMap<>();
+        visitTransferRepository.findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(visitIds, roomId)
+                .forEach(transfer -> latest.putIfAbsent(transfer.getVisitId(), transfer));
+        return latest;
+    }
+
+    private Map<UUID, String> sourceRoomNames(java.util.Collection<VisitTransfer> transfers) {
+        Set<UUID> roomIds = transfers.stream()
+                .map(VisitTransfer::getFromRoomId)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (roomIds.isEmpty()) {
+            return Map.of();
+        }
+        return roomRepository.findAllById(roomIds).stream()
+                .collect(Collectors.toMap(Room::getId, Room::getRoomName));
+    }
+
+    private DoctorQueueItemResponse toDoctorQueueItem(
+            Visit visit,
+            Patient patient,
+            VisitTransfer transfer,
+            Map<UUID, String> sourceRoomNames) {
+        return new DoctorQueueItemResponse(
+                visit.getId(),
+                patient == null ? "—" : patient.getHoten(),
+                patient == null ? "—" : patient.getMabenhnhan(),
+                patient == null ? null : patient.getNgaysinh(),
+                patient == null ? null : patientGender(patient),
+                visit.getQueueNumber(), visit.isPriority(),
+                visit.getPriorityReason() == null ? null : visit.getPriorityReason().name(),
+                visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getLydovaovien(),
+                visit.getThoigianvaovien(), visit.getStatus(), visit.isSkipped(), visit.getSkippedAt(),
+                transfer == null ? null : sourceRoomNames.get(transfer.getFromRoomId()),
+                transfer == null ? null : transfer.getTransferredAt());
+    }
+
+    private int compareDoctorQueueItems(DoctorQueueItemResponse left, DoctorQueueItemResponse right) {
+        int category = Integer.compare(queueCategory(left), queueCategory(right));
+        if (category != 0) {
+            return category;
+        }
+        if (left.isSkipped()) {
+            int skippedAt = Comparator.nullsLast(Comparator.<Instant>naturalOrder())
+                    .compare(left.skippedAt(), right.skippedAt());
+            if (skippedAt != 0) {
+                return skippedAt;
+            }
+        } else if (isWaiting(left)) {
+            int group = Integer.compare(waitingGroup(left), waitingGroup(right));
+            if (group != 0) {
+                return group;
+            }
+            if (waitingGroup(left) == 1) {
+                int transferredAt = Comparator.nullsLast(Comparator.<Instant>naturalOrder())
+                        .compare(left.transferredAt(), right.transferredAt());
+                if (transferredAt != 0) {
+                    return transferredAt;
+                }
+            }
+        } else if (left.status() == VisitStatus.WAITING_CONCLUSION) {
+            int priority = Boolean.compare(right.isPriority(), left.isPriority());
+            if (priority != 0) {
+                return priority;
+            }
+        }
+        return Integer.compare(left.queueNumber(), right.queueNumber());
+    }
+
+    private static int queueCategory(DoctorQueueItemResponse item) {
+        if (item.isSkipped()) {
+            return 3;
+        }
+        return switch (item.status()) {
+            case WAITING -> 0;
+            case IN_EXAMINATION -> 1;
+            case WAITING_CONCLUSION -> 2;
+            default -> 4;
+        };
+    }
+
+    private static boolean isWaiting(DoctorQueueItemResponse item) {
+        return !item.isSkipped() && item.status() == VisitStatus.WAITING;
+    }
+
+    private static int waitingGroup(DoctorQueueItemResponse item) {
+        if (item.isPriority()) {
+            return 0;
+        }
+        return item.transferredAt() == null ? 2 : 1;
+    }
+
+    private boolean isOnDuty(UUID doctorId, UUID roomId, LocalDate date, LocalTime time) {
+        DutyShift shift = currentShift(time);
+        if (shift == null) {
+            return false;
+        }
+        return dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(date, shift, doctorId)
+                .map(DutySchedule::getRoomId)
+                .filter(roomId::equals)
+                .isPresent();
+    }
+
+    private static DutyShift currentShift(LocalTime time) {
+        if (!time.isBefore(MORNING_START) && !time.isAfter(MORNING_END)) {
+            return DutyShift.MORNING;
+        }
+        if (!time.isBefore(AFTERNOON_START) && !time.isAfter(AFTERNOON_END)) {
+            return DutyShift.AFTERNOON;
+        }
+        return null;
     }
 
     private UUID currentAssignedRoom() {

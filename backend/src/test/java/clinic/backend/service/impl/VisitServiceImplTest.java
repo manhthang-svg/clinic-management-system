@@ -16,7 +16,15 @@ import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.StaffRoomAssignment;
+import clinic.backend.entity.Visit;
+import clinic.backend.entity.VisitTransfer;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.DutyShift;
+import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.PaymentStatus;
@@ -30,6 +38,8 @@ import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.repository.VisitTransferRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
@@ -59,6 +69,7 @@ class VisitServiceImplTest {
     private static final LocalDate QUEUE_DATE = LocalDate.of(2026, 10, 30);
     private static final UUID BUSY_ROOM_ID = UUID.randomUUID();
     private static final UUID EMPTY_ROOM_ID = UUID.randomUUID();
+    private static final UUID DOCTOR_ID = UUID.randomUUID();
 
     @Mock
     private MedicalServiceRepository medicalServiceRepository;
@@ -76,7 +87,13 @@ class VisitServiceImplTest {
     private VisitRepository visitRepository;
 
     @Mock
+    private VisitTransferRepository visitTransferRepository;
+
+    @Mock
     private StaffRoomAssignmentRepository staffRoomAssignmentRepository;
+
+    @Mock
+    private DutyScheduleRepository dutyScheduleRepository;
 
     @Mock
     private StaffAccountRepository staffAccountRepository;
@@ -100,7 +117,7 @@ class VisitServiceImplTest {
     private AuditLogService auditLogService;
 
     private final Clock clock = Clock.fixed(
-            Instant.parse("2026-10-29T17:00:00Z"), ZoneOffset.UTC);
+            Instant.parse("2026-10-30T02:00:00Z"), ZoneOffset.UTC);
 
     private VisitServiceImpl service;
 
@@ -112,7 +129,9 @@ class VisitServiceImplTest {
                 patientRepository,
                 roomRepository,
                 visitRepository,
+                visitTransferRepository,
                 staffRoomAssignmentRepository,
+                dutyScheduleRepository,
                 staffAccountRepository,
                 clinicFacilityRepository,
                 followUpAppointmentRepository,
@@ -121,6 +140,90 @@ class VisitServiceImplTest {
                 auditLogService,
                 uuidV7Generator,
                 clock);
+    }
+
+    @Test
+    void doctorQueueIsRoomScopedAndOrdersPriorityTransferThenRegular() {
+        Room assignedRoom = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        Room sourceRoom = new Room(
+                EMPTY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK02", "Phòng PK02", "Tầng 2", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Nguyễn Văn An").academicTitle("BS")
+                .role(clinic.backend.enums.Role.DOCTOR).status(AccountStatus.ACTIVE)
+                .build();
+        StaffRoomAssignment assignment = new StaffRoomAssignment(
+                UUID.randomUUID(), DOCTOR_ID, BUSY_ROOM_ID, clock.instant(), null, null, null, 0L);
+        DutySchedule schedule = mock(DutySchedule.class);
+        when(schedule.getRoomId()).thenReturn(BUSY_ROOM_ID);
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.of(assignment));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
+        when(dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
+                QUEUE_DATE, DutyShift.MORNING, DOCTOR_ID)).thenReturn(Optional.of(schedule));
+
+        Visit regular = queuedVisit(30, false);
+        Visit transferred = queuedVisit(20, false);
+        Visit priority = queuedVisit(10, true);
+        when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
+                BUSY_ROOM_ID, QUEUE_DATE, List.of(
+                        VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
+                .thenReturn(List.of(regular, transferred, priority));
+
+        Patient regularPatient = patient(regular.getPatientId(), "Thường");
+        Patient transferredPatient = patient(transferred.getPatientId(), "Chuyển phòng");
+        Patient priorityPatient = patient(priority.getPatientId(), "Ưu tiên");
+        when(patientRepository.findAllById(any())).thenReturn(
+                List.of(regularPatient, transferredPatient, priorityPatient));
+        VisitTransfer transfer = mock(VisitTransfer.class);
+        UUID transferredVisitId = transferred.getId();
+        when(transfer.getVisitId()).thenReturn(transferredVisitId);
+        when(transfer.getFromRoomId()).thenReturn(EMPTY_ROOM_ID);
+        when(transfer.getTransferredAt()).thenReturn(clock.instant().minusSeconds(60));
+        when(visitTransferRepository.findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(
+                any(), org.mockito.ArgumentMatchers.eq(BUSY_ROOM_ID))).thenReturn(List.of(transfer));
+        when(roomRepository.findAllById(any())).thenReturn(List.of(sourceRoom));
+
+        var queue = service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.WAITING, null, null, null, 0, 20);
+
+        assertThat(queue.roomId()).isEqualTo(BUSY_ROOM_ID);
+        assertThat(queue.doctorName()).isEqualTo("BS Nguyễn Văn An");
+        assertThat(queue.onDuty()).isTrue();
+        assertThat(queue.waitingCount()).isEqualTo(3);
+        assertThat(queue.visits().page().totalElements()).isEqualTo(3);
+        assertThat(queue.visits().content()).extracting("patientName")
+                .containsExactly("Ưu tiên", "Chuyển phòng", "Thường");
+        assertThat(queue.visits().content().get(1).sourceRoomName()).isEqualTo(sourceRoom.getRoomName());
+
+        var filtered = service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.WAITING, "chuyển", false, VisitDoituongbnLoai.DV, 0, 10);
+        assertThat(filtered.visits().content()).extracting("patientName")
+                .containsExactly("Chuyển phòng");
+    }
+
+    @Test
+    void doctorWithoutActiveExaminationRoomCannotReadAnotherQueue() {
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Nguyễn Văn An")
+                .role(clinic.backend.enums.Role.DOCTOR).status(AccountStatus.ACTIVE)
+                .build();
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.WAITING, null, null, null, 0, 20))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
+        verifyNoInteractions(visitRepository);
     }
 
     @Test
@@ -290,7 +393,31 @@ class VisitServiceImplTest {
         Room room = mock(Room.class);
         when(room.getId()).thenReturn(id);
         when(room.getRoomCode()).thenReturn(code);
+        when(room.getRoomName()).thenReturn("Phòng " + code);
         return room;
+    }
+
+    private static Visit queuedVisit(int queueNumber, boolean priority) {
+        Visit visit = mock(Visit.class);
+        when(visit.getId()).thenReturn(UUID.randomUUID());
+        when(visit.getPatientId()).thenReturn(UUID.randomUUID());
+        when(visit.getQueueNumber()).thenReturn(queueNumber);
+        when(visit.isPriority()).thenReturn(priority);
+        when(visit.getDoituongbnLoai()).thenReturn(VisitDoituongbnLoai.DV);
+        when(visit.getLydovaovien()).thenReturn("Đau đầu");
+        when(visit.getThoigianvaovien()).thenReturn(Instant.parse("2026-10-30T01:00:00Z"));
+        when(visit.getStatus()).thenReturn(VisitStatus.WAITING);
+        return visit;
+    }
+
+    private static Patient patient(UUID id, String name) {
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(id);
+        when(patient.getHoten()).thenReturn(name);
+        when(patient.getMabenhnhan()).thenReturn("BN-" + name);
+        when(patient.getNgaysinh()).thenReturn(LocalDate.of(1990, 1, 1));
+        when(patient.getGioitinh()).thenReturn((short) 1);
+        return patient;
     }
 
     private RegistrationResult registerInsuredVisit(short coverageRate) {

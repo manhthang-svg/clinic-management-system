@@ -76,6 +76,11 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
             @Param("queueDate") LocalDate queueDate
     );
 
+    List<Visit> findAllByRoomIdAndQueueDateAndStatusIn(
+            UUID roomId,
+            LocalDate queueDate,
+            Collection<VisitStatus> statuses);
+
     @Query("""
             select v from Visit v
             where v.queueDate = :queueDate

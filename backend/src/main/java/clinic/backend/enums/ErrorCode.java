@@ -44,6 +44,8 @@ public enum ErrorCode {
     ACTIVE_VISIT_EXISTS("ACTIVE_VISIT_EXISTS", "The patient already has an active visit.", HttpStatus.CONFLICT),
     ROOM_NOT_AVAILABLE("ROOM_NOT_AVAILABLE",
             "The examination room is not active or has no assigned doctor.", HttpStatus.CONFLICT),
+    ROOM_ASSIGNMENT_REQUIRED("ROOM_ASSIGNMENT_REQUIRED",
+            "No active examination room is assigned to the Doctor.", HttpStatus.CONFLICT),
     EXAMINATION_SERVICE_NOT_CONFIGURED("EXAMINATION_SERVICE_NOT_CONFIGURED",
             "No active examination service is configured.", HttpStatus.CONFLICT),
     CLINIC_FACILITY_NOT_CONFIGURED("CLINIC_FACILITY_NOT_CONFIGURED",
