@@ -27,6 +27,7 @@ public interface PaymentService {
     PaymentResponse getPrintablePayment(UUID paymentId);
 
     PaymentResponse confirmPayment(
+            UUID cashierAccountId,
             UUID paymentId,
             ConfirmPaymentRequest request
     );

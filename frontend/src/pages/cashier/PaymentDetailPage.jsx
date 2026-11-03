@@ -13,6 +13,7 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
+import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -123,15 +124,17 @@ export default function PaymentDetailPage() {
         if (submittingCash) return;
         setSubmittingCash(true);
         try {
-            await paymentApi.confirm(payment.id, {
+            const res = await paymentApi.confirm(payment.id, {
                 paymentMethod: 'CASH',
                 note: cashNote.trim() || undefined,
             });
-            setNotice('Đã xác nhận thu tiền mặt thành công!');
+            setNotice(confirmedNoticeText(res?.data || res));
             setCashModalOpen(false);
             loadPayment();
         } catch (err) {
-            alert(err?.message || 'Lỗi khi xác nhận thanh toán tiền mặt');
+            alert(confirmErrorMessage(err));
+            setCashModalOpen(false);
+            loadPayment();
         } finally {
             setSubmittingCash(false);
         }

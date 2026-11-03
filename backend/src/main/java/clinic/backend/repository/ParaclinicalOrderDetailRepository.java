@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ParaclinicalOrderDetailRepository extends JpaRepository<ParaclinicalOrderDetail, UUID> {
     long countByPerformerAccountIdAndStatus(UUID performerAccountId, ParaclinicalOrderDetailStatus status);
 
+    long countByRoomIdAndStatus(UUID roomId, ParaclinicalOrderDetailStatus status);
+
     long countByServiceIdAndStatusIn(
             UUID serviceId, Collection<ParaclinicalOrderDetailStatus> statuses);
 }

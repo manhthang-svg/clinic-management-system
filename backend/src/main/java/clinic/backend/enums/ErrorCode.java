@@ -71,6 +71,8 @@ public enum ErrorCode {
             HttpStatus.CONFLICT),
     FACILITY_CODE_LOCKED("FACILITY_CODE_LOCKED",
             "The facility code cannot change after the first visit.", HttpStatus.CONFLICT),
+    PAYMENT_NOT_FOUND("PAYMENT_NOT_FOUND", "The receipt does not exist.", HttpStatus.NOT_FOUND),
+    PAYMENT_NOT_PENDING("PAYMENT_NOT_PENDING", "The receipt is no longer pending.", HttpStatus.CONFLICT),
     CONCURRENT_MODIFICATION("CONCURRENT_MODIFICATION",
             "The resource was changed by another request. Reload it and try again.", HttpStatus.CONFLICT),
     CURRENT_PASSWORD_INCORRECT("CURRENT_PASSWORD_INCORRECT", "The current password is incorrect.",

@@ -16,6 +16,7 @@ import {
     FileText,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
+import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
 
 function formatMoney(amount) {
     if (amount === undefined || amount === null) return '0 ₫';
@@ -151,21 +152,18 @@ export default function CashierOverviewPage() {
 
         setConfirmingCash(true);
         try {
-            await paymentApi.confirm(cashModal.id, {
+            const res = await paymentApi.confirm(cashModal.id, {
                 paymentMethod: 'CASH',
                 note: 'Thu tiền mặt tại quầy',
             });
 
-            const isExam = (cashModal.type || cashModal.paymentType) === 'EXAMINATION_FEE';
-            setNotice(
-                isExam
-                    ? `Đã thu tiền khám thành công cho bệnh nhân ${cashModal.patientName || 'bệnh nhân'}! Lượt khám đã được chuyển vào hàng đợi phòng khám.`
-                    : `Đã thu tiền cận lâm sàng thành công cho bệnh nhân ${cashModal.patientName || 'bệnh nhân'}! Các chỉ định CLS đã được phát lệnh thực hiện.`
-            );
+            setNotice(confirmedNoticeText(res?.data || res));
             setCashModal(null);
             fetchPayments();
         } catch (err) {
-            alert(err?.message || 'Không thể xác nhận thanh toán.');
+            alert(confirmErrorMessage(err));
+            setCashModal(null);
+            fetchPayments();
         } finally {
             setConfirmingCash(false);
         }
