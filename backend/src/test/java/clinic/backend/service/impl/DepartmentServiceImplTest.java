@@ -222,8 +222,7 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    @DisplayName("Tính toán stats phòng và khoa chuẩn xác")
-    @Test
+    @DisplayName("Ném ngoại lệ khi nhóm dịch vụ kỹ thuật không thuộc chuyên khoa")
     void createRoom_Paraclinical_ServiceGroupMismatchDepartment_ThrowsException() {
         UUID deptId = UUID.randomUUID();
         UUID otherDeptId = UUID.randomUUID();
@@ -251,6 +250,8 @@ class DepartmentServiceImplTest {
                 .hasMessageContaining("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
     }
 
+    @Test
+    @DisplayName("Tính toán stats phòng và khoa chuẩn xác")
     void getStats_CalculatesCorrectly() {
         when(departmentRepository.count()).thenReturn(3L);
         when(roomRepository.count()).thenReturn(4L);

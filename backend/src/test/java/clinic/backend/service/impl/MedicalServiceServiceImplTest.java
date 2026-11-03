@@ -130,7 +130,6 @@ class MedicalServiceServiceImplTest {
     }
 
     @Test
-    @Test
     void rejectsServiceGroupWhoseDepartmentDoesNotMatchService() {
         UUID departmentId = UUID.randomUUID();
         UUID otherDepartmentId = UUID.randomUUID();
@@ -153,6 +152,7 @@ class MedicalServiceServiceImplTest {
                                 .isEqualTo(ErrorCode.SERVICE_ASSIGNMENT_INVALID));
     }
 
+    @Test
     void updatesOnlyEditableInformation() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);
