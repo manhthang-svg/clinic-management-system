@@ -42,6 +42,10 @@ export const FIELD_MSG = {
 };
 export const MSG = {
     CREATED: 'Tạo hồ sơ bệnh nhân thành công.',
+    UPDATED: 'Cập nhật hồ sơ bệnh nhân thành công.',
+    // TBD: Report 3 has no message for a profile changed by someone else meanwhile.
+    STALE: 'Hồ sơ vừa được người khác cập nhật. Vui lòng tải lại trang để xem dữ liệu mới.',
+    NOT_FOUND: 'Không tìm thấy hồ sơ bệnh nhân được yêu cầu.',
     FIX_FIELDS: 'Vui lòng kiểm tra lại các trường được đánh dấu.',
     DISCARD: 'Bạn có các thay đổi chưa được lưu. Bạn có muốn loại bỏ những thay đổi này không?',
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
@@ -102,6 +106,14 @@ export function buildPatientPayload(form) {
     });
     payload.gioitinh = Number(form.gioitinh);
     return payload;
+}
+
+/** UC-38 step 2: form values from a stored profile (null becomes ''). */
+export function toFormValues(patient) {
+    return Object.fromEntries(Object.keys(INITIAL_PATIENT_FORM).map((field) => {
+        const value = patient?.[field];
+        return [field, value === null || value === undefined ? '' : String(value)];
+    }));
 }
 
 /** Maps backend validation codes (details) to field messages. */

@@ -287,12 +287,88 @@ class PatientServiceImplTest {
         when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
 
         assertThatThrownBy(() -> service.updatePatient(
+                ACCOUNT_ID,
                 PATIENT_ID,
                 updateRequest(patient.getVersion() + 1)))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("đã được cập nhật bởi người khác");
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCURRENT_MODIFICATION));
 
         verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void updatesChangedFieldsAndRecordsOldAndNewValues() {
+        Patient patient = storedPatient();
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient));
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.updatePatient(ACCOUNT_ID, PATIENT_ID, updateRequest(0L));
+
+        assertThat(response.hoten()).isEqualTo("Nguyen Van B");
+        ArgumentCaptor<Map<String, ?>> values = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordBusinessChange(eq(ACCOUNT_ID), eq(AuditLogAction.UPDATE), eq("patients"),
+                eq(PATIENT_ID), any(), values.capture(), any());
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, String>> changes = (Map<String, Map<String, String>>) values.getValue().get("changes");
+        assertThat(changes).containsOnlyKeys("hoten", "email");
+        assertThat(changes.get("hoten")).containsEntry("old", "Nguyen Van A").containsEntry("new", "Nguyen Van B");
+    }
+
+    @Test
+    void savesNothingWhenNothingChanged() {
+        Patient patient = storedPatient();
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient));
+
+        service.updatePatient(ACCOUNT_ID, PATIENT_ID, unchangedRequest());
+
+        verify(patientRepository, never()).save(any(Patient.class));
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    void rejectsACitizenIdOfAnotherPatient() {
+        Patient patient = storedPatient();
+        Patient other = mock(Patient.class);
+        when(other.getId()).thenReturn(UUID.randomUUID());
+        when(other.getMabenhnhan()).thenReturn("BN7");
+        when(other.getHoten()).thenReturn("Trần Thị B");
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> service.updatePatient(ACCOUNT_ID, PATIENT_ID, updateRequest(0L)))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_IDENTIFICATION_EXISTS);
+                    assertThat(error.getDetails()).containsEntry("patientCode", "BN7");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void appliesTheAgeRulesOnUpdate() {
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(storedPatient()));
+        UpdatePatientRequest request = updateRequest(0L);
+        UpdatePatientRequest withoutPhone = new UpdatePatientRequest(request.hoten(), request.ngaysinh(),
+                request.gioitinh(), request.cccdSo(), null, null, null, "Kinh", "01", null, null, "Ha Noi",
+                null, null, null, null, null, null, null, null, null, null, null, null, null, 0L);
+
+        assertThatThrownBy(() -> service.updatePatient(ACCOUNT_ID, PATIENT_ID, withoutPhone))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getDetails()).containsEntry("sodienthoai", "REQUIRED"));
+    }
+
+    private Patient storedPatient() {
+        Patient patient = patient();
+        org.springframework.test.util.ReflectionTestUtils.setField(patient, "version", 0L);
+        return patient;
+    }
+
+    /** The same values as {@link #patient()}, so the update changes nothing. */
+    private UpdatePatientRequest unchangedRequest() {
+        return new UpdatePatientRequest("Nguyen Van A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null,
+                null, null, "Kinh", "01", null, null, "Ha Noi", null, null, null, null, null, "0901234567",
+                "patient@example.com", null, null, null, null, null, null, 0L);
     }
 
     @Test
@@ -490,7 +566,7 @@ class PatientServiceImplTest {
                 null,
                 null,
                 null,
-                null,
+                "0901234567",
                 null,
                 null,
                 null,

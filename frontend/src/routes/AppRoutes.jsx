@@ -24,6 +24,7 @@ import ReceptionistAppointmentsPage from "../pages/receptionist/ReceptionistAppo
 import ReceptionistCreatePatientPage from "../pages/receptionist/ReceptionistCreatePatientPage.jsx";
 import ReceptionistVisitRegisterPage from "../pages/receptionist/ReceptionistVisitRegisterPage.jsx";
 import ReceptionistPatientDetailPage from "../pages/receptionist/ReceptionistPatientDetailPage.jsx";
+import ReceptionistUpdatePatientPage from "../pages/receptionist/ReceptionistUpdatePatientPage.jsx";
 import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQueuePage.jsx";
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
@@ -208,6 +209,11 @@ export function AppRoutes({
           <Route
             path="patients/:id"
             element={<ReceptionistPatientDetailPage />}
+          />
+
+          <Route
+            path="patients/:id/edit"
+            element={<ReceptionistUpdatePatientPage />}
           />
 
           <Route

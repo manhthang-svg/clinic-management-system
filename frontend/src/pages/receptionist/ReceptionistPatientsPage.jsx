@@ -44,9 +44,6 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     const [loadError, setLoadError] = useState('');
     const [lastSearch, setLastSearch] = useState(null);
     const [notice, setNotice] = useState('');
-    const [editingPatient, setEditingPatient] = useState(null);
-    const [editForm, setEditForm] = useState(null);
-    const [savingPatient, setSavingPatient] = useState(false);
 
     // UC-40: đăng ký khám mở trang riêng thay vì popup.
     const openRegisterVisit = useCallback(
@@ -121,46 +118,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
 
     const filteredPatients = patients;
 
-    const openEditPatient = useCallback(async (patient) => {
-        try {
-            const response = await patientApi.detail(patient.id);
-            const detail = response?.data || response;
-            setEditingPatient(detail);
-            setEditForm({
-                ...detail,
-                version: detail.version ?? patient.version ?? 0,
-            });
-        } catch (err) {
-            setNotice(err?.message || 'Không thể tải hồ sơ bệnh nhân');
-        }
-    }, [patientApi]);
-
-    // UC-36 "Cập nhật thông tin" opens the update form of that patient (UC-38).
-    const editPatientId = location.state?.editPatientId;
-    useEffect(() => {
-        if (!editPatientId) return undefined;
-        const timer = window.setTimeout(() => void openEditPatient({ id: editPatientId }), 0);
-        return () => window.clearTimeout(timer);
-    }, [editPatientId, openEditPatient]);
-
-    const handleSavePatient = async (event) => {
-        event.preventDefault();
-        setSavingPatient(true);
-        try {
-            const response = await patientApi.update(editingPatient.id, editForm);
-            const updated = response?.data || response;
-            setPatients((current) =>
-                current.map((patient) => patient.id === updated.id ? updated : patient)
-            );
-            setEditingPatient(null);
-            setEditForm(null);
-            setNotice('Cập nhật hồ sơ bệnh nhân thành công.');
-        } catch (err) {
-            setNotice(err?.message || 'Không thể cập nhật hồ sơ bệnh nhân');
-        } finally {
-            setSavingPatient(false);
-        }
-    };
+    // UC-38 has its own page with the full form of UC-37.
+    const openEditPatient = (patient) =>
+        navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_EDIT, { id: patient.id }));
 
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6">
@@ -396,60 +356,6 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                 </div>
             </section>
 
-                                {editingPatient && editForm && (
-                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                                        <form onSubmit={handleSavePatient} className="w-full max-w-2xl space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                                <h3 className="text-lg font-bold text-slate-800">Cập nhật hồ sơ bệnh nhân</h3>
-                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
-                                                    <X size={18} />
-                                                </button>
-                                            </div>
-                                            <div className="grid gap-4 sm:grid-cols-2">
-                                                {[
-                                                    ['hoten', 'Họ và tên'],
-                                                    ['ngaysinh', 'Ngày sinh'],
-                                                    ['cccdSo', 'Số CCCD'],
-                                                    ['sodienthoai', 'Số điện thoại'],
-                                                    ['diachi', 'Địa chỉ'],
-                                                    ['dantoc', 'Dân tộc'],
-                                                    ['dantocMa', 'Mã dân tộc'],
-                                                    ['version', 'Phiên bản'],
-                                                ].map(([field, label]) => (
-                                                    <label key={field} className="text-sm font-semibold text-slate-700">
-                                                        {label}
-                                                        <input
-                                                            type={field === 'ngaysinh' ? 'date' : field === 'version' ? 'number' : 'text'}
-                                                            value={editForm[field] ?? ''}
-                                                            onChange={(event) => setEditForm({ ...editForm, [field]: field === 'version' ? Number(event.target.value) : event.target.value })}
-                                                            readOnly={field === 'version'}
-                                                            required={['hoten', 'ngaysinh', 'diachi', 'dantoc', 'dantocMa'].includes(field)}
-                                                            className={`${inputClass} mt-1`}
-                                                        />
-                                                    </label>
-                                                ))}
-                                                <label className="text-sm font-semibold text-slate-700">
-                                                    Giới tính
-                                                    <select
-                                                        value={editForm.gioitinh ?? 3}
-                                                        onChange={(event) => setEditForm({ ...editForm, gioitinh: Number(event.target.value) })}
-                                                        className={`${inputClass} mt-1`}
-                                                    >
-                                                        <option value="1">Nam</option>
-                                                        <option value="2">Nữ</option>
-                                                        <option value="3">Khác</option>
-                                                    </select>
-                                                </label>
-                                            </div>
-                                            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Hủy</button>
-                                                <button type="submit" disabled={savingPatient} className="rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-                                                    {savingPatient ? 'Đang lưu...' : 'Lưu thay đổi'}
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                )}
         </div>
     );
 }

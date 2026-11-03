@@ -33,6 +33,7 @@ export const ROUTES = {
     PATIENTS: '/receptionist/patients',
     PATIENT_CREATE: '/receptionist/patients/new',
     PATIENT_DETAIL: '/receptionist/patients/:id',
+    PATIENT_EDIT: '/receptionist/patients/:id/edit',
     VISIT_REGISTER: '/receptionist/patients/:id/register',
     ROOM_QUEUE: '/receptionist/room-queue',
   },
