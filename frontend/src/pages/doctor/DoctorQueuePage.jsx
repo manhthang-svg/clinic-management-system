@@ -16,9 +16,10 @@ import {
     X,
     FileText,
     Star,
-    Check,
 } from 'lucide-react';
 import visitApi from '../../apis/visitApi';
+import ParaclinicalOrderDialog from '../../components/paraclinical/ParaclinicalOrderDialog';
+import { createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 
 function formatTime(dateStr) {
     if (!dateStr) return '—';
@@ -58,10 +59,6 @@ export default function DoctorQueuePage() {
 
     // Modal Chỉ định CLS (Lần 2)
     const [clsModalVisit, setClsModalVisit] = useState(null);
-    const [clsDiagnosis, setClsDiagnosis] = useState('');
-    const [clsServices, setClsServices] = useState([]);
-    const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-    const [submittingCls, setSubmittingCls] = useState(false);
 
     // Tải danh sách phòng khám hoạt động
     useEffect(() => {
@@ -161,57 +158,13 @@ export default function DoctorQueuePage() {
         }
     };
 
-    // Mở modal chỉ định CLS
-    const handleOpenClsModal = async (visit) => {
-        setClsModalVisit(visit);
-        setClsDiagnosis(visit.lydovaovien || '');
-        setSelectedServiceIds([]);
-        try {
-            const res = await visitApi.getParaclinicalServices();
-            const list = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
-            setClsServices(list);
-            if (list.length > 0) {
-                setSelectedServiceIds([list[0].id]);
-            }
-        } catch (err) {
-            console.error('Lỗi tải danh mục CLS:', err);
-        }
-    };
+    // UC-49: mở màn chỉ định CLS; tạo xong hiện MSG67 và tải lại hàng chờ
+    const handleOpenClsModal = (visit) => setClsModalVisit(visit);
 
-    // Chọn / Bỏ chọn dịch vụ CLS
-    const toggleService = (id) => {
-        setSelectedServiceIds((prev) =>
-            prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-        );
-    };
-
-    // Xác nhận gửi chỉ định CLS (Chuyển sang thanh toán Lần 2)
-    const handleSubmitCls = async (e) => {
-        e.preventDefault();
-        if (!clsModalVisit) return;
-        if (selectedServiceIds.length === 0) {
-            alert('Vui lòng chọn ít nhất 1 dịch vụ cận lâm sàng');
-            return;
-        }
-
-        setSubmittingCls(true);
-        try {
-            await visitApi.orderParaclinical({
-                visitId: clsModalVisit.id,
-                chandoansobo: clsDiagnosis.trim() || undefined,
-                serviceIds: selectedServiceIds,
-            });
-
-            setNotice(
-                `Đã tạo chỉ định Cận lâm sàng thành công cho ${clsModalVisit.patientName}! Bệnh nhân vui lòng ra Quầy Thu Ngân thanh toán phí CLS (Lần 2) trước khi thực hiện dịch vụ.`
-            );
-            setClsModalVisit(null);
-            fetchQueue();
-        } catch (err) {
-            alert(err?.message || 'Không thể tạo chỉ định CLS');
-        } finally {
-            setSubmittingCls(false);
-        }
+    const handleClsCreated = (order) => {
+        setNotice(createdMessage(order));
+        setClsModalVisit(null);
+        fetchQueue();
     };
 
     return (
@@ -588,122 +541,12 @@ export default function DoctorQueuePage() {
                 </section>
             </div>
 
-            {/* MODAL: BÁC SĨ CHỈ ĐỊNH CẬN LÂM SÀNG (CLS - LẦN 2) */}
             {clsModalVisit && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-                    <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 bg-indigo-700 px-6 py-4 text-white">
-                            <div className="flex items-center gap-2.5">
-                                <FlaskConical className="h-6 w-6 text-indigo-200" />
-                                <div>
-                                    <h3 className="font-bold">Chỉ định Cận lâm sàng (CLS - Lần 2)</h3>
-                                    <p className="text-xs text-indigo-100">
-                                        Bệnh nhân: {clsModalVisit.patientName} • Mã BN: {clsModalVisit.patientCode}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setClsModalVisit(null)}
-                                className="rounded-lg p-1 text-indigo-100 hover:bg-indigo-800 hover:text-white"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmitCls} className="p-6 space-y-4">
-                            {/* Chẩn đoán sơ bộ */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-700">
-                                    Chẩn đoán sơ bộ của Bác sĩ
-                                </label>
-                                <input
-                                    type="text"
-                                    value={clsDiagnosis}
-                                    onChange={(e) => setClsDiagnosis(e.target.value)}
-                                    placeholder="VD: Nghi viêm dạ dày, theo dõi đái tháo đường..."
-                                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                                />
-                            </div>
-
-                            {/* Danh mục dịch vụ CLS */}
-                            <div>
-                                <div className="flex items-center justify-between pb-1">
-                                    <label className="block text-xs font-semibold text-slate-700">
-                                        Chọn các dịch vụ cận lâm sàng cần thực hiện ({selectedServiceIds.length} đã chọn):
-                                    </label>
-                                    <span className="text-[11px] text-slate-400">Tích chọn để thêm</span>
-                                </div>
-
-                                <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
-                                    {clsServices.length === 0 ? (
-                                        <p className="p-4 text-center text-xs text-slate-400">
-                                            Đang tải danh mục dịch vụ cận lâm sàng...
-                                        </p>
-                                    ) : (
-                                        clsServices.map((s) => {
-                                            const isSelected = selectedServiceIds.includes(s.id);
-                                            return (
-                                                <label
-                                                    key={s.id}
-                                                    onClick={() => toggleService(s.id)}
-                                                    className={`flex cursor-pointer items-center justify-between p-3 text-xs transition ${
-                                                        isSelected ? 'bg-indigo-50/70 font-semibold text-indigo-900' : 'hover:bg-slate-50 text-slate-700'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div
-                                                            className={`flex h-4 w-4 items-center justify-center rounded border ${
-                                                                isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
-                                                            }`}
-                                                        >
-                                                            {isSelected && <Check className="h-3 w-3" />}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium text-slate-800">{s.tenchidinh}</p>
-                                                            <p className="text-[11px] text-slate-400 font-mono">{s.serviceCode}</p>
-                                                        </div>
-                                                    </div>
-                                                    <span className="font-bold text-indigo-700 tabular-nums">
-                                                        {Number(s.clinicPrice || 0).toLocaleString('vi-VN')} ₫
-                                                    </span>
-                                                </label>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Lưu ý quy trình thanh toán Lần 2 */}
-                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs text-indigo-900 space-y-1">
-                                <p className="font-bold flex items-center gap-1.5">
-                                    <span>💡</span> Quy trình thanh toán Lần 2:
-                                </p>
-                                <p className="leading-relaxed">
-                                    Sau khi Bác sĩ phát lệnh chỉ định, hệ thống sẽ tự động tạo phiếu thu tiền CLS (`PARACLINICAL_FEE`). Bệnh nhân cần ra <strong>Quầy Thu Ngân</strong> đóng tiền (Tiền mặt hoặc PayOS VietQR) để lệnh CLS được giải phóng tới phòng xét nghiệm/chụp chiếu.
-                                </p>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setClsModalVisit(null)}
-                                    className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                                >
-                                    Hủy
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submittingCls || selectedServiceIds.length === 0}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-                                >
-                                    {submittingCls ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                    Phát lệnh chỉ định CLS
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <ParaclinicalOrderDialog
+                    visit={clsModalVisit}
+                    onClose={() => setClsModalVisit(null)}
+                    onCreated={handleClsCreated}
+                />
             )}
         </main>
     );
