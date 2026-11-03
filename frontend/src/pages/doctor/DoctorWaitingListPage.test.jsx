@@ -83,7 +83,7 @@ describe('DoctorWaitingListPage backend integration', () => {
 
         expect(await screen.findByText('Nguyễn Thị Mai')).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: 'Ghi chú' })).toBeInTheDocument();
-        expect(screen.queryByRole('columnheader', { name: 'STT' })).not.toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'STT' })).toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Số thứ tự' })).not.toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Ưu tiên' })).not.toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Lý do khám' })).not.toBeInTheDocument();

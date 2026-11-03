@@ -42,7 +42,7 @@ const STATUS_BADGE = {
 
 const SKIPPED_BADGE = ['Bỏ lượt', 'bg-rose-50 text-rose-700 border-rose-200'];
 
-const COLUMNS = ['Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
+const COLUMNS = ['STT', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
     'Ghi chú', 'Trạng thái', 'Thao tác'];
 
 const defaultProfileLoader = (signal) => createAccountApi(apiClient).profile(signal);
@@ -304,12 +304,13 @@ export default function DoctorWaitingListPage({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((visit) => {
+                                    {rows.map((visit, index) => {
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
                                         const isFirstPatient = activeTab === 'waiting' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped;
                                         return (
                                             <tr key={visit.id} className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'}`}>
+                                                <td className="px-3 py-3 text-slate-500">{(currentPage - 1) * pageSize + index + 1}</td>
                                                 <td className="px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
                                                 <td className="px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
                                                 <td className="px-3 py-3">{ageOf(visit.patientDob) ?? '—'}</td>
