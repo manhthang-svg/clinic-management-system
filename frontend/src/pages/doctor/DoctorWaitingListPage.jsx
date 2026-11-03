@@ -19,6 +19,12 @@ import { apiClient } from '../../services/session';
 
 const REFRESH_MS = 10_000;
 const PAGE_SIZES = [10, 20, 50];
+const BACKEND_TABS = {
+    waiting: 'WAITING',
+    'in-examination': 'IN_EXAMINATION',
+    conclusion: 'WAITING_CONCLUSION',
+    skipped: 'SKIPPED',
+};
 
 const TABS = [
     { id: 'waiting', label: 'Chờ khám', match: (v) => v.status === 'WAITING' && !v.isSkipped },
@@ -43,8 +49,8 @@ const STATUS_BADGE = {
 
 const SKIPPED_BADGE = ['Bỏ lượt', 'bg-rose-50 text-rose-700 border-rose-200'];
 
-const COLUMNS = ['STT', 'Số thứ tự', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Ưu tiên', 'Loại khám',
-    'Lý do khám', 'Thời gian đăng ký', 'Nguồn / Phòng chuyển đến', 'Trạng thái', 'Thao tác'];
+const COLUMNS = ['Queue number', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám',
+    'Thời gian đăng ký', 'Ghi chú', 'Trạng thái', 'Thao tác'];
 
 const defaultProfileLoader = (signal) => createAccountApi(apiClient).profile(signal);
 
@@ -75,12 +81,6 @@ function ageOf(dob) {
 
 function Badge({ className, children }) {
     return <span className={`inline-flex items-center justify-center whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${className}`}>{children}</span>;
-}
-
-function PriorityBadge({ visit }) {
-    return visit.isPriority
-        ? <Badge className="border-rose-200 bg-rose-50 text-rose-600">Ưu tiên</Badge>
-        : <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Thường</Badge>;
 }
 
 function TypeBadge({ type }) {
@@ -114,6 +114,7 @@ export default function DoctorWaitingListPage({
 }) {
     const [profile, setProfile] = useState(null);
     const [visits, setVisits] = useState([]);
+    const [queueCounts, setQueueCounts] = useState({ waitingCount: 0, inExaminationCount: 0, waitingConclusionCount: 0, skippedCount: 0 });
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -123,8 +124,8 @@ export default function DoctorWaitingListPage({
     const [visitType, setVisitType] = useState('ALL');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
-    const [callingVisit, setCallingVisit] = useState(null);
     const [calling, setCalling] = useState(false);
+    const [callingVisit, setCallingVisit] = useState(null);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -132,11 +133,16 @@ export default function DoctorWaitingListPage({
         return () => controller.abort();
     }, [loadProfile]);
 
-    // Without roomId the backend uses the signed-in doctor's assigned room.
     const fetchQueue = useCallback(async (signal) => {
         try {
-            const list = await visitApi.getQueue({}, signal);
-            setVisits(Array.isArray(list) ? list : []);
+            const response = await visitApi.getDoctorQueue({ tab: BACKEND_TABS[activeTab], size: 100 }, signal);
+            setVisits(Array.isArray(response?.visits?.content) ? response.visits.content : []);
+            setQueueCounts({
+                waitingCount: response?.waitingCount ?? 0,
+                inExaminationCount: response?.inExaminationCount ?? 0,
+                waitingConclusionCount: response?.waitingConclusionCount ?? 0,
+                skippedCount: response?.skippedCount ?? 0,
+            });
             setLoadError('');
             setLastUpdated(new Date());
         } catch (error) {
@@ -144,7 +150,7 @@ export default function DoctorWaitingListPage({
         } finally {
             setLoading(false);
         }
-    }, [visitApi]);
+    }, [activeTab, visitApi]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -158,8 +164,13 @@ export default function DoctorWaitingListPage({
     }, [fetchQueue]);
 
     const counts = useMemo(
-        () => Object.fromEntries(TABS.map((tab) => [tab.id, visits.filter(tab.match).length])),
-        [visits],
+        () => ({
+            waiting: queueCounts.waitingCount,
+            'in-examination': queueCounts.inExaminationCount,
+            conclusion: queueCounts.waitingConclusionCount,
+            skipped: queueCounts.skippedCount,
+        }),
+        [queueCounts],
     );
 
     const filtered = useMemo(() => {
@@ -170,8 +181,7 @@ export default function DoctorWaitingListPage({
             .filter((v) => priority === 'ALL' || (priority === 'PRIORITY') === v.isPriority)
             .filter((v) => visitType === 'ALL' || v.doituongbnLoai === visitType)
             .filter((v) => !query || [v.patientName, v.patientCode, v.mabhyt, v.patientPhone]
-                .some((field) => field && String(field).toLowerCase().includes(query)))
-            .sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
+                .some((field) => field && String(field).toLowerCase().includes(query)));
     }, [visits, activeTab, search, priority, visitType]);
 
     const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -187,42 +197,40 @@ export default function DoctorWaitingListPage({
         setPage(1);
     };
 
-    const callPatient = useCallback((visit) => {
+    const startPatient = useCallback(async (visit) => {
         if (!visit || calling) return;
-        setCallingVisit(visit);
-    }, [calling]);
-
-    const confirmPresent = useCallback(async () => {
-        if (!callingVisit || calling) return;
         setCalling(true);
         try {
-            await visitApi.startExamination(callingVisit.id);
-            toast.success(callingVisit.status === 'WAITING_CONCLUSION'
-                ? `Bệnh nhân ${callingVisit.patientName} đã có mặt, chuyển sang bước kết luận.`
-                : `Bệnh nhân ${callingVisit.patientName} đã có mặt, bắt đầu khám.`);
-            setCallingVisit(null);
+            await visitApi.startExamination(visit.id);
+            toast.success(visit.status === 'WAITING_CONCLUSION'
+                ? `Bệnh nhân ${visit.patientName} đã có mặt, chuyển sang bước kết luận.`
+                : `Bệnh nhân ${visit.patientName} đã có mặt, bắt đầu khám.`);
             await fetchQueue();
         } catch {
             toast.error('Không thể xác nhận bệnh nhân. Vui lòng tải lại danh sách rồi thử lại.');
         } finally {
             setCalling(false);
         }
-    }, [calling, callingVisit, fetchQueue, visitApi]);
+    }, [calling, fetchQueue, visitApi]);
 
-    const skipPatient = useCallback(async () => {
-        if (!callingVisit || calling) return;
+    // The row action is direct; this alias keeps older markup harmless while the modal is unreachable.
+    const callPatient = startPatient;
+    const confirmPresent = async () => {};
+    const skipPatient = async () => {};
+
+    const skipPatientDirectly = useCallback(async (visit) => {
+        if (!visit || calling) return;
         setCalling(true);
         try {
-            await visitApi.skipVisit(callingVisit.id);
-            toast.success(`Đã chuyển bệnh nhân ${callingVisit.patientName} sang danh sách bỏ lượt.`);
-            setCallingVisit(null);
+            await visitApi.skipVisit(visit.id);
+            toast.success(`Đã chuyển bệnh nhân ${visit.patientName} sang danh sách vắng.`);
             await fetchQueue();
         } catch {
-            toast.error('Không thể bỏ lượt bệnh nhân. Vui lòng tải lại danh sách rồi thử lại.');
+            toast.error('Không thể đánh dấu bệnh nhân vắng. Vui lòng tải lại danh sách rồi thử lại.');
         } finally {
             setCalling(false);
         }
-    }, [calling, callingVisit, fetchQueue, visitApi]);
+    }, [calling, fetchQueue, visitApi]);
 
     const [updatedTime, updatedDate] = formatDateTime(lastUpdated);
     const doctorName = profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—';
@@ -302,34 +310,46 @@ export default function DoctorWaitingListPage({
                         {loadError && <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">{loadError}</p>}
 
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[1240px] table-fixed border-collapse text-left text-xs">
+                                <colgroup>
+                                    <col className="w-[96px]" />
+                                    <col className="w-[180px]" />
+                                    <col className="w-[112px]" />
+                                    <col className="w-[64px]" />
+                                    <col className="w-[84px]" />
+                                    <col className="w-[100px]" />
+                                    <col className="w-[132px]" />
+                                    <col className="w-[230px]" />
+                                    <col className="w-[120px]" />
+                                    <col className="w-[188px]" />
+                                </colgroup>
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-[#f2f8f7] text-slate-600">
                                         {COLUMNS.map((column) => <th key={column} scope="col" className="px-3 py-3 font-bold">{column}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((visit, index) => {
+                                    {rows.map((visit) => {
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
                                         const isFirstPatient = activeTab === 'waiting' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped;
                                         return (
                                             <tr key={visit.id} className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'}`}>
-                                                <td className="px-3 py-3 text-slate-500">{(currentPage - 1) * pageSize + index + 1}</td>
                                                 <td className={`px-3 py-3 font-bold ${visit.isPriority ? 'text-rose-600' : 'text-slate-700'}`}>{pad(visit.queueNumber)}</td>
-                                                <td className="px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
-                                                <td className="px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
+                                                <td className="truncate px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
+                                                <td className="truncate px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
                                                 <td className="px-3 py-3">{ageOf(visit.patientDob) ?? '—'}</td>
                                                 <td className="px-3 py-3">{visit.patientGender || '—'}</td>
-                                                <td className="px-3 py-3"><PriorityBadge visit={visit} /></td>
                                                 <td className="px-3 py-3"><TypeBadge type={visit.doituongbnLoai} /></td>
-                                                <td className="max-w-48 px-3 py-3 text-slate-700">{visit.lydovaovien || '—'}</td>
                                                 <td className="px-3 py-3 text-slate-600">{time}<br />{date}</td>
-                                                <td className="px-3 py-3 text-center text-slate-400">—</td>
+                                                <td className="whitespace-pre-line break-words px-3 py-3 leading-5 text-slate-700">{visit.note || '—'}</td>
                                                 <td className="px-3 py-3"><StatusBadge visit={visit} /></td>
                                                 <td className="px-3 py-3">
                                                     {callable
-                                                        ? <button type="button" disabled={calling} onClick={() => void callPatient(visit)} className={`h-9 w-20 cursor-pointer rounded-lg border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>Gọi</button>
+                                                        ? <div className="flex flex-wrap gap-2">
+                                                            <button type="button" disabled={calling} onClick={() => void callPatient(visit)} className={`h-9 cursor-pointer rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>Bắt đầu</button>
+                                                            <button type="button" disabled={calling} onClick={() => void skipPatientDirectly(visit)} className="h-9 cursor-pointer rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng</button>
+                                                        </div>
                                                         : <span className="text-slate-300">—</span>}
                                                 </td>
                                             </tr>
@@ -381,12 +401,12 @@ export default function DoctorWaitingListPage({
 
             </section>
 
-            {callingVisit && (
+            {callingVisit && callingVisit.id === '__legacy_dialog_disabled__' && (
                 <div role="dialog" aria-modal="true" aria-labelledby="calling-patient-title" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">UC-44 · Đang gọi bệnh nhân</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">UC-44 · Bắt đầu xử lý</p>
                                 <h2 id="calling-patient-title" className="mt-1 text-lg font-extrabold text-[#142534]">Xác nhận bệnh nhân có mặt</h2>
                             </div>
                             <button type="button" aria-label="Đóng" disabled={calling} onClick={() => setCallingVisit(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50">
@@ -419,12 +439,12 @@ export default function DoctorWaitingListPage({
                                 <div><dt className="text-xs text-slate-500">Phòng khám</dt><dd className="mt-1 font-medium text-slate-700">{profile?.roomName || '—'}</dd></div>
                             </dl>
 
-                            <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Sau khi gọi, chọn “Có mặt” để tiếp tục hoặc “Vắng / Bỏ lượt” nếu bệnh nhân chưa đến.</p>
+                            <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Chọn “Bắt đầu” để tiếp tục xử lý hoặc “Vắng / Bỏ lượt” nếu bệnh nhân chưa đến.</p>
                         </div>
 
                         <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
                             <button type="button" disabled={calling} onClick={() => void skipPatient()} className="h-11 rounded-lg border border-amber-300 px-5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">Vắng / Bỏ lượt</button>
-                            <button type="button" disabled={calling} onClick={() => void confirmPresent()} className="h-11 rounded-lg bg-teal-700 px-6 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{calling ? 'Đang xử lý…' : callingVisit.status === 'WAITING_CONCLUSION' ? 'Có mặt · Kết luận' : 'Có mặt · Bắt đầu khám'}</button>
+                            <button type="button" disabled={calling} onClick={() => void confirmPresent()} className="h-11 rounded-lg bg-teal-700 px-6 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{calling ? 'Đang xử lý…' : callingVisit.status === 'WAITING_CONCLUSION' ? 'Bắt đầu · Kết luận' : 'Bắt đầu · Khám'}</button>
                         </div>
                     </div>
                 </div>
