@@ -1,14 +1,29 @@
 package clinic.backend.service.impl;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
+import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.response.PaymentHistoryResponse;
+import clinic.backend.dto.response.ReceiptPrintResponse;
+import clinic.backend.entity.ClinicFacility;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.AuditLogAction;
+import clinic.backend.repository.ClinicFacilityRepository;
+import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.dto.response.PaymentItemResponse;
 import clinic.backend.dto.response.PaymentResponse;
 import clinic.backend.entity.ParaclinicalOrderDetail;
@@ -17,23 +32,22 @@ import clinic.backend.entity.Payment;
 import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
-import clinic.backend.enums.VisitStatus;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
-import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -42,12 +56,21 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final String PAYMENT_AUDIT_ENTITY = "payments";
+    private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final Instant ALL_TIME_START = Instant.parse("2000-01-01T00:00:00Z");
+    private static final Instant ALL_TIME_END = Instant.parse("9999-01-01T00:00:00Z");
+
     private final PaymentRepository paymentRepository;
     private final VisitRepository visitRepository;
     private final PatientRepository patientRepository;
     private final RoomRepository roomRepository;
-    private final ParaclinicalOrderRepository paraclinicalOrderRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    private final PaymentCompletionService paymentCompletionService;
+    private final AuditLogService auditLogService;
+    private final StaffAccountRepository staffAccountRepository;
+    private final ClinicFacilityRepository clinicFacilityRepository;
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,13 +78,75 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentStatus status,
             PaymentType type,
             String search,
+            LocalDate from,
+            LocalDate to,
             Pageable pageable
     ) {
-        String normalizedSearch = search == null || search.isBlank()
-                ? null
-                : search.trim();
-        return paymentRepository.search(status, type, normalizedSearch, pageable)
+        // UC-70 bước 2: từ khóa ít nhất 2 ký tự (EF-01, MSG05)
+        String keyword = search == null || search.isBlank() ? null : search.trim();
+        if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
+        }
+        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
+        return paymentRepository.search(
+                        statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, pageable)
                 .map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentHistoryResponse getHistory(
+            UUID cashierAccountId,
+            PaymentStatus status,
+            PaymentType type,
+            PaymentMethod method,
+            LocalDate from,
+            LocalDate to,
+            Pageable pageable
+    ) {
+        // UC-73 bước 2: mặc định hôm nay; khoảng ngày sai thì MSG53 (EF-01)
+        LocalDate today = LocalDate.now(clock);
+        LocalDate fromDate = from != null ? from : today;
+        LocalDate toDate = to != null ? to : today;
+        if (fromDate.isAfter(toDate)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
+        }
+        // Lịch sử chỉ gồm phiếu Đã thu và Đã hủy
+        if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("status", "INVALID_FORMAT"));
+        }
+        Collection<PaymentStatus> statuses = status == null
+                ? EnumSet.of(PaymentStatus.PAID, PaymentStatus.CANCELLED)
+                : EnumSet.of(status);
+        Instant fromTime = startOf(fromDate, ALL_TIME_START);
+        Instant toTime = endOf(toDate, ALL_TIME_END);
+
+        Page<PaymentResponse> page = paymentRepository
+                .history(statuses, type, method, cashierAccountId, fromTime, toTime, pageable)
+                .map(this::toResponse);
+        List<PaymentHistoryResponse.MethodTotal> totals = status == PaymentStatus.CANCELLED
+                ? List.of()
+                : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime).stream()
+                        .map(row -> new PaymentHistoryResponse.MethodTotal(
+                                row.getMethod(), row.getTotal(), row.getCount()))
+                        .toList();
+        BigDecimal grandTotal = totals.stream()
+                .map(PaymentHistoryResponse.MethodTotal::total)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new PaymentHistoryResponse(
+                new PageResponse<>(page.getContent(), new PageResponse.PageMetadata(
+                        page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages())),
+                totals,
+                grandTotal);
+    }
+
+    private Instant startOf(LocalDate date, Instant fallback) {
+        return date == null ? fallback : date.atStartOfDay(clock.getZone()).toInstant();
+    }
+
+    private Instant endOf(LocalDate date, Instant fallback) {
+        return date == null ? fallback : date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
     }
 
     @Override
@@ -80,92 +165,75 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
-
-        return toResponse(payment);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PaymentResponse getPrintablePayment(UUID paymentId) {
-        Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
-
-        if (payment.getStatus() != PaymentStatus.PAID
-                && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Chỉ được in phiếu đã thanh toán hoặc miễn phí"
-            );
-        }
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
         return toResponse(payment);
     }
 
     @Override
     @Transactional
+    public ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        // EF-01: chỉ in phiếu đã thu (hoặc miễn phí) – MSG62 (BR-37)
+        if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
+            throw new AppException(ErrorCode.PAYMENT_NOT_PAID, Map.of("status", payment.getStatus().name()));
+        }
+
+        // AF-01: từ lần in thứ hai là bản sao; mọi lần in đều ghi log
+        boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId);
+        Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
+        auditLogService.recordBusinessChange(
+                cashierAccountId, AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId,
+                visit != null ? visit.getSovaovien() : null,
+                Map.of("receiptNumber", String.valueOf(payment.getReceiptNumber()), "reprint", reprint),
+                clock.instant());
+
+        String cashierName = payment.getCashierAccountId() == null
+                ? null
+                : staffAccountRepository.findById(payment.getCashierAccountId())
+                        .map(StaffAccount::getFullName)
+                        .orElse(null);
+        String facilityName = clinicFacilityRepository.findCurrent()
+                .map(ClinicFacility::getTenCskcb)
+                .orElse(null);
+
+        return new ReceiptPrintResponse(
+                reprint,
+                facilityName,
+                cashierName,
+                visit != null ? visit.getDoituongbnLoai() : null,
+                visit != null ? visit.getInsuranceCoverageRate() : null,
+                visit != null && payment.getType() == PaymentType.EXAMINATION_FEE ? visit.getQueueNumber() : null,
+                toResponse(payment));
+    }
+
+    @Override
+    @Transactional
     public PaymentResponse confirmPayment(
+            UUID cashierAccountId,
             UUID paymentId,
             ConfirmPaymentRequest request
     ) {
-        // 1. Khóa phiếu thu để tránh hai yêu cầu xác nhận cùng lúc.
+        // 1. Khóa phiếu thu để hai thu ngân không xác nhận cùng lúc (UC-71 bước 4).
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // 2. Chỉ cho phép xác nhận phiếu đang chờ thanh toán.
+        // 2. Phiếu đã thu hoặc đã hủy thì báo MSG64 (EF-02).
         if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Phiếu thu không ở trạng thái chờ thanh toán"
-            );
+            throw new AppException(ErrorCode.PAYMENT_NOT_PENDING, Map.of(
+                    "receiptNumber", payment.getReceiptNumber() != null
+                            ? payment.getReceiptNumber()
+                            : payment.getPaymentCode(),
+                    "status", payment.getStatus().name()));
         }
 
-        // 3. Lấy ID tài khoản đang đăng nhập từ JWT.
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null
-                || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Không xác định được tài khoản thu ngân"
-            );
-        }
-
-        UUID cashierAccountId;
-        try {
-            cashierAccountId = UUID.fromString(jwt.getSubject());
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "ID tài khoản đăng nhập không hợp lệ"
-            );
-        }
-
-        // 4. Tìm lượt khám liên quan đến phiếu thu.
-        Visit visit = visitRepository.findById(payment.getVisitId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy lượt khám"
-                ));
-
-        // 5. Tạo số phiếu thu.
+        // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
         String receiptNumber = "PT"
-                + LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))
-                .format(DateTimeFormatter.BASIC_ISO_DATE)
+                + LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "-"
                 + payment.getPaymentCode();
-
-        // 6. Cập nhật phiếu thu thành đã thanh toán.
         payment.markAsPaid(
                 request.paymentMethod(),
                 cashierAccountId,
@@ -173,27 +241,8 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentRepository.save(payment);
 
-        // 7. Đồng bộ trạng thái nghiệp vụ theo loại thanh toán:
-        if (payment.getType() == PaymentType.EXAMINATION_FEE) {
-            // Thanh toán lần 1: Phí khám -> chuyển lượt khám sang chờ khám
-            if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
-                visit.markAsWaiting();
-                visitRepository.save(visit);
-            }
-        } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
-            // Thanh toán lần 2: Phí CLS -> giải phóng chỉ định CLS để vào hàng đợi phòng thực hiện
-            paraclinicalOrderRepository.findByPaymentId(payment.getId())
-                    .ifPresent(order -> {
-                        order.release();
-                        paraclinicalOrderRepository.save(order);
-                        if (order.getDetails() != null) {
-                            for (ParaclinicalOrderDetail detail : order.getDetails()) {
-                                detail.release(Instant.now());
-                                paraclinicalOrderDetailRepository.save(detail);
-                            }
-                        }
-                    });
-        }
+        // 4. Bước 8 và audit: dùng chung với PayOS (lượt khám vào hàng chờ, hoặc chia phòng CLS – BR-28).
+        paymentCompletionService.completePaidReceipt(payment, cashierAccountId);
 
         return toResponse(payment);
     }
@@ -208,9 +257,34 @@ public class PaymentServiceImpl implements PaymentService {
             room = roomRepository.findById(visit.getRoomId()).orElse(null);
         }
 
+        Map<UUID, ParaclinicalOrderDetail> details = new HashMap<>();
+        Map<UUID, Room> performingRooms = new HashMap<>();
+        if (payment.getType() == PaymentType.PARACLINICAL_FEE && payment.getItems() != null) {
+            List<UUID> detailIds = payment.getItems().stream()
+                    .map(PaymentItem::getOrderDetailId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            for (ParaclinicalOrderDetail detail : paraclinicalOrderDetailRepository.findAllById(detailIds)) {
+                details.put(detail.getId(), detail);
+            }
+            List<UUID> roomIds = details.values().stream()
+                    .map(ParaclinicalOrderDetail::getRoomId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            for (Room performingRoom : roomRepository.findAllById(roomIds)) {
+                performingRooms.put(performingRoom.getId(), performingRoom);
+            }
+        }
+
         List<PaymentItemResponse> itemResponses = new ArrayList<>();
         if (payment.getItems() != null) {
             for (PaymentItem item : payment.getItems()) {
+                ParaclinicalOrderDetail detail = item.getOrderDetailId() != null
+                        ? details.get(item.getOrderDetailId())
+                        : null;
+                Room performingRoom = detail != null && detail.getRoomId() != null
+                        ? performingRooms.get(detail.getRoomId())
+                        : null;
                 itemResponses.add(new PaymentItemResponse(
                         item.getId(),
                         item.getServiceId(),
@@ -220,7 +294,10 @@ public class PaymentServiceImpl implements PaymentService {
                         item.getDongia(),
                         item.getThanhtien(),
                         item.getBhytChitra(),
-                        item.getBenhnhanphaitra()
+                        item.getBenhnhanphaitra(),
+                        performingRoom != null ? performingRoom.getRoomName() : null,
+                        performingRoom != null ? performingRoom.getLocation() : null,
+                        detail != null ? detail.getQueueNumber() : null
                 ));
             }
         }

@@ -1,14 +1,20 @@
 package clinic.backend.controller;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.PayOSResultResponse;
+import clinic.backend.dto.response.PaymentHistoryResponse;
 import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.dto.response.PaymentResponse;
+import clinic.backend.dto.response.ReceiptPrintResponse;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
+import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.PayOSPaymentService;
 import clinic.backend.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +23,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,17 +46,38 @@ public class PaymentController {
     private final PayOSPaymentService payOSPaymentService;
     private final PaymentService paymentService;
 
-    // 1. Danh sách phiếu thu (có lọc theo trạng thái và loại thanh toán)
+    // 1. Danh sách và tra cứu phiếu thu (lọc trạng thái, loại, khoảng ngày tạo)
     @PreAuthorize("hasRole('CASHIER')")
     @GetMapping
-    @Operation(summary = "UC-69, UC-70, UC-73 Xem và tra cứu phiếu thu")
+    @Operation(summary = "UC-69, UC-70 Xem và tìm kiếm phiếu thu")
     public ApiResponse<Page<PaymentResponse>> getPayments(
             @RequestParam(required = false) PaymentStatus status,
             @RequestParam(required = false) PaymentType type,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             Pageable pageable
     ) {
-        return ApiResponse.success(paymentService.getPayments(status, type, search, pageable));
+        return ApiResponse.success(paymentService.getPayments(status, type, search, from, to, pageable));
+    }
+
+    // 1b. Lịch sử thanh toán: phiếu đã thu / đã hủy và tổng theo phương thức
+    @PreAuthorize("hasRole('CASHIER')")
+    @GetMapping("/history")
+    @Operation(summary = "UC-73 Xem lịch sử thanh toán")
+    public ApiResponse<PaymentHistoryResponse> getHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) PaymentStatus status,
+            @RequestParam(required = false) PaymentType type,
+            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(defaultValue = "true") boolean mine,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @PageableDefault(size = 50, sort = "paidAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        UUID cashierId = mine ? StaffPrincipal.from(jwt).accountId() : null;
+        return ApiResponse.success(
+                paymentService.getHistory(cashierId, status, type, method, from, to, pageable));
     }
 
     // 2. Danh sách phiếu thu đang chờ thanh toán
@@ -57,7 +89,7 @@ public class PaymentController {
             Pageable pageable
     ) {
         return ApiResponse.success(
-                paymentService.getPayments(PaymentStatus.PENDING, type, null, pageable));
+                paymentService.getPayments(PaymentStatus.PENDING, type, null, null, null, pageable));
     }
 
     // 3. Chi tiết phiếu thu
@@ -71,12 +103,14 @@ public class PaymentController {
     }
 
     @PreAuthorize("hasRole('CASHIER')")
-    @GetMapping("/{paymentId}/print")
-    @Operation(summary = "UC-72 Chuẩn bị dữ liệu in phiếu thu")
-    public ApiResponse<PaymentResponse> getPrintablePayment(
+    @PostMapping("/{paymentId}/commands/prepare-receipt-print")
+    @Operation(summary = "UC-72 Chuẩn bị in hoặc in lại phiếu thu và ghi audit")
+    public ApiResponse<ReceiptPrintResponse> prepareReceiptPrint(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId
     ) {
-        return ApiResponse.success(paymentService.getPrintablePayment(paymentId));
+        return ApiResponse.success(
+                paymentService.prepareReceiptPrint(StaffPrincipal.from(jwt).accountId(), paymentId));
     }
 
     // 4. Xác nhận thanh toán tại quầy (Tiền mặt / Thẻ)
@@ -84,10 +118,12 @@ public class PaymentController {
     @PostMapping("/{paymentId}/confirm")
     @Operation(summary = "UC-71 Xác nhận thanh toán")
     public ApiResponse<PaymentResponse> confirmPayment(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId,
             @Valid @RequestBody ConfirmPaymentRequest request
     ) {
-        return ApiResponse.success(paymentService.confirmPayment(paymentId, request));
+        return ApiResponse.success(
+                paymentService.confirmPayment(StaffPrincipal.from(jwt).accountId(), paymentId, request));
     }
 
     // 5. Tạo mã QR PayOS
@@ -113,20 +149,20 @@ public class PaymentController {
     // 7. Xác nhận kết quả thanh toán PayOS từ trang chuyển hướng kết quả (Return URL)
     @PostMapping("/confirm-payos-result")
     @Operation(summary = "Xác nhận kết quả thanh toán PayOS")
-    public ApiResponse<PaymentResponse> confirmPayOSResult(
+    public ApiResponse<PayOSResultResponse> confirmPayOSResult(
             @Valid @RequestBody ConfirmPayOSResultRequest request
     ) {
         UUID paymentId = payOSPaymentService.confirmPayOSResult(request);
-        return ApiResponse.success(paymentService.getPaymentById(paymentId));
+        return ApiResponse.success(payOSPaymentService.getResult(paymentId));
     }
 
     // 8. Tra cứu phiếu thu theo mã đơn hàng PayOS
     @GetMapping("/by-order-code/{orderCode}")
     @Operation(summary = "Tra cứu phiếu thu theo mã đơn hàng PayOS")
-    public ApiResponse<PaymentResponse> getPaymentByOrderCode(
+    public ApiResponse<PayOSResultResponse> getPaymentByOrderCode(
             @PathVariable Long orderCode
     ) {
         UUID paymentId = payOSPaymentService.getPaymentIdByOrderCode(orderCode);
-        return ApiResponse.success(paymentService.getPaymentById(paymentId));
+        return ApiResponse.success(payOSPaymentService.getResult(paymentId));
     }
 }

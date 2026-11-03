@@ -12,12 +12,19 @@ export const paymentApi = {
         return apiClient.request(`/payments${suffix}`, { signal });
     },
 
+    history(params = {}, signal) {
+        const query = new URLSearchParams(params);
+        return apiClient.request(`/payments/history?${query.toString()}`, { signal });
+    },
+
     getById(id, signal) {
         return apiClient.request(`/payments/${encodeURIComponent(id)}`, { signal });
     },
 
-    getPrintable(id) {
-        return apiClient.request(`/payments/${encodeURIComponent(id)}/print`);
+    prepareReceiptPrint(id) {
+        return apiClient.request(`/payments/${encodeURIComponent(id)}/commands/prepare-receipt-print`, {
+            method: 'POST',
+        });
     },
 
     confirm(id, data) {

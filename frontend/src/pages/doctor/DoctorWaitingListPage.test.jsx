@@ -28,6 +28,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             getDoctorQueue: vi.fn().mockResolvedValue(queueResponse()),
             startExamination: vi.fn(),
             skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
         };
 
         render(
@@ -77,6 +78,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             })),
             startExamination: vi.fn().mockResolvedValue({}),
             skipVisit: vi.fn().mockResolvedValue({}),
+            acceptSkippedVisit: vi.fn().mockResolvedValue({}),
         };
 
         render(<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} />);
@@ -91,7 +93,42 @@ describe('DoctorWaitingListPage backend integration', () => {
         expect(screen.getByText('Ưu tiên: Người cao tuổi')).toBeInTheDocument();
         expect(screen.getByText('Chuyển từ: Phòng khám Nội 2')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Có mặt' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu' }));
         await waitFor(() => expect(visitApi.startExamination).toHaveBeenCalledWith('visit-1'));
+    });
+
+    it('accepts a skipped patient without showing the skip action', async () => {
+        const visit = {
+            id: 'visit-skipped',
+            patientName: 'Trần Văn Bình',
+            queueNumber: 7,
+            status: 'WAITING',
+            isSkipped: true,
+            note: 'Ưu tiên: Người cao tuổi',
+        };
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                skippedCount: 1,
+                visits: { content: [visit], page: { number: 0, size: 10, totalElements: 1, totalPages: 1 } },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn().mockResolvedValue({}),
+        };
+
+        render(
+            <DoctorWaitingListPage
+                visitApi={visitApi}
+                loadProfile={vi.fn().mockResolvedValue({})}
+                initialTab="skipped"
+            />,
+        );
+
+        expect(await screen.findByText('Trần Văn Bình')).toBeInTheDocument();
+        expect(screen.getByText('Ưu tiên: Người cao tuổi')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Vắng' })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu' }));
+        await waitFor(() => expect(visitApi.acceptSkippedVisit).toHaveBeenCalledWith('visit-skipped'));
     });
 });

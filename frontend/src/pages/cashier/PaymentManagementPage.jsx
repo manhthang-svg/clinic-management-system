@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
     Search,
     RefreshCw,
@@ -15,6 +15,8 @@ import {
     X,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
+import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
+import { SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -75,7 +77,11 @@ export default function PaymentManagementPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [typeTab, setTypeTab] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
+    const [searchError, setSearchError] = useState('');
     const [notice, setNotice] = useState('');
+    const navigate = useNavigate();
 
     // Modal state
     const [cashModalPayment, setCashModalPayment] = useState(null);
@@ -88,23 +94,26 @@ export default function PaymentManagementPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
 
+    // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; đúng 1 phiếu Chờ của mã lượt khám thì mở UC-71
     const fetchPayments = useCallback(async () => {
+        const { params, error } = searchParams({
+            search, status: statusFilter, type: typeTab, from: fromDate, to: toDate,
+        });
+        setSearchError(error || '');
+        if (error) return;
         setLoading(true);
         try {
-            const params = { size: 50 };
-            if (statusFilter !== 'ALL') params.status = statusFilter;
-            if (typeTab !== 'ALL') params.type = typeTab;
-            if (search.trim()) params.search = search.trim();
-
             const res = await paymentApi.list(params);
             const content = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
             setPayments(content);
+            const target = directConfirmTarget(content, search);
+            if (target) navigate(target);
         } catch (err) {
-            setNotice(err?.message || 'Không thể tải danh sách phiếu thu');
+            setNotice(confirmErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, typeTab]);
+    }, [search, statusFilter, typeTab, fromDate, toDate, navigate]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -122,16 +131,18 @@ export default function PaymentManagementPage() {
         if (!cashModalPayment || submittingCash) return;
         setSubmittingCash(true);
         try {
-            await paymentApi.confirm(cashModalPayment.id, {
+            const res = await paymentApi.confirm(cashModalPayment.id, {
                 paymentMethod: 'CASH',
                 note: cashNote.trim() || undefined,
             });
-            setNotice(`Thanh toán thành công phiếu ${cashModalPayment.paymentCode} bằng TIỀN MẶT.`);
+            setNotice(confirmedNoticeText(res?.data || res));
             setCashModalPayment(null);
             setCashNote('');
             fetchPayments();
         } catch (err) {
-            alert(err?.message || 'Lỗi khi xác nhận thanh toán tiền mặt');
+            alert(confirmErrorMessage(err));
+            setCashModalPayment(null);
+            fetchPayments();
         } finally {
             setSubmittingCash(false);
         }
@@ -276,7 +287,7 @@ export default function PaymentManagementPage() {
                             <h2 className="text-lg font-semibold text-slate-800">Danh sách phiếu thanh toán viện phí</h2>
                             <p className="mt-1 text-sm text-[#60737d]">Tìm thấy {filtered.length} phiếu phù hợp.</p>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <label className="block">
                                 <span className="mb-1 block text-xs font-semibold text-[#60737d]">Tìm kiếm</span>
                                 <div className="relative">
@@ -284,10 +295,32 @@ export default function PaymentManagementPage() {
                                     <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
-                                        placeholder="Mã phiếu, họ tên BN, mã BN..."
+                                        placeholder="Số phiếu, mã lượt khám, mã BN, họ tên"
+                                        aria-describedby={searchError ? 'payment-search-error' : undefined}
                                         className="min-h-10 w-full rounded-xl border border-[#d5e0dc] pl-9 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                                     />
                                 </div>
+                                {searchError && (
+                                    <span id="payment-search-error" role="alert" className="mt-1 block text-xs text-red-600">{searchError}</span>
+                                )}
+                            </label>
+                            <label className="block">
+                                <span className="mb-1 block text-xs font-semibold text-[#60737d]">Từ ngày</span>
+                                <input
+                                    type="date"
+                                    value={fromDate}
+                                    onChange={(e) => setFromDate(e.target.value)}
+                                    className="min-h-10 w-full rounded-xl border border-[#d5e0dc] bg-white px-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="mb-1 block text-xs font-semibold text-[#60737d]">Đến ngày</span>
+                                <input
+                                    type="date"
+                                    value={toDate}
+                                    onChange={(e) => setToDate(e.target.value)}
+                                    className="min-h-10 w-full rounded-xl border border-[#d5e0dc] bg-white px-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                />
                             </label>
                             <label className="block">
                                 <span className="mb-1 block text-xs font-semibold text-[#60737d]">Trạng thái</span>
@@ -402,7 +435,7 @@ export default function PaymentManagementPage() {
                                 {filtered.length === 0 && (
                                     <tr>
                                         <td colSpan="7" className="px-5 py-12 text-center text-sm text-[#60737d]">
-                                            {loading ? 'Đang tải dữ liệu...' : 'Không có phiếu thanh toán nào phù hợp.'}
+                                            {loading ? 'Đang tải dữ liệu...' : SEARCH_MSG.NO_RESULT}
                                         </td>
                                     </tr>
                                 )}

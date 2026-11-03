@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<useCase id="UC-74" name="Verify Health Insurance" section="8.4" feature="Patient Reception" language="vi">
+  <actors>
+    <primaryActor>Receptionist</primaryActor>
+    <secondaryActor>Simulated Health Insurance Portal (BHXH)</secondaryActor>
+  </actors>
+  <description>Là lễ tân, tôi muốn hệ thống tra cứu thẻ BHYT của bệnh nhân qua cổng BHYT mô phỏng, để chỉ áp dụng bảo hiểm cho thẻ hợp lệ với đúng mức hưởng. Nếu thẻ không hợp lệ, lượt khám được đăng ký dạng tự trả và tôi thông báo cho bệnh nhân (BR-13). Cổng là dịch vụ mô phỏng, không kết nối thật với cổng quốc gia (SW-01). Mở rộng UC-40 (bước 6).</description>
+  <preconditions>
+    <condition number="1">Đăng ký khám (UC-40) đang thực hiện, đã chọn BHYT và đã nhập mã thẻ (10 chữ số hoặc 15 ký tự).</condition>
+  </preconditions>
+  <normalFlow>
+    <step number="1">
+      <action>Hệ thống kiểm tra định dạng mã thẻ (BR-50): đúng 10 chữ số, hoặc đúng 15 ký tự gồm 2 chữ in hoa và 13 chữ số.</action>
+    </step>
+    <step number="2">
+      <action>Hệ thống xác định mã BHXH 10 số: thẻ 10 số thì lấy nguyên; thẻ 15 ký tự thì lấy 10 ký tự cuối.</action>
+    </step>
+    <step number="3">
+      <action>Hệ thống gửi mã BHXH sang cổng mô phỏng.</action>
+    </step>
+    <step number="4">
+      <action>Cổng tra cứu theo mã BHXH và trả về: mã kết quả, trạng thái thẻ, số định danh cá nhân (nếu đã đồng bộ), họ tên, ngày sinh (kèm loại ngày sinh), giới tính, số thẻ đang lưu, hiệu lực từ ngày, hiệu lực đến ngày, nơi đăng ký KCB ban đầu (mã 5 số và tên), mức hưởng (%).</action>
+    </step>
+    <step number="5">
+      <action>Hệ thống kiểm tra cổng trả kết quả thành công và thẻ đang hoạt động.</action>
+    </step>
+    <step number="6">
+      <action>Nếu cổng và hồ sơ bệnh nhân đều có số định danh cá nhân, hệ thống đối chiếu số định danh, họ tên và ngày sinh:</action>
+      <check>Số định danh cá nhân: phải khớp chính xác; nếu không khớp thì không được fallback bằng thông tin nhân khẩu học.</check>
+      <check>Họ tên: không phân biệt chữ hoa, chữ thường, bỏ khoảng trắng thừa.</check>
+      <check>Ngày sinh: loại đầy đủ thì so cả ngày-tháng-năm; loại chỉ có tháng-năm thì so tháng và năm; loại chỉ có năm thì so năm.</check>
+    </step>
+    <step number="7">
+      <action>Hệ thống kiểm tra thẻ có hiệu lực tại ngày đăng ký (hiệu lực từ ≤ hôm nay ≤ hiệu lực đến).</action>
+    </step>
+    <step number="8">
+      <action>Hệ thống lấy mức hưởng do cổng trả về để tính các khoản thu của lượt khám (BR-27).</action>
+    </step>
+    <step number="9">
+      <action>Hệ thống hiển thị MSG16 kèm ngày hết hạn và mức hưởng, đồng thời lưu vào lượt khám: mã thẻ đã nhập, mã BHXH, hiệu lực từ/đến, nơi đăng ký KCB ban đầu và mức hưởng.</action>
+    </step>
+    <continuation>Tiếp tục ở UC-40 bước 7.</continuation>
+  </normalFlow>
+  <alternativeFlows>
+    <flow id="AF-01" atStep="6">
+      <title>Một trong hai nguồn chưa có số định danh cá nhân</title>
+      <step number="1.1">Hệ thống đối chiếu họ tên, ngày sinh và giới tính.</step>
+      <step number="1.2">Nếu cả ba thông tin khớp, kết quả xác minh trả phương thức DEMOGRAPHIC, đánh dấu cần kiểm tra thủ công và tiếp tục bước 7.</step>
+      <step number="1.3">Hệ thống hiển thị cảnh báo để lễ tân đối chiếu thẻ BHYT/VssID với bệnh nhân trước khi tiếp tục.</step>
+      <step number="1.4">Nếu có thông tin không khớp, thực hiện EF-03.</step>
+    </flow>
+  </alternativeFlows>
+  <exceptionFlows>
+    <flow id="EF-01" atStep="1">
+      <title>Sai định dạng</title>
+      <step number="1.1">Hệ thống hiển thị MSG05 dưới ô mã thẻ.</step>
+      <step number="1.2">Quay lại UC-40 bước 6.</step>
+    </flow>
+    <flow id="EF-02" atStep="5 hoặc 7">
+      <title>Không tìm thấy thẻ, thẻ không hoạt động (hết hạn, bị thu hồi) hoặc chưa đến ngày hiệu lực</title>
+      <step number="2.1">Hệ thống hiển thị MSG17. Loại lượt khám chuyển sang Tự trả và lễ tân thông báo cho bệnh nhân (BR-13).</step>
+      <step number="2.2">Tiếp tục ở UC-40 bước 7 (UC-40, AF-02).</step>
+    </flow>
+    <flow id="EF-03" atStep="6">
+      <title>Số định danh cá nhân, họ tên, ngày sinh hoặc giới tính không khớp</title>
+      <step number="3.1">Hệ thống hiển thị MSG18 kèm dữ liệu cổng trả về.</step>
+      <step number="3.2">Lễ tân kiểm tra thẻ với bệnh nhân và chọn một trong ba cách: sửa mã thẻ (quay lại UC-40 bước 6), sửa hồ sơ bệnh nhân (UC-38), hoặc chuyển sang Tự trả (UC-40, AF-02).</step>
+    </flow>
+    <flow id="EF-04" atStep="3">
+      <title>Cổng không trả lời trong 10 giây</title>
+      <step number="4.1">Hệ thống hiển thị MSG20 với hai nút Thử lại và Tự trả.</step>
+      <step number="4.2">Thử lại để quay lại bước 3; Tự trả theo (UC-40, AF-02).</step>
+    </flow>
+  </exceptionFlows>
+  <postconditions>
+    <outcome type="success">Thành công: lượt khám đang đăng ký giữ mã thẻ, mã BHXH, hiệu lực từ/đến, nơi đăng ký KCB ban đầu và mức hưởng, dùng để tách mọi khoản thu của lượt khám thành phần BHYT chi trả và phần bệnh nhân trả (BR-27).</outcome>
+    <outcome type="failure">Thất bại: không áp dụng bảo hiểm; lượt khám là Tự trả.</outcome>
+  </postconditions>
+  <businessRules>BR-11, BR-13, BR-27, BR-50; Data rules: Valid health insurance only, Payment calculation (I.3.3); SW-01, CI-03</businessRules>
+  <messages>
+    <message id="MSG05" />
+    <message id="MSG16" />
+    <message id="MSG17" />
+    <message id="MSG18" />
+    <message id="MSG20" />
+  </messages>
+</useCase>

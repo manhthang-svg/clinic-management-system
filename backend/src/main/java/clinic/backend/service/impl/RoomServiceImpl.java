@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import clinic.backend.dto.request.CreateRoomRequest;
 import clinic.backend.dto.response.RoomResponse;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
@@ -55,11 +56,17 @@ public class RoomServiceImpl implements RoomService {
                         "Phòng cận lâm sàng phải có nhóm dịch vụ"
                 );
             }
-            serviceGroupRepository.findById(serviceGroupId)
+            ServiceGroup group = serviceGroupRepository.findById(serviceGroupId)
                     .orElseThrow(() -> new ResponseStatusException(
                             HttpStatus.NOT_FOUND,
                             "Không tìm thấy nhóm dịch vụ"
                     ));
+            if (group.getDepartmentId() != null && !group.getDepartmentId().equals(request.departmentId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn"
+                );
+            }
         } else if (request.type() == RoomType.EXAMINATION) {
             if (request.serviceGroupId() != null) {
                 throw new ResponseStatusException(

@@ -316,6 +316,9 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
         if (serviceGroup.getType() != ServiceGroupType.valueOf(request.type().name())) {
             throw invalidAssignment("SERVICE_GROUP_TYPE_MISMATCH");
         }
+        if (serviceGroup.getDepartmentId() != null && !serviceGroup.getDepartmentId().equals(request.departmentId())) {
+            throw invalidAssignment("SERVICE_GROUP_DEPARTMENT_MISMATCH");
+        }
     }
 
     private MedicalService findService(UUID serviceId) {

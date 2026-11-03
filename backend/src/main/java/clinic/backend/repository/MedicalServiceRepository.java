@@ -1,6 +1,8 @@
 
 package clinic.backend.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,6 +18,11 @@ public interface MedicalServiceRepository
         JpaSpecificationExecutor<MedicalService> {
 
     boolean existsByCode(String code);
+
+    List<MedicalService> findAllByStatusAndTypeInOrderByTenchidinhAsc(
+            ActivationStatus status,
+            Collection<MedicalServiceType> types
+    );
 
     boolean existsByTypeAndStatus(
             MedicalServiceType type,
