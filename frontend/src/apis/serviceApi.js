@@ -13,6 +13,9 @@ export function createServiceApi(client) {
         create: (body) => client.request('/services', { method: 'POST', body }),
         update: (id, body) => client.request(`/services/${id}`, { method: 'PUT', body }),
         updatePrices: (id, body) => client.request(`/services/${id}/prices`, { method: 'PUT', body }),
+        checkDeactivation: (id) => client.request(`/services/${id}/deactivation-check`),
+        checkActivation: (id) => client.request(`/services/${id}/activation-check`),
+        updateStatus: (id, body) => client.request(`/services/${id}/status`, { method: 'PATCH', body }),
     };
 }
 
