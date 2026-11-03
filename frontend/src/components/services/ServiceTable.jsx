@@ -5,7 +5,7 @@ import { formatPrice } from './serviceFormat';
 
 const STATUS_TONES = {
   ACTIVE: 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]',
-  INACTIVE: 'bg-slate-100 text-slate-500 border-slate-200',
+  INACTIVE: 'bg-rose-50 text-rose-600 border-rose-200',
 };
 
 const ACTION_CLASS = 'p-1.5 rounded-lg transition-colors cursor-pointer';
@@ -56,8 +56,7 @@ export function ServiceTable({
               <th className="pl-3 pr-2 py-3">Mã DV</th>
               <th className="px-2 py-3">Tên dịch vụ</th>
               <th className="px-2 py-3">Loại</th>
-              <th className="px-2 py-3">Nhóm / Khoa thực hiện</th>
-              <th className="px-2 py-3 text-right">Giá viện phí</th>
+              <th className="px-2 py-3">Nhóm dịch vụ</th>              <th className="px-2 py-3 text-right">Giá viện phí</th>
               <th className="px-2 py-3 text-right">Giá BHYT</th>
               <th className="px-2 py-3">Trạng thái</th>
               {onToggleStatus && <th className="px-2 py-3">Thao tác</th>}
@@ -96,11 +95,9 @@ export function ServiceTable({
                         {type?.label ?? service.type}
                       </span>
                     </td>
-                    <td className="px-2 py-3 min-w-[120px]">
-                      <div className="font-medium text-slate-700">{service.serviceGroupName ?? type?.label}</div>
-                      <div className="text-[10px] text-slate-400">{service.departmentName ?? 'Dùng chung các phòng khám'}</div>
-                    </td>
-                    <td className="px-2 py-3 text-right font-semibold text-slate-700 whitespace-nowrap">
+                    <td className="px-2 py-3 min-w-[120px] font-medium text-slate-700">
+                      {service.serviceGroupName ?? type?.label}
+                    </td>                    <td className="px-2 py-3 text-right font-semibold text-slate-700 whitespace-nowrap">
                       {formatPrice(service.clinicPrice)}
                     </td>
                     <td className="px-2 py-3 text-right whitespace-nowrap">
