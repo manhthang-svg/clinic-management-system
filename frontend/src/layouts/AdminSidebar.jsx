@@ -12,10 +12,13 @@ import {
   Hospital,
   Settings,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   CalendarDays,
 } from 'lucide-react';
 import { NAV_ITEMS } from '../constants/accountData';
+import { useResponsiveSidebar } from '../hooks/useResponsiveSidebar';
 
 const ICONS = {
   LayoutGrid,
@@ -37,6 +40,7 @@ const IDLE_CLASS = 'hover:bg-white hover:text-slate-800';
 
 export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
   const navigate = useNavigate();
+  const { collapsed, setCollapsed, toggleCollapsed } = useResponsiveSidebar();
 
   const paths = {
     accounts: '/admin/accounts',
@@ -65,18 +69,25 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
     setOpenGroups((prev) => (prev.includes(id) ? prev.filter((group) => group !== id) : [...prev, id]));
 
   return (
-    <aside className="w-[224px] h-full overflow-y-auto bg-[#eef5f4] border-r border-[#dfeae8] flex flex-col shrink-0 select-none">
-      <div className="h-20 flex items-center gap-3 px-6">
-        <div className="w-9 h-9 rounded-xl bg-[#127e7a] text-white flex items-center justify-center shadow-sm">
-          <Plus className="w-5 h-5" strokeWidth={3} />
-        </div>
-        <div>
-          <div className="text-base font-extrabold tracking-tight text-[#1b2533] leading-tight">METPH</div>
-          <div className="text-[10px] font-semibold text-slate-400 leading-none">Quản lý phòng khám</div>
-        </div>
+    <aside className={`flex h-full shrink-0 select-none flex-col overflow-y-auto border-r border-[#dfeae8] bg-[#eef5f4] transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[224px]'}`}>
+      <div className={`flex h-20 shrink-0 items-center ${collapsed ? 'justify-center' : 'justify-between gap-2 px-4'}`}>
+        {!collapsed && (
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#127e7a] text-white shadow-sm">
+              <Plus className="h-5 w-5" strokeWidth={3} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-base font-extrabold leading-tight tracking-tight text-[#1b2533]">METPH</div>
+              <div className="whitespace-nowrap text-[10px] font-semibold leading-none text-slate-400">Quản lý phòng khám</div>
+            </div>
+          </div>
+        )}
+        <button type="button" onClick={toggleCollapsed} aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} title={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-500 hover:bg-white hover:text-[#127e7a]">
+          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+        </button>
       </div>
 
-      <nav aria-label="Điều hướng chính" className="px-3 py-2 space-y-1 text-[13px] font-medium text-slate-500">
+      <nav aria-label="Điều hướng chính" className={`space-y-1 py-2 text-[13px] font-medium text-slate-500 ${collapsed ? 'px-2' : 'px-3'}`}>
         {NAV_ITEMS.map((item) => {
           const Icon = ICONS[item.iconName] || LayoutGrid;
 
@@ -88,14 +99,22 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
                 <button
                   type="button"
                   aria-expanded={open}
-                  onClick={() => toggleGroup(item.id)}
-                  className={`${ITEM_CLASS} ${containsActive ? ACTIVE_CLASS : IDLE_CLASS}`}
+                  title={collapsed ? item.label : undefined}
+                  onClick={() => {
+                    if (collapsed) {
+                      setCollapsed(false);
+                      setOpenGroups((current) => current.includes(item.id) ? current : [...current, item.id]);
+                      return;
+                    }
+                    toggleGroup(item.id);
+                  }}
+                  className={`${ITEM_CLASS} ${collapsed ? 'justify-center px-0' : ''} ${containsActive ? ACTIVE_CLASS : IDLE_CLASS}`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+                  {!collapsed && <ChevronDown className={`w-4 h-4 transition-transform ${open ? '' : '-rotate-90'}`} />}
                 </button>
-                {open && (
+                {open && !collapsed && (
                   <div className="mt-1 ml-5 pl-3 border-l border-slate-200 space-y-0.5">
                     {item.children.map((child) => {
                       const active = child.id === activeKey;
@@ -124,11 +143,12 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
               key={item.id}
               type="button"
               aria-current={active ? 'page' : undefined}
+              title={collapsed ? item.label : undefined}
               onClick={() => handleNavigate(item.id)}
-              className={`${ITEM_CLASS} ${active ? ACTIVE_CLASS : IDLE_CLASS}`}
+              className={`${ITEM_CLASS} ${collapsed ? 'justify-center px-0' : ''} ${active ? ACTIVE_CLASS : IDLE_CLASS}`}
             >
-              <Icon className="w-4 h-4" />
-              <span>{item.label}</span>
+              <Icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
             </button>
           );
         })}
