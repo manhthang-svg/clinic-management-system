@@ -19,7 +19,26 @@ export function FieldHint({ children }) {
   return <p className="text-xs text-slate-400">{children}</p>;
 }
 
-export function Field({ id, label, required, error, hint, className = '', children }) {
+// Width of the label column of an inline field; content that lines up with inline fields uses INLINE_OFFSET_CLASS.
+export const INLINE_LABEL_CLASS = 'md:w-40 md:shrink-0 md:pt-2.5';
+export const INLINE_OFFSET_CLASS = 'md:pl-44';
+
+/** A labelled control; inline puts the label beside the control from md up instead of above it. */
+export function Field({ id, label, required, error, hint, inline = false, className = '', children }) {
+  if (inline) {
+    return (
+      <div className={`flex flex-col md:flex-row gap-1.5 md:gap-4 ${className}`}>
+        <label htmlFor={id} className={`block text-sm font-semibold text-slate-700 ${INLINE_LABEL_CLASS}`}>
+          {label}
+          {required && <span className="text-rose-500 ml-0.5">*</span>}
+        </label>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {children}
+          {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : hint && <FieldHint>{hint}</FieldHint>}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`space-y-1.5 ${className}`}>
       <label htmlFor={id} className="block text-sm font-semibold text-slate-700">

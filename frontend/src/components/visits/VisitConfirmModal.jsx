@@ -14,21 +14,33 @@ function Row({ label, children }) {
   );
 }
 
-function FeeSummary({ fee, loading }) {
+function FeeItem({ label, value }) {
+  return (
+    <div className="p-3 rounded-xl bg-white border border-slate-100">
+      <dt className="text-[11px] text-slate-500">{label}</dt>
+      <dd className="text-sm font-bold text-slate-800 mt-0.5">{formatMoney(value)}</dd>
+    </div>
+  );
+}
+
+// An insurance visit shows only the two prices; its amount is totalled and paid at the end of the visit.
+function FeeSummary({ fee, loading, insured }) {
   if (loading) return <p role="status" className="text-sm text-slate-400">Đang tính phí khám…</p>;
   if (!fee) {
     return <p role="alert" className="text-sm text-rose-600">Không tải được phí khám. Vui lòng quay lại và thử lại.</p>;
   }
+  if (insured) {
+    return (
+      <dl className="grid grid-cols-2 gap-3">
+        <FeeItem label="Giá viện phí" value={fee.clinicPrice} />
+        <FeeItem label="Giá BHYT" value={fee.appliedPrice} />
+      </dl>
+    );
+  }
   return (
     <dl className="grid grid-cols-3 gap-3">
-      <div className="p-3 rounded-xl bg-white border border-slate-100">
-        <dt className="text-[11px] text-slate-500">Giá viện phí</dt>
-        <dd className="text-sm font-bold text-slate-800 mt-0.5">{formatMoney(fee.clinicPrice)}</dd>
-      </div>
-      <div className="p-3 rounded-xl bg-white border border-slate-100">
-        <dt className="text-[11px] text-slate-500">BHYT chi trả</dt>
-        <dd className="text-sm font-bold text-slate-800 mt-0.5">{formatMoney(fee.insuranceAmount ?? 0)}</dd>
-      </div>
+      <FeeItem label="Giá viện phí" value={fee.clinicPrice} />
+      <FeeItem label="BHYT chi trả" value={fee.insuranceAmount ?? 0} />
       <div className="p-3 rounded-xl bg-[#e6f5f3] border border-[#bfe0dc]">
         <dt className="text-[11px] text-[#127e7a]">Bệnh nhân trả</dt>
         <dd className="text-base font-extrabold text-[#127e7a] mt-0.5">{formatMoney(fee.patientAmount)}</dd>
@@ -118,10 +130,10 @@ export function VisitConfirmModal({
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
             <h3 className="text-sm font-bold text-slate-800">Phí khám</h3>
-            <FeeSummary fee={fee} loading={feeLoading} />
+            <FeeSummary fee={fee} loading={feeLoading} insured={insured} />
             <p className="text-xs text-slate-500">
               {insured
-                ? 'Lượt khám BHYT vào danh sách chờ khám ngay; bệnh nhân thanh toán sau khi có kết luận.'
+                ? 'Lượt khám BHYT vào danh sách chờ khám ngay. Phí khám được tính tổng cùng các chi phí khác và thanh toán khi kết thúc lượt khám.'
                 : 'Bệnh nhân thanh toán phí khám tại quầy thu ngân trước khi vào khu chờ.'}
             </p>
           </div>

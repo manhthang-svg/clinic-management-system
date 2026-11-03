@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../apis/apiError';
-import { insuranceErrorKind, loadErrorMessage, MSG99, NETWORK_MESSAGE } from './visitErrors';
+import { insuranceErrorKind, loadErrorMessage, MSG99, NETWORK_MESSAGE, ticketErrorMessage } from './visitErrors';
 
 describe('insurance verification errors', () => {
   it('does not misclassify an API validation error as a portal timeout', () => {
@@ -32,5 +32,24 @@ describe('insurance verification errors', () => {
 
     expect(insuranceErrorKind(invalid)).toBe('invalid');
     expect(insuranceErrorKind(mismatch)).toBe('mismatch');
+  });
+});
+
+describe('ticket load errors (UC-41)', () => {
+  it('explains a missing clinic facility', () => {
+    const error = new ApiError('Not configured', {
+      status: 409,
+      errorResponse: { code: 'CLINIC_FACILITY_NOT_CONFIGURED', message: 'Not configured' },
+    });
+
+    expect(ticketErrorMessage(error)).toBe('Chưa cấu hình thông tin cơ sở khám bệnh. Vui lòng liên hệ quản trị viên.');
+  });
+
+  it('names the code or status of an unknown failure', () => {
+    const coded = new ApiError('Boom', { status: 500, errorResponse: { code: 'INTERNAL_ERROR', message: 'Boom' } });
+    const bare = new ApiError('Bad gateway', { status: 502 });
+
+    expect(ticketErrorMessage(coded)).toBe(`${MSG99} (Mã lỗi: INTERNAL_ERROR)`);
+    expect(ticketErrorMessage(bare)).toBe(`${MSG99} (Mã lỗi: HTTP 502)`);
   });
 });
