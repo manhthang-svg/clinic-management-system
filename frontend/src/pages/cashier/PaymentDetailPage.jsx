@@ -13,7 +13,8 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
-import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
+import PaymentReceipt from '../../components/payments/PaymentReceipt';
+import { PRINT_MSG, confirmErrorMessage, confirmedNoticeText, printErrorMessage } from '../../components/payments/paymentConfirm';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -80,13 +81,15 @@ export default function PaymentDetailPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
     const isPrintable = payment?.status === 'PAID' || payment?.status === 'FEE_EXEMPT';
+    const [receipt, setReceipt] = useState(null);
 
+    // UC-72: lấy nội dung phiếu (ghi log in / bản sao), hiện bản xem trước rồi mở hộp thoại in
     const handlePrint = async () => {
         try {
-            await paymentApi.getPrintable(payment.id);
-            window.print();
+            setReceipt(await paymentApi.prepareReceiptPrint(payment.id));
+            window.setTimeout(() => window.print(), 0);
         } catch (err) {
-            setNotice(err?.message || 'Chỉ được in phiếu đã thanh toán hoặc miễn phí.');
+            setNotice(printErrorMessage(err));
         }
     };
 
@@ -130,7 +133,9 @@ export default function PaymentDetailPage() {
             });
             setNotice(confirmedNoticeText(res?.data || res));
             setCashModalOpen(false);
-            loadPayment();
+            await loadPayment();
+            // UC-71 bước 9: mở bản in phiếu thu ngay sau khi xác nhận (UC-72)
+            await handlePrint();
         } catch (err) {
             alert(confirmErrorMessage(err));
             setCashModalOpen(false);
@@ -406,6 +411,9 @@ export default function PaymentDetailPage() {
                         >
                             <Printer size={16} /> In phiếu thu
                         </button>
+                        {!isPrintable && (
+                            <span className="text-xs text-slate-500">{PRINT_MSG.NOT_PAID}</span>
+                        )}
 
                         {payment.status === 'PENDING' && (
                             <>
@@ -564,6 +572,11 @@ export default function PaymentDetailPage() {
                         ) : null}
                     </div>
                 </div>
+            )}
+            {receipt && (
+                <section aria-label="Xem trước phiếu thu" className="mx-auto mt-6 max-w-2xl">
+                    <PaymentReceipt receipt={receipt} />
+                </section>
             )}
         </main>
     );
