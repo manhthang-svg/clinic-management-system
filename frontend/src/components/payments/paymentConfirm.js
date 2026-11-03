@@ -27,6 +27,16 @@ export function confirmErrorMessage(error) {
     return MSG.SYSTEM_ERROR;
 }
 
+export const PRINT_MSG = {
+    NOT_PAID: 'Chỉ in được phiếu thu sau khi đã xác nhận thanh toán.',
+};
+
+/** UC-72: MSG62 when the receipt is not Paid, MSG12 / MSG99 otherwise. */
+export function printErrorMessage(error) {
+    if (error?.errorResponse?.code === 'PAYMENT_NOT_PAID') return PRINT_MSG.NOT_PAID;
+    return confirmErrorMessage(error);
+}
+
 /**
  * MSG30 plus, for a paraclinical fee, where each service is performed (BR-28) and which services have no
  * Active room yet (AF-02).
