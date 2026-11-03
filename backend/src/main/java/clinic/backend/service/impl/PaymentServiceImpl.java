@@ -11,6 +11,13 @@ import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
+import clinic.backend.dto.response.ReceiptPrintResponse;
+import clinic.backend.entity.ClinicFacility;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.AuditLogAction;
+import clinic.backend.repository.ClinicFacilityRepository;
+import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.dto.response.PaymentItemResponse;
 import clinic.backend.dto.response.PaymentResponse;
 import clinic.backend.entity.ParaclinicalOrderDetail;
@@ -42,12 +49,17 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final String PAYMENT_AUDIT_ENTITY = "payments";
+
     private final PaymentRepository paymentRepository;
     private final VisitRepository visitRepository;
     private final PatientRepository patientRepository;
     private final RoomRepository roomRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     private final PaymentCompletionService paymentCompletionService;
+    private final AuditLogService auditLogService;
+    private final StaffAccountRepository staffAccountRepository;
+    private final ClinicFacilityRepository clinicFacilityRepository;
     private final Clock clock;
 
     @Override
@@ -87,23 +99,42 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public PaymentResponse getPrintablePayment(UUID paymentId) {
+    @Transactional
+    public ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        if (payment.getStatus() != PaymentStatus.PAID
-                && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Chỉ được in phiếu đã thanh toán hoặc miễn phí"
-            );
+        // EF-01: chỉ in phiếu đã thu (hoặc miễn phí) – MSG62 (BR-37)
+        if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
+            throw new AppException(ErrorCode.PAYMENT_NOT_PAID, Map.of("status", payment.getStatus().name()));
         }
 
-        return toResponse(payment);
+        // AF-01: từ lần in thứ hai là bản sao; mọi lần in đều ghi log
+        boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId);
+        Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
+        auditLogService.recordBusinessChange(
+                cashierAccountId, AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId,
+                visit != null ? visit.getSovaovien() : null,
+                Map.of("receiptNumber", String.valueOf(payment.getReceiptNumber()), "reprint", reprint),
+                clock.instant());
+
+        String cashierName = payment.getCashierAccountId() == null
+                ? null
+                : staffAccountRepository.findById(payment.getCashierAccountId())
+                        .map(StaffAccount::getFullName)
+                        .orElse(null);
+        String facilityName = clinicFacilityRepository.findCurrent()
+                .map(ClinicFacility::getTenCskcb)
+                .orElse(null);
+
+        return new ReceiptPrintResponse(
+                reprint,
+                facilityName,
+                cashierName,
+                visit != null ? visit.getDoituongbnLoai() : null,
+                visit != null ? visit.getInsuranceCoverageRate() : null,
+                visit != null && payment.getType() == PaymentType.EXAMINATION_FEE ? visit.getQueueNumber() : null,
+                toResponse(payment));
     }
 
     @Override

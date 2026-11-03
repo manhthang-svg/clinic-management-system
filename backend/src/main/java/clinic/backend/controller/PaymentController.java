@@ -8,6 +8,7 @@ import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PayOSResultResponse;
 import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.dto.response.PaymentResponse;
+import clinic.backend.dto.response.ReceiptPrintResponse;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
 import clinic.backend.security.user.StaffPrincipal;
@@ -75,12 +76,14 @@ public class PaymentController {
     }
 
     @PreAuthorize("hasRole('CASHIER')")
-    @GetMapping("/{paymentId}/print")
-    @Operation(summary = "UC-72 Chuẩn bị dữ liệu in phiếu thu")
-    public ApiResponse<PaymentResponse> getPrintablePayment(
+    @PostMapping("/{paymentId}/commands/prepare-receipt-print")
+    @Operation(summary = "UC-72 Chuẩn bị in hoặc in lại phiếu thu và ghi audit")
+    public ApiResponse<ReceiptPrintResponse> prepareReceiptPrint(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId
     ) {
-        return ApiResponse.success(paymentService.getPrintablePayment(paymentId));
+        return ApiResponse.success(
+                paymentService.prepareReceiptPrint(StaffPrincipal.from(jwt).accountId(), paymentId));
     }
 
     // 4. Xác nhận thanh toán tại quầy (Tiền mặt / Thẻ)

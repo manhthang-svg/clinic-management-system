@@ -77,6 +77,7 @@ public enum ErrorCode {
     MEDICAL_RECORD_CLOSED("MEDICAL_RECORD_CLOSED", "The medical record is closed.", HttpStatus.CONFLICT),
     SERVICE_INACTIVE("SERVICE_INACTIVE", "The medical service is no longer active.", HttpStatus.CONFLICT),
     PAYMENT_NOT_FOUND("PAYMENT_NOT_FOUND", "The receipt does not exist.", HttpStatus.NOT_FOUND),
+    PAYMENT_NOT_PAID("PAYMENT_NOT_PAID", "The receipt can be printed only after payment.", HttpStatus.CONFLICT),
     PAYMENT_NOT_PENDING("PAYMENT_NOT_PENDING", "The receipt is no longer pending.", HttpStatus.CONFLICT),
     CONCURRENT_MODIFICATION("CONCURRENT_MODIFICATION",
             "The resource was changed by another request. Reload it and try again.", HttpStatus.CONFLICT),
