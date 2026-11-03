@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -97,19 +98,79 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void trimsSearchBeforeDelegatingPaymentQuery() {
+    void searchesAllStatusesWithATrimmedKeywordAndTheWholeDayRange() {
         Payment payment = examinationFee("P-001");
-        when(paymentRepository.search(
-                null, null, "P-001", PageRequest.of(0, 10)))
+        when(paymentRepository.search(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(payment)));
         when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.empty());
 
-        var response = service.getPayments(
-                null, null, "  P-001  ", PageRequest.of(0, 10));
+        var response = service.getPayments(null, null, "  P-001  ",
+                LocalDate.of(2026, 10, 28), LocalDate.of(2026, 10, 28), PageRequest.of(0, 10));
 
-        assertThat(response.getContent()).hasSize(1);
-        assertThat(response.getContent().getFirst().paymentCode()).isEqualTo("P-001");
-        verify(paymentRepository).search(null, null, "P-001", PageRequest.of(0, 10));
+        assertThat(response.getContent()).singleElement()
+                .satisfies(r -> assertThat(r.paymentCode()).isEqualTo("P-001"));
+        verify(paymentRepository).search(
+                EnumSet.allOf(PaymentStatus.class), null,
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"),
+                "P-001", PageRequest.of(0, 10));
+    }
+
+    @Test
+    void rejectsAOneCharacterKeyword() {
+        assertThatThrownBy(() -> service.getPayments(null, null, " a ", null, null, PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(e.getDetails()).containsEntry("search", "TOO_SHORT");
+                });
+    }
+
+    @Test
+    void historyDefaultsToTodayAndSumsPaidReceiptsPerMethod() {
+        UUID cashierId = UUID.randomUUID();
+        when(paymentRepository.history(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(paymentRepository.historyTotals(null, null, cashierId,
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z")))
+                .thenReturn(List.of(total(PaymentMethod.CASH, 300000, 2), total(PaymentMethod.BANK_TRANSFER, 200000, 1)));
+
+        var history = service.getHistory(cashierId, null, null, null, null, null, PageRequest.of(0, 50));
+
+        verify(paymentRepository).history(
+                EnumSet.of(PaymentStatus.PAID, PaymentStatus.CANCELLED), null, null, cashierId,
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), PageRequest.of(0, 50));
+        assertThat(history.totalsByMethod()).hasSize(2);
+        assertThat(history.totalPatientAmount()).isEqualByComparingTo("500000");
+    }
+
+    @Test
+    void historyRejectsAReversedDateRange() {
+        assertThatThrownBy(() -> service.getHistory(null, null, null, null,
+                LocalDate.of(2026, 10, 28), LocalDate.of(2026, 10, 27), PageRequest.of(0, 50)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("dateRange", "INVALID_FORMAT"));
+    }
+
+    @Test
+    void historyRejectsPendingReceipts() {
+        assertThatThrownBy(() -> service.getHistory(null, PaymentStatus.PENDING, null, null, null, null,
+                PageRequest.of(0, 50)))
+                .isInstanceOf(AppException.class);
+    }
+
+    private static PaymentRepository.MethodTotal total(PaymentMethod method, long amount, long count) {
+        return new PaymentRepository.MethodTotal() {
+            public PaymentMethod getMethod() {
+                return method;
+            }
+
+            public BigDecimal getTotal() {
+                return BigDecimal.valueOf(amount);
+            }
+
+            public Long getCount() {
+                return count;
+            }
+        };
     }
 
     @Test
