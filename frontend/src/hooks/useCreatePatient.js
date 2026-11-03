@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import patientApi from '../apis/patientApi';
 
 const initialForm = {
@@ -119,8 +119,10 @@ function buildPatientPayload(form) {
 
 export function useCreatePatient() {
     const navigate = useNavigate();
+    const location = useLocation();
 
-    const [form, setForm] = useState(initialForm);
+    // UC-35 EF-02: the keyword of an unsuccessful search pre-fills the form.
+    const [form, setForm] = useState(() => ({ ...initialForm, ...(location.state?.prefill ?? {}) }));
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 

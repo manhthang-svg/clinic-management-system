@@ -1,19 +1,34 @@
 package clinic.backend.service.impl;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
+import clinic.backend.dto.response.PatientActiveVisitResponse;
 import clinic.backend.entity.Patient;
+import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.PatientSearchType;
+import clinic.backend.enums.VisitStatus;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.VisitRepository;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 
@@ -37,13 +53,16 @@ class PatientServiceImplTest {
     private PatientRepository patientRepository;
 
     @Mock
+    private VisitRepository visitRepository;
+
+    @Mock
     private UuidV7Generator ids;
 
     private PatientServiceImpl service;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        service = new PatientServiceImpl(patientRepository, ids);
+        service = new PatientServiceImpl(patientRepository, visitRepository, ids);
     }
 
     @AfterEach
@@ -112,6 +131,7 @@ class PatientServiceImplTest {
 
         var response = service.listPatients(
                 "  Nguyen  ",
+                null,
                 org.springframework.data.domain.PageRequest.of(0, 10));
 
         assertThat(response).hasSize(1);
@@ -119,6 +139,88 @@ class PatientServiceImplTest {
         verify(patientRepository).search(
                 org.mockito.ArgumentMatchers.eq("Nguyen"),
                 org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void searchesByTypeWithTheMatchingQuery() {
+        PageRequest page = PageRequest.of(0, 10);
+        Page<Patient> found = new PageImpl<>(List.of(patient()));
+        when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
+        when(patientRepository.findAllByMabenhnhanIgnoreCase("bn1234567", page)).thenReturn(found);
+        when(patientRepository.findAllBySodienthoai("0901234567", page)).thenReturn(found);
+        when(patientRepository.searchByName("nguyen", page)).thenReturn(found);
+        when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
+        when(patientRepository.searchByInsuranceCard("DN4010123456789", page)).thenReturn(found);
+
+        assertThat(service.listPatients(" 012345678901 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
+        assertThat(service.listPatients("bn1234567", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
+        assertThat(service.listPatients("0901234567", PatientSearchType.PHONE, page)).hasSize(1);
+        assertThat(service.listPatients("nguyen", PatientSearchType.NAME, page)).hasSize(1);
+        assertThat(service.listPatients("C1234567", PatientSearchType.PASSPORT, page)).hasSize(1);
+        assertThat(service.listPatients("DN4010123456789", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
+    }
+
+    @Test
+    void addsLastVisitAndActiveVisitToEachResult() {
+        PageRequest page = PageRequest.of(0, 10);
+        when(patientRepository.searchByName("nguyen", page)).thenReturn(new PageImpl<>(List.of(patient())));
+        Instant lastVisitAt = Instant.parse("2026-11-01T02:00:00Z");
+        VisitRepository.PatientLastVisit lastVisit = mock(VisitRepository.PatientLastVisit.class);
+        when(lastVisit.getPatientId()).thenReturn(PATIENT_ID);
+        when(lastVisit.getLastVisitAt()).thenReturn(lastVisitAt);
+        VisitRepository.PatientActiveVisit activeVisit = mock(VisitRepository.PatientActiveVisit.class);
+        when(activeVisit.getPatientId()).thenReturn(PATIENT_ID);
+        when(activeVisit.getRegistrationCode()).thenReturn("VV001");
+        when(activeVisit.getStatus()).thenReturn(VisitStatus.WAITING);
+        when(activeVisit.getRoomName()).thenReturn("Phòng khám Nội 1");
+        when(visitRepository.findLastVisitTimes(List.of(PATIENT_ID))).thenReturn(List.of(lastVisit));
+        when(visitRepository.findActiveVisits(List.of(PATIENT_ID), VisitRepository.FINISHED_STATUSES))
+                .thenReturn(List.of(activeVisit));
+
+        var result = service.listPatients("nguyen", PatientSearchType.NAME, page).getContent().getFirst();
+
+        assertThat(result.lastVisitAt()).isEqualTo(lastVisitAt);
+        assertThat(result.activeVisit())
+                .isEqualTo(new PatientActiveVisitResponse("VV001", VisitStatus.WAITING, "Phòng khám Nội 1"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "CITIZEN_ID, 12345",
+            "CITIZEN_ID, 01234567890A",
+            "PHONE, 090123456",
+            "PHONE, 09012345678",
+            "NAME, A",
+            "PASSPORT, C123456789012345",
+            "PASSPORT, C-123",
+            "INSURANCE_CARD, DN40101234"
+    })
+    void rejectsKeywordWithWrongFormatForItsType(PatientSearchType type, String keyword) {
+        assertThatThrownBy(() -> service.listPatients(keyword, type, PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(error.getDetails()).containsEntry("keyword", "INVALID_FORMAT");
+                });
+        verifyNoInteractions(patientRepository);
+    }
+
+    @Test
+    void requiresKeywordWhenSearchTypeIsGiven() {
+        assertThatThrownBy(() -> service.listPatients("  ", PatientSearchType.NAME, PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getDetails()).containsEntry("keyword", "REQUIRED"));
+    }
+
+    @Test
+    void returnsAtMostFiftyResults() {
+        when(patientRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+
+        service.listPatients(null, null, PageRequest.of(2, 500));
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(patientRepository).findAll(pageable.capture());
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
+        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
     }
 
     private void authenticateAs(UUID accountId) {

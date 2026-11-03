@@ -3,12 +3,20 @@ package clinic.backend.service.impl;
 
 import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
+import clinic.backend.dto.response.PatientActiveVisitResponse;
 import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.entity.Patient;
+import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.PatientSearchType;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.PatientService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,13 +26,20 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PatientServiceImpl implements PatientService {
 
+    /** UC-35 step 6: at most 50 results. */
+    static final int MAX_SEARCH_RESULTS = 50;
+
     private final PatientRepository patientRepository;
+    private final VisitRepository visitRepository;
     private final UuidV7Generator uuidV7Generator;
 
     private String generatePatientCode() {
@@ -132,7 +147,9 @@ public class PatientServiceImpl implements PatientService {
                 savedPatient.getNguoithanQuanhe(),
                 savedPatient.getDiachinguoithan(),
                 savedPatient.getSodienthoainguoithan(),
-                savedPatient.getVersion()
+                savedPatient.getVersion(),
+                null,
+                null
         );
     }
 
@@ -193,16 +210,67 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
-    @Transactional
-    public org.springframework.data.domain.Page<PatientResponse> listPatients(
-            String keyword,
-            org.springframework.data.domain.Pageable pageable
-    ) {
+    @Transactional(readOnly = true)
+    public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
+        Pageable limited = pageable.getPageSize() > MAX_SEARCH_RESULTS
+                ? PageRequest.of(pageable.getPageNumber(), MAX_SEARCH_RESULTS, pageable.getSort())
+                : pageable;
         String normalizedKeyword = normalize(keyword);
-        return (normalizedKeyword == null
-                ? patientRepository.findAll(pageable)
-                : patientRepository.search(normalizedKeyword, pageable))
-                .map(this::toResponse);
+        Page<Patient> patients;
+        if (type == null) {
+            patients = normalizedKeyword == null
+                    ? patientRepository.findAll(limited)
+                    : patientRepository.search(normalizedKeyword, limited);
+        } else {
+            if (normalizedKeyword == null) {
+                throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "REQUIRED"));
+            }
+            if (!isValidKeyword(normalizedKeyword, type)) {
+                throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "INVALID_FORMAT"));
+            }
+            patients = switch (type) {
+                case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
+                case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
+                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanIgnoreCase(normalizedKeyword, limited);
+                case PHONE -> patientRepository.findAllBySodienthoai(normalizedKeyword, limited);
+                case NAME -> patientRepository.searchByName(normalizedKeyword, limited);
+                case INSURANCE_CARD -> patientRepository.searchByInsuranceCard(normalizedKeyword, limited);
+            };
+        }
+        return withVisitSummary(patients);
+    }
+
+    /** UC-35 step 4: keyword format by search type. */
+    private static boolean isValidKeyword(String keyword, PatientSearchType type) {
+        return switch (type) {
+            case CITIZEN_ID -> keyword.matches("\\d{12}");
+            case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
+            case PHONE -> keyword.matches("\\d{10}");
+            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
+            case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
+            case PATIENT_CODE -> true;
+        };
+    }
+
+    /** UC-35 step 6: last visit date and active visit of each result, loaded with two queries per page. */
+    private Page<PatientResponse> withVisitSummary(Page<Patient> patients) {
+        List<UUID> ids = patients.map(Patient::getId).getContent();
+        if (ids.isEmpty()) {
+            return patients.map(this::toResponse);
+        }
+        Map<UUID, Instant> lastVisits = visitRepository.findLastVisitTimes(ids).stream()
+                .collect(Collectors.toMap(
+                        VisitRepository.PatientLastVisit::getPatientId,
+                        VisitRepository.PatientLastVisit::getLastVisitAt));
+        Map<UUID, PatientActiveVisitResponse> activeVisits = visitRepository
+                .findActiveVisits(ids, VisitRepository.FINISHED_STATUSES).stream()
+                .collect(Collectors.toMap(
+                        VisitRepository.PatientActiveVisit::getPatientId,
+                        visit -> new PatientActiveVisitResponse(
+                                visit.getRegistrationCode(), visit.getStatus(), visit.getRoomName()),
+                        (first, second) -> first));
+        return patients.map(patient -> toResponse(
+                patient, lastVisits.get(patient.getId()), activeVisits.get(patient.getId())));
     }
 
     @Override
@@ -217,6 +285,11 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private PatientResponse toResponse(Patient savedPatient) {
+        return toResponse(savedPatient, null, null);
+    }
+
+    private PatientResponse toResponse(
+            Patient savedPatient, Instant lastVisitAt, PatientActiveVisitResponse activeVisit) {
         return new PatientResponse(
                 savedPatient.getId(),
                 savedPatient.getMabenhnhan(),
@@ -245,7 +318,9 @@ public class PatientServiceImpl implements PatientService {
                 savedPatient.getNguoithanQuanhe(),
                 savedPatient.getDiachinguoithan(),
                 savedPatient.getSodienthoainguoithan(),
-                savedPatient.getVersion()
+                savedPatient.getVersion(),
+                lastVisitAt,
+                activeVisit
         );
     }
 }

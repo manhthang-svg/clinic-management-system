@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -111,6 +112,44 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
     List<RoomQueueCount> countRoomQueues(
             @Param("queueDate") LocalDate queueDate
     );
+
+    /** UC-35: registration time of the latest visit of each patient. */
+    @Query("""
+            select v.patientId as patientId, max(v.thoigianvaovien) as lastVisitAt
+            from Visit v
+            where v.patientId in :patientIds
+            group by v.patientId
+            """)
+    List<PatientLastVisit> findLastVisitTimes(@Param("patientIds") Collection<UUID> patientIds);
+
+    /** UC-35: the active visit of each patient (at most one per patient, BR-17). */
+    @Query("""
+            select v.patientId as patientId, v.sovaovien as registrationCode, v.status as status,
+                   room.roomName as roomName
+            from Visit v
+            left join Room room on room.id = v.roomId
+            where v.patientId in :patientIds
+              and v.status not in :finishedStatuses
+            """)
+    List<PatientActiveVisit> findActiveVisits(
+            @Param("patientIds") Collection<UUID> patientIds,
+            @Param("finishedStatuses") Collection<VisitStatus> finishedStatuses);
+
+    interface PatientLastVisit {
+        UUID getPatientId();
+
+        Instant getLastVisitAt();
+    }
+
+    interface PatientActiveVisit {
+        UUID getPatientId();
+
+        String getRegistrationCode();
+
+        VisitStatus getStatus();
+
+        String getRoomName();
+    }
 
     /** Number of queued visits of one room per status and skip flag (UC-42). */
     interface RoomQueueCount {

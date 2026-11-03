@@ -7,6 +7,7 @@ import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.dto.response.FollowUpAppointmentResponse;
+import clinic.backend.enums.PatientSearchType;
 import clinic.backend.service.FollowUpAppointmentService;
 import clinic.backend.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,12 +56,15 @@ public class PatientController {
     }
 
     @GetMapping
-    @Operation(summary = "UC-35 Tìm kiếm và xem danh sách bệnh nhân")
+    // ASSUMPTION: Permission Matrix 4.4 gives the Doctor full search; Technician and Cashier scopes are TBD.
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
+    @Operation(summary = "UC-35 Tìm kiếm và xem danh sách bệnh nhân (tối đa 50 kết quả)")
     public ApiResponse<Page<PatientResponse>> listPatients(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) PatientSearchType type,
             Pageable pageable
     ) {
-        return ApiResponse.success(patientService.listPatients(keyword, pageable));
+        return ApiResponse.success(patientService.listPatients(keyword, type, pageable));
     }
 
     @GetMapping("/{id}")
