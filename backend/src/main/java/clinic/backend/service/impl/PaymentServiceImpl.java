@@ -1,13 +1,10 @@
 package clinic.backend.service.impl;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -16,30 +13,22 @@ import java.util.UUID;
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.PaymentItemResponse;
 import clinic.backend.dto.response.PaymentResponse;
-import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
-import clinic.backend.enums.ActivationStatus;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
-import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
-import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
-import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
-import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
-import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.VisitRepository;
-import clinic.backend.service.AuditLogService;
+import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -57,11 +46,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final VisitRepository visitRepository;
     private final PatientRepository patientRepository;
     private final RoomRepository roomRepository;
-    private final ParaclinicalOrderRepository paraclinicalOrderRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
-    private final MedicalServiceRepository medicalServiceRepository;
-    private final RoomQueueCounterRepository queueCounterRepository;
-    private final AuditLogService auditLogService;
+    private final PaymentCompletionService paymentCompletionService;
     private final Clock clock;
 
     @Override
@@ -140,15 +126,9 @@ public class PaymentServiceImpl implements PaymentService {
                     "status", payment.getStatus().name()));
         }
 
-        Visit visit = visitRepository.findById(payment.getVisitId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-
-        Instant now = clock.instant();
-        LocalDate today = LocalDate.now(clock);
-
         // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
         String receiptNumber = "PT"
-                + today.format(DateTimeFormatter.BASIC_ISO_DATE)
+                + LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "-"
                 + payment.getPaymentCode();
         payment.markAsPaid(
@@ -158,72 +138,10 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentRepository.save(payment);
 
-        // 4. Tiếp tục lượt khám theo loại phiếu (bước 8):
-        List<String> unroutedServices = new ArrayList<>();
-        if (payment.getType() == PaymentType.EXAMINATION_FEE) {
-            // Phí khám: lượt khám vào danh sách chờ khám của phòng (BR-15).
-            if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
-                visit.markAsWaiting();
-                visitRepository.save(visit);
-            }
-        } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
-            // Phí CLS: mỗi chỉ định vào phòng đang hoạt động ít người chờ nhất (BR-26, BR-28).
-            paraclinicalOrderRepository.findByPaymentId(payment.getId())
-                    .ifPresent(order -> {
-                        order.release();
-                        paraclinicalOrderRepository.save(order);
-                        if (order.getDetails() != null) {
-                            for (ParaclinicalOrderDetail detail : order.getDetails()) {
-                                if (!routeToLeastBusyRoom(detail, today, now)) {
-                                    unroutedServices.add(detail.getTenchidinh());
-                                }
-                            }
-                        }
-                    });
-        }
-
-        // 5. Ghi audit việc thu tiền (BR-37).
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("receiptNumber", receiptNumber);
-        audit.put("type", payment.getType().name());
-        audit.put("paymentMethod", request.paymentMethod().name());
-        audit.put("patientAmount", payment.getPatientTotalAmount());
-        if (!unroutedServices.isEmpty()) {
-            audit.put("unroutedServices", unroutedServices);
-        }
-        auditLogService.recordBusinessChange(
-                cashierAccountId,
-                AuditLogAction.UPDATE,
-                "payments",
-                payment.getId(),
-                visit.getSovaovien(),
-                audit,
-                now);
+        // 4. Bước 8 và audit: dùng chung với PayOS (lượt khám vào hàng chờ, hoặc chia phòng CLS – BR-28).
+        paymentCompletionService.completePaidReceipt(payment, cashierAccountId);
 
         return toResponse(payment);
-    }
-
-    /**
-     * Sends one paid service to the Active room with the fewest waiting orders among the rooms of its service
-     * group; ties go to the lower room code (BR-28). Returns false when no Active room performs it (UC-71 AF-02).
-     */
-    private boolean routeToLeastBusyRoom(ParaclinicalOrderDetail detail, LocalDate today, Instant now) {
-        Room room = medicalServiceRepository.findById(detail.getServiceId())
-                .map(MedicalService::getServiceGroupId)
-                .flatMap(groupId -> roomRepository
-                        .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(groupId, ActivationStatus.ACTIVE)
-                        .stream()
-                        .min(Comparator.comparingLong(candidate -> paraclinicalOrderDetailRepository
-                                .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING))))
-                .orElse(null);
-
-        if (room == null) {
-            detail.releaseTo(null, null, now);
-        } else {
-            detail.releaseTo(room.getId(), queueCounterRepository.takeNext(room.getId(), today), now);
-        }
-        paraclinicalOrderDetailRepository.save(detail);
-        return room != null;
     }
 
     private PaymentResponse toResponse(Payment payment) {

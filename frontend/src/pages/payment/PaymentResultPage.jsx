@@ -83,26 +83,13 @@ export default function PaymentResultPage() {
                     data = res?.data || res;
                 }
 
-                // Nếu data chưa có đầy đủ thông tin hoặc thiếu tên bệnh nhân, tra cứu lại theo orderCode
-                if (!data || typeof data !== 'object' || !data.patientName || data.patientName === '—') {
-                    try {
-                        const byOrder = await paymentApi.getByOrderCode(Number(orderCode));
-                        const orderData = byOrder?.data || byOrder;
-                        if (orderData && typeof orderData === 'object') {
-                            data = orderData;
-                        }
-                    } catch {
-                        // ignore fallback error
-                    }
-                }
-
                 if (isMounted) {
                     setPayment(data);
                 }
             } catch (err) {
                 console.error('Lỗi xác nhận thanh toán:', err);
                 if (isMounted) {
-                    setError(err?.message || 'Không thể đồng bộ thông tin thanh toán.');
+                    setError('Không thể đồng bộ thông tin thanh toán. Vui lòng liên hệ quầy thu ngân.');
                 }
             } finally {
                 if (isMounted) {
@@ -235,44 +222,18 @@ export default function PaymentResultPage() {
                                 </div>
                             </div>
 
-                            {/* Thông tin bệnh nhân & đợt khám */}
-                            <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2">
-                                <div className="space-y-1.5 rounded-2xl bg-slate-50 p-4">
-                                    <p className="font-bold text-slate-500 uppercase tracking-wide">Thông tin bệnh nhân</p>
-                                    <p className="text-sm font-extrabold text-slate-900">{payment?.patientName || '—'}</p>
-                                    <p className="text-slate-600">
-                                        Mã BN: <span className="font-mono font-bold text-slate-800">{payment?.patientCode || '—'}</span>
-                                    </p>
-                                    {payment?.patientGender && (
-                                        <p className="text-slate-600">
-                                            Giới tính: {payment.patientGender} {payment.patientDob ? `• Sinh ngày: ${payment.patientDob}` : ''}
-                                        </p>
-                                    )}
-                                    {payment?.patientPhone && (
-                                        <p className="text-slate-600">SĐT: {payment.patientPhone}</p>
-                                    )}
-                                </div>
-
-                                <div className="space-y-1.5 rounded-2xl bg-slate-50 p-4">
-                                    <p className="font-bold text-slate-500 uppercase tracking-wide">Thông tin đợt khám</p>
-                                    {payment?.soVaoVien && (
-                                        <p className="text-slate-700">
-                                            Số vào viện: <strong className="font-mono text-teal-700">{payment.soVaoVien}</strong>
-                                        </p>
-                                    )}
-                                    <p className="text-slate-700">
-                                        Phòng khám: <strong>{payment?.roomName || 'Phòng khám bệnh'}</strong>
-                                    </p>
-                                    <p className="text-slate-700">
-                                        Loại phí: <strong>{isExam ? 'Phí khám ban đầu (Lần 1)' : 'Phí cận lâm sàng (Lần 2)'}</strong>
-                                    </p>
-                                    <p className="text-slate-700">
-                                        Hình thức: <strong>Chuyển khoản VietQR PayOS</strong>
-                                    </p>
-                                    <p className="text-slate-500 text-[11px]">
-                                        Thời gian: {formatDate(payment?.paidAt || payment?.createdAt)}
-                                    </p>
-                                </div>
+                            {/* Thông tin thanh toán (trang công khai: không hiện thông tin bệnh nhân) */}
+                            <div className="space-y-1.5 rounded-2xl bg-slate-50 p-4 text-xs">
+                                <p className="font-bold text-slate-500 uppercase tracking-wide">Thông tin thanh toán</p>
+                                <p className="text-slate-700">
+                                    Loại phí: <strong>{isExam ? 'Phí khám ban đầu (Lần 1)' : 'Phí cận lâm sàng (Lần 2)'}</strong>
+                                </p>
+                                <p className="text-slate-700">
+                                    Hình thức: <strong>Chuyển khoản VietQR PayOS</strong>
+                                </p>
+                                <p className="text-slate-500 text-[11px]">
+                                    Thời gian: {formatDate(payment?.paidAt || payment?.createdAt)}
+                                </p>
                             </div>
 
                             {/* Chi tiết dịch vụ */}
@@ -375,12 +336,8 @@ export default function PaymentResultPage() {
                                         <span className="font-mono font-bold text-slate-800">{payment.paymentCode}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-slate-500">Bệnh nhân:</span>
-                                        <span className="font-bold text-slate-800">{payment.patientName}</span>
-                                    </div>
-                                    <div className="flex justify-between">
                                         <span className="text-slate-500">Số tiền:</span>
-                                        <span className="font-bold text-teal-700">{formatMoney(payment.amount)}</span>
+                                        <span className="font-bold text-teal-700">{formatMoney(payment.patientTotalAmount)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Trạng thái hiện tại:</span>
