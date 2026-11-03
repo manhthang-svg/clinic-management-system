@@ -25,5 +25,6 @@ public record DoctorQueueItemResponse(
         boolean isSkipped,
         Instant skippedAt,
         String sourceRoomName,
-        Instant transferredAt) {
+        Instant transferredAt,
+        String note) {
 }
