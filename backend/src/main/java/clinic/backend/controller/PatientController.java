@@ -66,10 +66,11 @@ public class PatientController {
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @Operation(summary = "UC-38 Cập nhật thông tin bệnh nhân")
     public ApiResponse<PatientResponse> updatePatient(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
             @Valid @RequestBody UpdatePatientRequest request
     ) {
-        return ApiResponse.success(patientService.updatePatient(id, request));
+        return ApiResponse.success(patientService.updatePatient(StaffPrincipal.from(jwt).accountId(), id, request));
     }
 
     @GetMapping

@@ -41,6 +41,7 @@ import java.time.Period;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -163,21 +164,25 @@ public class PatientServiceImpl implements PatientService {
                 .limit(MAX_DUPLICATES).map(this::toResponse).toList();
     }
 
-    /** UC-37 step 4: phone from 18 years old; guardian name and relationship under 18; at most 120 years. */
     private void checkAgeRules(CreatePatientRequest request) {
+        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
+    }
+
+    /** UC-37 step 4 (also UC-38 step 4): phone from 18 years old; guardian name and relationship under 18. */
+    private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation) {
         LocalDate today = LocalDate.now(clock);
-        int age = Period.between(request.ngaysinh(), today).getYears();
+        int age = Period.between(birthDate, today).getYears();
         Map<String, String> errors = new LinkedHashMap<>();
-        if (request.ngaysinh().isBefore(today.minusYears(MAX_AGE_YEARS))) {
+        if (birthDate.isBefore(today.minusYears(MAX_AGE_YEARS))) {
             errors.put("ngaysinh", "INVALID_FORMAT");
         }
-        if (age >= ADULT_AGE && normalize(request.sodienthoai()) == null) {
+        if (age >= ADULT_AGE && normalize(phone) == null) {
             errors.put("sodienthoai", "REQUIRED");
         }
-        if (age < ADULT_AGE && normalize(request.hotennguoithan()) == null) {
+        if (age < ADULT_AGE && normalize(guardianName) == null) {
             errors.put("hotennguoithan", "REQUIRED");
         }
-        if (age < ADULT_AGE && normalize(request.nguoithanQuanhe()) == null) {
+        if (age < ADULT_AGE && normalize(guardianRelation) == null) {
             errors.put("nguoithanQuanhe", "REQUIRED");
         }
         if (!errors.isEmpty()) {
@@ -206,31 +211,36 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional
-    public PatientResponse updatePatient(UUID id, UpdatePatientRequest request) {
-        Patient patient = patientRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy bệnh nhân"
-                ));
-
+    public PatientResponse updatePatient(UUID actorAccountId, UUID id, UpdatePatientRequest request) {
+        Patient patient = requiredPatient(id);
         if (!patient.getVersion().equals(request.version())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Thông tin bệnh nhân đã được cập nhật bởi người khác"
-            );
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
+        // Step 4: the checks of UC-37 steps 4–5 (annotations and age rules).
+        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
 
         String cccdSo = normalize(request.cccdSo());
-        if (cccdSo != null && patientRepository.existsByCccdSoAndIdNot(cccdSo, id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "CCCD đã tồn tại trong hệ thống"
-            );
+        String hochieuSo = normalize(request.hochieuSo());
+        // Step 5 / EF-02: a citizen ID or passport used by another patient (BR-12); MSG19 offers to open it.
+        if (cccdSo != null) {
+            patientRepository.findByCccdSo(cccdSo).filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> identificationExists("cccdSo", other));
+        }
+        if (hochieuSo != null) {
+            patientRepository.findFirstByHochieuSoIgnoreCase(hochieuSo).filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> identificationExists("hochieuSo", other));
         }
 
+        // AF-02: compare before touching the managed entity, so an unchanged form saves and records nothing.
+        Map<String, Object> changes = changedFields(administrativeValues(patient),
+                requestedValues(request, cccdSo, hochieuSo));
+        if (changes.isEmpty()) {
+            return toResponse(patient);
+        }
+        Instant now = clock.instant();
         patient.updateAdministrativeInfo(
                 cccdSo,
-                normalize(request.hochieuSo()),
+                hochieuSo,
                 request.hoten().trim(),
                 request.ngaysinh(),
                 request.gioitinh(),
@@ -254,10 +264,90 @@ public class PatientServiceImpl implements PatientService {
                 normalize(request.nguoithanQuanhe()),
                 normalize(request.diachinguoithan()),
                 normalize(request.sodienthoainguoithan()),
-                Instant.now()
+                now
         );
+        Patient saved = patientRepository.save(patient);
+        // Step 6: changed fields with old and new values (Security: Audit trail).
+        auditLogService.recordBusinessChange(actorAccountId, AuditLogAction.UPDATE, PATIENT_AUDIT_ENTITY, id, null,
+                Map.of("mabenhnhan", patient.getMabenhnhan(), "changes", changes), now);
+        return toResponse(saved);
+    }
 
-        return toResponse(patientRepository.save(patient));
+    /** The administrative fields a Receptionist can change (BR-23: no history or allergies). */
+    private static Map<String, Object> administrativeValues(Patient patient) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("hoten", patient.getHoten());
+        values.put("ngaysinh", patient.getNgaysinh());
+        values.put("gioitinh", patient.getGioitinh());
+        values.put("cccdSo", patient.getCccdSo());
+        values.put("hochieuSo", patient.getHochieuSo());
+        values.put("sodienthoai", patient.getSodienthoai());
+        values.put("email", patient.getEmail());
+        values.put("diachi", patient.getDiachi());
+        values.put("xaphuong", patient.getXaphuong());
+        values.put("xaphuongMa", patient.getXaphuongMa());
+        values.put("tinhthanh", patient.getTinhthanh());
+        values.put("tinhthanhMa", patient.getTinhthanhMa());
+        values.put("nghenghiep", patient.getNghenghiep());
+        values.put("nghenghiepMa", patient.getNghenghiepMa());
+        values.put("noilamviec", patient.getNoilamviec());
+        values.put("dantoc", patient.getDantoc());
+        values.put("dantocMa", patient.getDantocMa());
+        values.put("ngoaikieu", patient.getNgoaikieu());
+        values.put("ngoaikieuMa", patient.getNgoaikieuMa());
+        values.put("yeutorh", patient.getYeutorh());
+        values.put("nhommau", patient.getNhommau());
+        values.put("hotennguoithan", patient.getHotennguoithan());
+        values.put("nguoithanQuanhe", patient.getNguoithanQuanhe());
+        values.put("diachinguoithan", patient.getDiachinguoithan());
+        values.put("sodienthoainguoithan", patient.getSodienthoainguoithan());
+        return values;
+    }
+
+    /** The same fields as {@link #administrativeValues}, normalized the way they are saved. */
+    private Map<String, Object> requestedValues(UpdatePatientRequest request, String cccdSo, String hochieuSo) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("hoten", request.hoten().trim());
+        values.put("ngaysinh", request.ngaysinh());
+        values.put("gioitinh", request.gioitinh());
+        values.put("cccdSo", cccdSo);
+        values.put("hochieuSo", hochieuSo);
+        values.put("sodienthoai", normalize(request.sodienthoai()));
+        values.put("email", normalize(request.email()));
+        values.put("diachi", request.diachi().trim());
+        values.put("xaphuong", normalize(request.xaphuong()));
+        values.put("xaphuongMa", normalize(request.xaphuongMa()));
+        values.put("tinhthanh", normalize(request.tinhthanh()));
+        values.put("tinhthanhMa", normalize(request.tinhthanhMa()));
+        values.put("nghenghiep", normalize(request.nghenghiep()));
+        values.put("nghenghiepMa", normalize(request.nghenghiepMa()));
+        values.put("noilamviec", normalize(request.noilamviec()));
+        values.put("dantoc", request.dantoc().trim());
+        values.put("dantocMa", request.dantocMa().trim());
+        values.put("ngoaikieu", normalize(request.ngoaikieu()));
+        values.put("ngoaikieuMa", normalize(request.ngoaikieuMa()));
+        values.put("yeutorh", normalize(request.yeutorh()));
+        values.put("nhommau", normalize(request.nhommau()));
+        values.put("hotennguoithan", normalize(request.hotennguoithan()));
+        values.put("nguoithanQuanhe", normalize(request.nguoithanQuanhe()));
+        values.put("diachinguoithan", normalize(request.diachinguoithan()));
+        values.put("sodienthoainguoithan", normalize(request.sodienthoainguoithan()));
+        return values;
+    }
+
+    /** { field: { old, new } } for every field whose value changed. */
+    private static Map<String, Object> changedFields(Map<String, Object> before, Map<String, Object> after) {
+        Map<String, Object> changes = new LinkedHashMap<>();
+        before.forEach((field, oldValue) -> {
+            Object newValue = after.get(field);
+            if (!Objects.equals(oldValue, newValue)) {
+                Map<String, Object> change = new LinkedHashMap<>();
+                change.put("old", oldValue == null ? null : oldValue.toString());
+                change.put("new", newValue == null ? null : newValue.toString());
+                changes.put(field, change);
+            }
+        });
+        return changes;
     }
 
     @Override

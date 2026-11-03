@@ -9,6 +9,7 @@ import {
     createErrorMessage,
     isDirty,
     serverFieldErrors,
+    toFormValues,
     validatePatientForm,
 } from './patientForm';
 
@@ -66,6 +67,14 @@ describe('patientForm helpers', () => {
     it('maps backend validation codes to field messages', () => {
         expect(serverFieldErrors({ sodienthoai: 'REQUIRED', cccdSo: 'INVALID_FORMAT', other: 'X' }))
             .toEqual({ sodienthoai: FIELD_MSG.REQUIRED, cccdSo: FIELD_MSG.INVALID_FORMAT });
+    });
+
+    it('turns a stored profile into form values (UC-38 step 2)', () => {
+        const values = toFormValues({ hoten: 'An', gioitinh: 2, cccdSo: null, extra: 'x' });
+        expect(values.hoten).toBe('An');
+        expect(values.gioitinh).toBe('2');
+        expect(values.cccdSo).toBe('');
+        expect(values).not.toHaveProperty('extra');
     });
 
     it('knows when something was entered', () => {

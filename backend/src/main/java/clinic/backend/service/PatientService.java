@@ -19,7 +19,8 @@ public interface PatientService {
     /** UC-37 step 7: profiles with the same full name and date of birth. */
     List<PatientResponse> findPossibleDuplicates(String fullName, LocalDate birthDate);
 
-    PatientResponse updatePatient(UUID id, UpdatePatientRequest request);
+    /** UC-38: saves changed administrative fields and records them with old and new values. */
+    PatientResponse updatePatient(UUID actorAccountId, UUID id, UpdatePatientRequest request);
 
     Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable);
 

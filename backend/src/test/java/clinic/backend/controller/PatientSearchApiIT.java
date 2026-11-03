@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -204,6 +205,51 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].mabenhnhan", contains(code)));
+    }
+
+    @Test
+    void updatesAProfileAndRecordsTheChangedFields() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID patientId = UUID.randomUUID();
+        String citizenId = digits(12);
+        insertPatient(patientId, receptionist, "Vũ Văn " + suffix(), citizenId, "09" + digits(8), null);
+
+        mockMvc.perform(put("/api/v1/patients/" + patientId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Vũ Văn Đổi Tên", citizenId, "0912345678", 0)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hoten").value("Vũ Văn Đổi Tên"));
+
+        String changes = jdbc.queryForObject("""
+                SELECT new_value::text FROM audit_logs
+                WHERE action = 'UPDATE' AND entity_type = 'patients' AND entity_id = ?
+                """, String.class, patientId);
+        org.assertj.core.api.Assertions.assertThat(changes).contains("Vũ Văn Đổi Tên", "0912345678");
+    }
+
+    @Test
+    void rejectsAnUpdateWithTheCitizenIdOfAnotherPatient() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String takenId = digits(12);
+        insertPatient(UUID.randomUUID(), receptionist, "Người có CCCD", takenId, null, null);
+        UUID patientId = UUID.randomUUID();
+        insertPatient(patientId, receptionist, "Người sửa", null, "09" + digits(8), null);
+
+        mockMvc.perform(put("/api/v1/patients/" + patientId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Người sửa", takenId, "0912345678", 0)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PATIENT_IDENTIFICATION_EXISTS"))
+                .andExpect(jsonPath("$.details.field").value("cccdSo"));
+    }
+
+    private String updateBody(String name, String citizenId, String phone, long version) throws Exception {
+        java.util.Map<String, Object> body = objectMapper.readValue(
+                createBody(name, "1990-01-01", citizenId, phone), java.util.HashMap.class);
+        body.put("version", version);
+        return objectMapper.writeValueAsString(body);
     }
 
     private String createBody(String name, String birthDate, String citizenId, String phone) throws Exception {
