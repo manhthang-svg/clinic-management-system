@@ -3,7 +3,11 @@ package clinic.backend.service.impl;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +15,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
+import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.response.PaymentHistoryResponse;
 import clinic.backend.dto.response.ReceiptPrintResponse;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.StaffAccount;
@@ -27,6 +33,7 @@ import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
 import clinic.backend.exceptions.AppException;
@@ -50,6 +57,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class PaymentServiceImpl implements PaymentService {
 
     private static final String PAYMENT_AUDIT_ENTITY = "payments";
+    private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final Instant ALL_TIME_START = Instant.parse("2000-01-01T00:00:00Z");
+    private static final Instant ALL_TIME_END = Instant.parse("9999-01-01T00:00:00Z");
 
     private final PaymentRepository paymentRepository;
     private final VisitRepository visitRepository;
@@ -68,13 +78,75 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentStatus status,
             PaymentType type,
             String search,
+            LocalDate from,
+            LocalDate to,
             Pageable pageable
     ) {
-        String normalizedSearch = search == null || search.isBlank()
-                ? null
-                : search.trim();
-        return paymentRepository.search(status, type, normalizedSearch, pageable)
+        // UC-70 bước 2: từ khóa ít nhất 2 ký tự (EF-01, MSG05)
+        String keyword = search == null || search.isBlank() ? null : search.trim();
+        if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
+        }
+        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
+        return paymentRepository.search(
+                        statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, pageable)
                 .map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentHistoryResponse getHistory(
+            UUID cashierAccountId,
+            PaymentStatus status,
+            PaymentType type,
+            PaymentMethod method,
+            LocalDate from,
+            LocalDate to,
+            Pageable pageable
+    ) {
+        // UC-73 bước 2: mặc định hôm nay; khoảng ngày sai thì MSG53 (EF-01)
+        LocalDate today = LocalDate.now(clock);
+        LocalDate fromDate = from != null ? from : today;
+        LocalDate toDate = to != null ? to : today;
+        if (fromDate.isAfter(toDate)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
+        }
+        // Lịch sử chỉ gồm phiếu Đã thu và Đã hủy
+        if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("status", "INVALID_FORMAT"));
+        }
+        Collection<PaymentStatus> statuses = status == null
+                ? EnumSet.of(PaymentStatus.PAID, PaymentStatus.CANCELLED)
+                : EnumSet.of(status);
+        Instant fromTime = startOf(fromDate, ALL_TIME_START);
+        Instant toTime = endOf(toDate, ALL_TIME_END);
+
+        Page<PaymentResponse> page = paymentRepository
+                .history(statuses, type, method, cashierAccountId, fromTime, toTime, pageable)
+                .map(this::toResponse);
+        List<PaymentHistoryResponse.MethodTotal> totals = status == PaymentStatus.CANCELLED
+                ? List.of()
+                : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime).stream()
+                        .map(row -> new PaymentHistoryResponse.MethodTotal(
+                                row.getMethod(), row.getTotal(), row.getCount()))
+                        .toList();
+        BigDecimal grandTotal = totals.stream()
+                .map(PaymentHistoryResponse.MethodTotal::total)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new PaymentHistoryResponse(
+                new PageResponse<>(page.getContent(), new PageResponse.PageMetadata(
+                        page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages())),
+                totals,
+                grandTotal);
+    }
+
+    private Instant startOf(LocalDate date, Instant fallback) {
+        return date == null ? fallback : date.atStartOfDay(clock.getZone()).toInstant();
+    }
+
+    private Instant endOf(LocalDate date, Instant fallback) {
+        return date == null ? fallback : date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
     }
 
     @Override
