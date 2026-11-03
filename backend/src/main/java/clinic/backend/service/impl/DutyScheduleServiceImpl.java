@@ -4,6 +4,9 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -20,6 +23,7 @@ import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DutyScheduleRepository;
@@ -43,6 +47,33 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     private final RoomRepository roomRepository;
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
+
+    public static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    public static final LocalTime MORNING_SHIFT_END = LocalTime.of(11, 30);
+    public static final LocalTime AFTERNOON_SHIFT_END = LocalTime.of(17, 30);
+
+    /**
+     * Kiểm tra xem ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian quá khứ hay chưa theo giờ Việt Nam
+     */
+    private boolean isPastShift(LocalDate workDate, DutyShift shift) {
+        if (workDate == null) return false;
+        ZonedDateTime nowVN = clock.instant().atZone(VIETNAM_ZONE);
+        LocalDate todayVN = nowVN.toLocalDate();
+        LocalTime currentTimeVN = nowVN.toLocalTime();
+
+        if (workDate.isBefore(todayVN)) {
+            return true;
+        }
+        if (workDate.isEqual(todayVN) && shift != null) {
+            if (shift == DutyShift.MORNING && currentTimeVN.isAfter(MORNING_SHIFT_END)) {
+                return true;
+            }
+            if (shift == DutyShift.AFTERNOON && currentTimeVN.isAfter(AFTERNOON_SHIFT_END)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -79,9 +110,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     @Override
     // Tạo mới hoặc cập nhật 1 ca trực đơn lẻ.
     public DutyScheduleItemResponse saveDuty(DutyScheduleSaveRequest request, UUID currentUserId) {
-        LocalDate today = LocalDate.now(clock);
-        if (request.getWorkDate() != null && request.getWorkDate().isBefore(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể phân công hoặc chỉnh sửa lịch trực trong quá khứ");
+        if (isPastShift(request.getWorkDate(), request.getShift())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể phân công hoặc chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
         }
 
         StaffAccount staff = staffAccountRepository.findById(request.getStaffAccountId())
@@ -114,8 +144,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
             schedule = dutyScheduleRepository.findById(request.getId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lịch trực"));
 
-            if (schedule.getWorkDate().isBefore(today)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa lịch trực trong quá khứ");
+            if (isPastShift(schedule.getWorkDate(), schedule.getShift())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
             }
 
             // Kiểm tra nhân viên không trùng ca trong ngày
@@ -181,12 +211,13 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày bắt đầu không thể sau ngày kết thúc");
         }
 
-        LocalDate today = LocalDate.now(clock);
-        if (endDate.isBefore(today)) {
+        ZonedDateTime nowVN = clock.instant().atZone(VIETNAM_ZONE);
+        LocalDate todayVN = nowVN.toLocalDate();
+        if (endDate.isBefore(todayVN)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể sao chép lịch trực cho tuần đã qua trong quá khứ");
         }
 
-        LocalDate deleteFrom = startDate.isBefore(today) ? today : startDate;
+        LocalDate deleteFrom = startDate.isBefore(todayVN) ? todayVN : startDate;
         List<DutySchedule> existing = dutyScheduleRepository.findByWorkDateBetweenOrderByWorkDateAscShiftAsc(deleteFrom, endDate);
         dutyScheduleRepository.deleteAll(existing);
         dutyScheduleRepository.flush();
@@ -204,7 +235,7 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
 
         if (request.getItems() != null) {
             for (DutyScheduleSaveRequest item : request.getItems()) {
-                if (item.getWorkDate() != null && item.getWorkDate().isBefore(today)) {
+                if (isPastShift(item.getWorkDate(), item.getShift())) {
                     continue;
                 }
                 if (item.getStaffAccountId() == null || item.getRoomId() == null) {
@@ -258,9 +289,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     public void deleteDuty(UUID id) {
         DutySchedule schedule = dutyScheduleRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lịch trực cần xoá"));
-        LocalDate today = LocalDate.now(clock);
-        if (schedule.getWorkDate().isBefore(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xoá lịch trực trong quá khứ");
+        if (isPastShift(schedule.getWorkDate(), schedule.getShift())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xoá ca trực đã kết thúc hoặc trong quá khứ");
         }
         dutyScheduleRepository.delete(schedule);
     }

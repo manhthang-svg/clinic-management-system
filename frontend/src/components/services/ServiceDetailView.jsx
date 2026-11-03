@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Banknote, DoorOpen, Pencil } from 'lucide-react';
+import { FileText, Banknote, DoorOpen, Pencil, Power, PowerOff } from 'lucide-react';
 import { SERVICE_TYPE_MAP, SERVICE_STATUS_LABELS } from '../../constants/serviceData';
 import { AccountPageHeader } from '../accounts/AccountFormParts';
 import { formatPrice } from './serviceFormat';
@@ -9,10 +9,14 @@ const SECONDARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer';
 const PRIMARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer';
+const DEACTIVATE_BUTTON_CLASS =
+  'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-rose-600 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
+const ACTIVATE_BUTTON_CLASS =
+  'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#127e7a] bg-white border border-[#bfe0dc] rounded-xl hover:bg-teal-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
 
 const STATUS_TONES = {
   ACTIVE: 'bg-emerald-50 text-emerald-600',
-  INACTIVE: 'bg-slate-100 text-slate-500',
+  INACTIVE: 'bg-rose-50 text-rose-600',
 };
 
 function SectionCard({ icon: Icon, title, action, children }) {
@@ -59,13 +63,14 @@ function PriceStat({ label, value, note }) {
   );
 }
 
-/** UC-21 View medical service detail, with UC-23 / UC-24 updates. */
-export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdatePrices }) {
+/** UC-21 View medical service detail, with UC-23 / UC-24 updates and UC-25 status change. */
+export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdatePrices, onToggleStatus, statusBusy = false }) {
   // 'info' | 'price' | null
   const [editing, setEditing] = useState(null);
   const close = () => setEditing(null);
   const type = SERVICE_TYPE_MAP[service.type];
   const examination = service.type === 'EXAMINATION';
+  const active = service.status === 'ACTIVE';
   const rooms = service.performingRooms ?? [];
 
   const infoRows = [
@@ -104,8 +109,19 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
             </div>
           </div>
         </div>
-        {(onUpdateInfo || onUpdatePrices) && (
+        {(onUpdateInfo || onUpdatePrices || onToggleStatus) && (
           <div className="flex flex-wrap gap-2.5 shrink-0">
+            {onToggleStatus && (
+              <button
+                type="button"
+                disabled={statusBusy}
+                onClick={onToggleStatus}
+                className={active ? DEACTIVATE_BUTTON_CLASS : ACTIVATE_BUTTON_CLASS}
+              >
+                {active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                {active ? 'Ngừng hoạt động' : 'Kích hoạt'}
+              </button>
+            )}
             {onUpdateInfo && (
               <button type="button" onClick={() => setEditing('info')} className={SECONDARY_BUTTON_CLASS}>
                 <Pencil className="w-4 h-4" />

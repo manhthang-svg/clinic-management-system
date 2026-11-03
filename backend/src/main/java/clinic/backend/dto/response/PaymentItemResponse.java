@@ -14,7 +14,10 @@ public record PaymentItemResponse(
         BigDecimal dongia,
         BigDecimal thanhtien,
         BigDecimal bhytChitra,
-        BigDecimal benhnhanphaitra
+        BigDecimal benhnhanphaitra,
+        String roomName,
+        String roomLocation,
+        Integer queueNumber
 ) {
     @JsonProperty("serviceName")
     public String serviceName() {

@@ -162,4 +162,17 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
             this.releasedAt = when != null ? when : Instant.now();
         }
     }
+
+    /**
+     * UC-71 step 8: sends the paid service to its performing room (BR-28). A null room means no Active room
+     * performs the service yet; the order still becomes Waiting (UC-71 AF-02).
+     */
+    public void releaseTo(UUID roomId, Integer queueNumber, Instant when) {
+        if (this.status == ParaclinicalOrderDetailStatus.PENDING_PAYMENT) {
+            this.roomId = roomId;
+            this.queueNumber = queueNumber;
+            this.status = ParaclinicalOrderDetailStatus.WAITING;
+            this.releasedAt = when;
+        }
+    }
 }

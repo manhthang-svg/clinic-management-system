@@ -38,6 +38,7 @@ export const visitApi = {
         return apiClient.request(`/visits/queue${suffix}`, { signal });
     },
 
+    // UC-43: authenticated doctor's assigned-room queue with server-side filtering and pagination.
     getDoctorQueue(params = {}, signal) {
         const query = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {
@@ -99,6 +100,12 @@ export const visitApi = {
 
     skipVisit(visitId) {
         return apiClient.request(`/visits/${encodeURIComponent(visitId)}/skip`, {
+            method: 'POST',
+        });
+    },
+
+    acceptSkippedVisit(visitId) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/accept-skipped`, {
             method: 'POST',
         });
     },

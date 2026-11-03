@@ -12,24 +12,38 @@ import {
     Building2,
     AlertCircle,
 } from 'lucide-react';
-import patientApi from '../../apis/patientApi';
+import defaultPatientApi from '../../apis/patientApi';
 import { ROUTES } from '../../routes/routes';
+import { VISIT_STATUS_LABELS } from '../../constants/visitData';
+import {
+    DEFAULT_SEARCH_TYPE,
+    MSG,
+    SEARCH_TYPES,
+    createPrefill,
+    searchErrorMessage,
+    validateKeyword,
+} from '../../components/patients/patientSearch';
 
 const inputClass =
     'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
-export default function ReceptionistPatientsPage() {
+const MAX_RESULTS = 50;
+const IDENTIFYING_TYPES = ['CITIZEN_ID', 'PASSPORT', 'PATIENT_CODE'];
+
+/** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
+export default function ReceptionistPatientsPage({ patientApi = defaultPatientApi }) {
     const navigate = useNavigate();
     const location = useLocation();
 
     const [patients, setPatients] = useState([]);
+    const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [searchType, setSearchType] = useState(DEFAULT_SEARCH_TYPE);
     const [keyword, setKeyword] = useState('');
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [keywordError, setKeywordError] = useState('');
+    const [loadError, setLoadError] = useState('');
+    const [lastSearch, setLastSearch] = useState(null);
     const [notice, setNotice] = useState('');
-    const [editingPatient, setEditingPatient] = useState(null);
-    const [editForm, setEditForm] = useState(null);
-    const [savingPatient, setSavingPatient] = useState(false);
 
     // UC-40: đăng ký khám mở trang riêng thay vì popup.
     const openRegisterVisit = useCallback(
@@ -37,26 +51,58 @@ export default function ReceptionistPatientsPage() {
         [navigate]
     );
 
-    // Tải danh sách bệnh nhân
-    const fetchPatients = useCallback(async () => {
+    // Without a search the page lists the latest patients; a search sends its type (UC-35).
+    const fetchPatients = useCallback(async (search) => {
         setLoading(true);
+        setLoadError('');
         try {
-            const res = await patientApi.list({ size: 50, keyword: keyword.trim() });
-            const list = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
+            const res = await patientApi.list({ size: MAX_RESULTS, ...(search ?? {}) });
+            const page = res?.data ?? res;
+            const list = page?.content || (Array.isArray(page) ? page : []);
+            // AF-04: one profile per identification number (BR-12), so a single match opens UC-36 directly.
+            if (search && IDENTIFYING_TYPES.includes(search.type) && list.length === 1
+                && (page?.totalElements ?? 1) === 1) {
+                navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: list[0].id }));
+                return;
+            }
             setPatients(list);
+            setTotalElements(page?.totalElements ?? list.length);
+            setLastSearch(search);
         } catch (err) {
-            setNotice(err?.message || 'Không thể tải danh sách bệnh nhân');
+            const message = searchErrorMessage(err);
+            if (err?.errorResponse?.details?.keyword) setKeywordError(message);
+            else setLoadError(message);
         } finally {
             setLoading(false);
         }
-    }, [keyword]);
+    }, [navigate, patientApi]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
-            void fetchPatients();
+            void fetchPatients(null);
         }, 0);
         return () => window.clearTimeout(timer);
     }, [fetchPatients]);
+
+    const handleSearch = (event) => {
+        event.preventDefault();
+        const error = validateKeyword(searchType, keyword);
+        setKeywordError(error);
+        if (error) return;
+        void fetchPatients({ type: searchType, keyword: keyword.trim() });
+    };
+
+    const clearSearch = () => {
+        setKeyword('');
+        setKeywordError('');
+        void fetchPatients(null);
+    };
+
+    const createFromSearch = () => navigate(ROUTES.RECEPTIONIST.PATIENT_CREATE, {
+        state: { prefill: lastSearch ? createPrefill(lastSearch.type, lastSearch.keyword) : {} },
+    });
+
+    const selectedType = SEARCH_TYPES.find((item) => item.value === searchType);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -72,38 +118,9 @@ export default function ReceptionistPatientsPage() {
 
     const filteredPatients = patients;
 
-    const openEditPatient = async (patient) => {
-        try {
-            const response = await patientApi.detail(patient.id);
-            const detail = response?.data || response;
-            setEditingPatient(detail);
-            setEditForm({
-                ...detail,
-                version: detail.version ?? patient.version ?? 0,
-            });
-        } catch (err) {
-            setNotice(err?.message || 'Không thể tải hồ sơ bệnh nhân');
-        }
-    };
-
-    const handleSavePatient = async (event) => {
-        event.preventDefault();
-        setSavingPatient(true);
-        try {
-            const response = await patientApi.update(editingPatient.id, editForm);
-            const updated = response?.data || response;
-            setPatients((current) =>
-                current.map((patient) => patient.id === updated.id ? updated : patient)
-            );
-            setEditingPatient(null);
-            setEditForm(null);
-            setNotice('Cập nhật hồ sơ bệnh nhân thành công.');
-        } catch (err) {
-            setNotice(err?.message || 'Không thể cập nhật hồ sơ bệnh nhân');
-        } finally {
-            setSavingPatient(false);
-        }
-    };
+    // UC-38 has its own page with the full form of UC-37.
+    const openEditPatient = (patient) =>
+        navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_EDIT, { id: patient.id }));
 
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6">
@@ -119,7 +136,7 @@ export default function ReceptionistPatientsPage() {
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        onClick={fetchPatients}
+                        onClick={() => void fetchPatients(lastSearch)}
                         disabled={loading}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
@@ -153,41 +170,92 @@ export default function ReceptionistPatientsPage() {
             )}
 
             <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px]">
-                    <div className="relative">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
-                            placeholder="Tìm mã bệnh nhân, họ tên, CCCD, số điện thoại..."
-                            className={`${inputClass} pl-10`}
-                        />
+                <form onSubmit={handleSearch} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-[200px_1fr_auto]">
+                    <div>
+                        <label htmlFor="patient-search-type" className="text-xs font-semibold text-slate-600">Tìm theo</label>
+                        <select
+                            id="patient-search-type"
+                            value={searchType}
+                            onChange={(event) => {
+                                setSearchType(event.target.value);
+                                setKeywordError('');
+                            }}
+                            className={`${inputClass} mt-1`}
+                        >
+                            {SEARCH_TYPES.map((item) => (
+                                <option key={item.value} value={item.value}>{item.label}</option>
+                            ))}
+                        </select>
                     </div>
 
-                    <select
-                        value={statusFilter}
-                        onChange={(event) => setStatusFilter(event.target.value)}
-                        className={inputClass}
-                    >
-                        <option value="ALL">Tất cả bệnh nhân</option>
-                        <option value="ACTIVE">Đang hoạt động</option>
-                    </select>
-                </div>
+                    <div>
+                        <label htmlFor="patient-search-keyword" className="text-xs font-semibold text-slate-600">Từ khóa</label>
+                        <span className="relative mt-1 block">
+                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                id="patient-search-keyword"
+                                value={keyword}
+                                onChange={(event) => setKeyword(event.target.value)}
+                                placeholder={selectedType?.placeholder}
+                                aria-invalid={keywordError ? 'true' : undefined}
+                                aria-describedby={keywordError ? 'patient-search-error' : undefined}
+                                className={`${inputClass} pl-10 ${keywordError ? 'border-red-400' : ''}`}
+                            />
+                        </span>
+                        {keywordError && (
+                            <span id="patient-search-error" role="alert" className="mt-1 block text-xs font-medium text-red-600">
+                                {keywordError}
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                        >
+                            {loading ? 'Đang tìm…' : 'Tìm kiếm'}
+                        </button>
+                        {lastSearch && (
+                            <button
+                                type="button"
+                                onClick={clearSearch}
+                                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                            >
+                                Xóa tìm kiếm
+                            </button>
+                        )}
+                    </div>
+                </form>
             </section>
+
+            {loadError && (
+                <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <AlertCircle size={18} className="shrink-0" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-slate-100 p-5">
                     <div>
-                        <h2 className="font-bold text-slate-800">Danh sách bệnh nhân</h2>
+                        <h2 className="font-bold text-slate-800">{lastSearch ? 'Kết quả tìm kiếm' : 'Danh sách bệnh nhân'}</h2>
                         <p className="mt-1 text-sm text-slate-500">Có {filteredPatients.length} bệnh nhân</p>
                     </div>
                 </div>
 
+                {lastSearch && totalElements > filteredPatients.length && (
+                    <p role="status" className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                        {MSG.TOO_MANY}
+                    </p>
+                )}
+
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] text-left">
+                    <table className="w-full min-w-[1100px] text-left">
                         <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
                             <tr>
-                                {['Mã BN', 'Họ và tên', 'Ngày sinh', 'Giới tính', 'Số điện thoại', 'Thao tác'].map((heading) => (
+                                {['Mã BN', 'Họ và tên', 'Ngày sinh', 'Giới tính', 'CCCD / Hộ chiếu', 'Số điện thoại', 'Lần khám gần nhất', 'Lượt khám đang mở', 'Thao tác'].map((heading) => (
                                     <th key={heading} className="whitespace-nowrap px-5 py-4 font-semibold">
                                         {heading}
                                     </th>
@@ -212,7 +280,23 @@ export default function ReceptionistPatientsPage() {
                                             {dob ? new Date(`${dob}T00:00:00`).toLocaleDateString('vi-VN') : '—'}
                                         </td>
                                         <td className="px-5 py-4 text-sm text-slate-600">{gender}</td>
+                                        <td className="px-5 py-4 text-sm font-mono text-slate-600">{patient.cccdSo || patient.hochieuSo || '—'}</td>
                                         <td className="px-5 py-4 text-sm text-slate-600">{phone}</td>
+                                        <td className="px-5 py-4 text-sm text-slate-600">
+                                            {patient.lastVisitAt ? new Date(patient.lastVisitAt).toLocaleDateString('vi-VN') : '—'}
+                                        </td>
+                                        <td className="px-5 py-4 text-sm text-slate-600">
+                                            {patient.activeVisit ? (
+                                                <span className="inline-flex flex-col">
+                                                    <span className="font-semibold text-amber-700">
+                                                        {VISIT_STATUS_LABELS[patient.activeVisit.status] ?? patient.activeVisit.status}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500">
+                                                        {patient.activeVisit.registrationCode} · {patient.activeVisit.roomName}
+                                                    </span>
+                                                </span>
+                                            ) : '—'}
+                                        </td>
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-2">
                                                 <button
@@ -227,7 +311,7 @@ export default function ReceptionistPatientsPage() {
                                                 <button
                                                     type="button"
                                                     title="Xem hồ sơ"
-                                                    onClick={() => navigate(`/receptionist/patients/${patient.id}`)}
+                                                    onClick={() => navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }))}
                                                     className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
                                                 >
                                                     <Eye size={15} />
@@ -248,8 +332,22 @@ export default function ReceptionistPatientsPage() {
 
                             {filteredPatients.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">
-                                        {loading ? 'Đang tải danh sách bệnh nhân...' : 'Không tìm thấy bệnh nhân phù hợp.'}
+                                    <td colSpan={9} className="px-5 py-12 text-center text-sm text-slate-500">
+                                        {loading ? 'Đang tải danh sách bệnh nhân…' : (
+                                            <span className="inline-flex flex-col items-center gap-3">
+                                                <span>{MSG.NO_RESULT}</span>
+                                                {lastSearch && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={createFromSearch}
+                                                        className="inline-flex items-center gap-2 rounded-xl bg-[#0F9D9A] px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                                                    >
+                                                        <UserPlus size={16} />
+                                                        Tạo hồ sơ bệnh nhân mới
+                                                    </button>
+                                                )}
+                                            </span>
+                                        )}
                                     </td>
                                 </tr>
                             )}
@@ -258,60 +356,6 @@ export default function ReceptionistPatientsPage() {
                 </div>
             </section>
 
-                                {editingPatient && editForm && (
-                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                                        <form onSubmit={handleSavePatient} className="w-full max-w-2xl space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                                <h3 className="text-lg font-bold text-slate-800">Cập nhật hồ sơ bệnh nhân</h3>
-                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
-                                                    <X size={18} />
-                                                </button>
-                                            </div>
-                                            <div className="grid gap-4 sm:grid-cols-2">
-                                                {[
-                                                    ['hoten', 'Họ và tên'],
-                                                    ['ngaysinh', 'Ngày sinh'],
-                                                    ['cccdSo', 'Số CCCD'],
-                                                    ['sodienthoai', 'Số điện thoại'],
-                                                    ['diachi', 'Địa chỉ'],
-                                                    ['dantoc', 'Dân tộc'],
-                                                    ['dantocMa', 'Mã dân tộc'],
-                                                    ['version', 'Phiên bản'],
-                                                ].map(([field, label]) => (
-                                                    <label key={field} className="text-sm font-semibold text-slate-700">
-                                                        {label}
-                                                        <input
-                                                            type={field === 'ngaysinh' ? 'date' : field === 'version' ? 'number' : 'text'}
-                                                            value={editForm[field] ?? ''}
-                                                            onChange={(event) => setEditForm({ ...editForm, [field]: field === 'version' ? Number(event.target.value) : event.target.value })}
-                                                            readOnly={field === 'version'}
-                                                            required={['hoten', 'ngaysinh', 'diachi', 'dantoc', 'dantocMa'].includes(field)}
-                                                            className={`${inputClass} mt-1`}
-                                                        />
-                                                    </label>
-                                                ))}
-                                                <label className="text-sm font-semibold text-slate-700">
-                                                    Giới tính
-                                                    <select
-                                                        value={editForm.gioitinh ?? 3}
-                                                        onChange={(event) => setEditForm({ ...editForm, gioitinh: Number(event.target.value) })}
-                                                        className={`${inputClass} mt-1`}
-                                                    >
-                                                        <option value="1">Nam</option>
-                                                        <option value="2">Nữ</option>
-                                                        <option value="3">Khác</option>
-                                                    </select>
-                                                </label>
-                                            </div>
-                                            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-                                                <button type="button" onClick={() => setEditingPatient(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Hủy</button>
-                                                <button type="submit" disabled={savingPatient} className="rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-                                                    {savingPatient ? 'Đang lưu...' : 'Lưu thay đổi'}
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                )}
         </div>
     );
 }

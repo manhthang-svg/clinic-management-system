@@ -1,6 +1,7 @@
 package clinic.backend.config;
 
 import java.security.SecureRandom;
+import java.time.ZoneId;
 import java.time.Clock;
 
 import clinic.backend.utils.UuidV7Generator;
@@ -14,7 +15,7 @@ public class ApplicationConfig {
 
     @Bean
     Clock clock() {
-        return Clock.systemUTC();
+        return Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
     }
 
     @Bean

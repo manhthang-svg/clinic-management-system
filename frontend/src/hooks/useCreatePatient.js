@@ -1,188 +1,130 @@
 import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router';
-import patientApi from '../apis/patientApi';
+import { generatePath, useLocation, useNavigate } from 'react-router';
+import { toast } from 'sonner';
+import defaultPatientApi from '../apis/patientApi';
+import {
+    INITIAL_PATIENT_FORM,
+    MSG,
+    buildPatientPayload,
+    createErrorMessage,
+    isDirty,
+    msg19,
+    serverFieldErrors,
+    validatePatientForm,
+} from '../components/patients/patientForm';
+import { clinicToday } from '../components/visits/visitForm';
+import { ROUTES } from '../routes/routes';
 
-const initialForm = {
-    hoten: '',
-    ngaysinh: '',
-    gioitinh: '1',
-    cccdSo: '',
-    hochieuSo: '',
-    nghenghiep: '',
-    nghenghiepMa: '',
-    dantoc: 'Kinh',
-    dantocMa: '01',
-    ngoaikieu: '',
-    ngoaikieuMa: '',
-    diachi: '',
-    xaphuong: '',
-    xaphuongMa: '',
-    tinhthanh: '',
-    tinhthanhMa: '',
-    noilamviec: '',
-    sodienthoai: '',
-    yeutorh: '',
-    nhommau: '',
-    hotennguoithan: '',
-    nguoithanQuanhe: '',
-    diachinguoithan: '',
-    sodienthoainguoithan: '',
-};
-
-function validatePatient(form) {
-    if (!form.hoten.trim()) {
-        return 'Vui lòng nhập họ và tên bệnh nhân.';
-    }
-
-    if (!form.ngaysinh) {
-        return 'Vui lòng chọn ngày sinh.';
-    }
-
-    const today = new Date();
-    const todayString = [
-        today.getFullYear(),
-        String(today.getMonth() + 1).padStart(2, '0'),
-        String(today.getDate()).padStart(2, '0'),
-    ].join('-');
-
-    if (form.ngaysinh > todayString) {
-        return 'Ngày sinh không được ở tương lai.';
-    }
-
-    if (!['1', '2', '3'].includes(form.gioitinh)) {
-        return 'Giới tính không hợp lệ.';
-    }
-
-    if (!form.dantoc.trim() || !form.dantocMa.trim()) {
-        return 'Vui lòng nhập dân tộc và mã dân tộc.';
-    }
-
-    if (!form.diachi.trim()) {
-        return 'Vui lòng nhập địa chỉ bệnh nhân.';
-    }
-
-    const cccd = form.cccdSo.trim();
-    if (cccd && !/^\d{12}$/.test(cccd)) {
-        return 'Nếu nhập CCCD, vui lòng nhập đủ 12 chữ số.';
-    }
-
-    const phone = form.sodienthoai.trim();
-    if (phone && !/^\d{9,15}$/.test(phone)) {
-        return 'Số điện thoại phải gồm 9–15 chữ số.';
-    }
-
-    const relativePhone = form.sodienthoainguoithan.trim();
-    if (relativePhone && !/^\d{9,15}$/.test(relativePhone)) {
-        return 'Số điện thoại người thân phải gồm 9–15 chữ số.';
-    }
-
-    return '';
-}
-
-function buildPatientPayload(form) {
-    const nullableFields = [
-        'cccdSo',
-        'hochieuSo',
-        'nghenghiep',
-        'nghenghiepMa',
-        'ngoaikieu',
-        'ngoaikieuMa',
-        'xaphuong',
-        'xaphuongMa',
-        'tinhthanh',
-        'tinhthanhMa',
-        'noilamviec',
-        'sodienthoai',
-        'yeutorh',
-        'nhommau',
-        'hotennguoithan',
-        'nguoithanQuanhe',
-        'diachinguoithan',
-        'sodienthoainguoithan',
-    ];
-
-    const payload = {
-        ...form,
-        hoten: form.hoten.trim(),
-        gioitinh: Number(form.gioitinh),
-        dantoc: form.dantoc.trim(),
-        dantocMa: form.dantocMa.trim(),
-        diachi: form.diachi.trim(),
-    };
-
-    nullableFields.forEach((field) => {
-        payload[field] = form[field].trim() || null;
-    });
-
-    return payload;
-}
-
-export function useCreatePatient() {
+/** UC-37 Create New Patient Profile: form state, checks, duplicate warning and saving. */
+export function useCreatePatient(patientApi = defaultPatientApi) {
     const navigate = useNavigate();
+    const location = useLocation();
 
+    // UC-35 EF-02: the keyword of an unsuccessful search pre-fills the form.
+    const [initialForm] = useState(() => ({ ...INITIAL_PATIENT_FORM, ...(location.state?.prefill ?? {}) }));
     const [form, setForm] = useState(initialForm);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [error, setError] = useState('');
+    const [conflict, setConflict] = useState(null);
+    const [duplicates, setDuplicates] = useState(null);
+    const [confirmCancel, setConfirmCancel] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
-
-        setForm((previous) => ({
-            ...previous,
-            [name]: value,
-        }));
-
+        setForm((previous) => ({ ...previous, [name]: value }));
+        setFieldErrors((previous) => {
+            if (!previous[name]) return previous;
+            const next = { ...previous };
+            delete next[name];
+            return next;
+        });
         setError('');
+        if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
     }, []);
 
-    const handleSubmit = useCallback(async (event) => {
-        event.preventDefault();
+    const openProfile = useCallback((patientId) => {
+        navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patientId }));
+    }, [navigate]);
 
-        if (submitting) return;
-
-        setError('');
-
-        const validationError = validatePatient(form);
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-
+    // Step 8–9: create, record (backend) and open UC-36 with MSG04.
+    const save = useCallback(async () => {
+        setDuplicates(null);
         setSubmitting(true);
-
         try {
             const res = await patientApi.create(buildPatientPayload(form));
             const created = res?.data || res;
-
-            navigate('/receptionist', {
-                replace: true,
-                state: {
-                    notice: `Tạo hồ sơ bệnh nhân "${form.hoten.trim()}" thành công!`,
-                    openVisitFor: created,
-                },
-            });
+            toast.success(MSG.CREATED);
+            navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: created.id }), { replace: true });
         } catch (err) {
-            setError(
-                err?.message ||
-                'Không thể tạo hồ sơ bệnh nhân. Vui lòng thử lại.',
-            );
+            const details = err?.errorResponse?.details;
+            if (err?.errorResponse?.code === 'PATIENT_IDENTIFICATION_EXISTS' && details) {
+                // EF-02: MSG19 with Open profile.
+                setConflict(details);
+                setFieldErrors((previous) => ({
+                    ...previous,
+                    [details.field]: msg19(details.field, details.patientCode, details.fullName),
+                }));
+            } else {
+                setFieldErrors(serverFieldErrors(details));
+                setError(createErrorMessage(err));
+            }
         } finally {
             setSubmitting(false);
         }
-    }, [form, navigate, submitting]);
+    }, [form, navigate, patientApi]);
 
-    const goBack = useCallback(() => {
-        if (!submitting) {
-            navigate('/receptionist');
+    const handleSubmit = useCallback(async (event) => {
+        event.preventDefault();
+        if (submitting) return;
+        setError('');
+        setConflict(null);
+
+        const errors = validatePatientForm(form, clinicToday());
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            setError(MSG.FIX_FIELDS);
+            return;
         }
-    }, [navigate, submitting]);
+
+        // Step 7 / AF-02: warn about profiles with the same full name and date of birth.
+        setSubmitting(true);
+        try {
+            const res = await patientApi.possibleDuplicates(form.hoten.trim(), form.ngaysinh);
+            const list = res?.data ?? res ?? [];
+            if (list.length > 0) {
+                setDuplicates(list);
+                setSubmitting(false);
+                return;
+            }
+        } catch {
+            // The warning is advisory; creation still checks the identification numbers.
+        }
+        await save();
+    }, [form, patientApi, save, submitting]);
+
+    // AF-03: Cancel asks for confirmation (MSG40) when something was entered.
+    const goBack = useCallback(() => {
+        if (submitting) return;
+        if (isDirty(form, initialForm)) setConfirmCancel(true);
+        else navigate(ROUTES.RECEPTIONIST.PATIENTS);
+    }, [form, initialForm, navigate, submitting]);
 
     return {
         form,
+        fieldErrors,
         error,
+        conflict,
+        duplicates,
+        confirmCancel,
         submitting,
         handleChange,
         handleSubmit,
         goBack,
+        openProfile,
+        createAnyway: save,
+        closeDuplicates: () => setDuplicates(null),
+        keepEditing: () => setConfirmCancel(false),
+        discard: () => navigate(ROUTES.RECEPTIONIST.PATIENTS),
     };
 }

@@ -429,7 +429,8 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     private AccountSummaryResponse toSummary(AccountSummaryView account) {
         return new AccountSummaryResponse(
                 account.getId(), account.getUsername(), account.getFullName(), account.getPhoneNumber(),
-                account.getEmail(), account.getRole(), account.getStatus(), account.getRoomName(),
+                account.getEmail(), account.getRole(), account.getStatus(),
+                account.getRoomId(), account.getRoomCode(), account.getRoomName(),
                 account.getDepartmentName(), account.getLastLoginAt(), account.getPasswordChangeRequired(),
                 account.getVersion());
     }

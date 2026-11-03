@@ -23,6 +23,8 @@ import ReceptionistPatientsPage from "../pages/receptionist/ReceptionistPatients
 import ReceptionistAppointmentsPage from "../pages/receptionist/ReceptionistAppointmentsPage.jsx";
 import ReceptionistCreatePatientPage from "../pages/receptionist/ReceptionistCreatePatientPage.jsx";
 import ReceptionistVisitRegisterPage from "../pages/receptionist/ReceptionistVisitRegisterPage.jsx";
+import ReceptionistPatientDetailPage from "../pages/receptionist/ReceptionistPatientDetailPage.jsx";
+import ReceptionistUpdatePatientPage from "../pages/receptionist/ReceptionistUpdatePatientPage.jsx";
 import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQueuePage.jsx";
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
@@ -116,6 +118,7 @@ export function AppRoutes({
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}
+                onOpenProfile={() => navigate(ROUTES.ADMIN.PROFILE)}
               />
             }
           />
@@ -201,6 +204,16 @@ export function AppRoutes({
           <Route
             path="patients/new"
             element={<ReceptionistCreatePatientPage />}
+          />
+
+          <Route
+            path="patients/:id"
+            element={<ReceptionistPatientDetailPage />}
+          />
+
+          <Route
+            path="patients/:id/edit"
+            element={<ReceptionistUpdatePatientPage />}
           />
 
           <Route
@@ -301,6 +314,7 @@ export function AppRoutes({
               currentUser={session.account}
               onLogout={onLogout}
               onChangePassword={onChangePassword}
+              onOpenProfile={() => navigate(ROUTES.TECHNICIAN.PROFILE)}
             />
           }
         >
@@ -309,6 +323,16 @@ export function AppRoutes({
           <Route path="queue" element={<TechnicianQueuePage />} />
           <Route path="results" element={<ParaclinicalResultListPage />} />
           <Route path="results/:orderId" element={<ParaclinicalResultPage />} />
+          <Route
+            path="profile"
+            element={
+              <OwnProfilePage
+                accountApi={account}
+                onBack={() => navigate(ROUTES.TECHNICIAN.OVERVIEW)}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
           <Route
             path="schedules"
             element={

@@ -15,6 +15,7 @@ import {
     X,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
+import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -122,16 +123,18 @@ export default function PaymentManagementPage() {
         if (!cashModalPayment || submittingCash) return;
         setSubmittingCash(true);
         try {
-            await paymentApi.confirm(cashModalPayment.id, {
+            const res = await paymentApi.confirm(cashModalPayment.id, {
                 paymentMethod: 'CASH',
                 note: cashNote.trim() || undefined,
             });
-            setNotice(`Thanh toán thành công phiếu ${cashModalPayment.paymentCode} bằng TIỀN MẶT.`);
+            setNotice(confirmedNoticeText(res?.data || res));
             setCashModalPayment(null);
             setCashNote('');
             fetchPayments();
         } catch (err) {
-            alert(err?.message || 'Lỗi khi xác nhận thanh toán tiền mặt');
+            alert(confirmErrorMessage(err));
+            setCashModalPayment(null);
+            fetchPayments();
         } finally {
             setSubmittingCash(false);
         }

@@ -32,6 +32,8 @@ export const ROUTES = {
     SCHEDULES: '/receptionist/schedules',
     PATIENTS: '/receptionist/patients',
     PATIENT_CREATE: '/receptionist/patients/new',
+    PATIENT_DETAIL: '/receptionist/patients/:id',
+    PATIENT_EDIT: '/receptionist/patients/:id/edit',
     VISIT_REGISTER: '/receptionist/patients/:id/register',
     ROOM_QUEUE: '/receptionist/room-queue',
   },
@@ -59,6 +61,7 @@ export const ROUTES = {
   TECHNICIAN: {
     OVERVIEW: '/technician',
     DASHBOARD: '/technician/dashboard',
+    PROFILE: '/technician/profile',
     SCHEDULES: '/technician/schedules',
     QUEUE: '/technician/queue',
     RESULTS: '/technician/results',

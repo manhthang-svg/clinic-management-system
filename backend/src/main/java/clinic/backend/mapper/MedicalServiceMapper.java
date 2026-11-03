@@ -39,6 +39,7 @@ public interface MedicalServiceMapper {
 
     @Mapping(target = "code", source = "serviceGroupCode")
     @Mapping(target = "name", source = "serviceGroupName")
+    @Mapping(target = "departmentId", source = "departmentId")
     ServiceGroupOptionResponse toServiceGroupOption(ServiceGroup serviceGroup);
 
     @Mapping(target = "code", source = "departmentCode")
