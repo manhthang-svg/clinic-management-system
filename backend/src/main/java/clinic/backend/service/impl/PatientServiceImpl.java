@@ -34,7 +34,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +52,11 @@ public class PatientServiceImpl implements PatientService {
     static final int MAX_SEARCH_RESULTS = 50;
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
+    private static final int ADULT_AGE = 18;
+    private static final int MAX_AGE_YEARS = 120;
+    private static final int MAX_CODE_ATTEMPTS = 10;
+    /** UC-37 AF-02: the possible duplicates shown with MSG57. */
+    private static final int MAX_DUPLICATES = 10;
 
     private final PatientRepository patientRepository;
     private final VisitRepository visitRepository;
@@ -55,6 +64,7 @@ public class PatientServiceImpl implements PatientService {
     private final MedicalHistoryRepository medicalHistoryRepository;
     private final AuditLogService auditLogService;
     private final UuidV7Generator uuidV7Generator;
+    private final Clock clock;
 
     private String generatePatientCode() {
         int number = java.util.concurrent.ThreadLocalRandom
@@ -89,23 +99,27 @@ public class PatientServiceImpl implements PatientService {
         UUID createdByAccountId = UUID.fromString(jwt.getSubject());
 
         String cccdSo = normalize(request.cccdSo());
-
-        if (cccdSo != null && patientRepository.existsByCccdSo(cccdSo)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "CCCD đã tồn tại trong hệ thống"
-            );
+        String hochieuSo = normalize(request.hochieuSo());
+        checkAgeRules(request);
+        // Step 6 / EF-02: one profile per citizen ID or passport (BR-12); MSG19 offers to open it.
+        if (cccdSo != null) {
+            patientRepository.findByCccdSo(cccdSo).ifPresent(existing -> identificationExists("cccdSo", existing));
+        }
+        if (hochieuSo != null) {
+            patientRepository.findFirstByHochieuSoIgnoreCase(hochieuSo)
+                    .ifPresent(existing -> identificationExists("hochieuSo", existing));
         }
 
-        String mabenhnhan = generatePatientCode();
+        String mabenhnhan = uniquePatientCode();
+        Instant now = clock.instant();
 
         Patient patient = new Patient(
                 uuidV7Generator.next(),
-                Instant.now(),
+                now,
                 mabenhnhan,
                 cccdSo,
-                normalize(request.hochieuSo()),
-                request.hoten(),
+                hochieuSo,
+                request.hoten().trim(),
                 request.ngaysinh(),
                 request.gioitinh(),
                 normalize(request.nghenghiep()),
@@ -132,39 +146,62 @@ public class PatientServiceImpl implements PatientService {
         );
 
         Patient savedPatient = patientRepository.save(patient);
+        // Step 8: the creation is recorded in the audit log.
+        auditLogService.recordBusinessChange(createdByAccountId, AuditLogAction.CREATE, PATIENT_AUDIT_ENTITY,
+                savedPatient.getId(), null, Map.of("mabenhnhan", mabenhnhan), now);
+        return toResponse(savedPatient);
+    }
 
-        return new PatientResponse(
-                savedPatient.getId(),
-                savedPatient.getMabenhnhan(),
-                savedPatient.getCccdSo(),
-                savedPatient.getHochieuSo(),
-                savedPatient.getHoten(),
-                savedPatient.getNgaysinh(),
-                savedPatient.getGioitinh(),
-                savedPatient.getNghenghiep(),
-                savedPatient.getNghenghiepMa(),
-                savedPatient.getDantoc(),
-                savedPatient.getDantocMa(),
-                savedPatient.getNgoaikieu(),
-                savedPatient.getNgoaikieuMa(),
-                savedPatient.getDiachi(),
-                savedPatient.getXaphuong(),
-                savedPatient.getXaphuongMa(),
-                savedPatient.getTinhthanh(),
-                savedPatient.getTinhthanhMa(),
-                savedPatient.getNoilamviec(),
-                savedPatient.getSodienthoai(),
-                savedPatient.getEmail(),
-                savedPatient.getYeutorh(),
-                savedPatient.getNhommau(),
-                savedPatient.getHotennguoithan(),
-                savedPatient.getNguoithanQuanhe(),
-                savedPatient.getDiachinguoithan(),
-                savedPatient.getSodienthoainguoithan(),
-                savedPatient.getVersion(),
-                null,
-                null
-        );
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientResponse> findPossibleDuplicates(String fullName, LocalDate birthDate) {
+        if (normalize(fullName) == null || birthDate == null) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    Map.of(birthDate == null ? "ngaysinh" : "hoten", "REQUIRED"));
+        }
+        return patientRepository.findPossibleDuplicates(fullName.trim(), birthDate).stream()
+                .limit(MAX_DUPLICATES).map(this::toResponse).toList();
+    }
+
+    /** UC-37 step 4: phone from 18 years old; guardian name and relationship under 18; at most 120 years. */
+    private void checkAgeRules(CreatePatientRequest request) {
+        LocalDate today = LocalDate.now(clock);
+        int age = Period.between(request.ngaysinh(), today).getYears();
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (request.ngaysinh().isBefore(today.minusYears(MAX_AGE_YEARS))) {
+            errors.put("ngaysinh", "INVALID_FORMAT");
+        }
+        if (age >= ADULT_AGE && normalize(request.sodienthoai()) == null) {
+            errors.put("sodienthoai", "REQUIRED");
+        }
+        if (age < ADULT_AGE && normalize(request.hotennguoithan()) == null) {
+            errors.put("hotennguoithan", "REQUIRED");
+        }
+        if (age < ADULT_AGE && normalize(request.nguoithanQuanhe()) == null) {
+            errors.put("nguoithanQuanhe", "REQUIRED");
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, errors);
+        }
+    }
+
+    private static void identificationExists(String field, Patient existing) {
+        throw new AppException(ErrorCode.PATIENT_IDENTIFICATION_EXISTS, Map.of(
+                "field", field,
+                "patientId", existing.getId().toString(),
+                "patientCode", existing.getMabenhnhan(),
+                "fullName", existing.getHoten()));
+    }
+
+    /** Step 8: a random code is drawn again while it is already used. */
+    private String uniquePatientCode() {
+        for (int attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+            String code = generatePatientCode();
+            if (!patientRepository.existsByMabenhnhan(code)) {
+                return code;
+            }
+        }
+        throw new IllegalStateException("No free patient code after " + MAX_CODE_ATTEMPTS + " attempts");
     }
 
     @Override

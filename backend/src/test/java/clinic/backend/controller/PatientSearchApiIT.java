@@ -140,6 +140,86 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void createsAProfileAndRecordsTheCreation() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String citizenId = digits(12);
+
+        String body = mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Hoàng Văn " + suffix(), "1990-05-20", citizenId, "09" + digits(8))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cccdSo").value(citizenId))
+                .andReturn().getResponse().getContentAsString();
+        UUID patientId = UUID.fromString(objectMapper.readTree(body).get("data").get("id").asText());
+
+        Integer created = jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs WHERE action = 'CREATE' AND entity_type = 'patients' AND entity_id = ?
+                """, Integer.class, patientId);
+        org.assertj.core.api.Assertions.assertThat(created).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsAnExistingCitizenIdWithTheProfileToOpen() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String citizenId = digits(12);
+        UUID existingId = UUID.randomUUID();
+        String existingCode = insertPatient(existingId, receptionist, "Lý Thị " + suffix(), citizenId, null, null);
+
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người khác", "1990-05-20", citizenId, "09" + digits(8))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PATIENT_IDENTIFICATION_EXISTS"))
+                .andExpect(jsonPath("$.details.patientId").value(existingId.toString()))
+                .andExpect(jsonPath("$.details.patientCode").value(existingCode));
+    }
+
+    @Test
+    void rejectsAnAdultWithoutPhoneAndAWrongCitizenId() throws Exception {
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người lớn", "1990-05-20", "123", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.cccdSo").value("INVALID_FORMAT"));
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người lớn", "1990-05-20", null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.sodienthoai").value("REQUIRED"));
+    }
+
+    @Test
+    void listsPossibleDuplicatesBySameNameAndBirthDate() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String name = "Trùng Tên " + suffix();
+        String code = insertPatient(receptionist, name, null, null);
+
+        mockMvc.perform(get("/api/v1/patients/possible-duplicates")
+                        .param("hoten", name.toUpperCase())
+                        .param("ngaysinh", "1990-01-01")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].mabenhnhan", contains(code)));
+    }
+
+    private String createBody(String name, String birthDate, String citizenId, String phone) throws Exception {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("hoten", name);
+        body.put("ngaysinh", birthDate);
+        body.put("gioitinh", 1);
+        body.put("cccdSo", citizenId);
+        body.put("dantoc", "Kinh");
+        body.put("dantocMa", "01");
+        body.put("diachi", "Hà Nội");
+        body.put("sodienthoai", phone);
+        return objectMapper.writeValueAsString(body);
+    }
+
+    @Test
     void rejectsKeywordWithWrongFormatForItsType() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
 

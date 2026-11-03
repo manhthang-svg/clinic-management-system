@@ -1,5 +1,7 @@
 package clinic.backend.controller;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreatePatientRequest;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
 
@@ -47,6 +50,16 @@ public class PatientController {
             @Valid @RequestBody CreatePatientRequest request
     ) {
         return ApiResponse.success(patientService.createPatient(request));
+    }
+
+    @GetMapping("/possible-duplicates")
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @Operation(summary = "UC-37 AF-02 Hồ sơ có thể trùng (cùng họ tên và ngày sinh)")
+    public ApiResponse<List<PatientResponse>> findPossibleDuplicates(
+            @RequestParam(required = false) String hoten,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ngaysinh
+    ) {
+        return ApiResponse.success(patientService.findPossibleDuplicates(hoten, ngaysinh));
     }
 
     @PutMapping("/{id}")

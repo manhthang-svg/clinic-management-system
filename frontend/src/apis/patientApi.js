@@ -28,6 +28,12 @@ export const patientApi = {
         return apiClient.request(`/patients/${encodeURIComponent(id)}/overview`, { signal });
     },
 
+    // UC-37 AF-02: hồ sơ có cùng họ tên và ngày sinh
+    possibleDuplicates(hoten, ngaysinh, signal) {
+        const query = new URLSearchParams({ hoten, ngaysinh });
+        return apiClient.request(`/patients/possible-duplicates?${query}`, { signal });
+    },
+
     // Tạo hồ sơ bệnh nhân
     create(data) {
         return apiClient.request('/patients', {

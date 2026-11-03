@@ -1,8 +1,11 @@
 package clinic.backend.service.impl;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,6 +13,7 @@ import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.PatientActiveVisitResponse;
 import clinic.backend.dto.response.PatientOverviewResponse;
+import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
@@ -80,10 +84,90 @@ class PatientServiceImplTest {
 
     private PatientServiceImpl service;
 
+    /** 03/11/2026 in the clinic time zone. */
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-03T03:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
+
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
         service = new PatientServiceImpl(
-                patientRepository, visitRepository, paymentRepository, medicalHistoryRepository, auditLogService, ids);
+                patientRepository, visitRepository, paymentRepository, medicalHistoryRepository, auditLogService, ids,
+                CLOCK);
+    }
+
+    @Test
+    void requiresPhoneFromEighteenYearsOld() {
+        authenticateAs(ACCOUNT_ID);
+
+        assertThatThrownBy(() -> service.createPatient(
+                createRequest("Nguyễn Văn A", LocalDate.of(2008, 11, 3), null, null, null, null, null)))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getDetails()).containsExactly(Map.entry("sodienthoai", "REQUIRED")));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void requiresGuardianNameAndRelationshipUnderEighteen() {
+        authenticateAs(ACCOUNT_ID);
+
+        assertThatThrownBy(() -> service.createPatient(
+                createRequest("Nguyễn Bé", LocalDate.of(2008, 11, 4), null, null, null, null, null)))
+                .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getDetails())
+                        .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe"));
+    }
+
+    @Test
+    void rejectsBirthDateMoreThan120YearsAgo() {
+        authenticateAs(ACCOUNT_ID);
+
+        assertThatThrownBy(() -> service.createPatient(
+                createRequest("Cụ A", LocalDate.of(1906, 11, 2), null, null, "0901234567", null, null)))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getDetails()).containsEntry("ngaysinh", "INVALID_FORMAT"));
+    }
+
+    @Test
+    void rejectsExistingPassportWithTheProfileToOpen() {
+        authenticateAs(ACCOUNT_ID);
+        when(patientRepository.findFirstByHochieuSoIgnoreCase("C1234567")).thenReturn(Optional.of(patient()));
+
+        assertThatThrownBy(() -> service.createPatient(
+                createRequest("John Smith", LocalDate.of(1990, 1, 1), null, "C1234567", "0901234567", null, null)))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_IDENTIFICATION_EXISTS);
+                    assertThat(error.getDetails()).containsEntry("field", "hochieuSo")
+                            .containsEntry("patientId", PATIENT_ID.toString())
+                            .containsEntry("patientCode", "BN1234567");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void drawsAnotherPatientCodeWhileTheCodeIsUsed() {
+        authenticateAs(ACCOUNT_ID);
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.existsByMabenhnhan(any())).thenReturn(true, true, false);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.createPatient(createRequest("Nguyễn Văn A", null, null, "0901234567"));
+
+        verify(patientRepository, org.mockito.Mockito.times(3)).existsByMabenhnhan(any());
+    }
+
+    @Test
+    void findsPossibleDuplicatesByNameAndBirthDate() {
+        when(patientRepository.findPossibleDuplicates("Nguyen Van A", LocalDate.of(1990, 1, 1)))
+                .thenReturn(List.of(patient()));
+
+        var duplicates = service.findPossibleDuplicates(" Nguyen Van A ", LocalDate.of(1990, 1, 1));
+
+        assertThat(duplicates).extracting(PatientResponse::mabenhnhan).containsExactly("BN1234567");
+    }
+
+    private CreatePatientRequest createRequest(String name, LocalDate birthDate, String citizenId, String passport,
+                                               String phone, String guardianName, String guardianRelation) {
+        return new CreatePatientRequest(name, birthDate, (short) 1, citizenId, passport, null, null, "Kinh", "01",
+                null, null, "Ha Noi", null, null, null, null, null, phone, null, null, null, guardianName,
+                guardianRelation, null, null);
     }
 
     @Test
@@ -160,7 +244,7 @@ class PatientServiceImplTest {
     void createsPatientWithNormalizedOptionalFieldsAndAuthenticatedCreator() {
         authenticateAs(ACCOUNT_ID);
         when(ids.next()).thenReturn(PATIENT_ID);
-        when(patientRepository.existsByCccdSo("012345678901")).thenReturn(false);
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.empty());
         when(patientRepository.save(any(Patient.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -171,23 +255,27 @@ class PatientServiceImplTest {
                 "  0901234567  "));
 
         assertThat(response.id()).isEqualTo(PATIENT_ID);
-        assertThat(response.hoten()).isEqualTo(" Nguyễn Văn A ");
+        assertThat(response.hoten()).isEqualTo("Nguyễn Văn A");
         assertThat(response.cccdSo()).isEqualTo("012345678901");
         assertThat(response.nghenghiep()).isEqualTo("Nghề nghiệp");
         assertThat(response.sodienthoai()).isEqualTo("0901234567");
         assertThat(response.email()).isEqualTo("patient@example.com");
         verify(patientRepository).save(any(Patient.class));
+        verify(auditLogService).recordBusinessChange(eq(ACCOUNT_ID), eq(AuditLogAction.CREATE), eq("patients"),
+                eq(PATIENT_ID), any(), any(), any());
     }
 
     @Test
     void rejectsDuplicateCitizenIdBeforeCreatingPatient() {
         authenticateAs(ACCOUNT_ID);
-        when(patientRepository.existsByCccdSo("012345678901")).thenReturn(true);
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient()));
 
         assertThatThrownBy(() -> service.createPatient(createRequest(
-                "Nguyễn Văn A", "012345678901", null, null)))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("CCCD đã tồn tại");
+                "Nguyễn Văn A", "012345678901", null, "0901234567")))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_IDENTIFICATION_EXISTS);
+                    assertThat(error.getDetails()).containsEntry("field", "cccdSo");
+                });
 
         verify(patientRepository, never()).save(any(Patient.class));
     }
