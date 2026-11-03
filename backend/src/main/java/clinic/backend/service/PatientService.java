@@ -3,6 +3,7 @@ package clinic.backend.service;
 import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.PatientResponse;
+import clinic.backend.enums.PatientSearchType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,7 +15,7 @@ public interface PatientService {
 
     PatientResponse updatePatient(UUID id, UpdatePatientRequest request);
 
-    Page<PatientResponse> listPatients(String keyword, Pageable pageable);
+    Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable);
 
     PatientResponse getPatientById(UUID id);
 }

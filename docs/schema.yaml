@@ -5032,7 +5032,7 @@ tables:
         field: imagingResultId
         sql_type: uuid
         base_type: uuid
-        nullable: false
+        nullable: true
         fk:
           table: imaging_results
           column: id
@@ -5042,7 +5042,21 @@ tables:
         proposal: keep
         standard: Không – khóa ngoại nội bộ
         description: Kết quả hình ảnh
-        note: Chỉ kết quả hình ảnh, thăm dò chức năng có file; lab_result_id đã bỏ (V33)
+      lab_result_id:
+        field: labResultId
+        sql_type: uuid
+        base_type: uuid
+        nullable: true
+        fk:
+          table: lab_results
+          column: id
+          on_delete: RESTRICT
+        relation: none
+        java_type: UUID
+        proposal: keep
+        standard: Không – khóa ngoại nội bộ
+        description: Kết quả xét nghiệm
+        note: UC-67 cho phép đính kèm ảnh hoặc PDF cho mọi kết quả; V33 bỏ cột này, V36 khôi phục
       hinhanh:
         field: hinhanh
         sql_type: varchar(1024)

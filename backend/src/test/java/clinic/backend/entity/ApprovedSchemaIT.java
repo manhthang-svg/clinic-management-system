@@ -187,7 +187,7 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void mapsAnOrderWithItsLabResultAndItems() {
+    void mapsAnOrderWithItsLabResultAndFiles() {
         UUID detail = newOrderDetail();
         UUID labResult = UUID.randomUUID();
         jdbcTemplate.update("""
@@ -201,6 +201,7 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                     values (?, ?, 'Glucose', '5.4', ?)
                     """, UUID.randomUUID(), labResult, flag);
         }
+        insertResultFile(null, labResult);
 
         ParaclinicalOrder storedOrder = entityManager.find(ParaclinicalOrder.class, order);
         assertThat(storedOrder.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
@@ -214,7 +215,7 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void attachesAResultFileToAnImagingResultOnly() {
+    void attachesAResultFileToExactlyOneResult() {
         UUID detail = newOrderDetail();
         UUID imagingResult = UUID.randomUUID();
         jdbcTemplate.update("""
@@ -222,12 +223,12 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                     kqcls_ketluan, status, created_at, updated_at, version)
                 values (?, ?, ?, ?, 'Gan bình thường', 'Bình thường', 'DRAFT', now(), now(), 0)
                 """, imagingResult, detail, doctor, "CDHA-" + detail);
-        UUID file = insertResultFile(imagingResult);
+        UUID file = insertResultFile(imagingResult, null);
 
         assertThat(entityManager.find(ImagingResult.class, imagingResult).getStatus())
                 .isEqualTo(ImagingResultStatus.DRAFT);
         assertThat(entityManager.find(ResultFile.class, file).getFileSha256()).hasSize(64);
-        assertThatThrownBy(() -> insertResultFile(null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertResultFile(null, null)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -421,13 +422,13 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 """, id, sophieu, record, doctor, payment);
     }
 
-    private UUID insertResultFile(UUID imagingResult) {
+    private UUID insertResultFile(UUID imagingResult, UUID labResult) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
-                insert into result_files (id, imaging_result_id, hinhanh, file_name, mime_type,
+                insert into result_files (id, imaging_result_id, lab_result_id, hinhanh, file_name, mime_type,
                     file_sha256, uploaded_by_account_id, uploaded_at)
-                values (?, ?, 'results/ket-qua.pdf', 'ket-qua.pdf', 'application/pdf', repeat('a', 64), ?, now())
-                """, id, imagingResult, doctor);
+                values (?, ?, ?, 'results/ket-qua.pdf', 'ket-qua.pdf', 'application/pdf', repeat('a', 64), ?, now())
+                """, id, imagingResult, labResult, doctor);
         return id;
     }
 
