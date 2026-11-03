@@ -1,6 +1,7 @@
 package clinic.backend.service;
 
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
+import clinic.backend.dto.response.PayOSResultResponse;
 import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.entity.Payment;
 import clinic.backend.enums.PaymentStatus;
@@ -238,19 +239,14 @@ public class PayOSPaymentService {
             return payment.getId();
         }
 
-        boolean isSuccess = "00".equals(request.code())
-                || "PAID".equalsIgnoreCase(request.status());
-
-        // Kiểm tra thêm qua SDK PayOS nếu có thể
+        // Chỉ tin xác nhận của chính PayOS: code/status trong request do trình duyệt gửi lên nên có thể giả mạo.
+        boolean isSuccess = false;
         try {
             PaymentLink paymentLink = payOS.paymentRequests().get(request.orderCode());
-            if (paymentLink != null && (
+            isSuccess = paymentLink != null && (
                     paymentLink.getStatus() == PaymentLinkStatus.PAID
                             || (paymentLink.getAmountPaid() != null
-                                && paymentLink.getAmountPaid() >= payment.getPatientTotalAmount().longValue())
-            )) {
-                isSuccess = true;
-            }
+                                && paymentLink.getAmountPaid() >= payment.getPatientTotalAmount().longValue()));
         } catch (Exception ex) {
             log.warn("Không thể kiểm tra PayOS SDK cho đơn hàng {}: {}", request.orderCode(), ex.getMessage());
         }
@@ -282,6 +278,16 @@ public class PayOSPaymentService {
 
         // Bước 8 và audit như thu tại quầy (UC-71); xác nhận tự động nên không có thu ngân.
         paymentCompletionService.completePaidReceipt(payment, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PayOSResultResponse getResult(UUID paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu thu"));
+        return new PayOSResultResponse(
+                payment.getId(), payment.getPaymentCode(), payment.getReceiptNumber(), payment.getType(),
+                payment.getStatus(), payment.getTotalAmount(), payment.getPatientTotalAmount(),
+                payment.getCreatedAt(), payment.getPaidAt());
     }
 
     private PaymentQrResponse toResponse(Payment payment) {

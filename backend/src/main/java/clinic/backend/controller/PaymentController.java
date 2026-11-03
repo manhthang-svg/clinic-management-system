@@ -5,6 +5,7 @@ import java.util.UUID;
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.PayOSResultResponse;
 import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.dto.response.PaymentResponse;
 import clinic.backend.enums.PaymentStatus;
@@ -118,20 +119,20 @@ public class PaymentController {
     // 7. Xác nhận kết quả thanh toán PayOS từ trang chuyển hướng kết quả (Return URL)
     @PostMapping("/confirm-payos-result")
     @Operation(summary = "Xác nhận kết quả thanh toán PayOS")
-    public ApiResponse<PaymentResponse> confirmPayOSResult(
+    public ApiResponse<PayOSResultResponse> confirmPayOSResult(
             @Valid @RequestBody ConfirmPayOSResultRequest request
     ) {
         UUID paymentId = payOSPaymentService.confirmPayOSResult(request);
-        return ApiResponse.success(paymentService.getPaymentById(paymentId));
+        return ApiResponse.success(payOSPaymentService.getResult(paymentId));
     }
 
     // 8. Tra cứu phiếu thu theo mã đơn hàng PayOS
     @GetMapping("/by-order-code/{orderCode}")
     @Operation(summary = "Tra cứu phiếu thu theo mã đơn hàng PayOS")
-    public ApiResponse<PaymentResponse> getPaymentByOrderCode(
+    public ApiResponse<PayOSResultResponse> getPaymentByOrderCode(
             @PathVariable Long orderCode
     ) {
         UUID paymentId = payOSPaymentService.getPaymentIdByOrderCode(orderCode);
-        return ApiResponse.success(paymentService.getPaymentById(paymentId));
+        return ApiResponse.success(payOSPaymentService.getResult(paymentId));
     }
 }
