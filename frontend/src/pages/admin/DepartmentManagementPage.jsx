@@ -23,28 +23,6 @@ const serviceApi = createServiceApi(apiClient);
 
 const { ADMIN } = ROUTES;
 
-// Mock localStorage removed
-
-function getStoredRoomServicesMap() {
-  try {
-    const raw = null;
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function persistRoomServices(roomIdOrCode, services) {
-  if (!roomIdOrCode) return;
-  try {
-    const map = getStoredRoomServicesMap();
-    map[roomIdOrCode] = Array.isArray(services) ? services : [];
-    // localStorage removed
-  } catch (err) {
-    console.error('Lỗi lưu danh sách dịch vụ phòng:', err);
-  }
-}
-
 export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassword }) {
   const navigate = useNavigate();
 
@@ -96,7 +74,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           const catalogServices = Array.isArray(activeServicesPage?.content)
             ? activeServicesPage.content
             : [];
-          const storedServicesMap = {};
           const itemsWithServices = fetchedItems.map((item) => {
             if (item.unitType === 'ROOM') {
               const isExamRoom = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
@@ -104,7 +81,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 ? catalogServices.filter((s) => s.type === 'EXAMINATION')
                 : (Array.isArray(item.assignedServices) ? item.assignedServices : []);
 
-;
               return {
                 ...item,
                 assignedServices: resolvedServices,
@@ -513,14 +489,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 : i
             )
           );
-          const finalAssignedServices = formData.assignedServices || [];
-          persistRoomServices(editingItem.id, finalAssignedServices);
-          if (editingItem.code) {
-            persistRoomServices(editingItem.code, finalAssignedServices);
-          }
-          if (formData.code) {
-            persistRoomServices(formData.code, finalAssignedServices);
-          }
           departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã cập nhật phòng "${formData.name}" thành công!`);
         } else {
@@ -554,13 +522,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             assignedServices: formData.assignedServices || [],
             serviceIds: formData.serviceIds || [],
           };
-          const finalAssignedServices = formData.assignedServices || [];
-          if (newRoom.id) {
-            persistRoomServices(newRoom.id, finalAssignedServices);
-          }
-          if (newRoom.code) {
-            persistRoomServices(newRoom.code, finalAssignedServices);
-          }
           setItems((prev) => [newRoom, ...prev]);
           departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);

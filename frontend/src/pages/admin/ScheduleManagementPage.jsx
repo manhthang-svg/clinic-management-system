@@ -179,9 +179,7 @@ export function ScheduleManagementPage({
 
         if (isMounted) {
           setStaffList(dutyStaff);
-          if (enrichedRooms.length > 0) {
-            setRoomList(enrichedRooms);
-          }
+          setRoomList(enrichedRooms);
         }
       } catch (e) {
         console.warn('Lỗi xử lý metadata phòng ban:', e);

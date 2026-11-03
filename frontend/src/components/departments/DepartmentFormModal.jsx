@@ -16,9 +16,7 @@ import { formatPrice } from '../services/serviceFormat';
 import { apiClient } from '../../services/session';
 import { createServiceApi } from '../../apis/serviceApi';
 import {
-  SERVICE_GROUP_TYPES,
   getParaclinicalDepartmentType,
-  resolveServiceGroupType,
   doesServiceGroupMatchDepartment,
 } from '../../constants/serviceData';
 
@@ -35,71 +33,6 @@ function getDepartmentCategory(dept) {
   if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
   const paraclinicalType = getParaclinicalDepartmentType(dept);
   return paraclinicalType ? 'PARACLINICAL' : 'CLINICAL';
-}
-
-function _unusedLegacyCategory(dept) {
-  if (!dept) return 'CLINICAL';
-  if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
-  const name = (dept.name || dept.tenkhoa || '').toLowerCase();
-  if (
-    name.includes('chẩn đoán') ||
-    name.includes('xét nghiệm') ||
-    name.includes('hình ảnh') ||
-    name.includes('thăm dò') ||
-    name.includes('nội soi') ||
-    name.includes('huyết học') ||
-    name.includes('sinh hóa') ||
-    name.includes('vi sinh')
-  ) {
-    return 'PARACLINICAL';
-  }
-  return 'CLINICAL';
-}
-
-function _unusedLegacyGetParaclinicalDepartmentType(dept) {
-  if (!dept) return null;
-  const code = (dept.code || dept.departmentCode || dept.makhoa || '').toUpperCase();
-  const name = (dept.name || dept.departmentName || dept.tenkhoa || '').toLowerCase();
-
-  // LAB: Khoa Xét nghiệm (Huyết học, Sinh hóa, Vi sinh)
-  if (
-    code.includes('XN') ||
-    code.includes('LAB') ||
-    name.includes('xét nghiệm') ||
-    name.includes('huyết học') ||
-    name.includes('sinh hóa') ||
-    name.includes('vi sinh')
-  ) {
-    return 'LAB';
-  }
-
-  // IMAGING: Khoa Chẩn đoán hình ảnh (CT, MRI, X-quang, Siêu âm)
-  if (
-    code.includes('CDHA') ||
-    code.includes('IMAGE') ||
-    code.includes('IMAGING') ||
-    code.includes('XQ') ||
-    name.includes('chẩn đoán') ||
-    name.includes('hình ảnh') ||
-    name.includes('x-quang') ||
-    name.includes('siêu âm')
-  ) {
-    return 'IMAGING';
-  }
-
-  // FUNCTIONAL: Khoa Thăm dò chức năng (Nội soi, Điện tim)
-  if (
-    code.includes('TDCN') ||
-    code.includes('FUNC') ||
-    name.includes('thăm dò') ||
-    name.includes('chức năng') ||
-    name.includes('nội soi') ||
-    name.includes('điện tim')
-  ) {
-    return 'FUNCTIONAL';
-  }
-
-  return null;
 }
 
 function buildInitialForm({ initialData, departments, isRoom }) {
@@ -281,60 +214,6 @@ function DepartmentFormModalContent({
         return [current, ...matched];
       }
     }
-    return matched;
-  }, [departments, formData.departmentId, serviceGroups, isEdit, effectiveServiceGroupId]);
-
-  const _unusedLegacyFilteredServiceGroups = useMemo(() => {
-    if (!formData.departmentId) return [];
-    const selectedDept = departments.find((d) => d.id === formData.departmentId);
-    if (!selectedDept) return serviceGroups;
-
-    const deptType = getParaclinicalDepartmentType(selectedDept);
-    if (!deptType) return serviceGroups;
-
-    const matched = serviceGroups.filter((g) => {
-      // 1. Kiểm tra trường type từ API backend (LAB, IMAGING, FUNCTIONAL)
-      if (g.type && String(g.type).toUpperCase() === deptType) return true;
-      // 2. Kiểm tra theo bảng mapping mã code nhóm (HEMATOLOGY -> LAB, ...)
-      const groupCodeType = SERVICE_GROUP_TYPES[g.code];
-      if (groupCodeType && groupCodeType === deptType) return true;
-      // 3. Fallback theo tên nhóm
-      const groupName = (g.name || '').toLowerCase();
-      if (deptType === 'LAB') {
-        return (
-          groupName.includes('huyết học') ||
-          groupName.includes('sinh hóa') ||
-          groupName.includes('vi sinh') ||
-          groupName.includes('xét nghiệm')
-        );
-      }
-      if (deptType === 'IMAGING') {
-        return (
-          groupName.includes('cắt lớp') ||
-          groupName.includes('cộng hưởng') ||
-          groupName.includes('x-quang') ||
-          groupName.includes('siêu âm') ||
-          groupName.includes('hình ảnh')
-        );
-      }
-      if (deptType === 'FUNCTIONAL') {
-        return (
-          groupName.includes('nội soi') ||
-          groupName.includes('điện tim') ||
-          groupName.includes('thăm dò')
-        );
-      }
-      return false;
-    });
-
-    // Khi edit, nếu phòng đã có nhóm kỹ thuật mà không nằm trong danh sách lọc thì vẫn bảo toàn
-    if (isEdit && effectiveServiceGroupId) {
-      const current = serviceGroups.find((g) => g.id === effectiveServiceGroupId);
-      if (current && !matched.some((g) => g.id === current.id)) {
-        return [current, ...matched];
-      }
-    }
-
     return matched;
   }, [departments, formData.departmentId, serviceGroups, isEdit, effectiveServiceGroupId]);
 
