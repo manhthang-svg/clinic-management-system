@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<useCase id="UC-43" name="View Patient Waiting List" section="9.1" feature="Clinical Examination" language="vi">
+  <actors>
+    <primaryActor>Doctor</primaryActor>
+    <secondaryActor>None</secondaryActor>
+  </actors>
+  <description>Bác sĩ xem và tra cứu các lượt khám trong ngày thuộc phòng khám được phân công. Danh sách được chia thành các tab Chờ khám, Đang khám, Chờ kết luận và Vắng mặt. Từ tab Chờ khám hoặc Chờ kết luận, bác sĩ có thể chọn Bắt đầu hoặc Vắng để tiếp tục UC-44.</description>
+  <preconditions>
+    <condition number="1">Bác sĩ đã đăng nhập thành công và không bị yêu cầu đổi mật khẩu (UC-01).</condition>
+    <condition number="2">Tài khoản bác sĩ đang hoạt động.</condition>
+    <condition number="3">Bác sĩ được phân công vào một phòng loại EXAMINATION đang hoạt động (BR-05, BR-19).</condition>
+  </preconditions>
+  <normalFlow>
+    <step number="1"><action>Bác sĩ mở chức năng Quản lý khám bệnh.</action></step>
+    <step number="2"><action>Hệ thống xác định bác sĩ hiện tại và phòng khám đang được phân công.</action></step>
+    <step number="3"><action>Hệ thống tải các lượt khám của phòng được phân công trong ngày hiện tại có trạng thái WAITING, IN_EXAMINATION hoặc WAITING_CONCLUSION.</action></step>
+    <step number="4">
+      <action>Hệ thống hiển thị các tab Chờ khám, Đang khám, Chờ kết luận và Vắng mặt; tab Chờ khám được chọn mặc định.</action>
+      <check>Chờ khám: trạng thái WAITING và chưa bị đánh dấu Skipped.</check>
+      <check>Đang khám: trạng thái IN_EXAMINATION và chưa bị đánh dấu Skipped.</check>
+      <check>Chờ kết luận: trạng thái WAITING_CONCLUSION và chưa bị đánh dấu Skipped.</check>
+      <check>Vắng mặt: lượt khám có cờ Skipped, không phụ thuộc giai đoạn được giữ lại.</check>
+    </step>
+    <step number="5">
+      <action>Hệ thống hiển thị bảng với các cột có độ rộng cố định: Queue number, Họ tên, Mã bệnh nhân, Tuổi, Giới tính, Loại khám, Thời gian đăng ký, Ghi chú, Trạng thái và Thao tác.</action>
+      <note>Không hiển thị cột STT của dòng, Ưu tiên, Lý do khám và Nguồn/Phòng chuyển đến thành các cột riêng.</note>
+      <note>Queue number luôn được hiển thị để nhận diện thứ tự bệnh nhân.</note>
+      <note>Ghi chú hiển thị lý do ưu tiên nếu có và phòng nguồn nếu bệnh nhân được chuyển phòng.</note>
+      <note>Nếu có cả hai nội dung, lý do ưu tiên và phòng nguồn được hiển thị thành hai dòng theo chiều dọc.</note>
+      <note>Nội dung dài được xuống dòng; độ rộng cột không thay đổi theo nội dung.</note>
+    </step>
+    <step number="6">
+      <action>Hệ thống sắp xếp danh sách Chờ khám theo BR-18.</action>
+      <check>Bệnh nhân ưu tiên đứng trước, theo Queue number tăng dần.</check>
+      <check>Bệnh nhân chuyển phòng đứng tiếp theo, theo thời điểm chuyển đến tăng dần; nếu bằng nhau thì theo Queue number tăng dần.</check>
+      <check>Bệnh nhân thường đứng sau cùng, theo Queue number tăng dần.</check>
+    </step>
+    <step number="7"><action>Bác sĩ có thể tìm kiếm theo tên bệnh nhân, mã bệnh nhân hoặc số thẻ BHYT; lọc theo ưu tiên và loại lượt khám; đổi tab và số dòng trên trang.</action></step>
+    <step number="8">
+      <action>Đối với lượt Chờ khám hoặc Chờ kết luận chưa bị Skipped, cột Thao tác hiển thị đúng hai nút Bắt đầu và Vắng.</action>
+      <check>Bắt đầu chuyển sang UC-44 với hành động START.</check>
+      <check>Vắng chuyển sang UC-44 với hành động SKIP.</check>
+    </step>
+    <step number="9"><action>Hệ thống tự động làm mới danh sách theo UI-04, cập nhật dữ liệu, số lượng từng tab và thời điểm làm mới gần nhất.</action></step>
+    <continuation>Use case kết thúc khi bác sĩ rời màn hình hoặc chọn Bắt đầu/Vắng để tiếp tục UC-44.</continuation>
+  </normalFlow>
+  <alternativeFlows>
+    <flow id="AF-01" atStep="3">
+      <title>Không có lượt khám phù hợp</title>
+      <step number="1.1">Hệ thống hiển thị danh sách rỗng, số lượng của tab bằng 0 và MSG01.</step>
+      <step number="1.2">Tự động làm mới vẫn tiếp tục để nhận lượt khám mới.</step>
+    </flow>
+    <flow id="AF-02" atStep="4">
+      <title>Xem danh sách Đang khám</title>
+      <step number="2.1">Hệ thống chỉ hiển thị các lượt IN_EXAMINATION chưa bị Skipped thuộc phòng hiện tại trong ngày.</step>
+      <step number="2.2">Không hiển thị nút Bắt đầu hoặc Vắng trên các lượt này.</step>
+    </flow>
+    <flow id="AF-03" atStep="4">
+      <title>Xem danh sách Chờ kết luận</title>
+      <step number="3.1">Hệ thống chỉ hiển thị các lượt WAITING_CONCLUSION chưa bị Skipped thuộc phòng hiện tại trong ngày.</step>
+      <step number="3.2">Hệ thống hiển thị hai nút Bắt đầu và Vắng để xử lý theo UC-44.</step>
+    </flow>
+    <flow id="AF-04" atStep="4">
+      <title>Xem danh sách Vắng mặt</title>
+      <step number="4.1">Hệ thống hiển thị các lượt có cờ Skipped thuộc phòng hiện tại trong ngày.</step>
+      <step number="4.2">Đối với lượt còn đủ điều kiện tiếp nhận, hệ thống hiển thị nút Bắt đầu để bác sĩ tiếp nhận trực tiếp theo UC-46.</step>
+    </flow>
+    <flow id="AF-05" atStep="7">
+      <title>Không có kết quả tìm kiếm hoặc lọc</title>
+      <step number="5.1">Hệ thống hiển thị danh sách rỗng và giữ nguyên điều kiện tìm kiếm/lọc.</step>
+      <step number="5.2">Bác sĩ có thể sửa điều kiện hoặc chọn Xóa bộ lọc.</step>
+    </flow>
+    <flow id="AF-06" atStep="8">
+      <title>Bác sĩ đang ngoài ca trực</title>
+      <step number="6.1">Bác sĩ vẫn được xem, tìm kiếm, lọc và làm mới danh sách.</step>
+      <step number="6.2">Nếu bác sĩ thực hiện Bắt đầu hoặc Vắng, UC-44 từ chối thao tác và trả MSG48.</step>
+    </flow>
+  </alternativeFlows>
+  <exceptionFlows>
+    <flow id="EF-01" atStep="2">
+      <title>Tài khoản không hợp lệ hoặc không có phòng được phân công</title>
+      <step number="1.1">Hệ thống từ chối truy cập danh sách và trả MSG13 hoặc ROOM_ASSIGNMENT_REQUIRED.</step>
+      <step number="1.2">Hệ thống không tải dữ liệu của phòng khác.</step>
+    </flow>
+    <flow id="EF-02" atStep="3 hoặc 9">
+      <title>Lỗi tải hoặc làm mới danh sách</title>
+      <step number="2.1">Hệ thống hiển thị MSG80.</step>
+      <step number="2.2">Nếu đã có dữ liệu trước đó, giao diện có thể giữ dữ liệu cũ và cho phép tải lại.</step>
+    </flow>
+    <flow id="EF-03" atStep="bất kỳ">
+      <title>Phiên đăng nhập hết hạn</title>
+      <step number="3.1">Hệ thống hiển thị MSG12 và chuyển người dùng về UC-01.</step>
+    </flow>
+  </exceptionFlows>
+  <postconditions>
+    <outcome type="success">Bác sĩ xem được đúng danh sách của phòng được phân công trong ngày, với số lượng, thứ tự, ghi chú và thao tác phù hợp từng tab.</outcome>
+    <outcome type="failure">Thao tác xem, tìm kiếm, lọc và làm mới không làm thay đổi trạng thái lượt khám.</outcome>
+  </postconditions>
+  <businessRules>BR-02, BR-05, BR-14, BR-15, BR-18, BR-19, BR-21, BR-41, BR-55; UI-04</businessRules>
+  <messages>
+    <message id="MSG01" />
+    <message id="MSG12" />
+    <message id="MSG13" />
+    <message id="MSG48" />
+    <message id="MSG80" />
+    <message id="ROOM_ASSIGNMENT_REQUIRED" />
+  </messages>
+</useCase>

@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -329,8 +330,10 @@ public class VisitServiceImpl implements VisitService {
             String keyword,
             Boolean priority,
             VisitDoituongbnLoai visitType,
+            VisitStatus interruptedStage,
             int page,
             int size) {
+        validateInterruptedStageFilter(tab, interruptedStage);
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
         LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
@@ -366,6 +369,7 @@ public class VisitServiceImpl implements VisitService {
                 .filter(item -> matchesTab(item, tab))
                 .filter(item -> priority == null || item.isPriority() == priority)
                 .filter(item -> visitType == null || item.doituongbnLoai() == visitType)
+                .filter(item -> interruptedStage == null || item.status() == interruptedStage)
                 .filter(item -> matchesKeyword(item, normalizedKeyword))
                 .toList();
         int fromIndex = (int) Math.min((long) page * size, filtered.size());
@@ -407,6 +411,17 @@ public class VisitServiceImpl implements VisitService {
         return containsIgnoreCase(item.patientName(), keyword)
                 || containsIgnoreCase(item.patientCode(), keyword)
                 || containsIgnoreCase(item.mabhyt(), keyword);
+    }
+
+    private static void validateInterruptedStageFilter(
+            DoctorQueueTab tab,
+            VisitStatus interruptedStage) {
+        if (interruptedStage == null) {
+            return;
+        }
+        if (tab != DoctorQueueTab.SKIPPED || !isDoctorWaitingStage(interruptedStage)) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID);
+        }
     }
 
     private static boolean containsIgnoreCase(String value, String normalizedKeyword) {
@@ -451,7 +466,29 @@ public class VisitServiceImpl implements VisitService {
                 visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getLydovaovien(),
                 visit.getThoigianvaovien(), visit.getStatus(), visit.isSkipped(), visit.getSkippedAt(),
                 transfer == null ? null : sourceRoomNames.get(transfer.getFromRoomId()),
-                transfer == null ? null : transfer.getTransferredAt());
+                transfer == null ? null : transfer.getTransferredAt(),
+                buildDoctorQueueNote(visit, transfer, sourceRoomNames));
+    }
+
+    private static String buildDoctorQueueNote(
+            Visit visit,
+            VisitTransfer transfer,
+            Map<UUID, String> sourceRoomNames) {
+        List<String> notes = new ArrayList<>(2);
+        if (visit.isPriority() && visit.getPriorityReason() != null) {
+            String reason = switch (visit.getPriorityReason()) {
+                case ELDERLY -> "Người cao tuổi";
+                case FRAIL_DISABLED -> "Người suy kiệt / khuyết tật";
+            };
+            notes.add("Ưu tiên: " + reason);
+        }
+        if (transfer != null) {
+            String sourceRoomName = sourceRoomNames.get(transfer.getFromRoomId());
+            if (sourceRoomName != null && !sourceRoomName.isBlank()) {
+                notes.add("Chuyển từ: " + sourceRoomName);
+            }
+        }
+        return notes.isEmpty() ? null : String.join("\n", notes);
     }
 
     private int compareDoctorQueueItems(DoctorQueueItemResponse left, DoctorQueueItemResponse right) {
@@ -547,17 +584,103 @@ public class VisitServiceImpl implements VisitService {
 
     @Override
     @Transactional
-    public VisitResponse startExamination(UUID visitId) {
-        Visit visit = visitRepository.findById(visitId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        if (visit.getStatus() != VisitStatus.WAITING) {
+    public VisitResponse startExamination(StaffPrincipal principal, UUID visitId) {
+        UUID roomId = requireDoctorRoomOnDuty(principal);
+        Visit visit = requireVisitInRoom(visitId, roomId);
+        if (visit.isSkipped() || !isDoctorWaitingStage(visit.getStatus())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
-        UUID doctorId = staffRoomAssignmentRepository.findByRoomIdAndRemovedAtIsNull(visit.getRoomId())
-                .map(StaffRoomAssignment::getStaffAccountId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_AVAILABLE));
-        visit.startExamination(doctorId);
+
+        Instant now = clock.instant();
+        if (visit.getStatus() == VisitStatus.WAITING) {
+            visit.startExamination(principal.accountId(), now);
+        } else {
+            visit.continueConclusion(principal.accountId(), now);
+        }
+        auditLogService.recordBusinessChange(
+                principal.accountId(), AuditLogAction.UPDATE, VISIT_AUDIT_ENTITY, visit.getId(),
+                visit.getSovaovien(), Map.of("action", "START", "status", visit.getStatus().name()), now);
         return toResponse(visitRepository.save(visit));
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse skipVisit(StaffPrincipal principal, UUID visitId) {
+        UUID roomId = requireDoctorRoomOnDuty(principal);
+        Visit visit = requireVisitInRoom(visitId, roomId);
+        if (visit.isSkipped() || !isDoctorWaitingStage(visit.getStatus())) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        Instant now = clock.instant();
+        visit.markSkipped(now);
+        auditLogService.recordBusinessChange(
+                principal.accountId(), AuditLogAction.UPDATE, VISIT_AUDIT_ENTITY, visit.getId(),
+                visit.getSovaovien(), Map.of("action", "SKIP", "status", visit.getStatus().name()), now);
+        return toResponse(visitRepository.save(visit));
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse acceptSkippedVisit(StaffPrincipal principal, UUID visitId) {
+        UUID roomId = requireDoctorRoomOnDuty(principal);
+        Visit visit = requireVisitInRoom(visitId, roomId);
+        if (!canAcceptSkippedVisit(visit)) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        VisitStatus interruptedStage = visit.getStatus();
+        Instant now = clock.instant();
+        visit.acceptSkipped(principal.accountId(), now);
+        auditLogService.recordBusinessChange(
+                principal.accountId(), AuditLogAction.UPDATE, VISIT_AUDIT_ENTITY, visit.getId(),
+                visit.getSovaovien(), Map.of(
+                        "action", "ACCEPT_SKIPPED",
+                        "interruptedStage", interruptedStage.name(),
+                        "status", visit.getStatus().name()), now);
+        return toResponse(visitRepository.save(visit));
+    }
+
+    private Visit requireVisitInRoom(UUID visitId, UUID roomId) {
+        Visit visit = visitRepository.findById(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        if (!roomId.equals(visit.getRoomId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        return visit;
+    }
+
+    private static boolean isDoctorWaitingStage(VisitStatus status) {
+        return status == VisitStatus.WAITING || status == VisitStatus.WAITING_CONCLUSION;
+    }
+
+    private static boolean canAcceptSkippedVisit(Visit visit) {
+        if (!visit.isSkipped() || !isDoctorWaitingStage(visit.getStatus())) {
+            return false;
+        }
+        return visit.getStatus() != VisitStatus.WAITING_CONCLUSION
+                || visit.getDoctorAccountId() != null;
+    }
+
+    private UUID requireDoctorRoomOnDuty(StaffPrincipal principal) {
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+        LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
+        StaffAccount doctor = staffAccountRepository.findById(principal.accountId())
+                .filter(account -> account.getRole() == Role.DOCTOR && account.canAuthenticate())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCESS_DENIED));
+        UUID roomId = staffRoomAssignmentRepository
+                .findByStaffAccountIdAndRemovedAtIsNull(doctor.getId())
+                .map(StaffRoomAssignment::getRoomId)
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
+        roomRepository.findById(roomId)
+                .filter(room -> room.getType() == RoomType.EXAMINATION)
+                .filter(room -> room.getStatus() == ActivationStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
+        if (!isOnDuty(doctor.getId(), roomId, today, localTime)) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        return roomId;
     }
 
     @Override

@@ -8,6 +8,7 @@ import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.DoctorQueueTab;
+import clinic.backend.enums.VisitStatus;
 import clinic.backend.security.user.StaffPrincipal;
 
 import java.time.LocalDate;
@@ -33,10 +34,15 @@ public interface VisitService {
             String keyword,
             Boolean priority,
             VisitDoituongbnLoai visitType,
+            VisitStatus interruptedStage,
             int page,
             int size);
 
-    VisitResponse startExamination(UUID visitId);
+    VisitResponse startExamination(StaffPrincipal principal, UUID visitId);
+
+    VisitResponse skipVisit(StaffPrincipal principal, UUID visitId);
+
+    VisitResponse acceptSkippedVisit(StaffPrincipal principal, UUID visitId);
 
     List<RoomQueueStatusResponse> getRoomQueueStatus(LocalDate date);
 

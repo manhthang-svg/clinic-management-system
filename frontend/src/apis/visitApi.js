@@ -103,6 +103,12 @@ export const visitApi = {
             method: 'POST',
         });
     },
+
+    acceptSkippedVisit(visitId) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/accept-skipped`, {
+            method: 'POST',
+        });
+    },
 };
 
 export default visitApi;

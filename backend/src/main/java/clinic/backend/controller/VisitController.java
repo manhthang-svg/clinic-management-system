@@ -14,6 +14,7 @@ import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.DoctorQueueTab;
+import clinic.backend.enums.VisitStatus;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.VisitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -96,19 +97,39 @@ public class VisitController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean priority,
             @RequestParam(required = false) VisitDoituongbnLoai visitType,
+            @RequestParam(required = false) VisitStatus interruptedStage,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return ApiResponse.success(visitService.getDoctorQueue(
-                StaffPrincipal.from(jwt), tab, keyword, priority, visitType, page, size));
+                StaffPrincipal.from(jwt), tab, keyword, priority, visitType, interruptedStage, page, size));
     }
 
-    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     @PostMapping("/{visitId}/start-examination")
     @Operation(summary = "UC-44 Gọi bệnh nhân vào khám")
     public ApiResponse<VisitResponse> startExamination(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID visitId
     ) {
-        return ApiResponse.success(visitService.startExamination(visitId));
+        return ApiResponse.success(visitService.startExamination(StaffPrincipal.from(jwt), visitId));
+    }
+
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @PostMapping("/{visitId}/skip")
+    @Operation(summary = "UC-44 Đánh dấu bệnh nhân vắng")
+    public ApiResponse<VisitResponse> skipVisit(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID visitId) {
+        return ApiResponse.success(visitService.skipVisit(StaffPrincipal.from(jwt), visitId));
+    }
+
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @PostMapping("/{visitId}/accept-skipped")
+    @Operation(summary = "UC-46 Tiếp nhận lại bệnh nhân vắng")
+    public ApiResponse<VisitResponse> acceptSkippedVisit(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID visitId) {
+        return ApiResponse.success(visitService.acceptSkippedVisit(StaffPrincipal.from(jwt), visitId));
     }
 
     @PreAuthorize("hasRole('RECEPTIONIST')")

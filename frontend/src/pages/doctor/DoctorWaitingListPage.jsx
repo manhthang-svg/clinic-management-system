@@ -42,7 +42,7 @@ const STATUS_BADGE = {
 
 const SKIPPED_BADGE = ['Bỏ lượt', 'bg-rose-50 text-rose-700 border-rose-200'];
 
-const COLUMNS = ['Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
+const COLUMNS = ['Queue number', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
     'Ghi chú', 'Trạng thái', 'Thao tác'];
 
 const defaultProfileLoader = (signal) => createAccountApi(apiClient).profile(signal);
@@ -84,6 +84,10 @@ function StatusBadge({ visit }) {
 }
 
 function VisitNotes({ visit }) {
+    if (visit.note) {
+        return <div className="whitespace-pre-line break-words text-slate-700">{visit.note}</div>;
+    }
+
     const notes = [];
     if (visit.isPriority) {
         notes.push(`Ưu tiên: ${PRIORITY_REASON_LABELS[visit.priorityReason] ?? visit.priorityReason ?? 'Có'}`);
@@ -220,6 +224,22 @@ export default function DoctorWaitingListPage({
         }
     }, [calling, fetchQueue, visitApi]);
 
+    const acceptSkippedPatient = useCallback(async (visit) => {
+        if (!visit || calling) return;
+        setCalling(true);
+        setProcessingVisitId(visit.id);
+        try {
+            await visitApi.acceptSkippedVisit(visit.id);
+            toast.success(`Đã tiếp nhận lại bệnh nhân ${visit.patientName}.`);
+            await fetchQueue();
+        } catch {
+            toast.error('Không thể tiếp nhận lại bệnh nhân. Vui lòng tải lại danh sách rồi thử lại.');
+        } finally {
+            setCalling(false);
+            setProcessingVisitId(null);
+        }
+    }, [calling, fetchQueue, visitApi]);
+
     const [updatedTime, updatedDate] = formatDateTime(lastUpdated);
     const doctorName = queueInfo?.doctorName || (profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—');
     const roomName = queueInfo?.roomName || profile?.roomName;
@@ -297,7 +317,19 @@ export default function DoctorWaitingListPage({
                         {loadError && <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">{loadError}</p>}
 
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[1240px] table-fixed border-collapse text-left text-xs">
+                                <colgroup>
+                                    <col className="w-[96px]" />
+                                    <col className="w-[180px]" />
+                                    <col className="w-[112px]" />
+                                    <col className="w-[64px]" />
+                                    <col className="w-[84px]" />
+                                    <col className="w-[100px]" />
+                                    <col className="w-[132px]" />
+                                    <col className="w-[230px]" />
+                                    <col className="w-[120px]" />
+                                    <col className="w-[188px]" />
+                                </colgroup>
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-[#f2f8f7] text-slate-600">
                                         {COLUMNS.map((column) => <th key={column} scope="col" className="px-3 py-3 font-bold">{column}</th>)}
@@ -307,24 +339,27 @@ export default function DoctorWaitingListPage({
                                     {rows.map((visit) => {
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
                                         const isFirstPatient = activeTab === 'waiting' && visit.id === nextPatient?.id;
-                                        const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped;
+                                        const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status);
                                         return (
                                             <tr key={visit.id} className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'}`}>
-                                                <td className="px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
-                                                <td className="px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
+                                                <td className={`px-3 py-3 font-bold ${visit.isPriority ? 'text-rose-600' : 'text-slate-700'}`}>{String(visit.queueNumber ?? '—').padStart(2, '0')}</td>
+                                                <td className="truncate px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
+                                                <td className="truncate px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
                                                 <td className="px-3 py-3">{ageOf(visit.patientDob) ?? '—'}</td>
                                                 <td className="px-3 py-3">{visit.patientGender || '—'}</td>
                                                 <td className="px-3 py-3"><TypeBadge type={visit.doituongbnLoai} /></td>
                                                 <td className="px-3 py-3 text-slate-600">{time}<br />{date}</td>
-                                                <td className="max-w-56 px-3 py-3"><VisitNotes visit={visit} /></td>
+                                                <td className="break-words px-3 py-3"><VisitNotes visit={visit} /></td>
                                                 <td className="px-3 py-3"><StatusBadge visit={visit} /></td>
                                                 <td className="px-3 py-3">
-                                                    {callable
-                                                        ? <div className="flex min-w-40 gap-2">
-                                                            <button type="button" disabled={calling} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Có mặt'}</button>
-                                                            <button type="button" disabled={calling} onClick={() => void skipPatient(visit)} className="h-9 flex-1 cursor-pointer rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng mặt</button>
-                                                        </div>
-                                                        : <span className="text-slate-300">—</span>}
+                                                    {callable && visit.isSkipped
+                                                        ? <button type="button" disabled={calling} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
+                                                        : callable
+                                                            ? <div className="flex min-w-40 gap-2">
+                                                                <button type="button" disabled={calling} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
+                                                                <button type="button" disabled={calling} onClick={() => void skipPatient(visit)} className="h-9 flex-1 cursor-pointer rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng</button>
+                                                            </div>
+                                                            : <span className="text-slate-300">—</span>}
                                                 </td>
                                             </tr>
                                         );
