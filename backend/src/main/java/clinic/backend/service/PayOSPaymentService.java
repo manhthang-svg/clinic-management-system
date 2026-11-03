@@ -2,16 +2,10 @@ package clinic.backend.service;
 
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.dto.response.PaymentQrResponse;
-import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Payment;
-import clinic.backend.entity.Visit;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
-import clinic.backend.enums.VisitStatus;
-import clinic.backend.repository.ParaclinicalOrderDetailRepository;
-import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PaymentRepository;
-import clinic.backend.repository.VisitRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +24,6 @@ import vn.payos.model.webhooks.Webhook;
 import vn.payos.model.webhooks.WebhookData;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -43,18 +36,14 @@ public class PayOSPaymentService {
 
     private final PayOS payOS;
     private final PaymentRepository paymentRepository;
-    private final VisitRepository visitRepository;
-    private final ParaclinicalOrderRepository paraclinicalOrderRepository;
-    private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    private final PaymentCompletionService paymentCompletionService;
     private final String returnUrl;
     private final String cancelUrl;
 
     public PayOSPaymentService(
             PayOS payOS,
             PaymentRepository paymentRepository,
-            VisitRepository visitRepository,
-            ParaclinicalOrderRepository paraclinicalOrderRepository,
-            ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository,
+            PaymentCompletionService paymentCompletionService,
             @Value("${PAYOS_RETURN_URL:http://localhost:5173/payment/result}")
             String returnUrl,
             @Value("${PAYOS_CANCEL_URL:http://localhost:5173/payment/cancel}")
@@ -62,9 +51,7 @@ public class PayOSPaymentService {
     ) {
         this.payOS = payOS;
         this.paymentRepository = paymentRepository;
-        this.visitRepository = visitRepository;
-        this.paraclinicalOrderRepository = paraclinicalOrderRepository;
-        this.paraclinicalOrderDetailRepository = paraclinicalOrderDetailRepository;
+        this.paymentCompletionService = paymentCompletionService;
         this.returnUrl = returnUrl;
         this.cancelUrl = cancelUrl;
     }
@@ -293,30 +280,8 @@ public class PayOSPaymentService {
         payment.markAsPaidByPayOS(receiptNumber);
         paymentRepository.save(payment);
 
-        if (payment.getType() == PaymentType.EXAMINATION_FEE) {
-            Visit visit = visitRepository.findById(payment.getVisitId())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Không tìm thấy lượt khám"
-                    ));
-
-            if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
-                visit.markAsWaiting();
-                visitRepository.save(visit);
-            }
-        } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
-            paraclinicalOrderRepository.findByPaymentId(payment.getId())
-                    .ifPresent(order -> {
-                        order.release();
-                        paraclinicalOrderRepository.save(order);
-                        if (order.getDetails() != null) {
-                            for (ParaclinicalOrderDetail detail : order.getDetails()) {
-                                detail.release(Instant.now());
-                                paraclinicalOrderDetailRepository.save(detail);
-                            }
-                        }
-                    });
-        }
+        // Bước 8 và audit như thu tại quầy (UC-71); xác nhận tự động nên không có thu ngân.
+        paymentCompletionService.completePaidReceipt(payment, null);
     }
 
     private PaymentQrResponse toResponse(Payment payment) {
