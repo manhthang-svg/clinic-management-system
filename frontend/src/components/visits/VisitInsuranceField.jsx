@@ -1,5 +1,5 @@
 import { ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from 'lucide-react';
-import { INPUT_CLASS, Field } from '../shared/FormFields';
+import { INPUT_CLASS, INLINE_OFFSET_CLASS, Field } from '../shared/FormFields';
 import { MSG20 } from './visitErrors';
 import { CARD_NUMBER_LENGTH, coverageRateOf, isCardNumberFormatValid } from './visitForm';
 import { formatDate } from './visitFormat';
@@ -7,13 +7,13 @@ import { formatDate } from './visitFormat';
 const SMALL_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
 
-function Panel({ tone, icon: Icon, title, children }) {
+function Panel({ tone, icon: Icon, title, className = '', children }) {
   const tones = {
     success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
     warning: 'bg-amber-50 border-amber-200 text-amber-800',
   };
   return (
-    <div role={tone === 'warning' ? 'alert' : 'status'} className={`p-3.5 rounded-xl border space-y-2 ${tones[tone]}`}>
+    <div role={tone === 'warning' ? 'alert' : 'status'} className={`p-3.5 rounded-xl border space-y-2 ${tones[tone]} ${className}`}>
       <p className="flex items-start gap-2 text-sm font-semibold">
         <Icon className="w-4 h-4 shrink-0 mt-0.5" />
         {title}
@@ -31,7 +31,9 @@ export function VisitInsuranceField({
   error,
   onVerify,
   onSwitchToSelfPaid,
+  inline = false,
 }) {
+  const offset = inline ? INLINE_OFFSET_CLASS : '';
   const current = insurance.cardNumber === value ? insurance.status : null;
   const verifying = current === 'VERIFYING';
   const card = insurance.card;
@@ -47,10 +49,11 @@ export function VisitInsuranceField({
         id="visit-card-number"
         label="Số thẻ BHYT"
         required
+        inline={inline}
         error={error}
         hint="Mã BHXH 10 chữ số hoặc thẻ BHYT gồm 2 chữ in hoa và 13 chữ số"
       >
-        <div className="flex gap-2.5">
+        <div className={`flex gap-2.5 ${inline ? 'md:max-w-xl' : ''}`}>
           <input
             id="visit-card-number"
             type="text"
@@ -77,6 +80,7 @@ export function VisitInsuranceField({
       {current === 'VALID' && (
         // MSG16
         <Panel
+          className={offset}
           tone="success"
           icon={ShieldCheck}
           title={`Thẻ BHYT có giá trị đến ${formatDate(card?.validTo)}. Mức hưởng: ${coverageRateOf(card) ?? '—'}%.`}
@@ -95,6 +99,7 @@ export function VisitInsuranceField({
       {current === 'MISMATCH' && (
         // MSG18
         <Panel
+          className={offset}
           tone="warning"
           icon={ShieldAlert}
           title={card
@@ -109,7 +114,7 @@ export function VisitInsuranceField({
       )}
 
       {current === 'UNAVAILABLE' && (
-        <Panel tone="warning" icon={ShieldQuestion} title={MSG20}>
+        <Panel className={offset} tone="warning" icon={ShieldQuestion} title={MSG20}>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={onVerify} className={`${SMALL_BUTTON_CLASS} bg-white border border-amber-300 text-amber-800 hover:bg-amber-100`}>
               <RefreshCw className="w-3.5 h-3.5" />
@@ -123,7 +128,7 @@ export function VisitInsuranceField({
       )}
 
       {current === 'ERROR' && (
-        <Panel tone="warning" icon={ShieldAlert} title={insurance.errorMessage}>
+        <Panel className={offset} tone="warning" icon={ShieldAlert} title={insurance.errorMessage}>
           <button type="button" onClick={onVerify} className={`${SMALL_BUTTON_CLASS} bg-white border border-amber-300 text-amber-800 hover:bg-amber-100`}>
             <RefreshCw className="w-3.5 h-3.5" />
             Thử lại

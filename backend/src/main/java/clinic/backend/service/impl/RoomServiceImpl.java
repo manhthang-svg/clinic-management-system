@@ -2,6 +2,7 @@ package clinic.backend.service.impl;
 
 import clinic.backend.dto.request.CreateRoomRequest;
 import clinic.backend.dto.response.RoomResponse;
+import clinic.backend.entity.Department;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.ServiceGroup;
 import clinic.backend.enums.ActivationStatus;
@@ -19,7 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -76,7 +80,7 @@ public class RoomServiceImpl implements RoomService {
             }
         }
 
-        departmentRepository.findById(request.departmentId())
+        Department department = departmentRepository.findById(request.departmentId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy khoa"
@@ -104,39 +108,48 @@ public class RoomServiceImpl implements RoomService {
 
         Room savedRoom = roomRepository.save(room);
 
-        return new RoomResponse(
-                savedRoom.getId(),
-                savedRoom.getDepartmentId(),
-                savedRoom.getServiceGroupId(),
-                savedRoom.getRoomCode(),
-                savedRoom.getRoomName(),
-                savedRoom.getLocation(),
-                savedRoom.getType(),
-                savedRoom.getStatus(),
-                savedRoom.getCreatedAt(),
-                savedRoom.getUpdatedAt()
-        );
+        // A new room has no doctor assigned yet.
+        return toResponse(savedRoom, department.getDepartmentName(), null);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public java.util.List<RoomResponse> getActiveExaminationRooms() {
-        return roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
+    public List<RoomResponse> getActiveExaminationRooms() {
+        List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                 RoomType.EXAMINATION,
                 ActivationStatus.ACTIVE
-        ).stream()
-        .filter(room -> staffRoomAssignmentRepository.hasActiveDoctor(room.getId()))
-        .map(savedRoom -> new RoomResponse(
-                savedRoom.getId(),
-                savedRoom.getDepartmentId(),
-                savedRoom.getServiceGroupId(),
-                savedRoom.getRoomCode(),
-                savedRoom.getRoomName(),
-                savedRoom.getLocation(),
-                savedRoom.getType(),
-                savedRoom.getStatus(),
-                savedRoom.getCreatedAt(),
-                savedRoom.getUpdatedAt()
-        )).toList();
+        );
+        Map<UUID, String> departmentNames = departmentRepository.findAllById(rooms.stream()
+                        .map(Room::getDepartmentId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(Department::getId, Department::getDepartmentName));
+
+        // Only rooms with an active assigned doctor can take patients; their names are joined in name order.
+        return rooms.stream()
+                .map(room -> Map.entry(room, staffRoomAssignmentRepository.findActiveDoctorNames(room.getId())))
+                .filter(entry -> !entry.getValue().isEmpty())
+                .map(entry -> toResponse(
+                        entry.getKey(),
+                        departmentNames.get(entry.getKey().getDepartmentId()),
+                        String.join(", ", entry.getValue())))
+                .toList();
+    }
+
+    private RoomResponse toResponse(Room room, String departmentName, String doctorName) {
+        return new RoomResponse(
+                room.getId(),
+                room.getDepartmentId(),
+                departmentName,
+                room.getServiceGroupId(),
+                room.getRoomCode(),
+                room.getRoomName(),
+                room.getLocation(),
+                room.getType(),
+                room.getStatus(),
+                doctorName,
+                room.getCreatedAt(),
+                room.getUpdatedAt()
+        );
     }
 }

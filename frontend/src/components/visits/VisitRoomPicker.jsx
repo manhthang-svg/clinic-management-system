@@ -1,14 +1,5 @@
-import { DoorOpen, MapPin, Clock, Stethoscope, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { FieldError } from '../shared/FormFields';
-
-function Count({ icon: Icon, label, value, tone }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold ${tone}`}>
-      <Icon className="w-3.5 h-3.5" />
-      {label}: {value}
-    </span>
-  );
-}
 
 /**
  * UC-40 steps 8-9 with UC-42: active examination rooms and today's queue counts.
@@ -44,56 +35,68 @@ export function VisitRoomPicker({ rooms, counts, value, onChange, error, loading
         aria-label="Phòng khám"
         aria-invalid={Boolean(error)}
         aria-describedby={error ? 'visit-room-error' : undefined}
-        className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3"
+        className={`overflow-x-auto rounded-xl border ${error ? 'border-rose-200' : 'border-slate-100'}`}
       >
-        {rooms.map((room) => {
-          const selected = room.id === value;
-          const roomCounts = counts[room.id] ?? { waiting: 0, inExamination: 0 };
-          return (
-            <label
-              key={room.id}
-              className={`relative flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${
-                selected
-                  ? 'border-[#127e7a] bg-[#f0f9f8] ring-2 ring-[#127e7a]/15'
-                  : error
-                    ? 'border-rose-200 bg-white hover:bg-slate-50'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
-              }`}
-            >
-              <input
-                type="radio"
-                name="visit-room"
-                value={room.id}
-                checked={selected}
-                onChange={() => onChange(room.id)}
-                className="mt-1 w-4 h-4 accent-[#127e7a] cursor-pointer"
-              />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-slate-800">{room.name}</span>
-                    {room.id === suggestedRoomId && (
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#f1edfd] text-[#7c5cdb]">
-                        Phòng gợi ý
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[#f6f8f9] text-xs font-semibold text-[#1b2533]">
+              <th className="pl-4 pr-2 py-3 w-14 text-center">Chọn</th>
+              <th className="px-3 py-3">Phòng khám</th>
+              <th className="px-3 py-3">Chuyên khoa</th>
+              <th className="px-3 py-3">Vị trí</th>
+              <th className="px-3 py-3">Bác sĩ trong ca</th>
+              <th className="px-3 py-3 text-right">Số bệnh nhân đang chờ và khám</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-sm">
+            {rooms.map((room) => {
+              const selected = room.id === value;
+              const roomCounts = counts[room.id] ?? { waiting: 0, inExamination: 0 };
+              const inputId = `visit-room-${room.id}`;
+              return (
+                <tr
+                  key={room.id}
+                  onClick={() => onChange(room.id)}
+                  className={`cursor-pointer transition-colors ${selected ? 'bg-[#f0f9f8]' : 'hover:bg-slate-50/70'}`}
+                >
+                  <td className="pl-4 pr-2 py-3 text-center">
+                    <input
+                      id={inputId}
+                      type="radio"
+                      name="visit-room"
+                      value={room.id}
+                      checked={selected}
+                      onChange={() => onChange(room.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="w-4 h-4 accent-[#127e7a] cursor-pointer align-middle"
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <label htmlFor={inputId} className="cursor-pointer">
+                      <span className={`font-semibold ${selected ? 'text-[#127e7a]' : 'text-slate-800'}`}>
+                        <span className="font-mono text-xs text-slate-500">{room.code}</span> – {room.name}
                       </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-400 font-mono">{room.code}</div>
-                </div>
-                <div className="space-y-1 text-xs text-slate-500">
-                  {room.departmentName && (
-                    <p className="flex items-center gap-1.5"><DoorOpen className="w-3.5 h-3.5" />{room.departmentName}</p>
-                  )}
-                  <p className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{room.location || '—'}</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <Count icon={Clock} label="Đang chờ" value={roomCounts.waiting} tone="bg-amber-50 text-amber-700" />
-                  <Count icon={Stethoscope} label="Đang khám" value={roomCounts.inExamination} tone="bg-[#e8f0fe] text-[#3b6fd8]" />
-                </div>
-              </div>
-            </label>
-          );
-        })}
+                      {room.id === suggestedRoomId && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#f1edfd] text-[#7c5cdb]">
+                          Phòng gợi ý
+                        </span>
+                      )}
+                    </label>
+                  </td>
+                  <td className="px-3 py-3 text-slate-600">{room.departmentName || '—'}</td>
+                  <td className="px-3 py-3 text-slate-600">{room.location || '—'}</td>
+                  <td className="px-3 py-3 text-slate-600">{room.doctorName || '—'}</td>
+                  <td className="px-3 py-3 text-right">
+                    <span className="font-semibold text-slate-800">{roomCounts.waiting + roomCounts.inExamination}</span>
+                    <span className="block text-[11px] text-slate-400">
+                      Chờ {roomCounts.waiting} · Đang khám {roomCounts.inExamination}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       {error && <FieldError id="visit-room-error">{error}</FieldError>}
     </div>
