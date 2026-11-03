@@ -236,6 +236,7 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     private static Visit visit(VisitStatus status, UUID doctorId) {
+        VisitStatus initialStatus = doctorId == null ? status : VisitStatus.WAITING;
         Visit visit = new Visit(VISIT_ID, NOW, "DK0000000001", UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), NOW, VisitDoituongbnLoai.DV, null, null, null, "Đau bụng", false, null,
                 LocalDate.of(2026, 11, 3), 1, VisitStatus.WAITING, VisitInsuranceVerifyStatus.NOT_APPLICABLE);
@@ -244,6 +245,12 @@ class ParaclinicalOrderServiceImplTest {
         }
         if (status != visit.getStatus()) {
             forceStatus(visit, status);
+                LocalDate.of(2026, 11, 3), 1, initialStatus, VisitInsuranceVerifyStatus.NOT_APPLICABLE);
+        if (doctorId != null) {
+            visit.startExamination(doctorId, NOW);
+            if (status != VisitStatus.IN_EXAMINATION) {
+                forceStatus(visit, status);
+            }
         }
         return visit;
     }
