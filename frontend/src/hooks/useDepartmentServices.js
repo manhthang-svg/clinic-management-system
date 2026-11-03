@@ -25,8 +25,7 @@ export function useDepartmentServices(options) {
 
   const shouldFetch = Boolean(
     (roomType === 'EXAMINATION') ||
-    serviceGroupId ||
-    departmentId
+    (roomType === 'PARACLINICAL' ? serviceGroupId : (serviceGroupId || departmentId))
   ) && roomType !== 'ADMINISTRATIVE';
 
   const queryKey = shouldFetch
@@ -50,7 +49,7 @@ export function useDepartmentServices(options) {
       if (serviceGroupId) {
         params.group = serviceGroupId;
       }
-      if (departmentId) {
+      if (departmentId && !serviceGroupId) {
         params.department = departmentId;
       }
     }

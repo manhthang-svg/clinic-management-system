@@ -8,5 +8,10 @@ public record ServiceGroupOptionResponse(
         UUID id,
         String code,
         String name,
-        ServiceGroupType type) {
+        ServiceGroupType type,
+        UUID departmentId) {
+
+    public ServiceGroupOptionResponse(UUID id, String code, String name, ServiceGroupType type) {
+        this(id, code, name, type, null);
+    }
 }

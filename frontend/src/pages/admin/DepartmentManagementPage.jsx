@@ -14,16 +14,20 @@ import {
   DepartmentDetailModal,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
+import { apiClient } from '../../services/session';
+import { createServiceApi } from '../../apis/serviceApi';
 import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
 
+const serviceApi = createServiceApi(apiClient);
+
 const { ADMIN } = ROUTES;
 
-const STORAGE_KEY_ROOM_SERVICES = 'clinic_room_assigned_services';
+// Mock localStorage removed
 
 function getStoredRoomServicesMap() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_ROOM_SERVICES);
+    const raw = null;
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -35,7 +39,7 @@ function persistRoomServices(roomIdOrCode, services) {
   try {
     const map = getStoredRoomServicesMap();
     map[roomIdOrCode] = Array.isArray(services) ? services : [];
-    localStorage.setItem(STORAGE_KEY_ROOM_SERVICES, JSON.stringify(map));
+    // localStorage removed
   } catch (err) {
     console.error('Lỗi lưu danh sách dịch vụ phòng:', err);
   }
@@ -82,19 +86,28 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     (async () => {
       try {
         setLoading(true);
-        const [fetchedItems, fetchedStats] = await Promise.all([
+        const [fetchedItems, fetchedStats, activeServicesPage] = await Promise.all([
           departmentApi.getItems(),
           departmentApi.getStats(),
+          serviceApi.list({ status: 'ACTIVE', size: 50 }).catch(() => ({ content: [] })),
         ]);
         if (cancelled) return;
         if (Array.isArray(fetchedItems)) {
-          const storedServicesMap = getStoredRoomServicesMap();
+          const catalogServices = Array.isArray(activeServicesPage?.content)
+            ? activeServicesPage.content
+            : [];
+          const storedServicesMap = {};
           const itemsWithServices = fetchedItems.map((item) => {
             if (item.unitType === 'ROOM') {
-              const stored = storedServicesMap[item.id] ?? storedServicesMap[item.code];
+              const isExamRoom = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
+              const resolvedServices = isExamRoom
+                ? catalogServices.filter((s) => s.type === 'EXAMINATION')
+                : (Array.isArray(item.assignedServices) ? item.assignedServices : []);
+
+;
               return {
                 ...item,
-                assignedServices: Array.isArray(stored) ? stored : (item.assignedServices || []),
+                assignedServices: resolvedServices,
               };
             }
             return item;

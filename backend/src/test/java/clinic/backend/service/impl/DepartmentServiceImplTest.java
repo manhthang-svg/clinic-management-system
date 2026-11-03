@@ -223,6 +223,34 @@ class DepartmentServiceImplTest {
 
     @Test
     @DisplayName("Tính toán stats phòng và khoa chuẩn xác")
+    @Test
+    void createRoom_Paraclinical_ServiceGroupMismatchDepartment_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        UUID otherDeptId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+
+        Department dept = new Department(deptId, "K-XN", "Khoa Xét Nghiệm", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        clinic.backend.entity.ServiceGroup group = org.mockito.Mockito.mock(clinic.backend.entity.ServiceGroup.class);
+        when(group.getDepartmentId()).thenReturn(otherDeptId);
+        when(serviceGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
+
+        RoomRequest request = RoomRequest.builder()
+                .roomCode("PK-SA-01")
+                .roomName("Phòng Siêu Âm 1")
+                .departmentId(deptId)
+                .serviceGroupId(groupId)
+                .location("Tòa A - P.101")
+                .type(RoomType.PARACLINICAL)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
+    }
+
     void getStats_CalculatesCorrectly() {
         when(departmentRepository.count()).thenReturn(3L);
         when(roomRepository.count()).thenReturn(4L);

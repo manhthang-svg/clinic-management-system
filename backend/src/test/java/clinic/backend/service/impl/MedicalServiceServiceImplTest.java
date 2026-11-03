@@ -130,6 +130,29 @@ class MedicalServiceServiceImplTest {
     }
 
     @Test
+    @Test
+    void rejectsServiceGroupWhoseDepartmentDoesNotMatchService() {
+        UUID departmentId = UUID.randomUUID();
+        UUID otherDepartmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        Department department = new Department(
+                departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
+                null, true, NOW);
+        ServiceGroup group = mock(ServiceGroup.class);
+        when(group.getType()).thenReturn(ServiceGroupType.LAB);
+        when(group.getDepartmentId()).thenReturn(otherDepartmentId);
+        when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
+        when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "XN-101", "Xet nghiem mau", MedicalServiceType.LAB,
+                groupId, departmentId, BigDecimal.ONE, null, null);
+
+        assertThatThrownBy(() -> service.createService(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_ASSIGNMENT_INVALID));
+    }
+
     void updatesOnlyEditableInformation() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);

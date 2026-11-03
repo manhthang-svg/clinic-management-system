@@ -353,6 +353,20 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
 
+        UUID serviceGroupId = request.getServiceGroupId();
+        if (request.getType() == RoomType.PARACLINICAL) {
+            if (serviceGroupId == null) {
+                throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
+            }
+            ServiceGroup group = serviceGroupRepository.findById(serviceGroupId)
+                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + serviceGroupId));
+            if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
+                throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
+            }
+        } else {
+            serviceGroupId = null;
+        }
+
         Instant now = clock.instant();
         UUID id = uuidV7Generator.next();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : ActivationStatus.ACTIVE;
@@ -361,7 +375,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 id,
                 now,
                 request.getDepartmentId(),
-                request.getServiceGroupId(),
+                serviceGroupId,
                 roomCode,
                 roomName,
                 location,
@@ -421,12 +435,26 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
         }
 
+        UUID serviceGroupId = request.getServiceGroupId();
+        if (request.getType() == RoomType.PARACLINICAL) {
+            if (serviceGroupId == null) {
+                throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
+            }
+            ServiceGroup group = serviceGroupRepository.findById(serviceGroupId)
+                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + serviceGroupId));
+            if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
+                throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
+            }
+        } else {
+            serviceGroupId = null;
+        }
+
         Instant now = clock.instant();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : room.getStatus();
 
         room.update(
                 request.getDepartmentId(),
-                request.getServiceGroupId(),
+                serviceGroupId,
                 roomName,
                 location,
                 request.getType(),
@@ -481,6 +509,12 @@ public class DepartmentServiceImpl implements DepartmentService {
         room.setStatus(nextStatus, now);
         Room saved = roomRepository.save(room);
 
+        String serviceGroupName = saved.getServiceGroupId() != null
+                ? serviceGroupRepository.findById(saved.getServiceGroupId())
+                        .map(ServiceGroup::getServiceGroupName)
+                        .orElse(null)
+                : null;
+
         String staffName = staffRoomAssignmentRepository.findByRoomIdAndRemovedAtIsNull(saved.getId())
                 .flatMap(assignment -> staffAccountRepository.findById(assignment.getStaffAccountId()))
                 .map(s -> (s.getAcademicTitle() != null ? s.getAcademicTitle() + " " : "") + s.getFullName())
@@ -493,6 +527,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .name(saved.getRoomName())
                 .departmentId(saved.getDepartmentId())
                 .departmentName(department != null ? department.getDepartmentName() : "—")
+                .serviceGroupId(saved.getServiceGroupId())
+                .serviceGroupName(serviceGroupName)
                 .type(saved.getType().name())
                 .location(saved.getLocation())
                 .headPerson(staffName)

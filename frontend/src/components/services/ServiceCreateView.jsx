@@ -10,7 +10,11 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import { SERVICE_TYPE_MAP } from '../../constants/serviceData';
+import {
+  SERVICE_TYPE_MAP,
+  resolveServiceGroupType,
+  doesServiceGroupMatchDepartment,
+} from '../../constants/serviceData';
 import { FormSection, AccountPageHeader } from '../accounts/AccountFormParts';
 import {
   EMPTY_SERVICE_FORM,
@@ -47,7 +51,14 @@ export function ServiceCreateView({ groups = [], departments = [], onCreate, onC
   const has = (field) => Boolean(errors[field] || serverErrors.fields[field]);
   const examination = form.type === 'EXAMINATION';
 
-  const typeGroups = groups.filter((group) => group.type === form.type);
+  const selectedDept = departments.find((d) => String(d.id) === String(form.departmentId));
+  const typeGroups = groups.filter((group) => {
+    if (resolveServiceGroupType(group) !== form.type && group.type !== form.type) return false;
+    if (selectedDept) {
+      return doesServiceGroupMatchDepartment(group, selectedDept);
+    }
+    return true;
+  });
   const typeDepartments = departments.filter((d) => d.type === 'PARACLINICAL' && d.active !== false);
 
   const clearServerError = (field) =>
@@ -59,7 +70,17 @@ export function ServiceCreateView({ groups = [], departments = [], onCreate, onC
     });
 
   const onChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'departmentId') {
+        const nextDept = departments.find((d) => String(d.id) === String(value));
+        const currentGroup = groups.find((g) => String(g.id) === String(prev.serviceGroupId));
+        if (currentGroup && nextDept && !doesServiceGroupMatchDepartment(currentGroup, nextDept)) {
+          next.serviceGroupId = '';
+        }
+      }
+      return next;
+    });
     clearServerError(field);
   };
 

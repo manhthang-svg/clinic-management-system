@@ -15,7 +15,12 @@ import { describeApiError } from '../../utils/describeApiError';
 import { formatPrice } from '../services/serviceFormat';
 import { apiClient } from '../../services/session';
 import { createServiceApi } from '../../apis/serviceApi';
-import { SERVICE_GROUP_TYPES } from '../../constants/serviceData';
+import {
+  SERVICE_GROUP_TYPES,
+  getParaclinicalDepartmentType,
+  resolveServiceGroupType,
+  doesServiceGroupMatchDepartment,
+} from '../../constants/serviceData';
 
 const serviceApi = createServiceApi(apiClient);
 
@@ -26,6 +31,13 @@ const SELECT_CLASS =
   'w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400';
 
 function getDepartmentCategory(dept) {
+  if (!dept) return 'CLINICAL';
+  if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
+  const paraclinicalType = getParaclinicalDepartmentType(dept);
+  return paraclinicalType ? 'PARACLINICAL' : 'CLINICAL';
+}
+
+function _unusedLegacyCategory(dept) {
   if (!dept) return 'CLINICAL';
   if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
   const name = (dept.name || dept.tenkhoa || '').toLowerCase();
@@ -44,7 +56,7 @@ function getDepartmentCategory(dept) {
   return 'CLINICAL';
 }
 
-function getParaclinicalDepartmentType(dept) {
+function _unusedLegacyGetParaclinicalDepartmentType(dept) {
   if (!dept) return null;
   const code = (dept.code || dept.departmentCode || dept.makhoa || '').toUpperCase();
   const name = (dept.name || dept.departmentName || dept.tenkhoa || '').toLowerCase();
@@ -189,6 +201,15 @@ function DepartmentFormModalContent({
   const assignedServices = useMemo(() => {
     if (!isRoom) return [];
     if (customServices !== null) return customServices;
+    if (isEdit && Array.isArray(initialData?.assignedServices) && initialData.assignedServices.length > 0) {
+      return initialData.assignedServices;
+    }
+    return [];
+  }, [isRoom, customServices, isEdit, initialData?.assignedServices]);
+
+  const _unusedAssignedServices = useMemo(() => {
+    if (!isRoom) return [];
+    if (customServices !== null) return customServices;
     if (Array.isArray(initialData?.assignedServices)) {
       return initialData.assignedServices;
     }
@@ -249,6 +270,21 @@ function DepartmentFormModalContent({
 
   // Lọc nhóm dịch vụ kỹ thuật tương ứng chính xác với Chuyên khoa cận lâm sàng đang chọn
   const filteredServiceGroups = useMemo(() => {
+    if (!formData.departmentId) return [];
+    const selectedDept = departments.find((d) => d.id === formData.departmentId);
+    if (!selectedDept) return serviceGroups;
+
+    const matched = serviceGroups.filter((g) => doesServiceGroupMatchDepartment(g, selectedDept));
+    if (isEdit && effectiveServiceGroupId) {
+      const current = serviceGroups.find((g) => g.id === effectiveServiceGroupId);
+      if (current && !matched.some((g) => g.id === current.id)) {
+        return [current, ...matched];
+      }
+    }
+    return matched;
+  }, [departments, formData.departmentId, serviceGroups, isEdit, effectiveServiceGroupId]);
+
+  const _unusedLegacyFilteredServiceGroups = useMemo(() => {
     if (!formData.departmentId) return [];
     const selectedDept = departments.find((d) => d.id === formData.departmentId);
     if (!selectedDept) return serviceGroups;
@@ -328,7 +364,7 @@ function DepartmentFormModalContent({
         type: '',
         serviceGroupId: '',
       }));
-      setCustomServices([]);
+      setCustomServices(null);
       setCustomSelectedCodes(new Set());
       return;
     }
@@ -351,7 +387,7 @@ function DepartmentFormModalContent({
         serviceGroupId: '',
       }));
     }
-    setCustomServices([]);
+    setCustomServices(null);
     setCustomSelectedCodes(new Set());
     if (errors.departmentId || errors.type || errors.serviceGroupId) {
       setErrors((prev) => ({ ...prev, departmentId: null, type: null, serviceGroupId: null }));
@@ -368,7 +404,7 @@ function DepartmentFormModalContent({
         type: '',
         serviceGroupId: '',
       }));
-      setCustomServices([]);
+      setCustomServices(null);
       setCustomSelectedCodes(new Set());
       return;
     }
@@ -390,7 +426,7 @@ function DepartmentFormModalContent({
       departmentId: targetDeptId,
       serviceGroupId: newType === 'PARACLINICAL' ? prev.serviceGroupId : '',
     }));
-    setCustomServices([]);
+    setCustomServices(null);
     setCustomSelectedCodes(new Set());
     if (errors.type) {
       setErrors((prev) => ({ ...prev, type: null }));
@@ -410,7 +446,7 @@ function DepartmentFormModalContent({
     }
     // Nếu đổi nhóm kỹ thuật -> reset danh sách dịch vụ đã chọn
     if (field === 'serviceGroupId') {
-      setCustomServices([]);
+      setCustomServices(null);
       setCustomSelectedCodes(new Set());
     }
   };
