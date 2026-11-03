@@ -2,6 +2,7 @@ package clinic.backend.service;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.PaymentResponse;
+import clinic.backend.dto.response.ReceiptPrintResponse;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
 import org.springframework.data.domain.Page;
@@ -24,7 +25,7 @@ public interface PaymentService {
 
     PaymentResponse getPaymentById(UUID paymentId);
 
-    PaymentResponse getPrintablePayment(UUID paymentId);
+    ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId);
 
     PaymentResponse confirmPayment(
             UUID cashierAccountId,
