@@ -3,97 +3,96 @@ package clinic.backend.dto.request;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 
+/**
+ * UC-37 Create New Patient Profile. Messages are stable codes (REQUIRED, INVALID_FORMAT, TOO_LONG) that the
+ * client maps to MSG02, MSG05 and MSG08. Rules that depend on the age are checked by the service.
+ */
 public record CreatePatientRequest(
 
-        @NotBlank(message = "Họ tên không được để trống")
-        @Size(max = 255)
+        @NotBlank(message = "REQUIRED")
+        @Size(max = 100, message = "TOO_LONG")
         String hoten,
 
-        @NotNull(message = "Ngày sinh không được để trống")
-        @PastOrPresent(message = "Ngày sinh không hợp lệ")
+        @NotNull(message = "REQUIRED")
+        @PastOrPresent(message = "INVALID_FORMAT")
         LocalDate ngaysinh,
 
-        @NotNull(message = "Giới tính không được để trống")
-        @Min(value = 1, message = "Giới tính phải từ 1 đến 3")
-        @Max(value = 3, message = "Giới tính phải từ 1 đến 3")
+        @NotNull(message = "REQUIRED")
+        @Min(value = 1, message = "INVALID_FORMAT")
+        @Max(value = 3, message = "INVALID_FORMAT")
         Short gioitinh,
 
-        @Size(max = 12)
+        @Pattern(regexp = "^$|^\\d{12}$", message = "INVALID_FORMAT")
         String cccdSo,
 
-        @Size(max = 15)
+        @Pattern(regexp = "^$|^[A-Za-z0-9]{1,15}$", message = "INVALID_FORMAT")
         String hochieuSo,
 
-        @Size(max = 100)
+        @Size(max = 100, message = "TOO_LONG")
         String nghenghiep,
 
-        @Size(max = 5)
+        @Size(max = 5, message = "TOO_LONG")
         String nghenghiepMa,
 
-        @NotBlank(message = "Dân tộc không được để trống")
-        @Size(max = 50)
+        @NotBlank(message = "REQUIRED")
+        @Size(max = 50, message = "TOO_LONG")
         String dantoc,
 
-        @NotBlank(message = "Mã dân tộc không được để trống")
-        @Size(max = 2)
+        @NotBlank(message = "REQUIRED")
+        @Size(max = 2, message = "TOO_LONG")
         String dantocMa,
 
-        @Size(max = 255)
+        @Size(max = 255, message = "TOO_LONG")
         String ngoaikieu,
 
-        @Size(max = 2)
+        @Size(max = 2, message = "TOO_LONG")
         String ngoaikieuMa,
 
-        @NotBlank(message = "Địa chỉ không được để trống")
-        @Size(max = 1024)
+        @NotBlank(message = "REQUIRED")
+        @Size(max = 1024, message = "TOO_LONG")
         String diachi,
 
-        @Size(max = 1024)
+        @Size(max = 1024, message = "TOO_LONG")
         String xaphuong,
 
-        @Size(max = 5)
+        @Size(max = 5, message = "TOO_LONG")
         String xaphuongMa,
 
-        @Size(max = 1024)
+        @Size(max = 1024, message = "TOO_LONG")
         String tinhthanh,
 
-        @Size(max = 3)
+        @Size(max = 3, message = "TOO_LONG")
         String tinhthanhMa,
 
-        @Size(max = 1024)
+        @Size(max = 1024, message = "TOO_LONG")
         String noilamviec,
 
-        @Pattern(
-                regexp = "^$|^[0-9]{9,15}$",
-                message = "Số điện thoại không hợp lệ"
-        )
-        @Size(max = 15)
+        /** Required from 18 years old (checked by the service). */
+        @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT")
         String sodienthoai,
 
-        @Email
-        @Size(max = 100)
+        @Email(message = "INVALID_FORMAT")
+        @Size(max = 100, message = "TOO_LONG")
         String email,
 
-        @Size(max = 5)
+        @Size(max = 5, message = "TOO_LONG")
         String yeutorh,
 
-        @Size(max = 5)
+        @Size(max = 5, message = "TOO_LONG")
         String nhommau,
 
-        @Size(max = 255)
+        /** Guardian name, required under 18 years old (checked by the service). */
+        @Size(max = 255, message = "TOO_LONG")
         String hotennguoithan,
 
-        @Size(max = 50)
+        /** Guardian relationship, required under 18 years old (checked by the service). */
+        @Size(max = 50, message = "TOO_LONG")
         String nguoithanQuanhe,
 
-        @Size(max = 1024)
+        @Size(max = 1024, message = "TOO_LONG")
         String diachinguoithan,
 
-        @Pattern(
-                regexp = "^$|^[0-9]{9,15}$",
-                message = "Số điện thoại người thân không hợp lệ"
-        )
-        @Size(max = 15)
+        @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT")
         String sodienthoainguoithan
 
 ) {}

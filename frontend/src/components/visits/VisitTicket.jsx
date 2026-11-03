@@ -25,7 +25,9 @@ function ticketGuidance(ticket, loading) {
  * UC-41 Print Examination Ticket (BR-16), shown after UC-40 succeeds.
  * TBD: ticket printer integration (HW-01); "In phiếu khám" uses the browser print dialog.
  */
-export function VisitTicket({ visit, ticket, loading, error, onReload, onPrint, onDone }) {
+export function VisitTicket({
+  visit, ticket, loading, error, onReload, onPrint, onDone, title = 'Đăng ký khám thành công',
+}) {
   const payable = typeof ticket?.patientAmount === 'number' ? ticket.patientAmount : null;
   const guidance = ticketGuidance(ticket, loading);
 
@@ -37,7 +39,7 @@ export function VisitTicket({ visit, ticket, loading, error, onReload, onPrint, 
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg! leading-7! font-bold! text-[#1b2533]">Đăng ký khám thành công</h2>
+            <h2 className="text-lg! leading-7! font-bold! text-[#1b2533]">{title}</h2>
             <p className="text-sm text-slate-500 mt-0.5">
               Lượt khám <span className="font-mono font-semibold text-slate-700">{visit.sovaovien}</span> ở trạng thái{' '}
               <span className="font-semibold text-slate-700">{VISIT_STATUS_LABELS[visit.status] ?? visit.status}</span>.

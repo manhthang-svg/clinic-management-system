@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,13 +27,57 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     boolean existsByCccdSoAndIdNot(String cccdSo, UUID id);
 
+    Optional<Patient> findFirstByHochieuSoIgnoreCase(String hochieuSo);
+
+    /** UC-37 step 7: possible duplicates have the same full name (ignoring case) and date of birth. */
+    @Query("""
+            select p from Patient p
+            where lower(trim(p.hoten)) = lower(trim(cast(:name as String))) and p.ngaysinh = :birthDate
+            order by p.mabenhnhan
+            """)
+    List<Patient> findPossibleDuplicates(@Param("name") String name, @Param("birthDate") LocalDate birthDate);
+
+    // UC-35 typed searches.
+    Page<Patient> findAllByCccdSo(String cccdSo, Pageable pageable);
+
+    Page<Patient> findAllByMabenhnhanIgnoreCase(String mabenhnhan, Pageable pageable);
+
+    Page<Patient> findAllBySodienthoai(String sodienthoai, Pageable pageable);
+
+    Page<Patient> findAllByHochieuSoIgnoreCase(String hochieuSo, Pageable pageable);
+
+    /** Patients whose previous visits used the insurance card. */
+    @Query("""
+            select p from Patient p
+            where exists (
+                select v.id from Visit v
+                where v.patientId = p.id and upper(v.mabhyt) = upper(cast(:card as String))
+            )
+            """)
+    Page<Patient> searchByInsuranceCard(
+            @Param("card") String card,
+            Pageable pageable
+    );
+
+    /** Name search ignoring case and Vietnamese accents (unaccent extension, V11). */
+    @Query("""
+            select p from Patient p
+            where lower(function('unaccent', p.hoten))
+                  like lower(function('unaccent', concat('%', cast(:name as String), '%')))
+            """)
+    Page<Patient> searchByName(
+            @Param("name") String name,
+            Pageable pageable
+    );
+
+    /** Free search of the reception dashboard, without a search type. */
     @Query("""
             select p from Patient p
             where lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
-               or lower(p.hoten) like lower(concat('%', cast(:keyword as String), '%'))
+               or lower(function('unaccent', p.hoten))
+                  like lower(function('unaccent', concat('%', cast(:keyword as String), '%')))
                or lower(coalesce(p.cccdSo, '')) like lower(concat('%', cast(:keyword as String), '%'))
                or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', cast(:keyword as String), '%'))
-               or lower(coalesce(p.email, '')) like lower(concat('%', cast(:keyword as String), '%'))
             """)
     Page<Patient> search(
             @Param("keyword") String keyword,

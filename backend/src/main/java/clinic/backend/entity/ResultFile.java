@@ -13,7 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * A file or image attached to an imaging or functional result (VI.2.9). Lab results have no files (V33).
+ * A file or image attached to a result (VI.2.9).
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -21,8 +21,11 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "result_files")
 public class ResultFile extends UuidEntity {
 
-    @Column(name = "imaging_result_id", nullable = false)
+    @Column(name = "imaging_result_id")
     private UUID imagingResultId;
+
+    @Column(name = "lab_result_id")
+    private UUID labResultId;
 
     /** CV 365 VI.2.9. */
     @Column(name = "hinhanh", nullable = false, length = 1024)
