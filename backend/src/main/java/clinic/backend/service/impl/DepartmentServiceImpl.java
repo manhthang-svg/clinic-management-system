@@ -354,16 +354,18 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
 
-        UUID serviceGroupId = request.getServiceGroupId();
+        final UUID serviceGroupId;
         if (request.getType() == RoomType.PARACLINICAL) {
-            if (serviceGroupId == null) {
+            UUID requestedGroupId = request.getServiceGroupId();
+            if (requestedGroupId == null) {
                 throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
             }
-            ServiceGroup group = serviceGroupRepository.findById(serviceGroupId)
-                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + serviceGroupId));
+            ServiceGroup group = serviceGroupRepository.findById(requestedGroupId)
+                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId));
             if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
                 throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
             }
+            serviceGroupId = requestedGroupId;
         } else {
             serviceGroupId = null;
         }
@@ -436,16 +438,18 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
         }
 
-        UUID serviceGroupId = request.getServiceGroupId();
+        final UUID serviceGroupId;
         if (request.getType() == RoomType.PARACLINICAL) {
-            if (serviceGroupId == null) {
+            UUID requestedGroupId = request.getServiceGroupId();
+            if (requestedGroupId == null) {
                 throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
             }
-            ServiceGroup group = serviceGroupRepository.findById(serviceGroupId)
-                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + serviceGroupId));
+            ServiceGroup group = serviceGroupRepository.findById(requestedGroupId)
+                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId));
             if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
                 throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
             }
+            serviceGroupId = requestedGroupId;
         } else {
             serviceGroupId = null;
         }
