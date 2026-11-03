@@ -33,6 +33,7 @@ const ASSIGNMENT_ERRORS = {
   DEPARTMENT_NOT_ACTIVE_PARACLINICAL: ['departmentId', 'Khoa phải là khoa cận lâm sàng đang hoạt động.'],
   SERVICE_GROUP_NOT_FOUND: ['serviceGroupId', 'Nhóm dịch vụ không tồn tại.'],
   SERVICE_GROUP_TYPE_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc loại dịch vụ đã chọn.'],
+  SERVICE_GROUP_DEPARTMENT_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc khoa thực hiện đã chọn.'],
   DEPARTMENT_AND_GROUP_REQUIRED: ['serviceGroupId', 'Vui lòng chọn khoa và nhóm dịch vụ.'],
 };
 
