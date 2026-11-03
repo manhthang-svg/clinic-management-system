@@ -9,6 +9,7 @@ import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.dto.response.PaymentResponse;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
+import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.PayOSPaymentService;
 import clinic.backend.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -84,10 +87,12 @@ public class PaymentController {
     @PostMapping("/{paymentId}/confirm")
     @Operation(summary = "UC-71 Xác nhận thanh toán")
     public ApiResponse<PaymentResponse> confirmPayment(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID paymentId,
             @Valid @RequestBody ConfirmPaymentRequest request
     ) {
-        return ApiResponse.success(paymentService.confirmPayment(paymentId, request));
+        return ApiResponse.success(
+                paymentService.confirmPayment(StaffPrincipal.from(jwt).accountId(), paymentId, request));
     }
 
     // 5. Tạo mã QR PayOS

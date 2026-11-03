@@ -1,39 +1,50 @@
 package clinic.backend.service.impl;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.PaymentItemResponse;
 import clinic.backend.dto.response.PaymentResponse;
+import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.AuditLogAction;
+import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.VisitStatus;
+import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
+import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -48,6 +59,10 @@ public class PaymentServiceImpl implements PaymentService {
     private final RoomRepository roomRepository;
     private final ParaclinicalOrderRepository paraclinicalOrderRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    private final MedicalServiceRepository medicalServiceRepository;
+    private final RoomQueueCounterRepository queueCounterRepository;
+    private final AuditLogService auditLogService;
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,10 +95,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
         return toResponse(payment);
     }
@@ -111,61 +123,34 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse confirmPayment(
+            UUID cashierAccountId,
             UUID paymentId,
             ConfirmPaymentRequest request
     ) {
-        // 1. Khóa phiếu thu để tránh hai yêu cầu xác nhận cùng lúc.
+        // 1. Khóa phiếu thu để hai thu ngân không xác nhận cùng lúc (UC-71 bước 4).
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy phiếu thu"
-                ));
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // 2. Chỉ cho phép xác nhận phiếu đang chờ thanh toán.
+        // 2. Phiếu đã thu hoặc đã hủy thì báo MSG64 (EF-02).
         if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Phiếu thu không ở trạng thái chờ thanh toán"
-            );
+            throw new AppException(ErrorCode.PAYMENT_NOT_PENDING, Map.of(
+                    "receiptNumber", payment.getReceiptNumber() != null
+                            ? payment.getReceiptNumber()
+                            : payment.getPaymentCode(),
+                    "status", payment.getStatus().name()));
         }
 
-        // 3. Lấy ID tài khoản đang đăng nhập từ JWT.
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null
-                || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Không xác định được tài khoản thu ngân"
-            );
-        }
-
-        UUID cashierAccountId;
-        try {
-            cashierAccountId = UUID.fromString(jwt.getSubject());
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "ID tài khoản đăng nhập không hợp lệ"
-            );
-        }
-
-        // 4. Tìm lượt khám liên quan đến phiếu thu.
         Visit visit = visitRepository.findById(payment.getVisitId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy lượt khám"
-                ));
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        // 5. Tạo số phiếu thu.
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.now(clock);
+
+        // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
         String receiptNumber = "PT"
-                + LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))
-                .format(DateTimeFormatter.BASIC_ISO_DATE)
+                + today.format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "-"
                 + payment.getPaymentCode();
-
-        // 6. Cập nhật phiếu thu thành đã thanh toán.
         payment.markAsPaid(
                 request.paymentMethod(),
                 cashierAccountId,
@@ -173,29 +158,72 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentRepository.save(payment);
 
-        // 7. Đồng bộ trạng thái nghiệp vụ theo loại thanh toán:
+        // 4. Tiếp tục lượt khám theo loại phiếu (bước 8):
+        List<String> unroutedServices = new ArrayList<>();
         if (payment.getType() == PaymentType.EXAMINATION_FEE) {
-            // Thanh toán lần 1: Phí khám -> chuyển lượt khám sang chờ khám
+            // Phí khám: lượt khám vào danh sách chờ khám của phòng (BR-15).
             if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
                 visit.markAsWaiting();
                 visitRepository.save(visit);
             }
         } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
-            // Thanh toán lần 2: Phí CLS -> giải phóng chỉ định CLS để vào hàng đợi phòng thực hiện
+            // Phí CLS: mỗi chỉ định vào phòng đang hoạt động ít người chờ nhất (BR-26, BR-28).
             paraclinicalOrderRepository.findByPaymentId(payment.getId())
                     .ifPresent(order -> {
                         order.release();
                         paraclinicalOrderRepository.save(order);
                         if (order.getDetails() != null) {
                             for (ParaclinicalOrderDetail detail : order.getDetails()) {
-                                detail.release(Instant.now());
-                                paraclinicalOrderDetailRepository.save(detail);
+                                if (!routeToLeastBusyRoom(detail, today, now)) {
+                                    unroutedServices.add(detail.getTenchidinh());
+                                }
                             }
                         }
                     });
         }
 
+        // 5. Ghi audit việc thu tiền (BR-37).
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("receiptNumber", receiptNumber);
+        audit.put("type", payment.getType().name());
+        audit.put("paymentMethod", request.paymentMethod().name());
+        audit.put("patientAmount", payment.getPatientTotalAmount());
+        if (!unroutedServices.isEmpty()) {
+            audit.put("unroutedServices", unroutedServices);
+        }
+        auditLogService.recordBusinessChange(
+                cashierAccountId,
+                AuditLogAction.UPDATE,
+                "payments",
+                payment.getId(),
+                visit.getSovaovien(),
+                audit,
+                now);
+
         return toResponse(payment);
+    }
+
+    /**
+     * Sends one paid service to the Active room with the fewest waiting orders among the rooms of its service
+     * group; ties go to the lower room code (BR-28). Returns false when no Active room performs it (UC-71 AF-02).
+     */
+    private boolean routeToLeastBusyRoom(ParaclinicalOrderDetail detail, LocalDate today, Instant now) {
+        Room room = medicalServiceRepository.findById(detail.getServiceId())
+                .map(MedicalService::getServiceGroupId)
+                .flatMap(groupId -> roomRepository
+                        .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(groupId, ActivationStatus.ACTIVE)
+                        .stream()
+                        .min(Comparator.comparingLong(candidate -> paraclinicalOrderDetailRepository
+                                .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING))))
+                .orElse(null);
+
+        if (room == null) {
+            detail.releaseTo(null, null, now);
+        } else {
+            detail.releaseTo(room.getId(), queueCounterRepository.takeNext(room.getId(), today), now);
+        }
+        paraclinicalOrderDetailRepository.save(detail);
+        return room != null;
     }
 
     private PaymentResponse toResponse(Payment payment) {
@@ -208,9 +236,34 @@ public class PaymentServiceImpl implements PaymentService {
             room = roomRepository.findById(visit.getRoomId()).orElse(null);
         }
 
+        Map<UUID, ParaclinicalOrderDetail> details = new HashMap<>();
+        Map<UUID, Room> performingRooms = new HashMap<>();
+        if (payment.getType() == PaymentType.PARACLINICAL_FEE && payment.getItems() != null) {
+            List<UUID> detailIds = payment.getItems().stream()
+                    .map(PaymentItem::getOrderDetailId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            for (ParaclinicalOrderDetail detail : paraclinicalOrderDetailRepository.findAllById(detailIds)) {
+                details.put(detail.getId(), detail);
+            }
+            List<UUID> roomIds = details.values().stream()
+                    .map(ParaclinicalOrderDetail::getRoomId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            for (Room performingRoom : roomRepository.findAllById(roomIds)) {
+                performingRooms.put(performingRoom.getId(), performingRoom);
+            }
+        }
+
         List<PaymentItemResponse> itemResponses = new ArrayList<>();
         if (payment.getItems() != null) {
             for (PaymentItem item : payment.getItems()) {
+                ParaclinicalOrderDetail detail = item.getOrderDetailId() != null
+                        ? details.get(item.getOrderDetailId())
+                        : null;
+                Room performingRoom = detail != null && detail.getRoomId() != null
+                        ? performingRooms.get(detail.getRoomId())
+                        : null;
                 itemResponses.add(new PaymentItemResponse(
                         item.getId(),
                         item.getServiceId(),
@@ -220,7 +273,10 @@ public class PaymentServiceImpl implements PaymentService {
                         item.getDongia(),
                         item.getThanhtien(),
                         item.getBhytChitra(),
-                        item.getBenhnhanphaitra()
+                        item.getBenhnhanphaitra(),
+                        performingRoom != null ? performingRoom.getRoomName() : null,
+                        performingRoom != null ? performingRoom.getLocation() : null,
+                        detail != null ? detail.getQueueNumber() : null
                 ));
             }
         }
