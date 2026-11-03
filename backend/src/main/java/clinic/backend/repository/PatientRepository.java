@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +26,16 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     boolean existsByCccdSo(String cccdSo);
 
     boolean existsByCccdSoAndIdNot(String cccdSo, UUID id);
+
+    Optional<Patient> findFirstByHochieuSoIgnoreCase(String hochieuSo);
+
+    /** UC-37 step 7: possible duplicates have the same full name (ignoring case) and date of birth. */
+    @Query("""
+            select p from Patient p
+            where lower(trim(p.hoten)) = lower(trim(cast(:name as String))) and p.ngaysinh = :birthDate
+            order by p.mabenhnhan
+            """)
+    List<Patient> findPossibleDuplicates(@Param("name") String name, @Param("birthDate") LocalDate birthDate);
 
     // UC-35 typed searches.
     Page<Patient> findAllByCccdSo(String cccdSo, Pageable pageable);

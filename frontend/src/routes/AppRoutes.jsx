@@ -23,6 +23,7 @@ import ReceptionistPatientsPage from "../pages/receptionist/ReceptionistPatients
 import ReceptionistAppointmentsPage from "../pages/receptionist/ReceptionistAppointmentsPage.jsx";
 import ReceptionistCreatePatientPage from "../pages/receptionist/ReceptionistCreatePatientPage.jsx";
 import ReceptionistVisitRegisterPage from "../pages/receptionist/ReceptionistVisitRegisterPage.jsx";
+import ReceptionistPatientDetailPage from "../pages/receptionist/ReceptionistPatientDetailPage.jsx";
 import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQueuePage.jsx";
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
@@ -202,6 +203,11 @@ export function AppRoutes({
           <Route
             path="patients/new"
             element={<ReceptionistCreatePatientPage />}
+          />
+
+          <Route
+            path="patients/:id"
+            element={<ReceptionistPatientDetailPage />}
           />
 
           <Route

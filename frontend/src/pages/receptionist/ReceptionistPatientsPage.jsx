@@ -28,6 +28,7 @@ const inputClass =
     'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
 const MAX_RESULTS = 50;
+const IDENTIFYING_TYPES = ['CITIZEN_ID', 'PASSPORT', 'PATIENT_CODE'];
 
 /** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
 export default function ReceptionistPatientsPage({ patientApi = defaultPatientApi }) {
@@ -61,6 +62,12 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
             const res = await patientApi.list({ size: MAX_RESULTS, ...(search ?? {}) });
             const page = res?.data ?? res;
             const list = page?.content || (Array.isArray(page) ? page : []);
+            // AF-04: one profile per identification number (BR-12), so a single match opens UC-36 directly.
+            if (search && IDENTIFYING_TYPES.includes(search.type) && list.length === 1
+                && (page?.totalElements ?? 1) === 1) {
+                navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: list[0].id }));
+                return;
+            }
             setPatients(list);
             setTotalElements(page?.totalElements ?? list.length);
             setLastSearch(search);
@@ -71,7 +78,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         } finally {
             setLoading(false);
         }
-    }, [patientApi]);
+    }, [navigate, patientApi]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -114,7 +121,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
 
     const filteredPatients = patients;
 
-    const openEditPatient = async (patient) => {
+    const openEditPatient = useCallback(async (patient) => {
         try {
             const response = await patientApi.detail(patient.id);
             const detail = response?.data || response;
@@ -126,7 +133,15 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         } catch (err) {
             setNotice(err?.message || 'Không thể tải hồ sơ bệnh nhân');
         }
-    };
+    }, [patientApi]);
+
+    // UC-36 "Cập nhật thông tin" opens the update form of that patient (UC-38).
+    const editPatientId = location.state?.editPatientId;
+    useEffect(() => {
+        if (!editPatientId) return undefined;
+        const timer = window.setTimeout(() => void openEditPatient({ id: editPatientId }), 0);
+        return () => window.clearTimeout(timer);
+    }, [editPatientId, openEditPatient]);
 
     const handleSavePatient = async (event) => {
         event.preventDefault();
@@ -336,7 +351,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                                                 <button
                                                     type="button"
                                                     title="Xem hồ sơ"
-                                                    onClick={() => navigate(`/receptionist/patients/${patient.id}`)}
+                                                    onClick={() => navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }))}
                                                     className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
                                                 >
                                                     <Eye size={15} />

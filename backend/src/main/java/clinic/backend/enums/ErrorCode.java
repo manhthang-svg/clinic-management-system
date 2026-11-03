@@ -41,6 +41,8 @@ public enum ErrorCode {
     SERVICE_GROUP_HAS_NO_ACTIVE_ROOM("SERVICE_GROUP_HAS_NO_ACTIVE_ROOM",
             "The service group has no active room.", HttpStatus.CONFLICT),
     PATIENT_NOT_FOUND("PATIENT_NOT_FOUND", "The patient does not exist.", HttpStatus.NOT_FOUND),
+    PATIENT_IDENTIFICATION_EXISTS("PATIENT_IDENTIFICATION_EXISTS",
+            "A patient with this citizen ID or passport already exists.", HttpStatus.CONFLICT),
     ACTIVE_VISIT_EXISTS("ACTIVE_VISIT_EXISTS", "The patient already has an active visit.", HttpStatus.CONFLICT),
     ROOM_NOT_AVAILABLE("ROOM_NOT_AVAILABLE",
             "The examination room is not active or has no assigned doctor.", HttpStatus.CONFLICT),

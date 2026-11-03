@@ -1,6 +1,7 @@
-import { useNavigate } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useCreatePatient } from '../../hooks/useCreatePatient';
+import { ADULT_AGE, MAX_NAME_LENGTH, MSG, formAge, msg57 } from '../../components/patients/patientForm';
+import { clinicToday } from '../../components/visits/visitForm';
 
 const inputClass =
     'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100';
@@ -22,14 +23,23 @@ const sections = [
     },
 ];
 
+// MSG02/MSG05/MSG08 in red under the field (UC-37 EF-01).
+function FieldError({ name, error }) {
+    return error ? (
+        <p id={`${name}-error`} className="mt-1 text-xs font-medium text-red-600">{error}</p>
+    ) : null;
+}
+
 function Field({
     label,
     name,
     form,
+    errors,
     onChange,
     required = false,
     ...props
 }) {
+    const error = errors?.[name];
     return (
         <div>
             <label htmlFor={name} className={labelClass}>
@@ -42,10 +52,12 @@ function Field({
                 name={name}
                 value={form[name] ?? ''}
                 onChange={onChange}
-                required={required}
-                className={inputClass}
+                aria-invalid={error ? 'true' : undefined}
+                aria-describedby={error ? `${name}-error` : undefined}
+                className={`${inputClass} ${error ? 'border-red-400' : ''}`}
                 {...props}
             />
+            <FieldError name={name} error={error} />
         </div>
     );
 }
@@ -54,10 +66,12 @@ function SelectField({
     label,
     name,
     form,
+    errors,
     onChange,
     options,
     required = false,
 }) {
+    const error = errors?.[name];
     return (
         <div>
             <label htmlFor={name} className={labelClass}>
@@ -70,8 +84,9 @@ function SelectField({
                 name={name}
                 value={form[name] ?? ''}
                 onChange={onChange}
-                required={required}
-                className={inputClass}
+                aria-invalid={error ? 'true' : undefined}
+                aria-describedby={error ? `${name}-error` : undefined}
+                className={`${inputClass} ${error ? 'border-red-400' : ''}`}
             >
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -79,22 +94,47 @@ function SelectField({
                     </option>
                 ))}
             </select>
+            <FieldError name={name} error={error} />
         </div>
     );
 }
 
-export default function ReceptionistCreatePatientPage() {
-    const navigate = useNavigate();
+function Dialog({ title, children }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+                {children}
+            </div>
+        </div>
+    );
+}
 
+/** UC-37 Create New Patient Profile. */
+export default function ReceptionistCreatePatientPage({ patientApi }) {
     // Hook quản lý form, validation, trạng thái lưu và gọi API.
     const {
         form,
+        fieldErrors,
         error,
+        conflict,
+        duplicates,
+        confirmCancel,
         submitting,
         handleChange,
         handleSubmit,
         goBack,
-    } = useCreatePatient();
+        openProfile,
+        createAnyway,
+        closeDuplicates,
+        keepEditing,
+        discard,
+    } = useCreatePatient(patientApi);
+
+    // Step 4: required fields depend on the age (phone from 18; guardian under 18).
+    const age = formAge(form, clinicToday());
+    const adult = age !== null && age >= ADULT_AGE;
+    const minor = age !== null && age < ADULT_AGE;
 
     return (
         <div className="mx-auto w-full max-w-[1500px] space-y-6">
@@ -128,7 +168,7 @@ export default function ReceptionistCreatePatientPage() {
                 </button>
             </header>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
                 {/* 1. Thông tin cá nhân */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
@@ -145,9 +185,10 @@ export default function ReceptionistCreatePatientPage() {
                             label="Họ và tên"
                             name="hoten"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             required
-                            maxLength={255}
+                            maxLength={MAX_NAME_LENGTH}
                             placeholder="Nhập họ và tên"
                         />
 
@@ -155,22 +196,24 @@ export default function ReceptionistCreatePatientPage() {
                             label="Ngày sinh"
                             name="ngaysinh"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             type="date"
                             required
-                            max={new Date().toISOString().slice(0, 10)}
+                            max={clinicToday()}
                         />
 
                         <SelectField
                             label="Giới tính"
                             name="gioitinh"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             required
                             options={[
                                 { value: '1', label: 'Nam' },
                                 { value: '2', label: 'Nữ' },
-                                { value: '3', label: 'Khác' },
+                                { value: '3', label: 'Chưa xác định' },
                             ]}
                         />
 
@@ -178,6 +221,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="CCCD"
                             name="cccdSo"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             inputMode="numeric"
                             maxLength={12}
@@ -188,6 +232,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Số hộ chiếu"
                             name="hochieuSo"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={15}
                             placeholder="Nếu có"
@@ -197,16 +242,19 @@ export default function ReceptionistCreatePatientPage() {
                             label="Số điện thoại"
                             name="sodienthoai"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             type="tel"
-                            maxLength={15}
-                            placeholder="0912345678"
+                            required={adult}
+                            maxLength={10}
+                            placeholder="10 chữ số, bắt buộc từ 18 tuổi"
                         />
 
                         <SelectField
                             label="Dân tộc"
                             name="dantoc"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             required
                             options={[
@@ -225,6 +273,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Mã dân tộc"
                             name="dantocMa"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             required
                             maxLength={2}
@@ -235,6 +284,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Nhóm máu"
                             name="nhommau"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             options={[
                                 { value: '', label: 'Chưa xác định' },
@@ -249,6 +299,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Yếu tố Rh"
                             name="yeutorh"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={5}
                             placeholder="Ví dụ: Rh+"
@@ -272,6 +323,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Nghề nghiệp"
                             name="nghenghiep"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={100}
                             placeholder="Nhập nghề nghiệp"
@@ -281,6 +333,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Mã nghề nghiệp"
                             name="nghenghiepMa"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={5}
                             placeholder="Mã nghề nghiệp"
@@ -290,6 +343,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Nơi làm việc"
                             name="noilamviec"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             placeholder="Tên cơ quan hoặc nơi làm việc"
                         />
@@ -298,6 +352,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Ngoại kiều"
                             name="ngoaikieu"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={255}
                             placeholder="Nếu có"
@@ -307,6 +362,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Mã ngoại kiều"
                             name="ngoaikieuMa"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={2}
                             placeholder="Nếu có"
@@ -316,6 +372,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Xã/phường"
                             name="xaphuong"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             placeholder="Tên xã/phường"
                         />
@@ -324,6 +381,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Mã xã/phường"
                             name="xaphuongMa"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={5}
                             placeholder="Mã xã/phường"
@@ -333,6 +391,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Tỉnh/thành phố"
                             name="tinhthanh"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             placeholder="Tên tỉnh/thành phố"
                         />
@@ -341,6 +400,7 @@ export default function ReceptionistCreatePatientPage() {
                             label="Mã tỉnh/thành"
                             name="tinhthanhMa"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             maxLength={3}
                             placeholder="Mã tỉnh/thành"
@@ -351,6 +411,7 @@ export default function ReceptionistCreatePatientPage() {
                                 label="Địa chỉ"
                                 name="diachi"
                                 form={form}
+                            errors={fieldErrors}
                                 onChange={handleChange}
                                 required
                                 maxLength={1024}
@@ -376,7 +437,9 @@ export default function ReceptionistCreatePatientPage() {
                             label="Họ tên người thân"
                             name="hotennguoithan"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
+                            required={minor}
                             maxLength={255}
                             placeholder="Họ tên người liên hệ"
                         />
@@ -385,7 +448,9 @@ export default function ReceptionistCreatePatientPage() {
                             label="Quan hệ"
                             name="nguoithanQuanhe"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
+                            required={minor}
                             options={[
                                 { value: '', label: 'Chọn quan hệ' },
                                 { value: 'Bố', label: 'Bố' },
@@ -402,9 +467,10 @@ export default function ReceptionistCreatePatientPage() {
                             label="Số điện thoại người thân"
                             name="sodienthoainguoithan"
                             form={form}
+                            errors={fieldErrors}
                             onChange={handleChange}
                             type="tel"
-                            maxLength={15}
+                            maxLength={10}
                             placeholder="Số điện thoại liên hệ"
                         />
 
@@ -413,6 +479,7 @@ export default function ReceptionistCreatePatientPage() {
                                 label="Địa chỉ người thân"
                                 name="diachinguoithan"
                                 form={form}
+                            errors={fieldErrors}
                                 onChange={handleChange}
                                 maxLength={1024}
                                 placeholder="Địa chỉ người thân"
@@ -421,7 +488,20 @@ export default function ReceptionistCreatePatientPage() {
                     </div>
                 </section>
 
-                {error && (
+                {conflict && (
+                    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <span>{fieldErrors[conflict.field]}</span>
+                        <button
+                            type="button"
+                            onClick={() => openProfile(conflict.patientId)}
+                            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                        >
+                            Mở hồ sơ
+                        </button>
+                    </div>
+                )}
+
+                {error && !conflict && (
                     <div
                         role="alert"
                         className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
@@ -446,10 +526,61 @@ export default function ReceptionistCreatePatientPage() {
                         className="inline-flex items-center gap-2 rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         <Save size={16} />
-                        {submitting ? 'Đang lưu...' : 'Lưu hồ sơ'}
+                        {submitting ? 'Đang lưu…' : 'Lưu hồ sơ'}
                     </button>
                 </div>
             </form>
+
+            {duplicates && (
+                <Dialog title="Có thể trùng hồ sơ">
+                    <p className="text-sm text-slate-600">{msg57(duplicates.length)}</p>
+                    <ul className="max-h-60 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-100">
+                        {duplicates.map((patient) => (
+                            <li key={patient.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                                <span>
+                                    <span className="font-mono text-teal-700">{patient.mabenhnhan}</span>
+                                    {' · '}{patient.hoten}
+                                    {patient.sodienthoai ? ` · ${patient.sodienthoai}` : ''}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => openProfile(patient.id)}
+                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Chọn hồ sơ này
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={closeDuplicates} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">
+                            Quay lại chỉnh sửa
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void createAnyway()}
+                            disabled={submitting}
+                            className="rounded-xl bg-[#0F9D9A] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                            Vẫn tạo hồ sơ mới
+                        </button>
+                    </div>
+                </Dialog>
+            )}
+
+            {confirmCancel && (
+                <Dialog title="Hủy tạo hồ sơ">
+                    <p className="text-sm text-slate-600">{MSG.DISCARD}</p>
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={keepEditing} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">
+                            Tiếp tục chỉnh sửa
+                        </button>
+                        <button type="button" onClick={discard} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white">
+                            Loại bỏ
+                        </button>
+                    </div>
+                </Dialog>
+            )}
         </div>
     );
 }
