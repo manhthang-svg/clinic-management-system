@@ -4,13 +4,22 @@ package clinic.backend.service.impl;
 import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.PatientActiveVisitResponse;
+import clinic.backend.dto.response.PatientOverviewResponse;
 import clinic.backend.dto.response.PatientResponse;
+import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.Patient;
+import clinic.backend.entity.Payment;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.PatientSearchType;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PatientService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +47,13 @@ public class PatientServiceImpl implements PatientService {
     /** UC-35 step 6: at most 50 results. */
     static final int MAX_SEARCH_RESULTS = 50;
 
+    private static final String PATIENT_AUDIT_ENTITY = "patients";
+
     private final PatientRepository patientRepository;
     private final VisitRepository visitRepository;
+    private final PaymentRepository paymentRepository;
+    private final MedicalHistoryRepository medicalHistoryRepository;
+    private final AuditLogService auditLogService;
     private final UuidV7Generator uuidV7Generator;
 
     private String generatePatientCode() {
@@ -274,14 +288,56 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public PatientResponse getPatientById(UUID id) {
-        Patient patient = patientRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy bệnh nhân"
-                ));
-        return toResponse(patient);
+        return toResponse(requiredPatient(id));
+    }
+
+    @Override
+    @Transactional
+    public PatientOverviewResponse getPatientOverview(UUID actorAccountId, UUID id) {
+        Patient patient = requiredPatient(id);
+        List<VisitRepository.PatientVisitHistory> history = visitRepository.findPatientHistory(id);
+
+        List<PatientOverviewResponse.VisitHistoryItem> visits = history.stream()
+                .map(visit -> new PatientOverviewResponse.VisitHistoryItem(
+                        visit.getVisitId(), visit.getRegistrationCode(), visit.getRegisteredAt(),
+                        visit.getRoomName(), doctorName(visit.getDoctorTitle(), visit.getDoctorName()),
+                        visit.getVisitType(), visit.getStatus()))
+                .toList();
+        String lastInsuranceCard = history.stream()
+                .map(VisitRepository.PatientVisitHistory::getInsuranceCard)
+                .filter(card -> card != null && !card.isBlank())
+                .findFirst().orElse(null);
+        PatientOverviewResponse.CurrentVisit activeVisit = history.stream()
+                .filter(visit -> !VisitRepository.FINISHED_STATUSES.contains(visit.getStatus()))
+                .findFirst()
+                .map(visit -> new PatientOverviewResponse.CurrentVisit(
+                        visit.getVisitId(), visit.getRegistrationCode(), visit.getStatus(), visit.getRoomName(),
+                        paymentRepository.findByVisitIdAndType(visit.getVisitId(), PaymentType.EXAMINATION_FEE)
+                                .map(Payment::getStatus).orElse(null)))
+                .orElse(null);
+        List<String> drugAllergies = medicalHistoryRepository
+                .findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(id, MedicalHistoryType.DRUG_ALLERGY).stream()
+                .map(MedicalHistory::getThongtinNoidung)
+                .toList();
+
+        // BR-48: every view of a patient profile is recorded.
+        auditLogService.recordBusinessChange(actorAccountId, AuditLogAction.VIEW_RECORD, PATIENT_AUDIT_ENTITY,
+                id, null, Map.of("mabenhnhan", patient.getMabenhnhan()), Instant.now());
+
+        return new PatientOverviewResponse(toResponse(patient), drugAllergies, lastInsuranceCard, activeVisit, visits);
+    }
+
+    private Patient requiredPatient(UUID id) {
+        return patientRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.PATIENT_NOT_FOUND));
+    }
+
+    private static String doctorName(String academicTitle, String fullName) {
+        if (fullName == null) {
+            return null;
+        }
+        return academicTitle == null || academicTitle.isBlank() ? fullName : academicTitle.strip() + " " + fullName;
     }
 
     private PatientResponse toResponse(Patient savedPatient) {

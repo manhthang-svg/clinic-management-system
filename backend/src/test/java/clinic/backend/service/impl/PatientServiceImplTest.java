@@ -9,13 +9,23 @@ import java.util.UUID;
 import clinic.backend.dto.request.CreatePatientRequest;
 import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.PatientActiveVisitResponse;
+import clinic.backend.dto.response.PatientOverviewResponse;
+import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.Patient;
+import clinic.backend.entity.Payment;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.PatientSearchType;
+import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.VisitRepository;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +47,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -56,13 +67,88 @@ class PatientServiceImplTest {
     private VisitRepository visitRepository;
 
     @Mock
+    private PaymentRepository paymentRepository;
+
+    @Mock
+    private MedicalHistoryRepository medicalHistoryRepository;
+
+    @Mock
+    private AuditLogService auditLogService;
+
+    @Mock
     private UuidV7Generator ids;
 
     private PatientServiceImpl service;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        service = new PatientServiceImpl(patientRepository, visitRepository, ids);
+        service = new PatientServiceImpl(
+                patientRepository, visitRepository, paymentRepository, medicalHistoryRepository, auditLogService, ids);
+    }
+
+    @Test
+    void overviewShowsHistoryActiveVisitAllergiesAndRecordsTheView() {
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient()));
+        UUID activeId = UUID.randomUUID();
+        VisitRepository.PatientVisitHistory active = history(activeId, "VV002", VisitStatus.WAITING_FEE_PAYMENT, null,
+                null, null);
+        VisitRepository.PatientVisitHistory done = history(UUID.randomUUID(), "VV001", VisitStatus.COMPLETED,
+                "ThS.", "Trần Bình", "DN4010123456789");
+        when(visitRepository.findPatientHistory(PATIENT_ID)).thenReturn(List.of(active, done));
+        Payment fee = mock(Payment.class);
+        when(fee.getStatus()).thenReturn(PaymentStatus.PENDING);
+        when(paymentRepository.findByVisitIdAndType(activeId, PaymentType.EXAMINATION_FEE))
+                .thenReturn(Optional.of(fee));
+        MedicalHistory allergy = mock(MedicalHistory.class);
+        when(allergy.getThongtinNoidung()).thenReturn("Penicillin");
+        when(medicalHistoryRepository.findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(
+                PATIENT_ID, MedicalHistoryType.DRUG_ALLERGY)).thenReturn(List.of(allergy));
+
+        var overview = service.getPatientOverview(ACCOUNT_ID, PATIENT_ID);
+
+        assertThat(overview.patient().id()).isEqualTo(PATIENT_ID);
+        assertThat(overview.drugAllergies()).containsExactly("Penicillin");
+        assertThat(overview.lastInsuranceCard()).isEqualTo("DN4010123456789");
+        assertThat(overview.activeVisit().registrationCode()).isEqualTo("VV002");
+        assertThat(overview.activeVisit().examinationFeeStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(overview.visits()).extracting(PatientOverviewResponse.VisitHistoryItem::registrationCode)
+                .containsExactly("VV002", "VV001");
+        assertThat(overview.visits().get(1).doctorName()).isEqualTo("ThS. Trần Bình");
+        verify(auditLogService).recordBusinessChange(eq(ACCOUNT_ID), eq(AuditLogAction.VIEW_RECORD), eq("patients"),
+                eq(PATIENT_ID), any(), any(), any());
+    }
+
+    @Test
+    void overviewWithoutVisitsHasNoActiveVisit() {
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient()));
+
+        var overview = service.getPatientOverview(ACCOUNT_ID, PATIENT_ID);
+
+        assertThat(overview.visits()).isEmpty();
+        assertThat(overview.activeVisit()).isNull();
+        assertThat(overview.lastInsuranceCard()).isNull();
+    }
+
+    @Test
+    void overviewOfMissingPatientIsNotFoundAndNotAudited() {
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPatientOverview(ACCOUNT_ID, PATIENT_ID))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_NOT_FOUND));
+        verifyNoInteractions(auditLogService);
+    }
+
+    private static VisitRepository.PatientVisitHistory history(UUID id, String code, VisitStatus status,
+                                                               String doctorTitle, String doctorName, String card) {
+        VisitRepository.PatientVisitHistory visit = mock(VisitRepository.PatientVisitHistory.class);
+        org.mockito.Mockito.lenient().when(visit.getVisitId()).thenReturn(id);
+        org.mockito.Mockito.lenient().when(visit.getRegistrationCode()).thenReturn(code);
+        org.mockito.Mockito.lenient().when(visit.getStatus()).thenReturn(status);
+        org.mockito.Mockito.lenient().when(visit.getDoctorTitle()).thenReturn(doctorTitle);
+        org.mockito.Mockito.lenient().when(visit.getDoctorName()).thenReturn(doctorName);
+        org.mockito.Mockito.lenient().when(visit.getInsuranceCard()).thenReturn(card);
+        return visit;
     }
 
     @AfterEach

@@ -1,6 +1,7 @@
 package clinic.backend.repository;
 
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -134,6 +135,39 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
     List<PatientActiveVisit> findActiveVisits(
             @Param("patientIds") Collection<UUID> patientIds,
             @Param("finishedStatuses") Collection<VisitStatus> finishedStatuses);
+
+    /** UC-36: visit history of one patient, newest first, without clinical details. */
+    @Query("""
+            select v.id as visitId, v.sovaovien as registrationCode, v.thoigianvaovien as registeredAt,
+                   room.roomName as roomName, doctor.academicTitle as doctorTitle, doctor.fullName as doctorName,
+                   v.doituongbnLoai as visitType, v.status as status, v.mabhyt as insuranceCard
+            from Visit v
+            left join Room room on room.id = v.roomId
+            left join StaffAccount doctor on doctor.id = v.doctorAccountId
+            where v.patientId = :patientId
+            order by v.thoigianvaovien desc
+            """)
+    List<PatientVisitHistory> findPatientHistory(@Param("patientId") UUID patientId);
+
+    interface PatientVisitHistory {
+        UUID getVisitId();
+
+        String getRegistrationCode();
+
+        Instant getRegisteredAt();
+
+        String getRoomName();
+
+        String getDoctorTitle();
+
+        String getDoctorName();
+
+        VisitDoituongbnLoai getVisitType();
+
+        VisitStatus getStatus();
+
+        String getInsuranceCard();
+    }
 
     interface PatientLastVisit {
         UUID getPatientId();

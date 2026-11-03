@@ -23,6 +23,11 @@ export const patientApi = {
         });
     },
 
+    // UC-36: thông tin hành chính, dị ứng, lịch sử khám (backend ghi audit lượt xem)
+    overview(id, signal) {
+        return apiClient.request(`/patients/${encodeURIComponent(id)}/overview`, { signal });
+    },
+
     // Tạo hồ sơ bệnh nhân
     create(data) {
         return apiClient.request('/patients', {

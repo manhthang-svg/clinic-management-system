@@ -7,7 +7,11 @@ import clinic.backend.dto.request.UpdatePatientRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PatientResponse;
 import clinic.backend.dto.response.FollowUpAppointmentResponse;
+import clinic.backend.dto.response.PatientOverviewResponse;
 import clinic.backend.enums.PatientSearchType;
+import clinic.backend.security.user.StaffPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import clinic.backend.service.FollowUpAppointmentService;
 import clinic.backend.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,9 +72,19 @@ public class PatientController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "UC-36 Xem chi tiết hồ sơ bệnh nhân")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
+    @Operation(summary = "Hồ sơ hành chính của bệnh nhân (dùng cho UC-38, UC-40)")
     public ApiResponse<PatientResponse> getPatientById(@PathVariable UUID id) {
         return ApiResponse.success(patientService.getPatientById(id));
+    }
+
+    @GetMapping("/{id}/overview")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
+    @Operation(summary = "UC-36 Xem thông tin bệnh nhân và lịch sử khám (ghi audit)")
+    public ApiResponse<PatientOverviewResponse> getPatientOverview(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID id) {
+        return ApiResponse.success(patientService.getPatientOverview(StaffPrincipal.from(jwt).accountId(), id));
     }
 
     @GetMapping("/{id}/follow-up-appointment")

@@ -104,6 +104,42 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void overviewShowsVisitHistoryAndRecordsTheView() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID patientId = UUID.randomUUID();
+        insertPatient(patientId, receptionist, "Đỗ Thị " + suffix(), null, null, null);
+        String card = "DN40" + digits(11);
+        String doneCode = insertVisit(receptionist, patientId, card, "COMPLETED");
+        String activeCode = insertVisit(receptionist, patientId, null, "WAITING");
+
+        mockMvc.perform(get("/api/v1/patients/" + patientId + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.patient.id").value(patientId.toString()))
+                .andExpect(jsonPath("$.data.lastInsuranceCard").value(card))
+                .andExpect(jsonPath("$.data.activeVisit.registrationCode").value(activeCode))
+                .andExpect(jsonPath("$.data.visits[*].registrationCode", contains(activeCode, doneCode)))
+                .andExpect(jsonPath("$.data.visits[0].roomName").isNotEmpty());
+
+        Integer views = jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs
+                WHERE action = 'VIEW_RECORD' AND entity_type = 'patients' AND entity_id = ? AND actor_account_id = ?
+                """, Integer.class, patientId, receptionist.getId());
+        org.assertj.core.api.Assertions.assertThat(views).isEqualTo(1);
+    }
+
+    @Test
+    void overviewOfUnknownPatientIsNotFoundAndCashierIsForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/patients/" + UUID.randomUUID() + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PATIENT_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/patients/" + UUID.randomUUID() + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void rejectsKeywordWithWrongFormatForItsType() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
 
