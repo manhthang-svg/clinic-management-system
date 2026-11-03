@@ -42,7 +42,7 @@ const STATUS_BADGE = {
 
 const SKIPPED_BADGE = ['Bỏ lượt', 'bg-rose-50 text-rose-700 border-rose-200'];
 
-const COLUMNS = ['STT', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
+const COLUMNS = ['Queue number', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
     'Ghi chú', 'Trạng thái', 'Thao tác'];
 
 const defaultProfileLoader = (signal) => createAccountApi(apiClient).profile(signal);
@@ -336,15 +336,15 @@ export default function DoctorWaitingListPage({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((visit, index) => {
+                                    {rows.map((visit) => {
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
                                         const isFirstPatient = activeTab === 'waiting' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status);
                                         return (
                                             <tr key={visit.id} className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'}`}>
-                                                <td className="px-3 py-3 text-slate-500">{(currentPage - 1) * pageSize + index + 1}</td>
-                                                <td className="px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
-                                                <td className="px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
+                                                <td className={`px-3 py-3 font-bold ${visit.isPriority ? 'text-rose-600' : 'text-slate-700'}`}>{String(visit.queueNumber ?? '—').padStart(2, '0')}</td>
+                                                <td className="truncate px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
+                                                <td className="truncate px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
                                                 <td className="px-3 py-3">{ageOf(visit.patientDob) ?? '—'}</td>
                                                 <td className="px-3 py-3">{visit.patientGender || '—'}</td>
                                                 <td className="px-3 py-3"><TypeBadge type={visit.doituongbnLoai} /></td>
