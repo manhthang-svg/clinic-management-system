@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -101,6 +102,167 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.data.content[0].activeVisit.registrationCode").value(activeCode))
                 .andExpect(jsonPath("$.data.content[0].activeVisit.status").value("WAITING"))
                 .andExpect(jsonPath("$.data.content[0].activeVisit.roomName").isNotEmpty());
+    }
+
+    @Test
+    void overviewShowsVisitHistoryAndRecordsTheView() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID patientId = UUID.randomUUID();
+        insertPatient(patientId, receptionist, "Đỗ Thị " + suffix(), null, null, null);
+        String card = "DN40" + digits(11);
+        String doneCode = insertVisit(receptionist, patientId, card, "COMPLETED");
+        String activeCode = insertVisit(receptionist, patientId, null, "WAITING");
+
+        mockMvc.perform(get("/api/v1/patients/" + patientId + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.patient.id").value(patientId.toString()))
+                .andExpect(jsonPath("$.data.lastInsuranceCard").value(card))
+                .andExpect(jsonPath("$.data.activeVisit.registrationCode").value(activeCode))
+                .andExpect(jsonPath("$.data.visits[*].registrationCode", contains(activeCode, doneCode)))
+                .andExpect(jsonPath("$.data.visits[0].roomName").isNotEmpty());
+
+        Integer views = jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs
+                WHERE action = 'VIEW_RECORD' AND entity_type = 'patients' AND entity_id = ? AND actor_account_id = ?
+                """, Integer.class, patientId, receptionist.getId());
+        org.assertj.core.api.Assertions.assertThat(views).isEqualTo(1);
+    }
+
+    @Test
+    void overviewOfUnknownPatientIsNotFoundAndCashierIsForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/patients/" + UUID.randomUUID() + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PATIENT_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/patients/" + UUID.randomUUID() + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createsAProfileAndRecordsTheCreation() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String citizenId = digits(12);
+
+        String body = mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Hoàng Văn " + suffix(), "1990-05-20", citizenId, "09" + digits(8))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cccdSo").value(citizenId))
+                .andReturn().getResponse().getContentAsString();
+        UUID patientId = UUID.fromString(objectMapper.readTree(body).get("data").get("id").asText());
+
+        Integer created = jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs WHERE action = 'CREATE' AND entity_type = 'patients' AND entity_id = ?
+                """, Integer.class, patientId);
+        org.assertj.core.api.Assertions.assertThat(created).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsAnExistingCitizenIdWithTheProfileToOpen() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String citizenId = digits(12);
+        UUID existingId = UUID.randomUUID();
+        String existingCode = insertPatient(existingId, receptionist, "Lý Thị " + suffix(), citizenId, null, null);
+
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người khác", "1990-05-20", citizenId, "09" + digits(8))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PATIENT_IDENTIFICATION_EXISTS"))
+                .andExpect(jsonPath("$.details.patientId").value(existingId.toString()))
+                .andExpect(jsonPath("$.details.patientCode").value(existingCode));
+    }
+
+    @Test
+    void rejectsAnAdultWithoutPhoneAndAWrongCitizenId() throws Exception {
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người lớn", "1990-05-20", "123", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.cccdSo").value("INVALID_FORMAT"));
+        mockMvc.perform(post("/api/v1/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("Người lớn", "1990-05-20", null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.sodienthoai").value("REQUIRED"));
+    }
+
+    @Test
+    void listsPossibleDuplicatesBySameNameAndBirthDate() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String name = "Trùng Tên " + suffix();
+        String code = insertPatient(receptionist, name, null, null);
+
+        mockMvc.perform(get("/api/v1/patients/possible-duplicates")
+                        .param("hoten", name.toUpperCase())
+                        .param("ngaysinh", "1990-01-01")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].mabenhnhan", contains(code)));
+    }
+
+    @Test
+    void updatesAProfileAndRecordsTheChangedFields() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID patientId = UUID.randomUUID();
+        String citizenId = digits(12);
+        insertPatient(patientId, receptionist, "Vũ Văn " + suffix(), citizenId, "09" + digits(8), null);
+
+        mockMvc.perform(put("/api/v1/patients/" + patientId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Vũ Văn Đổi Tên", citizenId, "0912345678", 0)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hoten").value("Vũ Văn Đổi Tên"));
+
+        String changes = jdbc.queryForObject("""
+                SELECT new_value::text FROM audit_logs
+                WHERE action = 'UPDATE' AND entity_type = 'patients' AND entity_id = ?
+                """, String.class, patientId);
+        org.assertj.core.api.Assertions.assertThat(changes).contains("Vũ Văn Đổi Tên", "0912345678");
+    }
+
+    @Test
+    void rejectsAnUpdateWithTheCitizenIdOfAnotherPatient() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String takenId = digits(12);
+        insertPatient(UUID.randomUUID(), receptionist, "Người có CCCD", takenId, null, null);
+        UUID patientId = UUID.randomUUID();
+        insertPatient(patientId, receptionist, "Người sửa", null, "09" + digits(8), null);
+
+        mockMvc.perform(put("/api/v1/patients/" + patientId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Người sửa", takenId, "0912345678", 0)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PATIENT_IDENTIFICATION_EXISTS"))
+                .andExpect(jsonPath("$.details.field").value("cccdSo"));
+    }
+
+    private String updateBody(String name, String citizenId, String phone, long version) throws Exception {
+        java.util.Map<String, Object> body = objectMapper.readValue(
+                createBody(name, "1990-01-01", citizenId, phone), java.util.HashMap.class);
+        body.put("version", version);
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private String createBody(String name, String birthDate, String citizenId, String phone) throws Exception {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("hoten", name);
+        body.put("ngaysinh", birthDate);
+        body.put("gioitinh", 1);
+        body.put("cccdSo", citizenId);
+        body.put("dantoc", "Kinh");
+        body.put("dantocMa", "01");
+        body.put("diachi", "Hà Nội");
+        body.put("sodienthoai", phone);
+        return objectMapper.writeValueAsString(body);
     }
 
     @Test

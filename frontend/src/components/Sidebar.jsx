@@ -15,11 +15,14 @@ import {
   Settings,
   Plus,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FolderHeart,
   UserCheck,
   UserRound,
   LogOut,
 } from 'lucide-react';
+import { useResponsiveSidebar } from '../hooks/useResponsiveSidebar';
 
 const ICONS = {
   LayoutDashboard,
@@ -218,6 +221,7 @@ export function Sidebar({ user, onNavigate, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [openGroups, setOpenGroups] = useState(['examination', 'medical-records', 'prescriptions']);
+  const { collapsed, setCollapsed, toggleCollapsed } = useResponsiveSidebar();
 
   const rawRole = user?.role?.toUpperCase();
   const role = rawRole?.replace(/^ROLE_/, '');
@@ -238,27 +242,29 @@ export function Sidebar({ user, onNavigate, onLogout }) {
   };
 
   return (
-    <aside className="h-full w-[224px] shrink-0 select-none overflow-y-auto border-r border-[#dfeae8] bg-[#eef5f4] flex flex-col">
+    <aside className={`flex h-full shrink-0 select-none flex-col overflow-y-auto border-r border-[#dfeae8] bg-[#eef5f4] transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[224px]'}`}>
       {/* Logo */}
-      <div className="h-20 flex items-center gap-3 px-6">
-        <div className="w-9 h-9 rounded-xl bg-[#127e7a] text-white flex items-center justify-center shadow-sm">
-          <Plus className="w-5 h-5" strokeWidth={3} />
-        </div>
-
-        <div>
-          <div className="text-base font-extrabold tracking-tight text-[#1b2533] leading-tight">
-            METPH
+      <div className={`flex h-20 shrink-0 items-center ${collapsed ? 'justify-center' : 'justify-between gap-2 px-4'}`}>
+        {!collapsed && (
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#127e7a] text-white shadow-sm">
+              <Plus className="h-5 w-5" strokeWidth={3} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-base font-extrabold leading-tight tracking-tight text-[#1b2533]">METPH</div>
+              <div className="whitespace-nowrap text-[10px] font-semibold leading-none text-slate-400">Quản lý phòng khám</div>
+            </div>
           </div>
-          <div className="text-[10px] font-semibold text-slate-400 leading-none">
-            Quản lý phòng khám
-          </div>
-        </div>
+        )}
+        <button type="button" onClick={toggleCollapsed} aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} title={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-500 hover:bg-white hover:text-[#127e7a]">
+          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+        </button>
       </div>
 
       {/* Menu theo vai trò */}
       <nav
         aria-label="Điều hướng chính"
-        className="px-3 py-2 space-y-1 text-[13px] font-medium"
+        className={`space-y-1 py-2 text-[13px] font-medium ${collapsed ? 'px-2' : 'px-3'}`}
       >
         {items.map((item) => {
           const Icon = ICONS[item.iconName] ?? LayoutDashboard;
@@ -270,16 +276,24 @@ export function Sidebar({ user, onNavigate, onLogout }) {
                 <button
                   type="button"
                   aria-expanded={open}
-                  onClick={() => setOpenGroups((current) => current.includes(item.id)
-                    ? current.filter((id) => id !== item.id)
-                    : [...current, item.id])}
-                  className={`${ITEM_CLASS} ${groupActive ? 'text-[#127e7a] font-semibold' : IDLE_CLASS}`}
+                  title={collapsed ? item.label : undefined}
+                  onClick={() => {
+                    if (collapsed) {
+                      setCollapsed(false);
+                      setOpenGroups((current) => current.includes(item.id) ? current : [...current, item.id]);
+                      return;
+                    }
+                    setOpenGroups((current) => current.includes(item.id)
+                      ? current.filter((id) => id !== item.id)
+                      : [...current, item.id]);
+                  }}
+                  className={`${ITEM_CLASS} ${collapsed ? 'justify-center px-0' : ''} ${groupActive ? 'text-[#127e7a] font-semibold' : IDLE_CLASS}`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">{item.label}</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />}
                 </button>
-                {open && (
+                {open && !collapsed && (
                   <div className="ml-7 space-y-0.5 pb-1">
                     {item.children.map((child) => {
                       const childActive = isActive(child.path);
@@ -310,20 +324,21 @@ export function Sidebar({ user, onNavigate, onLogout }) {
               key={item.id}
               type="button"
               aria-current={active ? 'page' : undefined}
+              title={collapsed ? item.label : undefined}
               onClick={() => {
                 if (onNavigate?.(item.path) === false) return;
                 navigate(item.path);
               }}
-              className={`${ITEM_CLASS} ${active ? ACTIVE_CLASS : IDLE_CLASS
+              className={`${ITEM_CLASS} ${collapsed ? 'justify-center px-0' : ''} ${active ? ACTIVE_CLASS : IDLE_CLASS
                 }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              <span>{item.label}</span>
+              {!collapsed && <span>{item.label}</span>}
             </button>
           );
         })}
 
-        {items.length === 0 && (
+        {items.length === 0 && !collapsed && (
           <p className="px-3 py-4 text-xs text-slate-400">
             Không tìm thấy menu cho tài khoản này.
           </p>
@@ -333,10 +348,11 @@ export function Sidebar({ user, onNavigate, onLogout }) {
           <button
             type="button"
             onClick={onLogout}
-            className={`${ITEM_CLASS} mt-4 border-t border-slate-200 pt-4 ${IDLE_CLASS}`}
+            title={collapsed ? 'Đăng xuất' : undefined}
+            className={`${ITEM_CLASS} mt-4 border-t border-slate-200 pt-4 ${collapsed ? 'justify-center px-0' : ''} ${IDLE_CLASS}`}
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            <span>Đăng xuất</span>
+            {!collapsed && <span>Đăng xuất</span>}
           </button>
         )}
       </nav>

@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
@@ -27,12 +27,18 @@ function CreatePage() {
     return <p>Trang tạo hồ sơ {JSON.stringify(location.state?.prefill)}</p>;
 }
 
+function DetailPage() {
+    const { id } = useParams();
+    return <p>Hồ sơ {id}</p>;
+}
+
 function renderPage(patientApi) {
     return render(
         <MemoryRouter initialEntries={['/receptionist/patients']}>
             <Routes>
                 <Route path="/receptionist/patients" element={<ReceptionistPatientsPage patientApi={patientApi} />} />
                 <Route path="/receptionist/patients/new" element={<CreatePage />} />
+                <Route path="/receptionist/patients/:id" element={<DetailPage />} />
             </Routes>
         </MemoryRouter>,
     );
@@ -113,6 +119,18 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.click(within(emptyRow).getByRole('button', { name: 'Tạo hồ sơ bệnh nhân mới' }));
 
         expect(screen.getByText('Trang tạo hồ sơ {"cccdSo":"012345678901"}')).toBeInTheDocument();
+    });
+
+    it('opens the profile when exactly one patient matches the citizen ID (AF-04)', async () => {
+        const user = userEvent.setup();
+        const patientApi = { list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient()])) };
+        renderPage(patientApi);
+        await screen.findByText(MSG.NO_RESULT);
+
+        await user.type(screen.getByLabelText('Từ khóa'), '012345678901');
+        await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
+
+        expect(await screen.findByText('Hồ sơ p-1')).toBeInTheDocument();
     });
 
     it('shows a Vietnamese message instead of the backend message on failure', async () => {

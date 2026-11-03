@@ -58,6 +58,25 @@ const UPDATE_CODE_MESSAGE = {
   MALFORMED_REQUEST: CREATE_CODE_MESSAGE.MALFORMED_REQUEST,
 };
 
+const STATUS_CODE_MESSAGE = {
+  UNAUTHORIZED: CREATE_CODE_MESSAGE.UNAUTHORIZED,
+  FORBIDDEN: 'Bạn không có quyền thay đổi trạng thái dịch vụ.',
+  SERVICE_NOT_FOUND: 'Dịch vụ không còn tồn tại.',
+  CONCURRENT_MODIFICATION: 'Dịch vụ vừa được cập nhật ở nơi khác. Thông tin mới đã được tải lại, vui lòng thử lại.',
+  LAST_ACTIVE_EXAMINATION_SERVICE: 'Không thể ngừng hoạt động dịch vụ khám bệnh duy nhất đang hoạt động.',
+  ACTIVE_EXAMINATION_SERVICE_EXISTS:
+    'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước.',
+  SERVICE_GROUP_HAS_NO_ACTIVE_ROOM: 'Nhóm dịch vụ chưa có phòng thực hiện nào đang hoạt động.',
+};
+
+/** One message for a failed UC-25 status check or change. */
+export function serviceStatusErrorMessage(error) {
+  if (!(error instanceof ApiError)) return 'Đã xảy ra lỗi. Vui lòng thử lại.';
+  const code = error.errorResponse?.code;
+  if (!code && error.status === undefined) return NETWORK_MESSAGE;
+  return STATUS_CODE_MESSAGE[code] || 'Không thay đổi được trạng thái dịch vụ. Vui lòng thử lại.';
+}
+
 /** Field errors and one summary message for a failed UC-23 / UC-24 update. */
 export function serviceUpdateErrors(error) {
   if (!(error instanceof ApiError)) return { fields: {}, message: 'Đã xảy ra lỗi. Vui lòng thử lại.' };

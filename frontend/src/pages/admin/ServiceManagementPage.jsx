@@ -18,7 +18,8 @@ import {
   ServiceCreateView,
   ServiceDetailView,
 } from "../../components/services";
-import { serviceErrorMessage } from "../../components/services/serviceErrors";
+import { ConfirmModal } from "../../components/ui";
+import { serviceErrorMessage, serviceStatusErrorMessage } from "../../components/services/serviceErrors";
 import {
   formToServiceRequest,
   infoFormToRequest,
@@ -73,6 +74,9 @@ export function ServiceManagementPage({
   // { id, service, error } of the detail screen; service is null while loading.
   const [detail, setDetail] = useState({ id: null, service: null, error: null });
   const [detailReloadKey, setDetailReloadKey] = useState(0);
+  // UC-25: { target, unfinishedOrderCount } once the server check passes.
+  const [statusConfirm, setStatusConfirm] = useState(null);
+  const [statusBusy, setStatusBusy] = useState(false);
 
   // The URL decides whether the list, the create form, or a detail is shown.
   // "/new" also matches ":id", so the create route is checked first.
@@ -221,6 +225,40 @@ export function ServiceManagementPage({
       "Đã cập nhật giá dịch vụ",
     );
 
+  // UC-25: the server checks the change first, then the admin confirms it.
+  const requestStatusChange = async () => {
+    const { id, service } = detail;
+    const deactivating = service.status === "ACTIVE";
+    setStatusBusy(true);
+    try {
+      const check = deactivating
+        ? await serviceApi.checkDeactivation(id)
+        : await serviceApi.checkActivation(id);
+      setStatusConfirm({ target: check.targetStatus, unfinishedOrderCount: check.unfinishedOrderCount });
+    } catch (error) {
+      toast.error(serviceStatusErrorMessage(error));
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const confirmStatusChange = async () => {
+    if (statusBusy) return;
+    const { target } = statusConfirm;
+    setStatusBusy(true);
+    try {
+      await updateDetail(
+        (id, version) => serviceApi.updateStatus(id, { status: target, version }),
+        target === "INACTIVE" ? "Đã ngừng hoạt động dịch vụ" : "Đã kích hoạt dịch vụ",
+      );
+    } catch (error) {
+      toast.error(serviceStatusErrorMessage(error));
+    } finally {
+      setStatusBusy(false);
+      setStatusConfirm(null);
+    }
+  };
+
   const layoutProps = {
     currentAdmin,
     onLogout,
@@ -259,13 +297,34 @@ export function ServiceManagementPage({
 
     let content;
     if (current.service) {
+      const deactivating = statusConfirm?.target === "INACTIVE";
       content = (
-        <ServiceDetailView
-          service={current.service}
-          onGoToList={showList}
-          onUpdateInfo={updateInfo}
-          onUpdatePrices={updatePrices}
-        />
+        <>
+          <ServiceDetailView
+            service={current.service}
+            onGoToList={showList}
+            onUpdateInfo={updateInfo}
+            onUpdatePrices={updatePrices}
+            onToggleStatus={requestStatusChange}
+            statusBusy={statusBusy}
+          />
+          <ConfirmModal
+            isOpen={Boolean(statusConfirm)}
+            title={deactivating ? "Ngừng hoạt động dịch vụ" : "Kích hoạt dịch vụ"}
+            description={
+              deactivating
+                ? `Dịch vụ "${current.service.name}" sẽ bị ẩn khỏi danh sách chỉ định.` +
+                  (statusConfirm?.unfinishedOrderCount > 0
+                    ? `\nĐang có ${statusConfirm.unfinishedOrderCount} chỉ định chưa hoàn thành dùng dịch vụ này.`
+                    : "")
+                : `Kích hoạt lại dịch vụ "${current.service.name}"?`
+            }
+            confirmText={statusBusy ? "Đang cập nhật…" : deactivating ? "Ngừng hoạt động" : "Kích hoạt"}
+            variant={deactivating ? "destructive" : "mint"}
+            onConfirm={confirmStatusChange}
+            onClose={() => !statusBusy && setStatusConfirm(null)}
+          />
+        </>
       );
     } else if (current.error) {
       content = (
