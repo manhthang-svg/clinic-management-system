@@ -1,6 +1,7 @@
 // In-memory stand-in for the technician result API (UC-64, UC-67). ASSUMPTION: replace with a real
 // adapter (same method names) once the backend exposes the endpoints. Data resets on page reload.
 import { MOCK_RESULT_ORDERS, MOCK_TECHNICIAN } from './resultMockData';
+import { INITIAL_PARACLINICAL_RESULTS } from '../../constants/technicianResultData';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
