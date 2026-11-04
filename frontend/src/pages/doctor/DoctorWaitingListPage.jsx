@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import {
     ChevronDown,
     ChevronLeft,
@@ -44,7 +44,7 @@ const STATUS_BADGE = {
 
 const SKIPPED_BADGE = ['Bỏ lượt', 'bg-rose-50 text-rose-700 border-rose-200'];
 
-const COLUMNS = ['STT', 'Họ tên', 'Mã BN', 'Tuổi', 'Giới tính', 'Loại khám', 'Thời gian đăng ký',
+const COLUMNS = ['STT', 'Họ tên', 'Mã BN', 'Loại khám', 'Thời gian đăng ký',
     'Ghi chú', 'Trạng thái', 'Thao tác'];
 
 const defaultProfileLoader = (signal) => createAccountApi(apiClient).profile(signal);
@@ -57,17 +57,6 @@ function formatDateTime(value) {
         date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
     ];
-}
-
-function ageOf(dob) {
-    if (!dob) return null;
-    const birth = new Date(`${dob}T00:00:00`);
-    if (Number.isNaN(birth.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const beforeBirthday = today.getMonth() < birth.getMonth()
-        || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
-    return beforeBirthday ? age - 1 : age;
 }
 
 function Badge({ className, children }) {
@@ -131,6 +120,7 @@ export default function DoctorWaitingListPage({
     loadProfile = defaultProfileLoader,
     initialTab = 'waiting',
 }) {
+    const location = useLocation();
     const navigate = useNavigate();
     const [profile, setProfile] = useState(null);
     const [visits, setVisits] = useState([]);
@@ -140,7 +130,7 @@ export default function DoctorWaitingListPage({
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeTab, setActiveTab] = useState(location.state?.activeTab ?? initialTab);
     const [search, setSearch] = useState('');
     const [priority, setPriority] = useState('ALL');
     const [visitType, setVisitType] = useState('ALL');
@@ -221,7 +211,7 @@ export default function DoctorWaitingListPage({
                 : `Bệnh nhân ${visit.patientName} đã có mặt, bắt đầu khám.`);
             navigate(
                 visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : ROUTES.DOCTOR.CLINICAL_EXAMINATION,
-                { state: { visitId: visit.id, stage: visit.status, visit, queueInfo } },
+                { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab } },
             );
         } catch (error) {
             toast.error(queueErrorMessage(error, 'Không thể bắt đầu lượt khám. Vui lòng tải lại danh sách rồi thử lại.'));
@@ -230,7 +220,7 @@ export default function DoctorWaitingListPage({
             setCalling(false);
             setProcessingVisitId(null);
         }
-    }, [calling, fetchQueue, navigate, queueInfo, visitApi]);
+    }, [activeTab, calling, fetchQueue, navigate, queueInfo, visitApi]);
 
     const skipPatient = useCallback(async (visit) => {
         if (!visit || calling) return;
@@ -258,7 +248,7 @@ export default function DoctorWaitingListPage({
             toast.success(`Đã tiếp nhận lại bệnh nhân ${visit.patientName}.`);
             navigate(
                 visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : ROUTES.DOCTOR.CLINICAL_EXAMINATION,
-                { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, acceptedFromSkipped: true } },
+                { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, acceptedFromSkipped: true, returnTab: activeTab } },
             );
         } catch (error) {
             toast.error(queueErrorMessage(error, 'Không thể tiếp nhận lại bệnh nhân. Vui lòng thử lại.'));
@@ -267,12 +257,12 @@ export default function DoctorWaitingListPage({
             setCalling(false);
             setProcessingVisitId(null);
         }
-    }, [calling, fetchQueue, navigate, queueInfo, visitApi]);
+    }, [activeTab, calling, fetchQueue, navigate, queueInfo, visitApi]);
 
     const openClinicalExamination = useCallback((visit) => {
         if (!visit || activeTab !== 'in-examination') return;
         navigate(ROUTES.DOCTOR.CLINICAL_EXAMINATION, {
-            state: { visitId: visit.id, stage: visit.status, visit, queueInfo },
+            state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab },
         });
     }, [activeTab, navigate, queueInfo]);
 
@@ -368,13 +358,11 @@ export default function DoctorWaitingListPage({
                         )}
 
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1400px] table-fixed border-collapse text-center text-xs">
+                            <table className="w-full min-w-[1280px] table-fixed border-collapse text-center text-xs">
                                 <colgroup>
                                     <col className="w-[64px]" />
                                     <col className="w-[200px]" />
                                     <col className="w-[190px]" />
-                                    <col className="w-[64px]" />
-                                    <col className="w-[84px]" />
                                     <col className="w-[100px]" />
                                     <col className="w-[140px]" />
                                     <col className="w-[210px]" />
@@ -408,8 +396,6 @@ export default function DoctorWaitingListPage({
                                                 <td className={`px-3 py-3 font-bold ${visit.isPriority ? 'text-rose-600' : 'text-slate-700'}`}>{String(visit.queueNumber ?? '—').padStart(2, '0')}</td>
                                                 <td className="truncate px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>
                                                 <td className="break-all whitespace-normal px-3 py-3 text-slate-600">{visit.patientCode || '—'}</td>
-                                                <td className="px-3 py-3">{ageOf(visit.patientDob) ?? '—'}</td>
-                                                <td className="px-3 py-3">{visit.patientGender || '—'}</td>
                                                 <td className="px-3 py-3"><TypeBadge type={visit.doituongbnLoai} /></td>
                                                 <td className="px-3 py-3 text-slate-600">{time}<br />{date}</td>
                                                 <td className="break-words whitespace-normal px-3 py-3"><VisitNotes visit={visit} /></td>

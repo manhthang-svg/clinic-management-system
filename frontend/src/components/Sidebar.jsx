@@ -229,12 +229,15 @@ export function Sidebar({ user, onNavigate, onLogout }) {
 
   const isActive = (path) => {
     const currentPath = location.pathname;
+    const activePath = currentPath === '/doctor/clinical-examination'
+      ? '/doctor/appointments'
+      : currentPath;
     const navigableItems = items.flatMap((item) => item.children ?? [item]);
     const matchedItems = navigableItems
       .filter(
         (item) =>
-          currentPath === item.path ||
-          currentPath.startsWith(`${item.path}/`)
+          activePath === item.path ||
+          activePath.startsWith(`${item.path}/`)
       )
       .sort((a, b) => b.path.length - a.path.length);
 

@@ -29,6 +29,7 @@ describe('ClinicalExaminationPage', () => {
     it('shows visit context and the clinical examination form', () => {
         renderPage();
         expect(screen.getByRole('heading', { name: 'Khám lâm sàng' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Khám bệnh' })).toBeInTheDocument();
         expect(screen.getByText('Nguyễn Văn Nam')).toBeInTheDocument();
         expect(screen.getAllByText('Phòng khám Nội tổng quát').length).toBeGreaterThan(0);
         expect(screen.getByDisplayValue('Đau đầu, chóng mặt')).toBeInTheDocument();

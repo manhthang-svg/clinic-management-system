@@ -90,8 +90,14 @@ function TransferRoomPanel({ visit, queueInfo, onCancel }) {
         const controller = new AbortController();
         visitApi.getActiveExaminationRooms(controller.signal)
             .then((items) => setRooms((Array.isArray(items) ? items : []).filter((room) => room.id !== queueInfo?.roomId)))
-            .catch(() => toast.error('Không thể tải danh sách phòng khám đang hoạt động.'))
-            .finally(() => setLoading(false));
+            .catch((error) => {
+                if (error?.name !== 'AbortError') {
+                    toast.error('Không thể tải danh sách phòng khám đang hoạt động.');
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoading(false);
+            });
         return () => controller.abort();
     }, [queueInfo?.roomId]);
 
@@ -142,6 +148,10 @@ export default function ClinicalExaminationPage() {
     const navigate = useNavigate();
     const visit = location.state?.visit ?? null;
     const queueInfo = location.state?.queueInfo ?? null;
+    const returnTab = location.state?.returnTab;
+    const returnToWaitingList = () => navigate(ROUTES.DOCTOR.WAITING_LIST, {
+        state: returnTab ? { activeTab: returnTab } : undefined,
+    });
     const draftKey = `clinical-examination:${location.state?.visitId ?? visit?.id ?? 'unknown'}`;
     const [form, setForm] = useState(() => {
         try {
@@ -171,7 +181,7 @@ export default function ClinicalExaminationPage() {
                 <Stethoscope className="mx-auto h-10 w-10 text-amber-600" />
                 <h1 className="mt-3 text-lg font-bold text-slate-800">Chưa chọn lượt khám</h1>
                 <p className="mt-1 text-sm text-slate-600">Vui lòng bắt đầu một bệnh nhân từ danh sách chờ khám.</p>
-                <button type="button" onClick={() => navigate(ROUTES.DOCTOR.WAITING_LIST)} className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Về danh sách chờ</button>
+                <button type="button" onClick={returnToWaitingList} className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Về danh sách chờ</button>
             </div>
         );
     }
@@ -188,7 +198,7 @@ export default function ClinicalExaminationPage() {
     return (
         <main className="mx-auto max-w-[1600px] space-y-3 pb-8 text-slate-800">
             <header className="flex items-center justify-between">
-                <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="text-xs text-slate-400">Khám bệnh <span className="px-1">›</span> Khám lâm sàng</p></div></div>
+                <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="flex items-center text-xs text-slate-400"><button type="button" onClick={returnToWaitingList} className="cursor-pointer font-semibold text-teal-700 hover:text-teal-900 hover:underline">Khám bệnh</button><span className="px-1">›</span><span>Khám lâm sàng</span></p></div></div>
                 <button type="button" onClick={saveDraft} className="inline-flex h-10 items-center gap-2 rounded-lg border border-teal-600 px-4 text-xs font-semibold text-teal-700 hover:bg-teal-50"><Save className="h-4 w-4" />Lưu bản nháp</button>
             </header>
 
@@ -232,7 +242,7 @@ export default function ClinicalExaminationPage() {
                 <aside className="sticky top-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-bold"><CalendarDays className="h-4 w-4 text-teal-600" />Thông tin lượt khám</h2><dl className="mt-4 space-y-3 text-xs">{[['Ngày khám', formatDate(visit.thoigianvaovien)], ['Giờ đăng ký', formatTime(visit.thoigianvaovien)], ['Số thứ tự', visit.queueNumber], ['Loại khám', visit.doituongbnLoai === 'BHYT' ? 'Khám BHYT' : 'Khám dịch vụ'], ['Phòng khám', queueInfo?.roomName], ['Bác sĩ khám', queueInfo?.doctorName]].map(([label, value]) => <div key={label} className="grid grid-cols-[88px_1fr] gap-2"><dt className="text-slate-400">{label}</dt><dd className="font-semibold text-slate-700">{value || '—'}</dd></div>)}</dl><div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />Đang khám</div></aside>
             </div>
 
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => navigate(ROUTES.DOCTOR.WAITING_LIST)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600">Quay lại danh sách</button><button type="button" onClick={saveDraft} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800"><Save className="h-4 w-4" />Lưu bản nháp</button></div>
+            <div className="flex justify-end gap-2"><button type="button" onClick={returnToWaitingList} className="rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600">Quay lại danh sách</button><button type="button" onClick={saveDraft} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800"><Save className="h-4 w-4" />Lưu bản nháp</button></div>
             </>}
 
             {orderOpen && <ParaclinicalOrderDialog visit={visit} onClose={() => setOrderOpen(false)} onCreated={() => { setOrderOpen(false); toast.success('Đã tạo chỉ định cận lâm sàng.'); }} />}
