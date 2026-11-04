@@ -57,8 +57,8 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
         insertVisit(receptionist, roomId, QUEUE_DATE, "IN_EXAMINATION", false);
         insertVisit(receptionist, roomId, QUEUE_DATE, "WAITING_PARACLINICAL", false);
         insertVisit(receptionist, roomId, QUEUE_DATE, "WAITING_CONCLUSION", false);
-        // Not part of the queue: unpaid service visit, finished visit, and another day.
         insertVisit(receptionist, roomId, QUEUE_DATE, "WAITING_FEE_PAYMENT", false);
+        // Not part of the queue: finished visit, another day, and an inactive room.
         insertVisit(receptionist, roomId, QUEUE_DATE, "COMPLETED", false);
         insertVisit(receptionist, roomId, QUEUE_DATE.minusDays(1), "WAITING", false);
         insertVisit(receptionist, inactiveRoomId, QUEUE_DATE, "WAITING", false);
@@ -71,14 +71,35 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(room + ".roomCode", contains("PK-" + suffix)))
                 .andExpect(jsonPath(room + ".roomName", contains("Phòng PK-" + suffix)))
+                .andExpect(jsonPath(room + ".departmentName", contains("Khoa " + suffix)))
+                .andExpect(jsonPath(room + ".hasDoctor", contains(false)))
+                .andExpect(jsonPath(room + ".waitingPaymentCount", contains(1)))
                 .andExpect(jsonPath(room + ".waitingCount", contains(2)))
                 .andExpect(jsonPath(room + ".inExaminationCount", contains(1)))
                 .andExpect(jsonPath(room + ".waitingParaclinicalCount", contains(1)))
                 .andExpect(jsonPath(room + ".waitingConclusionCount", contains(1)))
                 .andExpect(jsonPath(room + ".skippedCount", contains(1)))
                 .andExpect(jsonPath(emptyRoom + ".waitingCount", contains(0)))
+                .andExpect(jsonPath(emptyRoom + ".waitingPaymentCount", contains(0)))
                 .andExpect(jsonPath(emptyRoom + ".skippedCount", contains(0)))
                 .andExpect(jsonPath("$.data[?(@.roomId == '" + inactiveRoomId + "')]", empty()));
+    }
+
+    @Test
+    void listsActiveAssignedDoctorsOfEachRoom() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        StaffAccount doctor = account(Role.DOCTOR);
+        String suffix = suffix();
+        UUID roomId = insertRoom(insertDepartment(suffix), "PD-" + suffix, "ACTIVE");
+        assignToRoom(doctor, roomId);
+
+        String room = "$.data[?(@.roomId == '" + roomId + "')]";
+        mockMvc.perform(get("/api/v1/visits/queue-status")
+                        .param("date", QUEUE_DATE.toString())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(room + ".hasDoctor", contains(true)))
+                .andExpect(jsonPath(room + ".doctorNames[0]", contains(doctor.getFullName())));
     }
 
     @Test
@@ -98,6 +119,13 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
                         .param("date", "30/10/2026")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
                 .andExpect(status().isBadRequest());
+    }
+
+    private void assignToRoom(StaffAccount staff, UUID roomId) {
+        jdbc.update("""
+                INSERT INTO staff_room_assignments (id, staff_account_id, room_id, assigned_at, version)
+                VALUES (?, ?, ?, ?, 0)
+                """, UUID.randomUUID(), staff.getId(), roomId, Timestamp.from(Instant.now()));
     }
 
     private static String suffix() {

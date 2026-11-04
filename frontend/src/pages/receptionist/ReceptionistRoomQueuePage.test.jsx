@@ -5,11 +5,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ApiError from '../../apis/apiError';
 import ReceptionistRoomQueuePage from './ReceptionistRoomQueuePage';
 
+const NO_ROOM_MESSAGE = 'Hiện không có phòng khám nào có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.';
+
 const room = (overrides) => ({
     roomId: 'room-1',
     roomCode: 'PK01',
     roomName: 'Phòng khám Nội 1',
     location: 'Tầng 1',
+    departmentId: 'dept-1',
+    departmentName: 'Khoa Nội',
+    doctorNames: ['BS Nguyễn Văn An'],
+    hasDoctor: true,
+    waitingPaymentCount: 0,
     waitingCount: 0,
     inExaminationCount: 0,
     waitingParaclinicalCount: 0,
@@ -41,11 +48,11 @@ describe('ReceptionistRoomQueuePage', () => {
 
         const busyRow = (await screen.findByText('Phòng khám Nội 1')).closest('tr');
         const cells = within(busyRow).getAllByRole('cell');
-        expect(cells.slice(1).map((cell) => cell.textContent)).toEqual(['4', '1', '0', '0', '2']);
+        expect(cells.slice(1).map((cell) => cell.textContent)).toEqual(['0', '4', '1', '0', '0', '2']);
         expect(within(busyRow).getByText('PK01 · Tầng 1')).toBeInTheDocument();
         expect(within(busyRow).getByText('Đông nhất')).toBeInTheDocument();
         expect(within(screen.getByText('Phòng khám Nội 2').closest('tr')).queryByText('Đông nhất')).not.toBeInTheDocument();
-        expect(screen.getByText('Phòng khám đang hoạt động').nextSibling).toHaveTextContent('2');
+        expect(screen.getByText('Phòng khám tiếp nhận được').nextSibling).toHaveTextContent('2');
         expect(screen.getByText('Tổng bệnh nhân chờ khám').nextSibling).toHaveTextContent('5');
         expect(screen.getByText('Đang khám', { selector: 'p' }).nextSibling).toHaveTextContent('2');
     });
@@ -71,7 +78,79 @@ describe('ReceptionistRoomQueuePage', () => {
         render(<ReceptionistRoomQueuePage visitApi={visitApi} />);
 
         expect(await screen.findByText('Chưa có phòng khám đang hoạt động')).toBeInTheDocument();
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(NO_ROOM_MESSAGE);
+    });
+
+    it('groups rooms by department and shows doctors and the waiting-for-payment count', async () => {
+        const visitApi = {
+            getQueueStatus: vi.fn().mockResolvedValue([
+                room({ waitingPaymentCount: 3 }),
+                room({
+                    roomId: 'room-2', roomCode: 'PK05', roomName: 'Phòng khám Tim 1',
+                    departmentId: 'dept-2', departmentName: 'Khoa Tim mạch', doctorNames: ['ThS.BS Trần Bình'],
+                }),
+            ]),
+        };
+
+        render(<ReceptionistRoomQueuePage visitApi={visitApi} />);
+
+        const internalRow = (await screen.findByText('Phòng khám Nội 1')).closest('tr');
+        expect(within(internalRow).getAllByRole('cell')[1]).toHaveTextContent('3');
+        expect(within(internalRow).getByText('Bác sĩ: BS Nguyễn Văn An')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Chờ thanh toán' })).toBeInTheDocument();
+        const headers = screen.getAllByRole('columnheader').map((cell) => cell.textContent);
+        expect(headers).toContain('Khoa Nội');
+        expect(headers).toContain('Khoa Tim mạch');
+        expect(screen.getByText('Bác sĩ: ThS.BS Trần Bình')).toBeInTheDocument();
+    });
+
+    it('greys out a room without a doctor and warns when no room can receive patients', async () => {
+        const visitApi = {
+            getQueueStatus: vi.fn().mockResolvedValue([
+                room({ doctorNames: [], hasDoctor: false, waitingCount: 9 }),
+            ]),
+        };
+
+        render(<ReceptionistRoomQueuePage visitApi={visitApi} />);
+
+        const row = (await screen.findByText('Phòng khám Nội 1')).closest('tr');
+        expect(row).toHaveClass('opacity-60');
+        expect(within(row).getByText('Chưa có bác sĩ')).toBeInTheDocument();
+        expect(within(row).queryByText('Đông nhất')).not.toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(NO_ROOM_MESSAGE);
+        expect(screen.getByText('Phòng khám tiếp nhận được').nextSibling).toHaveTextContent('0');
+    });
+
+    it('opens the waiting list of a room and goes back to the overview', async () => {
+        const user = userEvent.setup();
+        const visitApi = {
+            getQueueStatus: vi.fn().mockResolvedValue([room({ waitingCount: 2 })]),
+            getQueue: vi.fn().mockResolvedValue([
+                {
+                    id: 'visit-1', queueNumber: 1, patientName: 'Lê Văn Cường', patientCode: 'BN0001',
+                    isPriority: true, thoigianvaovien: '2026-11-05T01:30:00Z', status: 'WAITING', isSkipped: false,
+                },
+                {
+                    id: 'visit-2', queueNumber: 2, patientName: 'Phạm Thị Dung', patientCode: 'BN0002',
+                    isPriority: false, thoigianvaovien: '2026-11-05T01:40:00Z', status: 'WAITING', isSkipped: true,
+                },
+            ]),
+        };
+
+        render(<ReceptionistRoomQueuePage visitApi={visitApi} />);
+        await user.click(await screen.findByRole('button', { name: 'Phòng khám Nội 1' }));
+
+        const detail = await screen.findByRole('region', { name: 'Hàng đợi Phòng khám Nội 1' });
+        expect(visitApi.getQueue).toHaveBeenCalledWith({ roomId: 'room-1' }, expect.any(AbortSignal));
+        const first = (await within(detail).findByText('Lê Văn Cường')).closest('tr');
+        expect(within(first).getByText('Ưu tiên')).toBeInTheDocument();
+        expect(within(first).getByText('Chờ khám')).toBeInTheDocument();
+        expect(within(within(detail).getByText('Phạm Thị Dung').closest('tr')).getByText('Bỏ lượt')).toBeInTheDocument();
+
+        await user.click(within(detail).getByRole('button', { name: 'Quay lại' }));
+
+        expect(screen.queryByRole('region', { name: 'Hàng đợi Phòng khám Nội 1' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Phòng khám Nội 1' })).toBeInTheDocument();
     });
 
     it('reloads on demand and disables the button while loading', async () => {

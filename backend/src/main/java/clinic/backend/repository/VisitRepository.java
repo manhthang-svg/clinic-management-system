@@ -103,6 +103,7 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
             from Visit v
             where v.queueDate = :queueDate
               and v.status in (
+                  clinic.backend.enums.VisitStatus.WAITING_FEE_PAYMENT,
                   clinic.backend.enums.VisitStatus.WAITING,
                   clinic.backend.enums.VisitStatus.IN_EXAMINATION,
                   clinic.backend.enums.VisitStatus.WAITING_PARACLINICAL,

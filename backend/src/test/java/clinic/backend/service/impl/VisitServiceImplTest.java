@@ -18,6 +18,7 @@ import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.Department;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.entity.Visit;
@@ -38,6 +39,7 @@ import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.PatientRepository;
 import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VisitTransferRepository;
@@ -86,6 +88,9 @@ class VisitServiceImplTest {
     private RoomRepository roomRepository;
 
     @Mock
+    private DepartmentRepository departmentRepository;
+
+    @Mock
     private VisitRepository visitRepository;
 
     @Mock
@@ -130,6 +135,7 @@ class VisitServiceImplTest {
                 paymentRepository,
                 patientRepository,
                 roomRepository,
+                departmentRepository,
                 visitRepository,
                 visitTransferRepository,
                 staffRoomAssignmentRepository,
@@ -287,6 +293,69 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void queueStatusCountsVisitsWaitingForPayment() {
+        Room room = room(BUSY_ROOM_ID, "PK01");
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(room));
+        when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of(
+                count(BUSY_ROOM_ID, VisitStatus.WAITING_FEE_PAYMENT, false, 2),
+                count(BUSY_ROOM_ID, VisitStatus.WAITING, false, 1)));
+
+        var status = service.getRoomQueueStatus(QUEUE_DATE).getFirst();
+
+        assertThat(status.waitingPaymentCount()).isEqualTo(2);
+        assertThat(status.waitingCount()).isEqualTo(1);
+    }
+
+    @Test
+    void queueStatusShowsActiveAssignedDoctorsAndFlagsRoomsWithoutDoctor() {
+        Room busyRoom = room(BUSY_ROOM_ID, "PK01");
+        Room emptyRoom = room(EMPTY_ROOM_ID, "PK02");
+        UUID lockedDoctorId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(busyRoom, emptyRoom));
+        when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of());
+        when(staffRoomAssignmentRepository.findByRemovedAtIsNull()).thenReturn(List.of(
+                assignment(DOCTOR_ID, BUSY_ROOM_ID),
+                assignment(lockedDoctorId, EMPTY_ROOM_ID),
+                assignment(nurseId, EMPTY_ROOM_ID)));
+        when(staffAccountRepository.findAllById(any())).thenReturn(List.of(
+                staff(DOCTOR_ID, "BS", "Nguyễn Văn An", clinic.backend.enums.Role.DOCTOR, AccountStatus.ACTIVE),
+                staff(lockedDoctorId, null, "Trần Bình", clinic.backend.enums.Role.DOCTOR, AccountStatus.LOCKED),
+                staff(nurseId, null, "Lê Cúc", clinic.backend.enums.Role.RECEPTIONIST, AccountStatus.ACTIVE)));
+
+        var status = service.getRoomQueueStatus(QUEUE_DATE);
+
+        assertThat(status.get(0).doctorNames()).containsExactly("BS Nguyễn Văn An");
+        assertThat(status.get(0).hasDoctor()).isTrue();
+        assertThat(status.get(1).doctorNames()).isEmpty();
+        assertThat(status.get(1).hasDoctor()).isFalse();
+    }
+
+    @Test
+    void queueStatusGroupsRoomsByDepartmentName() {
+        UUID cardiologyId = UUID.randomUUID();
+        UUID internalId = UUID.randomUUID();
+        Room internalRoom = room(BUSY_ROOM_ID, "PK01");
+        Room cardiologyRoom = room(EMPTY_ROOM_ID, "PK02");
+        Room noDepartmentRoom = room(UUID.randomUUID(), "PK00");
+        when(internalRoom.getDepartmentId()).thenReturn(internalId);
+        when(cardiologyRoom.getDepartmentId()).thenReturn(cardiologyId);
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(noDepartmentRoom, internalRoom, cardiologyRoom));
+        when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of());
+        List<Department> departments = List.of(
+                department(internalId, "Khoa Nội"), department(cardiologyId, "Khoa Tim mạch"));
+        when(departmentRepository.findAllById(any())).thenReturn(departments);
+
+        var status = service.getRoomQueueStatus(QUEUE_DATE);
+
+        assertThat(status).extracting("roomCode").containsExactly("PK01", "PK02", "PK00");
+        assertThat(status).extracting("departmentName").containsExactly("Khoa Nội", "Khoa Tim mạch", null);
+    }
+
+    @Test
     void roomWithoutQueuedVisitsReportsZeroCounts() {
         Room emptyRoom = room(EMPTY_ROOM_ID, "PK02");
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
@@ -424,6 +493,25 @@ class VisitServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACTIVE_VISIT_EXISTS));
         verifyNoInteractions(paymentRepository);
+    }
+
+    private StaffRoomAssignment assignment(UUID staffAccountId, UUID roomId) {
+        return new StaffRoomAssignment(
+                UUID.randomUUID(), staffAccountId, roomId, clock.instant(), null, null, null, 0L);
+    }
+
+    private static StaffAccount staff(
+            UUID id, String title, String name, clinic.backend.enums.Role role, AccountStatus status) {
+        return StaffAccount.builder()
+                .id(id).academicTitle(title).fullName(name).role(role).status(status)
+                .build();
+    }
+
+    private static Department department(UUID id, String name) {
+        Department department = mock(Department.class);
+        when(department.getId()).thenReturn(id);
+        when(department.getDepartmentName()).thenReturn(name);
+        return department;
     }
 
     @Test
