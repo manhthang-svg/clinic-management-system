@@ -22,6 +22,9 @@ export function createServiceApi(client) {
             client.request(`/lab-parameters/${parameterId}/reference-ranges`, { method: 'POST', body }),
         updateReferenceRange: (parameterId, rangeId, body) =>
             client.request(`/lab-parameters/${parameterId}/reference-ranges/${rangeId}`, { method: 'PUT', body }),
+        listLabParameters: (signal) => client.request('/lab-parameters', { signal }),
+        reviseReferenceRange: (parameterId, rangeId, body) =>
+            client.request(`/lab-parameters/${parameterId}/reference-ranges/${rangeId}/revisions`, { method: 'POST', body }),
     };
 }
 

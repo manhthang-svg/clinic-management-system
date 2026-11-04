@@ -12,6 +12,7 @@ export const ROUTES = {
     SERVICES: '/admin/services',
     SERVICE_CREATE: '/admin/services/new',
     SERVICE_DETAIL: '/admin/services/:id',
+    LAB_PARAMETERS: '/admin/lab-parameters',
     PROFILE: '/admin/profile',
     PATIENTS: '/admin/patients',
     APPOINTMENTS: '/admin/appointments',

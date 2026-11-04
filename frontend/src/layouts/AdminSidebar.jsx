@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Plus,
   CalendarDays,
+  FlaskConical,
 } from 'lucide-react';
 import { NAV_ITEMS } from '../constants/accountData';
 import { useResponsiveSidebar } from '../hooks/useResponsiveSidebar';
@@ -32,6 +33,7 @@ const ICONS = {
   Hospital,
   Settings,
   CalendarDays,
+  FlaskConical,
 };
 
 const ITEM_CLASS = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer';
@@ -47,6 +49,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
     departments: '/admin/departments',
     rooms: '/admin/rooms',
     services: '/admin/services',
+    'lab-parameters': '/admin/lab-parameters',
     schedules: '/admin/schedules',
     'hospital-information': '/admin/hospital-information',
   };

@@ -54,6 +54,19 @@ public class LabReferenceRangeController {
                 .body(ApiResponse.success(created));
     }
 
+    @Operation(summary = "Cập nhật giá trị bằng một khoảng mới có hiệu lực từ hôm nay; khoảng cũ hết hiệu lực từ hôm qua")
+    @PostMapping("/{rangeId}/revisions")
+    public ResponseEntity<ApiResponse<LabReferenceRangeResponse>> revise(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID parameterId,
+            @PathVariable UUID rangeId,
+            @Valid @RequestBody LabReferenceRangeRequest request) {
+        LabReferenceRangeResponse revised = service.revise(StaffPrincipal.from(jwt), parameterId, rangeId, request);
+        return ResponseEntity.created(URI.create(
+                        "/api/v1/lab-parameters/" + parameterId + "/reference-ranges/" + revised.id()))
+                .body(ApiResponse.success(revised));
+    }
+
     @Operation(summary = "Cập nhật hoặc bật/tắt trực tiếp một khoảng tham chiếu")
     @PutMapping("/{rangeId}")
     public ApiResponse<LabReferenceRangeResponse> update(

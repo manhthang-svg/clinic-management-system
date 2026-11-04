@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
   { id: 'departments', label: 'Khoa / Phòng', iconName: 'Building2' },
   { id: 'schedules', label: 'Lịch trực', iconName: 'CalendarDays' },
   { id: 'services', label: 'Dịch vụ', iconName: 'BriefcaseMedical' },
+  { id: 'lab-parameters', label: 'Chỉ số xét nghiệm', iconName: 'FlaskConical' },
   { id: 'medicines', label: 'Danh mục thuốc', iconName: 'Pill' },
   { id: 'shared-catalogs', label: 'Danh mục dùng chung', iconName: 'BookOpen' },
   {

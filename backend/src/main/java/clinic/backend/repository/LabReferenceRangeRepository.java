@@ -11,5 +11,7 @@ public interface LabReferenceRangeRepository extends JpaRepository<LabReferenceR
 
     List<LabReferenceRange> findAllByParameterIdOrderByEffectiveFromDesc(UUID parameterId);
 
+    List<LabReferenceRange> findAllByOrderByEffectiveFromDesc();
+
     List<LabReferenceRange> findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(Collection<UUID> parameterIds);
 }
