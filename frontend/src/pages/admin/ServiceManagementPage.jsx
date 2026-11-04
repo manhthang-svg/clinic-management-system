@@ -287,9 +287,6 @@ export function ServiceManagementPage({
             groups={groups}
             departments={departments}
             labParameters={labParameters}
-            referenceRangeApi={serviceApi}
-            onReferenceRangesChanged={() => loadFormOptions()
-              .catch((error) => toast.error(serviceErrorMessage(error)))}
             onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}

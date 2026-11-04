@@ -18,7 +18,7 @@ export function DashboardLayout({ children, currentUser, onLogout, onChangePassw
                     onOpenProfile={onOpenProfile}
                 />
 
-                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+                <main className="relative min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
                     {children ?? <Outlet />}
                 </main>
             </div>

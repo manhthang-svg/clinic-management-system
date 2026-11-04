@@ -12,6 +12,6 @@ public record UpdateMedicalServicePriceRequest(
         @NotNull @Digits(integer = 9, fraction = 0)
         @DecimalMin("1") @DecimalMax("100000000") BigDecimal clinicPrice,
         @Digits(integer = 9, fraction = 0)
-        @DecimalMin("0") @DecimalMax("100000000") BigDecimal insurancePrice,
+        @DecimalMin("1") @DecimalMax("100000000") BigDecimal insurancePrice,
         @NotNull @PositiveOrZero Long version) {
 }

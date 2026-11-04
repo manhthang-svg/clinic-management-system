@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Banknote, FileText, FlaskConical, Info, Plus, X } from 'lucide-react';
+import { Banknote, FileText, FlaskConical, Plus, X } from 'lucide-react';
 import {
   SERVICE_TYPE_MAP,
   resolveServiceGroupType,
-  doesServiceGroupMatchDepartment,
 } from '../../constants/serviceData';
 import { FormSection, AccountPageHeader } from '../accounts/AccountFormParts';
 import {
@@ -16,15 +15,15 @@ import {
 import { serviceCreateErrors } from './serviceErrors';
 import { INPUT_CLASS, Field, FieldError, FieldHint, FormAlert, PriceInput } from './ServiceFormParts';
 import { LabParameterSelector } from './LabParameterSelector';
-import { LabReferenceRangeModal } from './LabReferenceRangeModal';
+
+// The shared examination service is not created from this screen; only paraclinical types are offered.
+const CREATABLE_TYPES = Object.entries(SERVICE_TYPE_MAP).filter(([value]) => value !== 'EXAMINATION');
 
 /** Create Service (UC-22). */
 export function ServiceCreateView({
   groups = [],
   departments = [],
   labParameters = [],
-  referenceRangeApi,
-  onReferenceRangesChanged,
   onCreate,
   onCancel,
   onGoToList,
@@ -33,19 +32,17 @@ export function ServiceCreateView({
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState({ fields: {}, message: null });
-  const [referenceParameter, setReferenceParameter] = useState(null);
 
   const errors = validateServiceForm(form);
   const shownErrors = touched ? { ...serverErrors.fields, ...errors } : {};
-  const examination = form.type === 'EXAMINATION';
+  // The performing department follows the chosen group (service_groups.department_id) and is not edited here.
+  const selectedGroup = groups.find((group) => String(group.id) === String(form.serviceGroupId));
   const selectedDept = departments.find((department) => String(department.id) === String(form.departmentId));
-  const typeDepartments = departments.filter(
-    (department) => department.type === 'PARACLINICAL' && department.active !== false,
+  const typeGroups = groups.filter(
+    (group) => resolveServiceGroupType(group) === form.type || group.type === form.type,
   );
-  const typeGroups = groups.filter((group) => {
-    if (resolveServiceGroupType(group) !== form.type && group.type !== form.type) return false;
-    return selectedDept ? doesServiceGroupMatchDepartment(group, selectedDept) : true;
-  });
+  let departmentText = '';
+  if (selectedGroup) departmentText = selectedDept?.name ?? 'Nhóm dịch vụ chưa được gán khoa';
 
   const clearServerError = (field) =>
     setServerErrors((previous) => {
@@ -58,20 +55,14 @@ export function ServiceCreateView({
   const onChange = (field, value) => {
     setForm((previous) => {
       const next = { ...previous, [field]: value };
-      if (field === 'departmentId') {
-        const nextDepartment = departments.find((department) => String(department.id) === String(value));
-        const currentGroup = groups.find((group) => String(group.id) === String(previous.serviceGroupId));
-        if (currentGroup && nextDepartment && !doesServiceGroupMatchDepartment(currentGroup, nextDepartment)) {
-          next.serviceGroupId = '';
-        }
-      }
       if (field === 'serviceGroupId') {
         const nextGroup = groups.find((group) => String(group.id) === String(value));
-        if (nextGroup?.departmentId) next.departmentId = String(nextGroup.departmentId);
+        next.departmentId = nextGroup?.departmentId ? String(nextGroup.departmentId) : '';
       }
       return next;
     });
     clearServerError(field);
+    if (field === 'serviceGroupId') clearServerError('departmentId');
   };
 
   const onTypeChange = (type) => {
@@ -178,68 +169,54 @@ export function ServiceCreateView({
               onChange={(event) => onTypeChange(event.target.value)}
               className={`${INPUT_CLASS} cursor-pointer`}
             >
-              {Object.entries(SERVICE_TYPE_MAP).map(([value, type]) => (
+              {CREATABLE_TYPES.map(([value, type]) => (
                 <option key={value} value={value}>{type.label}</option>
               ))}
             </select>
           </Field>
 
-          {!examination && (
-            <>
-              <Field
-                id="service-group"
-                label="Nhóm dịch vụ"
-                required
-                error={shownErrors.serviceGroupId}
-                hint={typeGroups.length === 0 ? 'Chưa có nhóm phù hợp với loại dịch vụ.' : undefined}
-                className="lg:col-span-4"
-              >
-                <select
-                  id="service-group"
-                  value={form.serviceGroupId}
-                  onChange={(event) => onChange('serviceGroupId', event.target.value)}
-                  aria-invalid={Boolean(shownErrors.serviceGroupId)}
-                  aria-describedby={shownErrors.serviceGroupId ? 'service-group-error' : undefined}
-                  className={`${INPUT_CLASS} cursor-pointer`}
-                >
-                  <option value="">Chọn nhóm dịch vụ</option>
-                  {typeGroups.map((group) => (
-                    <option key={group.id} value={group.id}>{group.name}</option>
-                  ))}
-                </select>
-              </Field>
+          <Field
+            id="service-group"
+            label="Nhóm dịch vụ"
+            required
+            error={shownErrors.serviceGroupId}
+            hint={typeGroups.length === 0 ? 'Chưa có nhóm phù hợp với loại dịch vụ.' : undefined}
+            className="lg:col-span-4"
+          >
+            <select
+              id="service-group"
+              value={form.serviceGroupId}
+              onChange={(event) => onChange('serviceGroupId', event.target.value)}
+              aria-invalid={Boolean(shownErrors.serviceGroupId)}
+              aria-describedby={shownErrors.serviceGroupId ? 'service-group-error' : undefined}
+              className={`${INPUT_CLASS} cursor-pointer`}
+            >
+              <option value="">Chọn nhóm dịch vụ</option>
+              {typeGroups.map((group) => (
+                <option key={group.id} value={group.id}>{group.name}</option>
+              ))}
+            </select>
+          </Field>
 
-              <Field
-                id="service-department"
-                label="Khoa thực hiện"
-                required
-                error={shownErrors.departmentId}
-                hint={typeDepartments.length === 0 ? 'Chưa có dữ liệu khoa cận lâm sàng.' : undefined}
-                className="lg:col-span-4"
-              >
-                <select
-                  id="service-department"
-                  value={form.departmentId}
-                  onChange={(event) => onChange('departmentId', event.target.value)}
-                  aria-invalid={Boolean(shownErrors.departmentId)}
-                  aria-describedby={shownErrors.departmentId ? 'service-department-error' : undefined}
-                  className={`${INPUT_CLASS} cursor-pointer`}
-                >
-                  <option value="">Chọn khoa thực hiện</option>
-                  {typeDepartments.map((department) => (
-                    <option key={department.id} value={department.id}>{department.name}</option>
-                  ))}
-                </select>
-              </Field>
-            </>
-          )}
-
-          {examination && (
-            <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600 lg:col-span-8">
-              <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#127e7a]" />
-              Dịch vụ khám bệnh dùng chung cho các phòng khám, không gắn với khoa hoặc nhóm dịch vụ.
-            </div>
-          )}
+          <Field
+            id="service-department"
+            label="Khoa thực hiện"
+            required
+            error={shownErrors.departmentId}
+            hint="Lấy theo nhóm dịch vụ đã chọn"
+            className="lg:col-span-4"
+          >
+            <input
+              id="service-department"
+              type="text"
+              readOnly
+              value={departmentText}
+              placeholder="Chọn nhóm dịch vụ trước"
+              aria-invalid={Boolean(shownErrors.departmentId)}
+              aria-describedby={shownErrors.departmentId ? 'service-department-error' : undefined}
+              className={`${INPUT_CLASS} bg-slate-50 text-slate-600 cursor-default`}
+            />
+          </Field>
 
           <Field
             id="service-description"
@@ -268,20 +245,26 @@ export function ServiceCreateView({
         description="Khai báo giá viện phí và giá áp dụng cho bảo hiểm y tế"
       >
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <Field
-            id="service-clinic-price"
-            label="Giá viện phí (VNĐ)"
-            required
-            error={shownErrors.clinicPrice}
-            hint="Lớn hơn 0, tối đa 100.000.000 đ"
-          >
+          {/* Same label row height as the insurance price, whose row also holds a checkbox, so the inputs line up. */}
+          <div className="space-y-2">
+            <div className="flex min-h-6 items-center">
+              <label htmlFor="service-clinic-price" className="text-sm font-semibold text-slate-700">
+                Giá viện phí (VNĐ)<span className="ml-0.5 text-rose-500">*</span>
+              </label>
+            </div>
             <PriceInput
               id="service-clinic-price"
               value={form.clinicPrice}
               onChange={(value) => onChange('clinicPrice', value)}
               error={shownErrors.clinicPrice}
+              placeholder="Nhập giá viện phí"
             />
-          </Field>
+            {shownErrors.clinicPrice ? (
+              <FieldError id="service-clinic-price-error">{shownErrors.clinicPrice}</FieldError>
+            ) : (
+              <FieldHint>Từ 1 đến 100.000.000 đ</FieldHint>
+            )}
+          </div>
 
           <div className="space-y-2">
             <div className="flex min-h-6 items-center justify-between gap-4">
@@ -304,13 +287,14 @@ export function ServiceCreateView({
               onChange={(value) => onChange('insurancePrice', value)}
               error={shownErrors.insurancePrice}
               disabled={!form.insuranceCovered}
+              placeholder={form.insuranceCovered ? 'Nhập giá BHYT' : 'Không áp dụng'}
             />
             {shownErrors.insurancePrice ? (
               <FieldError id="service-insurance-price-error">{shownErrors.insurancePrice}</FieldError>
             ) : (
               <FieldHint>
                 {form.insuranceCovered
-                  ? 'Lớn hơn 0, tối đa 100.000.000 đ'
+                  ? 'Từ 1 đến 100.000.000 đ'
                   : 'Dịch vụ không áp dụng giá bảo hiểm y tế.'}
               </FieldHint>
             )}
@@ -328,7 +312,6 @@ export function ServiceCreateView({
             parameters={labParameters}
             selectedIds={form.labParameterIds}
             onChange={(ids) => onChange('labParameterIds', ids)}
-            onConfigure={setReferenceParameter}
             error={shownErrors.labParameterIds}
           />
         </FormSection>
@@ -356,14 +339,6 @@ export function ServiceCreateView({
         </button>
       </div>
       </form>
-      {referenceParameter && referenceRangeApi && (
-        <LabReferenceRangeModal
-          parameter={referenceParameter}
-          api={referenceRangeApi}
-          onChanged={onReferenceRangesChanged}
-          onClose={() => setReferenceParameter(null)}
-        />
-      )}
     </>
   );
 }

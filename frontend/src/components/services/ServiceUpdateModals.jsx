@@ -112,7 +112,7 @@ export function ServicePriceModal({ service, onSubmit, onClose }) {
       onClose={onClose}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <Field id="edit-clinic-price" label="Giá viện phí" required error={shownErrors.clinicPrice} hint="Lớn hơn 0, tối đa 100.000.000 đ">
+        <Field id="edit-clinic-price" label="Giá viện phí" required error={shownErrors.clinicPrice} hint="Từ 1 đến 100.000.000 đ">
           <PriceInput
             id="edit-clinic-price"
             value={form.clinicPrice}
@@ -147,7 +147,7 @@ export function ServicePriceModal({ service, onSubmit, onClose }) {
             <FieldError id="edit-insurance-price-error">{shownErrors.insurancePrice}</FieldError>
           ) : (
             <FieldHint>
-              {form.insuranceCovered ? 'Lớn hơn 0, tối đa 100.000.000 đ' : 'Không áp dụng — bệnh nhân BHYT trả theo giá viện phí'}
+              {form.insuranceCovered ? 'Từ 1 đến 100.000.000 đ' : 'Không áp dụng — bệnh nhân BHYT trả theo giá viện phí'}
             </FieldHint>
           )}
         </div>

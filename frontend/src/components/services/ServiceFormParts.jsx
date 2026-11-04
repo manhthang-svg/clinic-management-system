@@ -7,7 +7,7 @@ export { INPUT_CLASS, Field, FieldError, FieldHint, FormAlert } from '../shared/
 
 // While focused the field shows the raw digits: reformatting under the caret (1000 -> 1.000)
 // desyncs Vietnamese IMEs such as Unikey, which then retype their buffer (1000 -> 1100).
-export function PriceInput({ id, value, onChange, error, disabled }) {
+export function PriceInput({ id, value, onChange, error, disabled, placeholder = '0' }) {
   const [focused, setFocused] = useState(false);
   const shown = value === '' || focused ? value : formatPrice(Number(value));
 
@@ -22,7 +22,7 @@ export function PriceInput({ id, value, onChange, error, disabled }) {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
-        placeholder="0"
+        placeholder={placeholder}
         disabled={disabled}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}

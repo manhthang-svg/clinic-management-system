@@ -30,7 +30,9 @@ describe('LabParameterSelector', () => {
   it('adds, reorders, and removes laboratory parameters from the table', async () => {
     render(<SelectorHarness />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Chọn chỉ số'), 'rbc');
+    await userEvent.type(screen.getByLabelText('Chọn chỉ số'), 'hồng');
+    expect(screen.queryByRole('option', { name: /Số lượng bạch cầu/ })).toBeNull();
+    await userEvent.click(screen.getByRole('option', { name: /Số lượng hồng cầu/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Thêm chỉ số' }));
 
     let rows = screen.getAllByRole('row').slice(1);
@@ -49,18 +51,25 @@ describe('LabParameterSelector', () => {
     expect(screen.getByText('WBC')).toBeInTheDocument();
   });
 
-  it('opens reference range configuration for the selected parameter', async () => {
-    const onConfigure = vi.fn();
-    render(
-      <LabParameterSelector
-        parameters={parameters}
-        selectedIds={['wbc']}
-        onChange={vi.fn()}
-        onConfigure={onConfigure}
-      />,
-    );
+  it('searches by code and adds the highlighted parameter with the keyboard', async () => {
+    const onChange = vi.fn();
+    render(<LabParameterSelector parameters={parameters} selectedIds={[]} onChange={onChange} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Cấu hình' }));
-    expect(onConfigure).toHaveBeenCalledWith(parameters[0]);
+    await userEvent.type(screen.getByLabelText('Chọn chỉ số'), 'rbc{Enter}{Enter}');
+
+    expect(onChange).toHaveBeenCalledWith(['rbc']);
+  });
+});
+
+describe('LabParameterSelector search', () => {
+  it('clears the search text with the X button', async () => {
+    render(<LabParameterSelector parameters={parameters} selectedIds={[]} onChange={vi.fn()} />);
+    const search = screen.getByLabelText('Chọn chỉ số');
+
+    await userEvent.type(search, 'glu');
+    await userEvent.click(screen.getByRole('button', { name: 'Xóa nội dung tìm kiếm' }));
+
+    expect(search).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Xóa nội dung tìm kiếm' })).toBeNull();
   });
 });

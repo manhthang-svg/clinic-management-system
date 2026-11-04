@@ -56,8 +56,9 @@ export function validateServiceForm(form) {
 
   // The shared examination service has no department or group.
   if (form.type !== 'EXAMINATION') {
-    if (!form.departmentId) errors.departmentId = 'Vui lòng chọn khoa thực hiện.';
+    // The department comes from the group, so it is missing only when the group has none.
     if (!form.serviceGroupId) errors.serviceGroupId = 'Vui lòng chọn nhóm dịch vụ.';
+    else if (!form.departmentId) errors.departmentId = 'Nhóm dịch vụ này chưa được gán khoa thực hiện.';
   }
 
   validatePrices(form, errors);
