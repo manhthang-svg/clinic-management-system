@@ -5,6 +5,7 @@ import { AccountPageHeader } from '../accounts/AccountFormParts';
 import { formatPrice, formatReferenceRangeLine } from './serviceFormat';
 import { LabValueTypeBadge } from './LabValueTypeBadge';
 import { ServiceInfoModal, ServicePriceModal } from './ServiceUpdateModals';
+import { LabReferenceRangeModal } from './LabReferenceRangeModal';
 
 const SECONDARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer';
@@ -66,9 +67,19 @@ function PriceStat({ label, value, note }) {
 }
 
 /** UC-21 View medical service detail, with UC-23 / UC-24 updates and UC-25 status change. */
-export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdatePrices, onToggleStatus, statusBusy = false }) {
+export function ServiceDetailView({
+  service,
+  onGoToList,
+  onUpdateInfo,
+  onUpdatePrices,
+  onToggleStatus,
+  referenceRangeApi,
+  onReferenceRangesChanged,
+  statusBusy = false,
+}) {
   // 'info' | 'price' | null
   const [editing, setEditing] = useState(null);
+  const [configuringParameter, setConfiguringParameter] = useState(null);
   const close = () => setEditing(null);
   const type = SERVICE_TYPE_MAP[service.type];
   const examination = service.type === 'EXAMINATION';
@@ -161,6 +172,14 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
           }}
         />
       )}
+      {configuringParameter && referenceRangeApi && (
+        <LabReferenceRangeModal
+          parameter={configuringParameter}
+          api={referenceRangeApi}
+          onChanged={onReferenceRangesChanged}
+          onClose={() => setConfiguringParameter(null)}
+        />
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <SectionCard icon={FileText} title="Thông tin dịch vụ">
@@ -224,6 +243,7 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
                     <th className="px-3 py-3">Kiểu kết quả</th>
                     <th className="px-3 py-3">Đơn vị</th>
                     <th className="px-3 py-3">Chỉ số tham chiếu</th>
+                    {referenceRangeApi && <th className="px-3 py-3 text-center">Thao tác</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -247,6 +267,23 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
                           </ul>
                         )}
                       </td>
+                      {referenceRangeApi && (
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setConfiguringParameter({
+                              id: parameter.parameterId,
+                              code: parameter.code,
+                              name: parameter.name,
+                              unit: parameter.unit,
+                            })}
+                            className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 text-xs font-semibold text-[#127e7a] transition-colors hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#127e7a]/30"
+                          >
+                            <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                            Cấu hình
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
