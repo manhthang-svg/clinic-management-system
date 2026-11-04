@@ -14,32 +14,14 @@ import {
   DepartmentDetailModal,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
+import { apiClient } from '../../services/session';
+import { createServiceApi } from '../../apis/serviceApi';
 import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
 
+const serviceApi = createServiceApi(apiClient);
+
 const { ADMIN } = ROUTES;
-
-const STORAGE_KEY_ROOM_SERVICES = 'clinic_room_assigned_services';
-
-function getStoredRoomServicesMap() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_ROOM_SERVICES);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function persistRoomServices(roomIdOrCode, services) {
-  if (!roomIdOrCode) return;
-  try {
-    const map = getStoredRoomServicesMap();
-    map[roomIdOrCode] = Array.isArray(services) ? services : [];
-    localStorage.setItem(STORAGE_KEY_ROOM_SERVICES, JSON.stringify(map));
-  } catch (err) {
-    console.error('Lỗi lưu danh sách dịch vụ phòng:', err);
-  }
-}
 
 export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassword }) {
   const navigate = useNavigate();
@@ -82,19 +64,26 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     (async () => {
       try {
         setLoading(true);
-        const [fetchedItems, fetchedStats] = await Promise.all([
+        const [fetchedItems, fetchedStats, activeServicesPage] = await Promise.all([
           departmentApi.getItems(),
           departmentApi.getStats(),
+          serviceApi.list({ status: 'ACTIVE', size: 50 }).catch(() => ({ content: [] })),
         ]);
         if (cancelled) return;
         if (Array.isArray(fetchedItems)) {
-          const storedServicesMap = getStoredRoomServicesMap();
+          const catalogServices = Array.isArray(activeServicesPage?.content)
+            ? activeServicesPage.content
+            : [];
           const itemsWithServices = fetchedItems.map((item) => {
             if (item.unitType === 'ROOM') {
-              const stored = storedServicesMap[item.id] ?? storedServicesMap[item.code];
+              const isExamRoom = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
+              const resolvedServices = isExamRoom
+                ? catalogServices.filter((s) => s.type === 'EXAMINATION')
+                : (Array.isArray(item.assignedServices) ? item.assignedServices : []);
+
               return {
                 ...item,
-                assignedServices: Array.isArray(stored) ? stored : (item.assignedServices || []),
+                assignedServices: resolvedServices,
               };
             }
             return item;
@@ -500,14 +489,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 : i
             )
           );
-          const finalAssignedServices = formData.assignedServices || [];
-          persistRoomServices(editingItem.id, finalAssignedServices);
-          if (editingItem.code) {
-            persistRoomServices(editingItem.code, finalAssignedServices);
-          }
-          if (formData.code) {
-            persistRoomServices(formData.code, finalAssignedServices);
-          }
           departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã cập nhật phòng "${formData.name}" thành công!`);
         } else {
@@ -541,13 +522,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             assignedServices: formData.assignedServices || [],
             serviceIds: formData.serviceIds || [],
           };
-          const finalAssignedServices = formData.assignedServices || [];
-          if (newRoom.id) {
-            persistRoomServices(newRoom.id, finalAssignedServices);
-          }
-          if (newRoom.code) {
-            persistRoomServices(newRoom.code, finalAssignedServices);
-          }
           setItems((prev) => [newRoom, ...prev]);
           departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);

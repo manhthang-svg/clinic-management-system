@@ -1,5 +1,4 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { OwnProfilePage } from './OwnProfilePage';
@@ -31,12 +30,16 @@ describe('OwnProfilePage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Hồ sơ cá nhân' })).toBeInTheDocument();
+    vi.useFakeTimers();
     const phone = screen.getByLabelText(/Số điện thoại/);
-    await userEvent.clear(phone);
-    await userEvent.type(phone, '0912345678');
-    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+    fireEvent.change(phone, { target: { value: '0912345678' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(accountApi.updateProfile).toHaveBeenCalledWith('0912345678', 'old@clinic.test');
-    expect(await screen.findByRole('status')).toHaveTextContent('Đã cập nhật thông tin liên hệ.');
+    await act(async () => {});
+    expect(screen.getByRole('status')).toHaveTextContent('Hồ sơ cập nhật thành công.');
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

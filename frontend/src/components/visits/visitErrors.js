@@ -61,3 +61,22 @@ export function loadErrorMessage(error) {
   if (isNetworkError(error)) return NETWORK_MESSAGE;
   return MSG99;
 }
+
+// UC-41: reasons the examination ticket cannot be assembled (VisitServiceImpl.toTicketResponse).
+const TICKET_CODE_MESSAGES = {
+  CLINIC_FACILITY_NOT_CONFIGURED: 'Chưa cấu hình thông tin cơ sở khám bệnh. Vui lòng liên hệ quản trị viên.',
+  PATIENT_NOT_FOUND: 'Không tìm thấy hồ sơ bệnh nhân của lượt khám.',
+  ROOM_NOT_AVAILABLE: 'Không tìm thấy phòng khám của lượt khám.',
+  NOT_FOUND: 'Không tìm thấy lượt khám hoặc phiếu thu phí khám.',
+  FORBIDDEN: 'Bạn không có quyền xem phiếu khám.',
+};
+
+/** Message for a failed ticket load; an unknown failure names its error code so it can be reported. */
+export function ticketErrorMessage(error) {
+  const code = codeOf(error);
+  if (TICKET_CODE_MESSAGES[code]) return TICKET_CODE_MESSAGES[code];
+  if (error?.status === 401) return MSG12;
+  if (isNetworkError(error)) return NETWORK_MESSAGE;
+  const reference = code ?? (error?.status ? `HTTP ${error.status}` : error?.name);
+  return reference ? `${MSG99} (Mã lỗi: ${reference})` : MSG99;
+}

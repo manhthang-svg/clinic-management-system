@@ -330,7 +330,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 w-full xl:w-96 xl:border-l xl:border-slate-100 xl:pl-5">
-          {actions.update !== false && <button
+          {!locked && actions.update !== false && <button
             type="button"
             onClick={onEdit}
             className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -338,7 +338,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             <Pencil className="w-4 h-4" />
             Chỉnh sửa tài khoản
           </button>}
-          {actions.assignRole && (
+          {!locked && actions.assignRole && (
             <button
               type="button"
               onClick={onAssignRole}
@@ -348,7 +348,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
               Đổi vai trò
             </button>
           )}
-          {canAssignRoom && (
+          {!locked && canAssignRoom && (
             <button
               type="button"
               onClick={onAssignRoom}
@@ -358,7 +358,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
               Phân công phòng
             </button>
           )}
-          {actions.resetPassword && !isSelf && (
+          {!locked && actions.resetPassword && !isSelf && (
             <button
               type="button"
               onClick={onResetPassword}
@@ -385,9 +385,15 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
         </div>
       </section>
 
+      {locked && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Tài khoản đang bị khóa. Hãy mở khóa tài khoản để sử dụng các chức năng chỉnh sửa, đổi vai trò, phân công phòng hoặc đặt lại mật khẩu.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <div className="space-y-5">
-          <SectionCard icon={User} title="Thông tin cá nhân" action={actions.update !== false ? <EditButton onClick={onEdit} /> : null}>
+          <SectionCard icon={User} title="Thông tin cá nhân" action={!locked && actions.update !== false ? <EditButton onClick={onEdit} /> : null}>
             <InfoList rows={personalRows} />
           </SectionCard>
 

@@ -33,13 +33,13 @@ describe('ChangePasswordForm', () => {
         const onSubmit = vi.fn();
         render(<ChangePasswordForm onSubmit={onSubmit} onChanged={vi.fn()}/>);
         await fill('temporary-pass', 'brand-new-password', 'different-value');
-        expect(screen.getByRole('alert')).toHaveTextContent('Xác nhận mật khẩu không khớp.');
+        expect(screen.getByRole('alert')).toHaveTextContent('Mật khẩu xác nhận không khớp.');
         expect(screen.getByLabelText('Nhập lại mật khẩu mới')).toHaveAttribute('aria-invalid', 'true');
         expect(screen.getByLabelText('Mật khẩu mới')).not.toHaveAttribute('aria-invalid');
         await userEvent.clear(screen.getByLabelText('Mật khẩu mới'));
         await userEvent.type(screen.getByLabelText('Mật khẩu mới'), 'short');
         await userEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
-        expect(screen.getByRole('alert')).toHaveTextContent('Mật khẩu mới phải có ít nhất 8 ký tự.');
+        expect(screen.getByRole('alert')).toHaveTextContent('Mật khẩu phải có độ dài từ 8–64 ký tự.');
         expect(onSubmit).not.toHaveBeenCalled();
     });
     it('explains a wrong current password', async () => {
@@ -49,7 +49,25 @@ describe('ChangePasswordForm', () => {
         }));
         render(<ChangePasswordForm onSubmit={onSubmit} onChanged={vi.fn()}/>);
         await fill('wrong-pass', 'brand-new-password', 'brand-new-password');
-        expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu hiện tại không đúng.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu hiện tại không chính xác.');
         expect(screen.getByLabelText('Mật khẩu hiện tại')).toHaveAttribute('aria-invalid', 'true');
+    });
+    it('shows MSG02 for required fields only after submit is clicked', async () => {
+        const onSubmit = vi.fn();
+        render(<ChangePasswordForm onSubmit={onSubmit} onChanged={vi.fn()}/>);
+        const submit = screen.getByRole('button', { name: 'Đổi mật khẩu' });
+
+        expect(submit).toBeEnabled();
+        expect(screen.queryByText('Mật khẩu hiện tại là bắt buộc.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Mật khẩu mới là bắt buộc.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Mật khẩu xác nhận là bắt buộc.')).not.toBeInTheDocument();
+
+        await userEvent.click(submit);
+
+        expect(screen.getByText('Mật khẩu hiện tại là bắt buộc.')).toBeInTheDocument();
+        expect(screen.getByText('Mật khẩu mới là bắt buộc.')).toBeInTheDocument();
+        expect(screen.getByText('Mật khẩu xác nhận là bắt buộc.')).toBeInTheDocument();
+        expect(submit).toBeEnabled();
+        expect(onSubmit).not.toHaveBeenCalled();
     });
 });

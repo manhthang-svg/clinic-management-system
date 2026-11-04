@@ -175,28 +175,45 @@ export function DutyWeeklyMatrix({
                     {!isCollapsed &&
                       rooms.map((room) => {
                         const roomCode = room.code || room.roomCode || room.name;
+                        const isRoomInactive =
+                          room.status === 'INACTIVE' ||
+                          room.status === 'inactive' ||
+                          room.isActive === false ||
+                          room.status === 'MAINTENANCE';
+
                         return (
                           <tr
                             key={room.id}
-                            className="hover:bg-slate-50/50 transition-colors border-b border-slate-200"
+                            className={`${
+                              isRoomInactive ? 'bg-slate-50/40 text-slate-400' : 'hover:bg-slate-50/50'
+                            } transition-colors border-b border-slate-200`}
                           >
                             {/* Cột Tên/Mã Phòng cố định bên trái (Sticky left) - Căn trái chuẩn Image 2 */}
                             <td
-                              className="sticky left-0 z-10 bg-white px-4 py-3 text-left font-semibold text-slate-700 text-xs sm:text-sm border-r border-slate-200 align-middle shadow-2xs"
-                              title={room.name || room.roomName || roomCode}
+                              className={`sticky left-0 z-10 ${
+                                isRoomInactive ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-700'
+                              } px-4 py-3 text-left font-semibold text-xs sm:text-sm border-r border-slate-200 align-middle shadow-2xs`}
+                              title={`${room.name || room.roomName || roomCode}${isRoomInactive ? ' (Tạm ngừng)' : ''}`}
                             >
-                              <div className="truncate">
-                                {roomCode}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`truncate ${isRoomInactive ? 'text-slate-500' : 'text-slate-700'}`}>
+                                  {roomCode}
+                                </span>
+                                {isRoomInactive && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-600 border border-rose-200/80 shrink-0 select-none">
+                                    Tạm ngừng
+                                  </span>
+                                )}
                               </div>
                             </td>
 
                             {/* 7 ô giao điểm theo từng ngày trong tuần */}
                             {days.map((day, dayIdx) => {
                               const isMorningPast = isShiftPast(day.dateStr, 'MORNING');
-                              const canEditMorning = canEdit && !isMorningPast;
+                              const canEditMorning = canEdit && !isMorningPast && !isRoomInactive;
 
                               const isAfternoonPast = isShiftPast(day.dateStr, 'AFTERNOON');
-                              const canEditAfternoon = canEdit && !isAfternoonPast;
+                              const canEditAfternoon = canEdit && !isAfternoonPast && !isRoomInactive;
 
                               const morningItem = scheduleMap.get(
                                 `${room.id}_${day.dateStr}_MORNING`
@@ -215,7 +232,9 @@ export function DutyWeeklyMatrix({
                               return (
                                 <td
                                   key={`${room.id}_${day.dateStr}`}
-                                  className="p-1.5 align-middle border-r border-slate-200 last:border-r-0 bg-white"
+                                  className={`p-1.5 align-middle border-r border-slate-200 last:border-r-0 ${
+                                    isRoomInactive ? 'bg-slate-50/50' : 'bg-white'
+                                  }`}
                                 >
                                   {/* Trường hợp 1: Chế độ xem Tất cả ca (2 slot Sáng & Chiều) */}
                                   {shiftFilter === 'ALL' && (
@@ -224,10 +243,14 @@ export function DutyWeeklyMatrix({
                                       {morningItem ? (
                                         <div
                                           onClick={() => onEditDuty(morningItem)}
-                                          className="bg-[#fffbeb] border border-amber-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs"
+                                          className={`bg-[#fffbeb] border border-amber-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs ${
+                                            isRoomInactive ? 'opacity-70' : ''
+                                          }`}
                                           title={`Ca Sáng: ${morningItem.staffName} ${
                                             morningRole ? `(${morningRole})` : ''
-                                          }${isMorningPast ? ' (Đã kết thúc)' : ''}`}
+                                          }${isMorningPast ? ' (Đã kết thúc)' : ''}${
+                                            isRoomInactive ? ' - Phòng tạm ngừng' : ''
+                                          }`}
                                         >
                                           <span className="font-bold text-amber-950 truncate text-[11px]">
                                             {morningItem.staffName}
@@ -242,6 +265,16 @@ export function DutyWeeklyMatrix({
                                         /* Ca sáng trong quá khứ và chưa phân công: ẩn, không click được */
                                         <div className="h-[27px] flex items-center justify-center select-none text-slate-300 text-xs">
                                           -
+                                        </div>
+                                      ) : isRoomInactive ? (
+                                        /* Phòng đang tạm khóa: hiện mờ mờ không click được */
+                                        <div
+                                          className="bg-slate-100/70 border border-dashed border-slate-200/90 rounded-md p-1.5 text-xs flex items-center justify-center gap-1 select-none cursor-not-allowed opacity-50"
+                                          title="Phòng đang tạm ngừng hoạt động - Không thể phân công"
+                                        >
+                                          <span className="text-slate-400 font-normal text-[11px] truncate">
+                                            [Chưa phân công]
+                                          </span>
                                         </div>
                                       ) : canEditMorning ? (
                                         <div
@@ -270,10 +303,14 @@ export function DutyWeeklyMatrix({
                                       {afternoonItem ? (
                                         <div
                                           onClick={() => onEditDuty(afternoonItem)}
-                                          className="bg-[#f0f9ff] border border-sky-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs"
+                                          className={`bg-[#f0f9ff] border border-sky-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs ${
+                                            isRoomInactive ? 'opacity-70' : ''
+                                          }`}
                                           title={`Ca Chiều: ${afternoonItem.staffName} ${
                                             afternoonRole ? `(${afternoonRole})` : ''
-                                          }${isAfternoonPast ? ' (Đã kết thúc)' : ''}`}
+                                          }${isAfternoonPast ? ' (Đã kết thúc)' : ''}${
+                                            isRoomInactive ? ' - Phòng tạm ngừng' : ''
+                                          }`}
                                         >
                                           <span className="font-bold text-sky-950 truncate text-[11px]">
                                             {afternoonItem.staffName}
@@ -288,6 +325,16 @@ export function DutyWeeklyMatrix({
                                         /* Ca chiều trong quá khứ và chưa phân công: ẩn, không click được */
                                         <div className="h-[27px] flex items-center justify-center select-none text-slate-300 text-xs">
                                           -
+                                        </div>
+                                      ) : isRoomInactive ? (
+                                        /* Phòng đang tạm khóa: hiện mờ mờ không click được */
+                                        <div
+                                          className="bg-slate-100/70 border border-dashed border-slate-200/90 rounded-md p-1.5 text-xs flex items-center justify-center gap-1 select-none cursor-not-allowed opacity-50"
+                                          title="Phòng đang tạm ngừng hoạt động - Không thể phân công"
+                                        >
+                                          <span className="text-slate-400 font-normal text-[11px] truncate">
+                                            [Chưa phân công]
+                                          </span>
                                         </div>
                                       ) : canEditAfternoon ? (
                                         <div
@@ -320,10 +367,14 @@ export function DutyWeeklyMatrix({
                                       {morningItem ? (
                                         <div
                                           onClick={() => onEditDuty(morningItem)}
-                                          className="bg-[#fffbeb] border border-amber-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs"
+                                          className={`bg-[#fffbeb] border border-amber-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs ${
+                                            isRoomInactive ? 'opacity-70' : ''
+                                          }`}
                                           title={`Ca Sáng: ${morningItem.staffName} ${
                                             morningRole ? `(${morningRole})` : ''
-                                          }${isMorningPast ? ' (Đã kết thúc)' : ''}`}
+                                          }${isMorningPast ? ' (Đã kết thúc)' : ''}${
+                                            isRoomInactive ? ' - Phòng tạm ngừng' : ''
+                                          }`}
                                         >
                                           <span className="font-bold text-amber-950 text-xs truncate">
                                             {morningItem.staffName}
@@ -338,6 +389,16 @@ export function DutyWeeklyMatrix({
                                         /* Ca sáng trong quá khứ và chưa phân công: ẩn, không click được */
                                         <div className="h-[38px] flex items-center justify-center select-none text-slate-300 text-xs">
                                           -
+                                        </div>
+                                      ) : isRoomInactive ? (
+                                        /* Phòng đang tạm khóa: hiện mờ mờ không click được */
+                                        <div
+                                          className="bg-slate-100/70 border border-dashed border-slate-200/90 rounded-lg p-2.5 text-xs flex items-center justify-center gap-2 select-none cursor-not-allowed opacity-50"
+                                          title="Phòng đang tạm ngừng hoạt động - Không thể phân công"
+                                        >
+                                          <span className="text-slate-400 font-normal text-xs">
+                                            [Chưa phân công]
+                                          </span>
                                         </div>
                                       ) : canEditMorning ? (
                                         <div
@@ -370,10 +431,14 @@ export function DutyWeeklyMatrix({
                                       {afternoonItem ? (
                                         <div
                                           onClick={() => onEditDuty(afternoonItem)}
-                                          className="bg-[#f0f9ff] border border-sky-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs"
+                                          className={`bg-[#f0f9ff] border border-sky-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs ${
+                                            isRoomInactive ? 'opacity-70' : ''
+                                          }`}
                                           title={`Ca Chiều: ${afternoonItem.staffName} ${
                                             afternoonRole ? `(${afternoonRole})` : ''
-                                          }${isAfternoonPast ? ' (Đã kết thúc)' : ''}`}
+                                          }${isAfternoonPast ? ' (Đã kết thúc)' : ''}${
+                                            isRoomInactive ? ' - Phòng tạm ngừng' : ''
+                                          }`}
                                         >
                                           <span className="font-bold text-sky-950 text-xs truncate">
                                             {afternoonItem.staffName}
@@ -388,6 +453,16 @@ export function DutyWeeklyMatrix({
                                         /* Ca chiều trong quá khứ và chưa phân công: ẩn, không click được */
                                         <div className="h-[38px] flex items-center justify-center select-none text-slate-300 text-xs">
                                           -
+                                        </div>
+                                      ) : isRoomInactive ? (
+                                        /* Phòng đang tạm khóa: hiện mờ mờ không click được */
+                                        <div
+                                          className="bg-slate-100/70 border border-dashed border-slate-200/90 rounded-lg p-2.5 text-xs flex items-center justify-center gap-2 select-none cursor-not-allowed opacity-50"
+                                          title="Phòng đang tạm ngừng hoạt động - Không thể phân công"
+                                        >
+                                          <span className="text-slate-400 font-normal text-xs">
+                                            [Chưa phân công]
+                                          </span>
                                         </div>
                                       ) : canEditAfternoon ? (
                                         <div

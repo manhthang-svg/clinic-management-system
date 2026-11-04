@@ -231,16 +231,20 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     private static MedicalService service(String code, String name, MedicalServiceType type, long price) {
-        return MedicalService.create(UUID.randomUUID(), NOW, code, name, type, UUID.randomUUID(), UUID.randomUUID(),
+        MedicalService service = MedicalService.create(
+                UUID.randomUUID(), NOW, code, name, type, UUID.randomUUID(), UUID.randomUUID(),
                 BigDecimal.valueOf(price), null, null);
+        service.changeStatus(ActivationStatus.ACTIVE, NOW);
+        return service;
     }
 
     private static Visit visit(VisitStatus status, UUID doctorId) {
+        VisitStatus initialStatus = doctorId == null ? status : VisitStatus.WAITING;
         Visit visit = new Visit(VISIT_ID, NOW, "DK0000000001", UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), NOW, VisitDoituongbnLoai.DV, null, null, null, "Đau bụng", false, null,
-                LocalDate.of(2026, 11, 3), 1, status, VisitInsuranceVerifyStatus.NOT_APPLICABLE);
+                LocalDate.of(2026, 11, 3), 1, initialStatus, VisitInsuranceVerifyStatus.NOT_APPLICABLE);
         if (doctorId != null) {
-            visit.startExamination(doctorId);
+            visit.startExamination(doctorId, NOW);
             if (status != VisitStatus.IN_EXAMINATION) {
                 forceStatus(visit, status);
             }

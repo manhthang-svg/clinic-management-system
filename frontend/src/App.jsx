@@ -15,6 +15,8 @@ import DashboardLayout from './layouts/DashboardlLayout';
 import AppRoutes from './routes/AppRoutes';
 import { ownProfileFromApi } from './utils/ownProfile';
 
+const NOTICE_DURATION_MS = 4_000;
+
 function homePathForRole(role) {
   switch (role?.toUpperCase().replace(/^ROLE_/, '')) {
     case 'ADMIN':
@@ -49,6 +51,12 @@ export function App({
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState('');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     sessionManager.restore().catch((error) => {
@@ -113,7 +121,7 @@ export function App({
 
   async function handlePasswordChanged() {
     setChangingPassword(false);
-    setNotice('Đã đổi mật khẩu.');
+    setNotice('Đổi mật khẩu thành công.');
     await sessionManager.refresh();
     navigate(homePathForRole(session.account?.role), { replace: true });
   }
@@ -148,8 +156,7 @@ export function App({
               role="alert"
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             >
-              Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
-              các chức năng khác.
+              Bạn phải đổi mật khẩu trước khi tiếp tục.
             </p>
           )}
 
@@ -199,8 +206,7 @@ export function App({
               role="alert"
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             >
-              Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
-              các chức năng khác.
+              Bạn phải đổi mật khẩu trước khi tiếp tục.
             </p>
           )}
 

@@ -19,6 +19,11 @@ public interface MedicalServiceRepository
 
     boolean existsByCode(String code);
 
+    // Matches uq_services_name_ci (V38): names are compared case-insensitively after trimming.
+    boolean existsByTenchidinhIgnoreCase(String tenchidinh);
+
+    boolean existsByTenchidinhIgnoreCaseAndIdNot(String tenchidinh, UUID id);
+
     List<MedicalService> findAllByStatusAndTypeInOrderByTenchidinhAsc(
             ActivationStatus status,
             Collection<MedicalServiceType> types

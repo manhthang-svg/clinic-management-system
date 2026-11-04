@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateRoomRequest;
@@ -90,15 +91,22 @@ class RoomServiceImplTest {
     }
 
     @Test
-    void listsOnlyActiveExaminationRooms() {
+    void listsActiveExaminationRoomsWithDoctorsAndDepartmentName() {
         Room room = new Room(
                 UUID.randomUUID(), NOW, departmentId, null,
                 "PK-01", "Phòng khám", "Tầng 1",
                 RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        Room roomWithoutDoctor = new Room(
+                UUID.randomUUID(), NOW, departmentId, null,
+                "PK-02", "Phòng khám 2", "Tầng 1",
+                RoomType.EXAMINATION, ActivationStatus.ACTIVE);
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                 RoomType.EXAMINATION, ActivationStatus.ACTIVE))
-                .thenReturn(List.of(room));
-        when(staffRoomAssignmentRepository.hasActiveDoctor(room.getId())).thenReturn(true);
+                .thenReturn(List.of(room, roomWithoutDoctor));
+        when(departmentRepository.findAllById(Set.of(departmentId))).thenReturn(List.of(department()));
+        when(staffRoomAssignmentRepository.findActiveDoctorNames(room.getId()))
+                .thenReturn(List.of("Lê Thị Hoa", "Trần Văn Minh"));
+        when(staffRoomAssignmentRepository.findActiveDoctorNames(roomWithoutDoctor.getId())).thenReturn(List.of());
 
         List<RoomResponse> response = service().getActiveExaminationRooms();
 
@@ -106,6 +114,8 @@ class RoomServiceImplTest {
             assertThat(item.code()).isEqualTo("PK-01");
             assertThat(item.type()).isEqualTo(RoomType.EXAMINATION);
             assertThat(item.status()).isEqualTo(ActivationStatus.ACTIVE);
+            assertThat(item.departmentName()).isEqualTo("Khoa Nội");
+            assertThat(item.doctorName()).isEqualTo("Lê Thị Hoa, Trần Văn Minh");
         });
     }
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateMedicalServiceRequest;
+import clinic.backend.dto.request.LabParameterSelectionRequest;
 import clinic.backend.dto.request.UpdateMedicalServiceRequest;
 import clinic.backend.dto.request.UpdateMedicalServicePriceRequest;
 import clinic.backend.dto.request.UpdateMedicalServiceStatusRequest;
@@ -14,6 +15,7 @@ import clinic.backend.dto.response.MedicalServiceDetailResponse;
 import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.PerformingRoomResponse;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.LabParameter;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.ServiceGroup;
@@ -25,10 +27,15 @@ import clinic.backend.enums.ServiceGroupType;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.mapper.MedicalServiceMapper;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.LabParameterRepository;
+import clinic.backend.repository.LabReferenceRangeRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
+import clinic.backend.repository.ServiceLabParameterRepository;
+import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,36 +61,49 @@ import static org.mockito.Mockito.when;
 class MedicalServiceServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-10-27T00:00:00Z");
+    private static final StaffPrincipal PRINCIPAL = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
 
     @Mock MedicalServiceRepository serviceRepository;
     @Mock DepartmentRepository departmentRepository;
     @Mock ServiceGroupRepository serviceGroupRepository;
+    @Mock LabParameterRepository labParameterRepository;
+    @Mock LabReferenceRangeRepository labReferenceRangeRepository;
+    @Mock ServiceLabParameterRepository serviceLabParameterRepository;
     @Mock RoomRepository roomRepository;
     @Mock ParaclinicalOrderDetailRepository orderDetailRepository;
+    @Mock AuditLogService auditLogService;
     @Mock MedicalServiceMapper serviceMapper;
     @Mock UuidV7Generator ids;
     @Mock Clock clock;
     @InjectMocks MedicalServiceServiceImpl service;
 
     @Test
-    void createsActiveParaclinicalService() {
+    void createsActiveLaboratoryServiceWithOrderedParameters() {
         UUID serviceId = UUID.randomUUID();
+        UUID mappingId = UUID.randomUUID();
+        UUID parameterId = UUID.randomUUID();
         UUID departmentId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
         Department department = new Department(
                 departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
                 null, true, NOW);
         ServiceGroup group = mock(ServiceGroup.class);
+        LabParameter parameter = mock(LabParameter.class);
+        when(group.isActive()).thenReturn(true);
         when(group.getType()).thenReturn(ServiceGroupType.LAB);
         when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
         when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
-        when(ids.next()).thenReturn(serviceId);
+        when(roomRepository.existsByServiceGroupIdAndStatus(groupId, ActivationStatus.ACTIVE)).thenReturn(true);
+        when(labParameterRepository.findAllByIdInAndActiveTrue(java.util.Set.of(parameterId)))
+                .thenReturn(List.of(parameter));
+        when(ids.next()).thenReturn(serviceId, mappingId);
         when(clock.instant()).thenReturn(NOW);
         CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
                 " xn-100 ", " Xet nghiem mau ", MedicalServiceType.LAB,
-                groupId, departmentId, BigDecimal.valueOf(120000), BigDecimal.ZERO, " Mo ta ");
+                groupId, departmentId, BigDecimal.valueOf(120000), null, " Mo ta ",
+                List.of(new LabParameterSelectionRequest(parameterId, 1)));
 
-        var response = service.createService(request);
+        var response = service.createService(PRINCIPAL, request);
 
         assertThat(response.serviceId()).isEqualTo(serviceId);
         ArgumentCaptor<MedicalService> captor = ArgumentCaptor.forClass(MedicalService.class);
@@ -92,7 +112,33 @@ class MedicalServiceServiceImplTest {
         assertThat(created.getCode()).isEqualTo("XN-100");
         assertThat(created.getTenchidinh()).isEqualTo("Xet nghiem mau");
         assertThat(created.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
-        assertThat(created.getInsurancePrice()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(created.getInsurancePrice()).isNull();
+        verify(serviceLabParameterRepository).saveAllAndFlush(any());
+    }
+
+    @Test
+    void rejectsServiceWhoseGroupHasNoActiveRoom() {
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        Department department = new Department(
+                departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
+                null, true, NOW);
+        ServiceGroup group = mock(ServiceGroup.class);
+        when(group.isActive()).thenReturn(true);
+        when(group.getType()).thenReturn(ServiceGroupType.LAB);
+        when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
+        when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
+        when(roomRepository.existsByServiceGroupIdAndStatus(groupId, ActivationStatus.ACTIVE)).thenReturn(false);
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "XN-100", "Xet nghiem mau", MedicalServiceType.LAB,
+                groupId, departmentId, BigDecimal.valueOf(120000), null, null,
+                List.of(new LabParameterSelectionRequest(UUID.randomUUID(), 1)));
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_GROUP_HAS_NO_ACTIVE_ROOM));
+        verify(serviceRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -100,12 +146,41 @@ class MedicalServiceServiceImplTest {
         when(serviceRepository.existsByCode("XN-100")).thenReturn(true);
         CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
                 "xn-100", "Xet nghiem mau", MedicalServiceType.LAB,
-                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, null, null);
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, null, null, List.of());
 
-        assertThatThrownBy(() -> service.createService(request))
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.SERVICE_CODE_ALREADY_EXISTS));
+    }
+
+    @Test
+    void rejectsDuplicateServiceNameIgnoringCaseBeforeSaving() {
+        when(serviceRepository.existsByCode("XN-101")).thenReturn(false);
+        when(serviceRepository.existsByTenchidinhIgnoreCase("Xet nghiem mau")).thenReturn(true);
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "xn-101", "  Xet nghiem mau ", MedicalServiceType.LAB,
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, null, null, List.of());
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_NAME_ALREADY_EXISTS);
+                    assertThat(exception.getDetails()).containsEntry("name", "ALREADY_EXISTS");
+                });
+        verify(serviceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsCreatingAnExaminationService() {
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "KB-02", "Kham benh", MedicalServiceType.EXAMINATION,
+                null, null, BigDecimal.valueOf(150000), null, null, List.of());
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_TYPE_NOT_CREATABLE));
+        verifyNoInteractions(serviceRepository);
     }
 
     @Test
@@ -116,14 +191,39 @@ class MedicalServiceServiceImplTest {
                 departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
                 null, true, NOW);
         ServiceGroup group = mock(ServiceGroup.class);
+        when(group.isActive()).thenReturn(true);
         when(group.getType()).thenReturn(ServiceGroupType.IMAGING);
         when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
         when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
         CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
                 "XN-100", "Xet nghiem mau", MedicalServiceType.LAB,
-                groupId, departmentId, BigDecimal.ONE, null, null);
+                groupId, departmentId, BigDecimal.ONE, null, null, List.of());
 
-        assertThatThrownBy(() -> service.createService(request))
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_ASSIGNMENT_INVALID));
+    }
+
+    @Test
+    void rejectsServiceGroupWhoseDepartmentDoesNotMatchService() {
+        UUID departmentId = UUID.randomUUID();
+        UUID otherDepartmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        Department department = new Department(
+                departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
+                null, true, NOW);
+        ServiceGroup group = mock(ServiceGroup.class);
+        when(group.isActive()).thenReturn(true);
+        when(group.getType()).thenReturn(ServiceGroupType.LAB);
+        when(group.getDepartmentId()).thenReturn(otherDepartmentId);
+        when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
+        when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "XN-101", "Xet nghiem mau", MedicalServiceType.LAB,
+                groupId, departmentId, BigDecimal.ONE, null, null, List.of());
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.SERVICE_ASSIGNMENT_INVALID));
@@ -136,19 +236,38 @@ class MedicalServiceServiceImplTest {
         MedicalServiceDetailResponse detail = new MedicalServiceDetailResponse(
                 serviceId, "XN-01", "New name", MedicalServiceType.LAB,
                 null, null, null, null, BigDecimal.TEN, null,
-                "New description", ActivationStatus.ACTIVE, 4L, List.of());
+                "New description", ActivationStatus.ACTIVE, 4L, List.of(), List.of());
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getTenchidinh()).thenReturn("Old name");
         when(entity.getVersion()).thenReturn(3L);
         when(clock.instant()).thenReturn(NOW);
-        when(serviceMapper.toDetail(entity, null, null, List.of())).thenReturn(detail);
+        when(serviceMapper.toDetail(entity, null, null, List.of(), List.of())).thenReturn(detail);
 
         var response = service.updateService(
-                serviceId, new UpdateMedicalServiceRequest(" New name ", " New description ", 3L));
+                PRINCIPAL, serviceId, new UpdateMedicalServiceRequest(" New name ", " New description ", 3L));
 
         assertThat(response).isEqualTo(detail);
         verify(entity).updateInformation("New name", "New description", NOW);
         verify(serviceRepository).saveAndFlush(entity);
+    }
+
+    @Test
+    void rejectsRenamingToTheNameOfAnotherService() {
+        UUID serviceId = UUID.randomUUID();
+        MedicalService entity = mock(MedicalService.class);
+        when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
+        when(entity.getTenchidinh()).thenReturn("Old name");
+        when(entity.getVersion()).thenReturn(3L);
+        when(serviceRepository.existsByTenchidinhIgnoreCaseAndIdNot("Glucose mau", serviceId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.updateService(
+                PRINCIPAL, serviceId, new UpdateMedicalServiceRequest(" Glucose mau ", null, 3L)))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_NAME_ALREADY_EXISTS);
+                    assertThat(exception.getDetails()).containsEntry("name", "ALREADY_EXISTS");
+                });
+        verify(entity, never()).updateInformation(any(), any(), any());
+        verify(serviceRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -159,7 +278,7 @@ class MedicalServiceServiceImplTest {
         when(entity.getTenchidinh()).thenReturn("Same name");
         when(entity.getDescription()).thenReturn(null);
 
-        service.updateService(serviceId, new UpdateMedicalServiceRequest(" Same name ", " ", 4L));
+        service.updateService(PRINCIPAL, serviceId, new UpdateMedicalServiceRequest(" Same name ", " ", 4L));
 
         verify(entity, never()).updateInformation(any(), any(), any());
         verify(serviceRepository, never()).saveAndFlush(any());
@@ -174,7 +293,7 @@ class MedicalServiceServiceImplTest {
         when(entity.getVersion()).thenReturn(5L);
 
         assertThatThrownBy(() -> service.updateService(
-                serviceId, new UpdateMedicalServiceRequest("New name", null, 4L)))
+                PRINCIPAL, serviceId, new UpdateMedicalServiceRequest("New name", null, 4L)))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.CONCURRENT_MODIFICATION));
@@ -229,33 +348,49 @@ class MedicalServiceServiceImplTest {
     }
 
     @Test
-    void deactivationCheckReturnsUnfinishedOrderCount() {
+    void deactivationCheckPassesForServiceWithoutUnfinishedOrders() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
+        when(entity.getId()).thenReturn(serviceId);
         when(entity.getType()).thenReturn(MedicalServiceType.LAB);
         when(entity.getStatus()).thenReturn(ActivationStatus.ACTIVE);
-        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(3L);
+        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(0L);
 
         var response = service.checkDeactivation(serviceId);
 
         assertThat(response.currentStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(response.targetStatus()).isEqualTo(ActivationStatus.INACTIVE);
-        assertThat(response.unfinishedOrderCount()).isEqualTo(3);
+        assertThat(response.unfinishedOrderCount()).isZero();
     }
 
     @Test
-    void rejectsDeactivationOfLastActiveExaminationService() {
+    void rejectsDeactivationOfServiceWithUnfinishedOrders() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getId()).thenReturn(serviceId);
+        when(entity.getType()).thenReturn(MedicalServiceType.LAB);
+        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(3L);
+
+        assertThatThrownBy(() -> service.checkDeactivation(serviceId))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_HAS_UNFINISHED_ORDERS);
+                    assertThat(exception.getDetails()).containsEntry("unfinishedOrderCount", "3");
+                });
+    }
+
+    @Test
+    void rejectsDeactivationOfAnyExaminationService() {
+        UUID serviceId = UUID.randomUUID();
+        MedicalService entity = mock(MedicalService.class);
+        when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getType()).thenReturn(MedicalServiceType.EXAMINATION);
 
         assertThatThrownBy(() -> service.checkDeactivation(serviceId))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.LAST_ACTIVE_EXAMINATION_SERVICE));
+                                .isEqualTo(ErrorCode.EXAMINATION_SERVICE_NOT_DEACTIVATABLE));
         verifyNoInteractions(orderDetailRepository);
     }
 
@@ -343,7 +478,7 @@ class MedicalServiceServiceImplTest {
                 serviceId, "XN.001", "Tổng phân tích tế bào máu", MedicalServiceType.LAB,
                 groupId, "Xét nghiệm máu", departmentId, "Khoa Xét nghiệm",
                 BigDecimal.valueOf(120000), null, "Mô tả", ActivationStatus.ACTIVE, 0L,
-                List.of(performingRoom));
+                List.of(performingRoom), List.of());
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getDepartmentId()).thenReturn(departmentId);
         when(entity.getServiceGroupId()).thenReturn(groupId);
@@ -354,7 +489,8 @@ class MedicalServiceServiceImplTest {
         when(roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(groupId, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room));
         when(serviceMapper.toPerformingRoom(room)).thenReturn(performingRoom);
-        when(serviceMapper.toDetail(entity, "Xét nghiệm máu", "Khoa Xét nghiệm", List.of(performingRoom)))
+        when(serviceMapper.toDetail(
+                entity, "Xét nghiệm máu", "Khoa Xét nghiệm", List.of(performingRoom), List.of()))
                 .thenReturn(detail);
 
         assertThat(service.getService(serviceId)).isEqualTo(detail);
@@ -377,9 +513,9 @@ class MedicalServiceServiceImplTest {
         MedicalServiceDetailResponse detail = new MedicalServiceDetailResponse(
                 serviceId, "KHAM", "Khám bệnh", MedicalServiceType.EXAMINATION,
                 null, null, null, null, BigDecimal.valueOf(100000), BigDecimal.valueOf(30000),
-                null, ActivationStatus.ACTIVE, 0L, List.of());
+                null, ActivationStatus.ACTIVE, 0L, List.of(), List.of());
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
-        when(serviceMapper.toDetail(entity, null, null, List.of())).thenReturn(detail);
+        when(serviceMapper.toDetail(entity, null, null, List.of(), List.of())).thenReturn(detail);
 
         assertThat(service.getService(serviceId).performingRooms()).isEmpty();
         verifyNoInteractions(roomRepository, departmentRepository, serviceGroupRepository);

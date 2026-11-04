@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, DoorOpen, FileText, RefreshCw, ShieldPlus, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, DoorOpen, FileText, RefreshCw, X } from 'lucide-react';
 import defaultPatientApi from '../../apis/patientApi';
 import defaultVisitApi from '../../apis/visitApi';
 import { AccountPageHeader, FormSection } from '../../components/accounts/AccountFormParts';
-import { INPUT_CLASS, Field, FormAlert } from '../../components/shared/FormFields';
+import { INPUT_CLASS, INLINE_LABEL_CLASS, Field, FormAlert } from '../../components/shared/FormFields';
 import {
   VisitAppointmentCard,
   VisitConfirmModal,
@@ -27,11 +27,11 @@ import {
   MSG17,
   insuranceErrorKind,
   loadErrorMessage,
+  ticketErrorMessage,
   msg22,
   msg56,
   visitCreateError,
 } from '../../components/visits/visitErrors';
-import { roomLabel } from '../../components/visits/visitFormat';
 import {
   PRIORITY_REASON_LABELS,
   REFERRAL_SOURCE_LABELS,
@@ -71,6 +71,45 @@ function StatusCard({ title, message, actionLabel, onAction }) {
         {actionLabel}
       </button>
     </section>
+  );
+}
+
+/** A required radio group laid out like an inline field: label on the left, options in one row. */
+function RadioRow({ name, label, options, value, onChange, error }) {
+  return (
+    <fieldset className="flex flex-col md:flex-row gap-1.5 md:gap-4">
+      <legend className="sr-only">{label}</legend>
+      <span aria-hidden="true" className={`block text-sm font-semibold text-slate-700 ${INLINE_LABEL_CLASS}`}>
+        {label}<span className="text-rose-500 ml-0.5">*</span>
+      </span>
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(options).map(([optionValue, optionLabel]) => (
+            <label
+              key={optionValue}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
+                value === optionValue
+                  ? 'border-[#127e7a] bg-[#f0f9f8] text-[#127e7a] ring-2 ring-[#127e7a]/15'
+                  : error
+                    ? 'border-rose-300 bg-rose-50/60 text-slate-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={optionValue}
+                checked={value === optionValue}
+                onChange={() => onChange(optionValue)}
+                className="w-4 h-4 accent-[#127e7a] cursor-pointer"
+              />
+              {optionLabel}
+            </label>
+          ))}
+        </div>
+        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
+      </div>
+    </fieldset>
   );
 }
 
@@ -277,7 +316,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
           : current);
       } catch (ticketError) {
         setCreated((current) => current?.visit.id === visit.id
-          ? { ...current, loading: false, error: loadErrorMessage(ticketError) }
+          ? { ...current, loading: false, error: ticketErrorMessage(ticketError) }
           : current);
       }
     } catch (error) {
@@ -316,7 +355,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
       const ticket = await visitApi.getTicket(created.visit.id);
       setCreated((current) => ({ ...current, ticket, loading: false, error: null }));
     } catch (error) {
-      setCreated((current) => ({ ...current, loading: false, error: loadErrorMessage(error) }));
+      setCreated((current) => ({ ...current, loading: false, error: ticketErrorMessage(error) }));
     }
   };
 
@@ -328,7 +367,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
       setCreated((current) => ({ ...current, ticket, loading: false, error: null }));
       window.setTimeout(() => window.print(), 0);
     } catch (error) {
-      setCreated((current) => ({ ...current, loading: false, error: loadErrorMessage(error) }));
+      setCreated((current) => ({ ...current, loading: false, error: ticketErrorMessage(error) }));
     }
   };
 
@@ -393,12 +432,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
           />
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-5 items-start">
-          <div className="space-y-5">
-            <FormSection icon={ShieldPlus} title="Đối tượng khám" description="Ưu tiên và loại lượt khám">
+        <div className="space-y-5">
+            <FormSection icon={FileText} title="Thông tin lượt khám" description="Đối tượng, lý do khám và nơi giới thiệu">
               <div className="space-y-5">
-                <div className="space-y-3">
-                  <label className="inline-flex items-center gap-2.5 text-sm font-semibold text-slate-700 cursor-pointer">
+                <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
+                  <label className={`inline-flex items-center gap-2.5 text-sm font-semibold text-slate-700 cursor-pointer ${INLINE_LABEL_CLASS}`}>
                     <input
                       type="checkbox"
                       checked={form.isPriority}
@@ -408,7 +446,14 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                     Ưu tiên
                   </label>
                   {form.isPriority && (
-                    <Field id="visit-priority-reason" label="Lý do ưu tiên" required error={shownErrors.priorityReason} className="md:w-1/2">
+                    <Field
+                      id="visit-priority-reason"
+                      label="Lý do ưu tiên"
+                      required
+                      inline
+                      error={shownErrors.priorityReason}
+                      className="flex-1 md:max-w-xl"
+                    >
                       <select
                         id="visit-priority-reason"
                         value={form.priorityReason}
@@ -426,39 +471,17 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                   )}
                 </div>
 
-                <fieldset className="space-y-2">
-                  <legend className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    Loại lượt khám<span className="text-rose-500 ml-0.5">*</span>
-                  </legend>
-                  <div className="grid grid-cols-2 gap-3 md:w-1/2">
-                    {Object.entries(VISIT_TYPE_LABELS).map(([value, label]) => (
-                      <label
-                        key={value}
-                        className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
-                          form.visitType === value
-                            ? 'border-[#127e7a] bg-[#f0f9f8] text-[#127e7a] ring-2 ring-[#127e7a]/15'
-                            : shownErrors.visitType
-                              ? 'border-rose-300 bg-rose-50/60 text-slate-700'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="visit-type"
-                          value={value}
-                          checked={form.visitType === value}
-                          onChange={() => changeVisitType(value)}
-                          className="w-4 h-4 accent-[#127e7a] cursor-pointer"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                  {shownErrors.visitType && <p className="text-xs font-medium text-rose-600">{shownErrors.visitType}</p>}
-                </fieldset>
+                <RadioRow
+                  name="visit-type"
+                  label="Loại lượt khám"
+                  options={VISIT_TYPE_LABELS}
+                  value={form.visitType}
+                  onChange={changeVisitType}
+                  error={shownErrors.visitType}
+                />
 
                 {typeNotice && (
-                  <div role="alert" className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+                  <div role="alert" className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 md:ml-44">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     <p className="text-sm flex-1">{typeNotice} Vui lòng thông báo cho bệnh nhân.</p>
                     <button type="button" aria-label="Đóng thông báo" onClick={() => setTypeNotice(null)} className="p-0.5 rounded hover:bg-amber-100 cursor-pointer">
@@ -469,6 +492,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
 
                 {form.visitType === 'BHYT' && (
                   <VisitInsuranceField
+                    inline
                     value={form.cardNumber}
                     onChange={(cardNumber) => update({ cardNumber })}
                     insurance={insurance}
@@ -477,15 +501,12 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                     onSwitchToSelfPaid={() => switchToSelfPaid(null)}
                   />
                 )}
-              </div>
-            </FormSection>
 
-            <FormSection icon={FileText} title="Lý do khám" description="Lý do đến khám và nơi giới thiệu">
-              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] gap-5">
                 <Field
                   id="visit-reason"
                   label="Lý do khám"
                   required
+                  inline
                   error={shownErrors.reason}
                   hint={`${form.reason.trim().length}/${MAX_REASON_LENGTH} ký tự`}
                 >
@@ -497,21 +518,17 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                     placeholder="VD: Đau đầu, sốt nhẹ 2 ngày"
                     aria-invalid={Boolean(shownErrors.reason)}
                     aria-describedby={shownErrors.reason ? 'visit-reason-error' : undefined}
-                    className={`${INPUT_CLASS} resize-none`}
+                    className={`${INPUT_CLASS} resize-none md:max-w-3xl`}
                   />
                 </Field>
-                <Field id="visit-referral" label="Nơi giới thiệu">
-                  <select
-                    id="visit-referral"
-                    value={form.referralSource}
-                    onChange={(e) => update({ referralSource: e.target.value })}
-                    className={`${INPUT_CLASS} cursor-pointer`}
-                  >
-                    {Object.entries(REFERRAL_SOURCE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </Field>
+
+                <RadioRow
+                  name="visit-referral"
+                  label="Nơi giới thiệu"
+                  options={REFERRAL_SOURCE_LABELS}
+                  value={form.referralSource}
+                  onChange={(referralSource) => update({ referralSource })}
+                />
               </div>
             </FormSection>
 
@@ -551,50 +568,27 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                 />
               </div>
             </FormSection>
-          </div>
 
-          <aside className="space-y-5 xl:sticky xl:top-4">
-            <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 space-y-3">
-              <h2 className="text-base! leading-6! font-bold! text-[#1b2533]">Tóm tắt</h2>
-              <dl className="space-y-2.5 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Ưu tiên</dt>
-                  <dd className="font-semibold text-slate-800 text-right">
-                    {form.isPriority ? PRIORITY_REASON_LABELS[form.priorityReason] ?? 'Chưa chọn lý do' : 'Không'}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Loại lượt khám</dt>
-                  <dd className="font-semibold text-slate-800 text-right">{VISIT_TYPE_LABELS[form.visitType] ?? '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Phòng khám</dt>
-                  <dd className="font-semibold text-slate-800 text-right">{selectedRoom ? roomLabel(selectedRoom) : '—'}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 space-y-2.5">
-              <button
-                type="button"
-                onClick={openConfirm}
-                disabled={insurance.status === 'VERIFYING'}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                Tiếp tục
-                <ArrowRight className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+              {alert && <div className="sm:mr-auto"><FormAlert>{alert}</FormAlert></div>}
               <button
                 type="button"
                 onClick={goToPatients}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
               >
                 <X className="w-4 h-4" />
                 Hủy
               </button>
-              {alert && <FormAlert>{alert}</FormAlert>}
+              <button
+                type="button"
+                onClick={openConfirm}
+                disabled={insurance.status === 'VERIFYING'}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Tiếp tục
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-          </aside>
         </div>
 
         {confirm && (

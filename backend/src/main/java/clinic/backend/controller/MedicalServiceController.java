@@ -18,6 +18,7 @@ import clinic.backend.dto.response.PageResponse;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.service.MedicalServiceService;
+import clinic.backend.security.user.StaffPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,6 +38,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
 
@@ -83,8 +86,9 @@ public class MedicalServiceController {
     @Operation(summary = "Tạo dịch vụ y tế")
     @PostMapping
     public ResponseEntity<ApiResponse<CreatedMedicalServiceResponse>> create(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateMedicalServiceRequest request) {
-        CreatedMedicalServiceResponse created = service.createService(request);
+        CreatedMedicalServiceResponse created = service.createService(StaffPrincipal.from(jwt), request);
         return ResponseEntity.created(URI.create("/api/v1/services/" + created.serviceId()))
                 .body(ApiResponse.success(created));
     }
@@ -92,9 +96,10 @@ public class MedicalServiceController {
     @Operation(summary = "Cập nhật thông tin dịch vụ y tế")
     @PutMapping("/{serviceId}")
     public ApiResponse<MedicalServiceDetailResponse> update(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID serviceId,
             @Valid @RequestBody UpdateMedicalServiceRequest request) {
-        return ApiResponse.success(service.updateService(serviceId, request));
+        return ApiResponse.success(service.updateService(StaffPrincipal.from(jwt), serviceId, request));
     }
 
     @Operation(summary = "Cập nhật giá dịch vụ y tế")

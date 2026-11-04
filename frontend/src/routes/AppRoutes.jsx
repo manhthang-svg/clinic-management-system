@@ -8,6 +8,7 @@ import {
   ServiceManagementPage,
   ScheduleManagementPage,
   HospitalInformationPage,
+  LabParameterManagementPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -27,8 +28,8 @@ import ReceptionistPatientDetailPage from "../pages/receptionist/ReceptionistPat
 import ReceptionistUpdatePatientPage from "../pages/receptionist/ReceptionistUpdatePatientPage.jsx";
 import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQueuePage.jsx";
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
-import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
 import DoctorWaitingListPage from "../pages/doctor/DoctorWaitingListPage.jsx";
+import ClinicalExaminationPage from "../pages/doctor/ClinicalExaminationPage.jsx";
 import OwnProfilePage from "../pages/profile/OwnProfilePage.jsx";
 import {
   TechnicianDashboardPage,
@@ -119,6 +120,17 @@ export function AppRoutes({
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}
                 onOpenProfile={() => navigate(ROUTES.ADMIN.PROFILE)}
+              />
+            }
+          />
+
+          <Route
+            path="lab-parameters"
+            element={
+              <LabParameterManagementPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
               />
             }
           />
@@ -266,21 +278,21 @@ export function AppRoutes({
         >
           <Route index element={<Navigate to="appointments" replace />} />
           <Route path="queue" element={<DoctorWaitingListPage />} />
-          <Route path="examinations" element={<DoctorQueuePage />} />
+          <Route path="examinations" element={<Navigate to="../appointments" replace />} />
           <Route path="appointments" element={<DoctorWaitingListPage />} />
           <Route path="conclusion" element={<DoctorWaitingListPage initialTab="conclusion" />} />
           <Route path="postponed" element={<DoctorWaitingListPage initialTab="skipped" />} />
-          <Route path="clinical-examination" element={<DoctorQueuePage />} />
-          <Route path="paraclinical-orders" element={<DoctorQueuePage />} />
-          <Route path="room-transfers" element={<DoctorQueuePage />} />
+          <Route path="clinical-examination" element={<ClinicalExaminationPage />} />
+          <Route path="paraclinical-orders" element={<Navigate to="../appointments" replace />} />
+          <Route path="room-transfers" element={<Navigate to="../appointments" replace />} />
           <Route
             path="skipped-patients"
             element={<DoctorWaitingListPage initialTab="skipped" />}
           />
-          <Route path="medical-records" element={<DoctorQueuePage />} />
-          <Route path="prescriptions" element={<DoctorQueuePage />} />
-          <Route path="follow-ups" element={<DoctorQueuePage />} />
-          <Route path="examined-patients" element={<DoctorQueuePage />} />
+          <Route path="medical-records" element={<Navigate to="../appointments" replace />} />
+          <Route path="prescriptions" element={<Navigate to="../appointments" replace />} />
+          <Route path="follow-ups" element={<Navigate to="../appointments" replace />} />
+          <Route path="examined-patients" element={<Navigate to="../appointments" replace />} />
           <Route
             path="schedules"
             element={

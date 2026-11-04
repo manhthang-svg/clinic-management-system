@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { INPUT_CLASS, FormAlert } from '../shared/FormFields';
 import { formatPrice } from './serviceFormat';
@@ -7,7 +7,7 @@ export { INPUT_CLASS, Field, FieldError, FieldHint, FormAlert } from '../shared/
 
 // While focused the field shows the raw digits: reformatting under the caret (1000 -> 1.000)
 // desyncs Vietnamese IMEs such as Unikey, which then retype their buffer (1000 -> 1100).
-export function PriceInput({ id, value, onChange, error, disabled }) {
+export function PriceInput({ id, value, onChange, error, disabled, placeholder = '0' }) {
   const [focused, setFocused] = useState(false);
   const shown = value === '' || focused ? value : formatPrice(Number(value));
 
@@ -22,7 +22,7 @@ export function PriceInput({ id, value, onChange, error, disabled }) {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
-        placeholder="0"
+        placeholder={placeholder}
         disabled={disabled}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
@@ -45,25 +45,57 @@ export function ServiceFormModal({
   alert,
   onSubmit,
   onClose,
+  maxWidthClass = 'max-w-xl',
   children,
 }) {
+  const dialogRef = useRef(null);
+  const submittingRef = useRef(submitting);
+  const onCloseRef = useRef(onClose);
+
   useEffect(() => {
+    submittingRef.current = submitting;
+  }, [submitting]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && !submitting) onClose();
+      if (event.key === 'Escape' && !submittingRef.current) onCloseRef.current();
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose, submitting]);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
       <form
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}
         onSubmit={onSubmit}
         noValidate
-        className="w-full max-w-xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-[#e3ece9]"
+        className={`w-full ${maxWidthClass} max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-[#e3ece9]`}
       >
         <div className="flex items-start gap-3 p-5 border-b border-slate-100">
           <div className="w-10 h-10 rounded-xl bg-[#e6f5f3] text-[#127e7a] flex items-center justify-center shrink-0">

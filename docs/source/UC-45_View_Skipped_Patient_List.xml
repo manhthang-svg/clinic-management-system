@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<useCase id="UC-45" name="View Skipped Patient List" section="9.3" feature="Clinical Examination" language="vi">
+  <actors>
+    <primaryActor>Doctor</primaryActor>
+    <secondaryActor>None</secondaryActor>
+  </actors>
+  <description>Bác sĩ xem và tra cứu các lượt khám đã được đánh dấu vắng tại phòng khám được phân công. UC-45 chỉ áp dụng cho Visit của phòng EXAMINATION; danh sách vắng của dịch vụ cận lâm sàng không thuộc phạm vi use case này.</description>
+  <preconditions>
+    <condition number="1">Bác sĩ đã đăng nhập thành công và không bị yêu cầu đổi mật khẩu (UC-01).</condition>
+    <condition number="2">Tài khoản bác sĩ đang hoạt động.</condition>
+    <condition number="3">Bác sĩ được phân công vào một phòng loại EXAMINATION đang hoạt động (BR-05, BR-19).</condition>
+  </preconditions>
+  <normalFlow>
+    <step number="1"><action>Bác sĩ mở chức năng Quản lý khám bệnh và chọn tab Vắng mặt trong UC-43.</action></step>
+    <step number="2"><action>Hệ thống xác định bác sĩ và phòng EXAMINATION đang được phân công.</action></step>
+    <step number="3">
+      <action>Hệ thống tải các lượt khám trong ngày thuộc đúng phòng có isSkipped=true và trạng thái được giữ lại là WAITING hoặc WAITING_CONCLUSION.</action>
+      <note>Skipped là cờ trạng thái hiện tại của lượt khám, không phải một giá trị trong VisitStatus.</note>
+    </step>
+    <step number="4">
+      <action>Hệ thống hiển thị bảng với các cột có độ rộng cố định giống UC-43: Queue number, Họ tên, Mã bệnh nhân, Tuổi, Giới tính, Loại khám, Thời gian đăng ký, Ghi chú, Trạng thái và Thao tác.</action>
+      <note>Không hiển thị thêm cột Thời gian vắng hoặc Giai đoạn bị gián đoạn.</note>
+      <note>Cột Trạng thái hiển thị Vắng mặt và giai đoạn đang được giữ lại: WAITING tương ứng Chờ khám; WAITING_CONCLUSION tương ứng Chờ kết luận.</note>
+      <note>Cột Ghi chú hiển thị lý do ưu tiên và phòng nguồn theo cùng quy tắc của UC-43; nếu có cả hai thì hiển thị trên hai dòng.</note>
+      <note>Độ rộng các cột được cố định; nội dung dài được xuống dòng và không làm thay đổi độ rộng cột.</note>
+    </step>
+    <step number="5"><action>Hệ thống sắp xếp theo skippedAt tăng dần; nếu trùng skippedAt thì theo Queue number tăng dần (BR-21).</action></step>
+    <step number="6"><action>Hệ thống hiển thị tổng số lượt đang bị Skipped tại phòng hiện tại.</action></step>
+    <step number="7"><action>Bác sĩ có thể tìm kiếm theo tên bệnh nhân, mã bệnh nhân hoặc số thẻ BHYT; lọc theo loại lượt khám và giai đoạn bị gián đoạn.</action></step>
+    <step number="8"><action>Hệ thống phân trang danh sách và giữ nguyên điều kiện tìm kiếm, bộ lọc cùng thứ tự sắp xếp khi bác sĩ chuyển trang.</action></step>
+    <step number="9">
+      <action>Trong cột Thao tác, hệ thống hiển thị một nút Bắt đầu đối với lượt còn đủ điều kiện tiếp nhận.</action>
+      <note>Nếu bệnh nhân chưa quay lại, bác sĩ không thực hiện thao tác; lượt tiếp tục nằm trong danh sách Vắng mặt.</note>
+      <note>Nút Bắt đầu tiếp tục UC-46; tab Vắng mặt không hiển thị nút Vắng.</note>
+    </step>
+    <step number="10"><action>Hệ thống tự động làm mới theo UI-04, cập nhật dữ liệu và tổng số lượt nhưng giữ nguyên tab, trang, nội dung tìm kiếm và bộ lọc.</action></step>
+    <step number="11"><action>Nếu tiến trình cuối ngày của BR-22 đã chuyển một lượt sang ABANDONED, lần làm mới tiếp theo loại lượt đó khỏi danh sách; UC-45 không trực tiếp thực hiện chuyển trạng thái cuối ngày.</action></step>
+    <continuation>Use case kết thúc khi bác sĩ rời màn hình hoặc chọn Bắt đầu để tiếp tục UC-46.</continuation>
+  </normalFlow>
+  <alternativeFlows>
+    <flow id="AF-01" atStep="3">
+      <title>Không có bệnh nhân vắng mặt</title>
+      <step number="1.1">Hệ thống hiển thị danh sách rỗng, tổng số bằng 0 và MSG01.</step>
+      <step number="1.2">Tự động làm mới vẫn tiếp tục để bổ sung lượt mới bị đánh dấu Skipped.</step>
+    </flow>
+    <flow id="AF-02" atStep="7">
+      <title>Không có kết quả tìm kiếm hoặc lọc</title>
+      <step number="2.1">Hệ thống hiển thị danh sách rỗng và giữ nguyên điều kiện hiện tại.</step>
+      <step number="2.2">Bác sĩ có thể sửa điều kiện hoặc chọn Xóa bộ lọc.</step>
+    </flow>
+    <flow id="AF-03" atStep="7">
+      <title>Xóa bộ lọc</title>
+      <step number="3.1">Hệ thống xóa nội dung tìm kiếm, đặt lại bộ lọc và đưa phân trang về trang đầu tiên.</step>
+      <step number="3.2">Hệ thống hiển thị lại đầy đủ danh sách theo thứ tự tại bước 5.</step>
+    </flow>
+    <flow id="AF-04" atStep="9">
+      <title>Bác sĩ đang ngoài ca trực</title>
+      <step number="4.1">Bác sĩ vẫn được xem, tìm kiếm, lọc, phân trang và làm mới danh sách.</step>
+      <step number="4.2">Hệ thống vô hiệu hóa nút Bắt đầu; nếu request vẫn được gửi, UC-46 từ chối thao tác và trả MSG48.</step>
+    </flow>
+  </alternativeFlows>
+  <exceptionFlows>
+    <flow id="EF-01" atStep="2">
+      <title>Tài khoản hoặc phòng được phân công không hợp lệ</title>
+      <step number="1.1">Nếu tài khoản không phải Doctor hoặc không còn hoạt động, hệ thống trả MSG13.</step>
+      <step number="1.2">Nếu không có phòng EXAMINATION đang hoạt động được phân công, hệ thống trả ROOM_ASSIGNMENT_REQUIRED.</step>
+      <step number="1.3">Hệ thống không tải dữ liệu của phòng khác.</step>
+    </flow>
+    <flow id="EF-02" atStep="3 hoặc 10">
+      <title>Lỗi tải hoặc làm mới danh sách</title>
+      <step number="2.1">Hệ thống trả MSG80.</step>
+      <step number="2.2">Nếu đã có dữ liệu trước đó, giao diện có thể giữ dữ liệu cũ kèm cảnh báo dữ liệu chưa được cập nhật.</step>
+      <step number="2.3">Bác sĩ có thể thử tải lại.</step>
+    </flow>
+    <flow id="EF-03" atStep="bất kỳ">
+      <title>Phiên đăng nhập hết hạn</title>
+      <step number="3.1">Hệ thống hiển thị MSG12, chặn thao tác được bảo vệ và chuyển người dùng về UC-01.</step>
+    </flow>
+  </exceptionFlows>
+  <postconditions>
+    <outcome type="success">Bác sĩ xem được danh sách Visit có isSkipped=true thuộc đúng phòng EXAMINATION được phân công; thao tác xem, tìm kiếm, lọc, phân trang và làm mới không thay đổi lượt khám.</outcome>
+    <outcome type="failure">Không thay đổi dữ liệu bệnh nhân hoặc lượt khám và không làm lộ dữ liệu của phòng khác.</outcome>
+  </postconditions>
+  <businessRules>BR-02, BR-05, BR-19, BR-21, BR-22, BR-42, BR-55; UI-04</businessRules>
+  <messages>
+    <message id="MSG01" />
+    <message id="MSG12" />
+    <message id="MSG13" />
+    <message id="MSG48" />
+    <message id="MSG80" />
+    <message id="ROOM_ASSIGNMENT_REQUIRED" />
+  </messages>
+</useCase>

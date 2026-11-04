@@ -17,7 +17,9 @@ export function AdminLayout({
         onNavigate={onNavigate}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      {/* relative: absolutely positioned content (sr-only labels, dropdowns) stays inside this scroll area
+          instead of stretching the page, which would add a second, page-level scrollbar. */}
+      <div className="relative flex-1 flex flex-col min-w-0 overflow-y-auto">
         <AdminTopBar
           currentAdmin={currentAdmin}
           onOpenProfile={onOpenProfile}

@@ -64,14 +64,12 @@ export function ScheduleManagementPage({
 
   // Schedules state
   const [scheduleItems, setScheduleItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [metadataLoading, setMetadataLoading] = useState(true);
 
   // Available staff & rooms (tải thật từ API, không dùng mock)
   const [staffList, setStaffList] = useState([]);
   const [roomList, setRoomList] = useState([]);
-
-  // Modal states (Admin CRUD)
-
 
   // Modal states (Admin CRUD)
   const [modalOpen, setModalOpen] = useState(false);
@@ -112,82 +110,72 @@ export function ScheduleManagementPage({
     let isMounted = true;
     async function loadMetadata() {
       try {
-        const promises = [
-          departmentApi.getAllItems().catch((err) => {
-            console.warn('Không thể tải danh mục khoa phòng qua departmentApi:', err);
-            return [];
-          }),
-        ];
-
-        // Chỉ Admin mới có quyền gọi accountApi.list (tránh lỗi 403 Forbidden cho Bác sĩ, KTV, Lễ tân)
-        if (isAdmin) {
-          const accountApi = createAccountApi(apiClient);
-          promises.push(
-            (async () => {
-              const allAccounts = [];
-              for (let page = 0; ; page += 1) {
-                const accRes = await accountApi.list({ page, size: 50 });
-                const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
-                allAccounts.push(...items);
-                const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
-                if (page + 1 >= totalPages || items.length === 0) break;
-              }
-              return allAccounts;
-            })().catch((err) => {
-              console.warn('Không thể tải danh sách tài khoản (chỉ admin):', err);
-              return [];
-            })
-          );
-        } else {
-          promises.push(Promise.resolve([]));
-        }
-
-        const [deptRes, accResPages] = await Promise.all(promises);
+        // Tải danh mục khoa/phòng thật và gán roomList ngay lập tức mà không phải chờ duyệt hết danh sách tài khoản
+        const deptRes = await departmentApi.getAllItems().catch((err) => {
+          console.warn('Không thể tải danh mục khoa phòng qua departmentApi:', err);
+          return [];
+        });
 
         const rawRooms = (deptRes?.data || deptRes || []).filter((it) => it.unitType === 'ROOM');
 
-        // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN cho lịch trực phòng (Không fallback sang vai trò khác)
-        const filteredAccounts = (accResPages || []).filter((a) => a.role === 'DOCTOR' || a.role === 'TECHNICIAN');
-        const sourceAccounts = filteredAccounts;
-
-        const dutyStaff = sourceAccounts.map((a) => {
-          const matchedRoom = rawRooms.find((r) =>
-            (a.roomId && r.id === a.roomId) ||
-            (a.roomName && (r.name === a.roomName || r.roomName === a.roomName))
-          );
-          return {
-            id: a.id,
-            fullName: (a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName,
-            role: a.role,
-            username: a.username,
-            roomId: a.roomId || matchedRoom?.id || null,
-            roomCode: a.roomCode || matchedRoom?.code || matchedRoom?.roomCode || null,
-            roomName: a.roomName || matchedRoom?.name || matchedRoom?.roomName || null,
-            departmentName: a.departmentName || matchedRoom?.departmentName || null,
-          };
-        });
-
-        // Gắn danh sách nhân viên trực thuộc cho từng phòng để liên kết 2 chiều
-        const enrichedRooms = rawRooms.map((r) => {
-          const assignedStaff = dutyStaff.filter((s) => s.roomId === r.id);
-          return {
-            ...r,
-            assignedStaff,
-            assignedStaffNames: assignedStaff.map((s) => s.fullName).join(', '),
-          };
-        });
-
         if (isMounted) {
-          setStaffList(dutyStaff);
-          if (enrichedRooms.length > 0) {
-            setRoomList(enrichedRooms);
+          setRoomList(rawRooms);
+          setMetadataLoading(false);
+        }
+
+        // Tải tài khoản nhân viên (chỉ Admin mới tải để gán phân công trong modal)
+        if (isAdmin && isMounted) {
+          try {
+            const accountApi = createAccountApi(apiClient);
+            const allAccounts = [];
+            for (let page = 0; ; page += 1) {
+              const accRes = await accountApi.list({ page, size: 50 });
+              const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
+              allAccounts.push(...items);
+              const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
+              if (page + 1 >= totalPages || items.length === 0) break;
+            }
+
+            if (!isMounted) return;
+
+            // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN và tài khoản đang hoạt động (không lấy tài khoản bị khóa)
+            const filteredAccounts = allAccounts.filter(
+              (a) => (a.role === 'DOCTOR' || a.role === 'TECHNICIAN') && (a.status === 'ACTIVE' || !a.status)
+            );
+            const dutyStaff = filteredAccounts.map((a) => {
+              const matchedRoom = rawRooms.find((r) => {
+                if (a.roomId && r.id && String(a.roomId).toLowerCase() === String(r.id).toLowerCase()) return true;
+                if (a.roomCode && r.code && a.roomCode.trim().toUpperCase() === r.code.trim().toUpperCase()) return true;
+                if (a.roomName && r.name && a.roomName.trim().toLowerCase() === r.name.trim().toLowerCase()) return true;
+                return false;
+              });
+              return {
+                id: a.id,
+                fullName: (matchedRoom?.headPerson && matchedRoom.headPerson.includes(a.fullName))
+                  ? matchedRoom.headPerson
+                  : ((a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName),
+                role: a.role,
+                username: a.username,
+                roomId: a.roomId || matchedRoom?.id || null,
+                roomCode: a.roomCode || matchedRoom?.code || matchedRoom?.roomCode || null,
+                roomName: a.roomName || matchedRoom?.name || matchedRoom?.roomName || null,
+                departmentName: a.departmentName || matchedRoom?.departmentName || null,
+              };
+            });
+
+            setStaffList(dutyStaff);
+          } catch (err) {
+            console.warn('Không thể tải danh sách tài khoản (chỉ admin):', err);
           }
         }
       } catch (e) {
         console.warn('Lỗi xử lý metadata phòng ban:', e);
+        if (isMounted) {
+          setMetadataLoading(false);
+        }
       }
     }
-    loadMetadata();
+    void loadMetadata();
     return () => { isMounted = false; };
   }, [isAdmin]);
 
@@ -200,27 +188,6 @@ export function ScheduleManagementPage({
       const res = await dutyScheduleApi.getWeeklySchedule(startDateStr, endDateStr);
       const items = res?.items || [];
       setScheduleItems(items);
-
-      // Nếu danh sách phòng chưa có, tự động trích xuất từ các ca trực đã có
-      if (items.length > 0) {
-        setRoomList((prev) => {
-          if (prev.length > 0) return prev;
-          const roomMap = new Map();
-          items.forEach((it) => {
-            if (it.roomId && !roomMap.has(it.roomId)) {
-              roomMap.set(it.roomId, {
-                id: it.roomId,
-                code: it.roomCode || it.roomName,
-                name: it.roomName || it.roomCode,
-                departmentName: it.departmentName || 'Khoa Khám Bệnh',
-                type: 'CLINICAL',
-                assignedStaff: [],
-              });
-            }
-          });
-          return Array.from(roomMap.values());
-        });
-      }
     } catch (e) {
       console.error('Failed to load duty schedules:', e);
       toast.error(describeApiError(e, 'Không thể tải lịch trực tuần này'));
@@ -231,7 +198,6 @@ export function ScheduleManagementPage({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      // First load or week switch: only show full loading skeleton if we don't have items yet
       void fetchSchedules(false);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -263,9 +229,20 @@ export function ScheduleManagementPage({
       return;
     }
 
+    const targetRoom = roomList.find((r) => String(r.id).toLowerCase() === String(roomId).toLowerCase());
+    const isTargetRoomInactive =
+      targetRoom?.status === 'INACTIVE' ||
+      targetRoom?.status === 'inactive' ||
+      targetRoom?.isActive === false ||
+      targetRoom?.status === 'MAINTENANCE';
+
+    if (isTargetRoomInactive) {
+      toast.error('Phòng khám đang tạm ngừng hoạt động, không thể phân công ca trực');
+      return;
+    }
+
     if (!isAdmin) {
       // Role khác chỉ được phép xem chi tiết ca trực ô này (nếu chưa trong quá khứ)
-      const targetRoom = roomList.find((r) => r.id === roomId);
       setEditingItem({
         id: null,
         workDate: dateStr,
@@ -280,8 +257,6 @@ export function ScheduleManagementPage({
       setModalOpen(true);
       return;
     }
-
-    const targetRoom = roomList.find((r) => r.id === roomId);
 
     const busyAccountIds = new Set(
       scheduleItems
@@ -305,12 +280,18 @@ export function ScheduleManagementPage({
 
     const requiredRole = isParaclinical ? 'TECHNICIAN' : 'DOCTOR';
 
-    const staffOfRoom = staffList.filter((s) =>
-      s.role === requiredRole && (
-        s.roomId === roomId ||
-        (targetRoom && (s.roomCode === targetRoom.code || s.roomName === targetRoom.name))
-      )
-    );
+    const targetRoomId = roomId ? String(roomId).toLowerCase() : '';
+    const staffOfRoom = staffList.filter((s) => {
+      if (s.role !== requiredRole) return false;
+      const sRoomId = s.roomId ? String(s.roomId).toLowerCase() : '';
+      const sCode = (s.roomCode || '').trim().toUpperCase();
+      const sName = (s.roomName || '').trim().toLowerCase();
+      return (
+        (sRoomId && targetRoomId && sRoomId === targetRoomId) ||
+        (roomCode && sCode && sCode === roomCode) ||
+        (targetRoom?.name && sName && sName === targetRoom.name.trim().toLowerCase())
+      );
+    });
     const freeStaffOfRoom = staffOfRoom.find((s) => !busyAccountIds.has(s.id));
     const defaultStaff = freeStaffOfRoom || staffOfRoom[0] || null;
 
@@ -321,7 +302,7 @@ export function ScheduleManagementPage({
       roomId,
       roomName: targetRoom?.name || targetRoom?.roomName || '',
       roomCode: targetRoom?.code || targetRoom?.roomCode || '',
-      staffAccountId: defaultStaff?.id || '',
+      staffAccountId: '',
       notes: '',
     });
     setModalDefaultDate(dateStr);
@@ -337,7 +318,7 @@ export function ScheduleManagementPage({
     }
     setEditingItem({
       ...item,
-      roomId: roomId || roomList[0]?.id || '',
+      roomId: roomId || '',
     });
     setModalDefaultDate(item.workDate);
     setModalOpen(true);
@@ -479,7 +460,16 @@ export function ScheduleManagementPage({
             notes: item.notes || '',
           };
         })
-        .filter(item => !isShiftPast(item.workDate, item.shift));
+        .filter(item => {
+          if (isShiftPast(item.workDate, item.shift)) return false;
+          const targetRoom = roomList.find((r) => r.id === item.roomId);
+          const isTargetInactive =
+            targetRoom?.status === 'INACTIVE' ||
+            targetRoom?.status === 'inactive' ||
+            targetRoom?.isActive === false ||
+            targetRoom?.status === 'MAINTENANCE';
+          return !isTargetInactive;
+        });
 
       if (newItems.length === 0) {
         toast.warning('Tất cả các ngày tương ứng trong tuần này đều đã qua hoặc đã kết thúc, không thể sao chép.');
@@ -623,16 +613,22 @@ export function ScheduleManagementPage({
       </div>
 
       {/* Weekly Matrix Schedule Grid */}
-      <div className="relative">
+      <div className="relative min-h-[350px]">
         {loading && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-2xl transition-all">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/90 shadow-md rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold">
+          <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-2xl transition-all">
+            <div className="flex items-center gap-2.5 px-5 py-2.5 bg-white shadow-md rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold">
               <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-              <span>Đang đồng bộ dữ liệu...</span>
+              <span>Đang tải lịch trực...</span>
             </div>
           </div>
         )}
-        <DutyWeeklyMatrix
+        {metadataLoading && roomList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-16 flex flex-col items-center justify-center min-h-[350px]">
+            <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mb-3" />
+            <span className="text-slate-600 font-medium text-sm">Đang tải danh mục phòng và lịch trực...</span>
+          </div>
+        ) : (
+          <DutyWeeklyMatrix
           days={days}
           roomList={roomList}
           staffList={staffList}
@@ -643,6 +639,7 @@ export function ScheduleManagementPage({
           onEditDuty={handleOpenEdit}
           onDeleteDuty={handleConfirmDelete}
         />
+        )}
       </div>
 
       {/* Modal Phân công / Chỉnh sửa (Admin) hoặc Xem chi tiết (Role khác) */}

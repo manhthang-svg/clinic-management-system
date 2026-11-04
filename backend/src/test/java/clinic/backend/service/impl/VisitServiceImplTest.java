@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.math.BigDecimal;
@@ -24,6 +25,7 @@ import clinic.backend.entity.Visit;
 import clinic.backend.entity.VisitTransfer;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.ErrorCode;
@@ -195,7 +197,7 @@ class VisitServiceImplTest {
 
         var queue = service.getDoctorQueue(
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
-                DoctorQueueTab.WAITING, null, null, null, 0, 20);
+                DoctorQueueTab.WAITING, null, null, null, null, 0, 20);
 
         assertThat(queue.roomId()).isEqualTo(BUSY_ROOM_ID);
         assertThat(queue.doctorName()).isEqualTo("BS Nguyễn Văn An");
@@ -205,10 +207,12 @@ class VisitServiceImplTest {
         assertThat(queue.visits().content()).extracting("patientName")
                 .containsExactly("Ưu tiên", "Chuyển phòng", "Thường");
         assertThat(queue.visits().content().get(1).sourceRoomName()).isEqualTo(sourceRoom.getRoomName());
+        assertThat(queue.visits().content().get(0).note()).isEqualTo("Ưu tiên: Người cao tuổi");
+        assertThat(queue.visits().content().get(1).note()).isEqualTo("Chuyển từ: " + sourceRoom.getRoomName());
 
         var filtered = service.getDoctorQueue(
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
-                DoctorQueueTab.WAITING, "chuyển", false, VisitDoituongbnLoai.DV, 0, 10);
+                DoctorQueueTab.WAITING, "chuyển", false, VisitDoituongbnLoai.DV, null, 0, 10);
         assertThat(filtered.visits().content()).extracting("patientName")
                 .containsExactly("Chuyển phòng");
     }
@@ -225,11 +229,44 @@ class VisitServiceImplTest {
 
         assertThatThrownBy(() -> service.getDoctorQueue(
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
-                DoctorQueueTab.WAITING, null, null, null, 0, 20))
+                DoctorQueueTab.WAITING, null, null, null, null, 0, 20))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
         verifyNoInteractions(visitRepository);
+    }
+
+    @Test
+    void skippedQueueOrdersBySkippedTimeAndFiltersInterruptedStage() {
+        stubDoctorOnDuty();
+        Visit waitingConclusion = skippedVisit(
+                20, VisitStatus.WAITING_CONCLUSION, clock.instant().minusSeconds(60));
+        Visit waiting = skippedVisit(
+                10, VisitStatus.WAITING, clock.instant().minusSeconds(120));
+        Patient waitingPatient = patient(waiting.getPatientId(), "Chờ khám");
+        Patient conclusionPatient = patient(waitingConclusion.getPatientId(), "Chờ kết luận");
+        when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
+                BUSY_ROOM_ID, QUEUE_DATE,
+                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
+                .thenReturn(List.of(waitingConclusion, waiting));
+        when(patientRepository.findAllById(any()))
+                .thenReturn(List.of(conclusionPatient, waitingPatient));
+        when(visitTransferRepository.findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(
+                any(), org.mockito.ArgumentMatchers.eq(BUSY_ROOM_ID))).thenReturn(List.of());
+
+        var queue = service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.SKIPPED, null, null, null, null, 0, 20);
+
+        assertThat(queue.skippedCount()).isEqualTo(2);
+        assertThat(queue.visits().content()).extracting("patientName")
+                .containsExactly("Chờ khám", "Chờ kết luận");
+
+        var filtered = service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.SKIPPED, null, null, null, VisitStatus.WAITING_CONCLUSION, 0, 20);
+        assertThat(filtered.visits().content()).extracting("patientName")
+                .containsExactly("Chờ kết luận");
     }
 
     @Test
@@ -477,6 +514,72 @@ class VisitServiceImplTest {
         return department;
     }
 
+    @Test
+    void acceptSkippedWaitingVisitStartsExamination() {
+        stubDoctorOnDuty();
+        Visit visit = visit(VisitStatus.WAITING);
+        visit.markSkipped(clock.instant().minusSeconds(60));
+        when(visitRepository.findById(visit.getId())).thenReturn(Optional.of(visit));
+        when(visitRepository.save(visit)).thenReturn(visit);
+
+        VisitResponse response = service.acceptSkippedVisit(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), visit.getId());
+
+        assertThat(response.status()).isEqualTo(VisitStatus.IN_EXAMINATION);
+        assertThat(response.isSkipped()).isFalse();
+        assertThat(response.skippedAt()).isNull();
+        assertThat(visit.getDoctorAccountId()).isEqualTo(DOCTOR_ID);
+        assertThat(visit.getDenkhambenhluc()).isEqualTo(clock.instant());
+        verify(auditLogService).recordBusinessChange(
+                DOCTOR_ID, AuditLogAction.UPDATE, "visits", visit.getId(), visit.getSovaovien(),
+                Map.of(
+                        "action", "ACCEPT_SKIPPED",
+                        "interruptedStage", "WAITING",
+                        "status", "IN_EXAMINATION"),
+                clock.instant());
+    }
+
+    @Test
+    void acceptSkippedConclusionVisitPreservesAssignedDoctor() {
+        stubDoctorOnDuty();
+        UUID assignedDoctorId = UUID.randomUUID();
+        Visit visit = visit(VisitStatus.WAITING_CONCLUSION);
+        visit.continueConclusion(assignedDoctorId, clock.instant().minusSeconds(120));
+        visit.markSkipped(clock.instant().minusSeconds(60));
+        when(visitRepository.findById(visit.getId())).thenReturn(Optional.of(visit));
+        when(visitRepository.save(visit)).thenReturn(visit);
+
+        VisitResponse response = service.acceptSkippedVisit(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), visit.getId());
+
+        assertThat(response.status()).isEqualTo(VisitStatus.WAITING_CONCLUSION);
+        assertThat(response.isSkipped()).isFalse();
+        assertThat(response.skippedAt()).isNull();
+        assertThat(visit.getDoctorAccountId()).isEqualTo(assignedDoctorId);
+        verify(auditLogService).recordBusinessChange(
+                DOCTOR_ID, AuditLogAction.UPDATE, "visits", visit.getId(), visit.getSovaovien(),
+                Map.of(
+                        "action", "ACCEPT_SKIPPED",
+                        "interruptedStage", "WAITING_CONCLUSION",
+                        "status", "WAITING_CONCLUSION"),
+                clock.instant());
+    }
+
+    @Test
+    void rejectsAcceptWhenVisitIsNotSkipped() {
+        stubDoctorOnDuty();
+        Visit visit = visit(VisitStatus.WAITING);
+        when(visitRepository.findById(visit.getId())).thenReturn(Optional.of(visit));
+
+        assertThatThrownBy(() -> service.acceptSkippedVisit(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), visit.getId()))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CONCURRENT_MODIFICATION));
+
+        verifyNoInteractions(auditLogService);
+    }
+
     private static Room room(UUID id, String code) {
         Room room = mock(Room.class);
         when(room.getId()).thenReturn(id);
@@ -485,12 +588,56 @@ class VisitServiceImplTest {
         return room;
     }
 
+    private void stubDoctorOnDuty() {
+        Room assignedRoom = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID)
+                .fullName("Nguyễn Văn An")
+                .role(clinic.backend.enums.Role.DOCTOR)
+                .status(AccountStatus.ACTIVE)
+                .build();
+        StaffRoomAssignment assignment = new StaffRoomAssignment(
+                UUID.randomUUID(), DOCTOR_ID, BUSY_ROOM_ID, clock.instant(), null, null, null, 0L);
+        DutySchedule schedule = mock(DutySchedule.class);
+        when(schedule.getRoomId()).thenReturn(BUSY_ROOM_ID);
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.of(assignment));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
+        when(dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
+                QUEUE_DATE, DutyShift.MORNING, DOCTOR_ID)).thenReturn(Optional.of(schedule));
+    }
+
+    private Visit visit(VisitStatus status) {
+        Instant registeredAt = clock.instant().minusSeconds(300);
+        return new Visit(
+                UUID.randomUUID(), registeredAt, "DK0000000046", UUID.randomUUID(), BUSY_ROOM_ID,
+                UUID.randomUUID(), registeredAt, VisitDoituongbnLoai.DV, null,
+                "Đau đầu", "TU_DEN", "Đau đầu", false, null, QUEUE_DATE, 46, status, null);
+    }
+
+    private static Visit skippedVisit(int queueNumber, VisitStatus status, Instant skippedAt) {
+        Visit visit = mock(Visit.class);
+        when(visit.getId()).thenReturn(UUID.randomUUID());
+        when(visit.getPatientId()).thenReturn(UUID.randomUUID());
+        when(visit.getQueueNumber()).thenReturn(queueNumber);
+        when(visit.getDoituongbnLoai()).thenReturn(VisitDoituongbnLoai.DV);
+        when(visit.getThoigianvaovien()).thenReturn(skippedAt.minusSeconds(300));
+        when(visit.getStatus()).thenReturn(status);
+        when(visit.isSkipped()).thenReturn(true);
+        when(visit.getSkippedAt()).thenReturn(skippedAt);
+        return visit;
+    }
+
     private static Visit queuedVisit(int queueNumber, boolean priority) {
         Visit visit = mock(Visit.class);
         when(visit.getId()).thenReturn(UUID.randomUUID());
         when(visit.getPatientId()).thenReturn(UUID.randomUUID());
         when(visit.getQueueNumber()).thenReturn(queueNumber);
         when(visit.isPriority()).thenReturn(priority);
+        when(visit.getPriorityReason()).thenReturn(priority ? clinic.backend.enums.PriorityReason.ELDERLY : null);
         when(visit.getDoituongbnLoai()).thenReturn(VisitDoituongbnLoai.DV);
         when(visit.getLydovaovien()).thenReturn("Đau đầu");
         when(visit.getThoigianvaovien()).thenReturn(Instant.parse("2026-10-30T01:00:00Z"));

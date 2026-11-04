@@ -19,6 +19,7 @@ import clinic.backend.enums.RecordSignatureSignerType;
 import clinic.backend.support.PostgresIntegrationTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -52,6 +53,11 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     private UUID medicalRecord;
     private UUID payment;
     private UUID order;
+
+    @BeforeEach
+    void removeSeededOutpatientTypeForIsolatedConstraintTests() {
+        jdbcTemplate.update("delete from medical_record_types where loaiba = 'NGOAITRU'");
+    }
 
     @Test
     void mapsMedicalRecordTypesAndAllowsOneDefault() {

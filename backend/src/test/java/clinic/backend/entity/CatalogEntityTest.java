@@ -93,7 +93,7 @@ class CatalogEntityTest {
         MedicalService service = MedicalService.create(
                 UUID.randomUUID(), CREATED_AT, "XN-01", "Xet nghiem mau",
                 MedicalServiceType.LAB, departmentId, groupId,
-                BigDecimal.valueOf(120000), BigDecimal.ZERO, null);
+                BigDecimal.valueOf(120000), null, null);
 
         assertThat(service.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(service.getDepartmentId()).isEqualTo(departmentId);

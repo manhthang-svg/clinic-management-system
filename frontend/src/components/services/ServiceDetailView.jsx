@@ -1,18 +1,27 @@
 import { useState } from 'react';
-import { FileText, Banknote, DoorOpen, Pencil } from 'lucide-react';
+import { FileText, Banknote, DoorOpen, FlaskConical, Pencil, Power, PowerOff } from 'lucide-react';
 import { SERVICE_TYPE_MAP, SERVICE_STATUS_LABELS } from '../../constants/serviceData';
 import { AccountPageHeader } from '../accounts/AccountFormParts';
-import { formatPrice } from './serviceFormat';
+import { formatPrice, formatReferenceRangeLine } from './serviceFormat';
+import { LabValueTypeBadge } from './LabValueTypeBadge';
 import { ServiceInfoModal, ServicePriceModal } from './ServiceUpdateModals';
+import { FormAlert } from './ServiceFormParts';
+import { MSG92 } from './serviceErrors';
+import { LabReferenceRangeModal } from './LabReferenceRangeModal';
 
 const SECONDARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer';
 const PRIMARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer';
+const DEACTIVATE_BUTTON_CLASS =
+  'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-rose-600 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
+const ACTIVATE_BUTTON_CLASS =
+  'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#127e7a] bg-white border border-[#bfe0dc] rounded-xl hover:bg-teal-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
+
 
 const STATUS_TONES = {
   ACTIVE: 'bg-emerald-50 text-emerald-600',
-  INACTIVE: 'bg-slate-100 text-slate-500',
+  INACTIVE: 'bg-rose-50 text-rose-600',
 };
 
 function SectionCard({ icon: Icon, title, action, children }) {
@@ -59,14 +68,27 @@ function PriceStat({ label, value, note }) {
   );
 }
 
-/** UC-21 View medical service detail, with UC-23 / UC-24 updates. */
-export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdatePrices }) {
+/** UC-21 View medical service detail, with UC-23 / UC-24 updates and UC-25 status change. */
+export function ServiceDetailView({
+  service,
+  onGoToList,
+  onUpdateInfo,
+  onUpdatePrices,
+  onToggleStatus,
+  referenceRangeApi,
+  onReferenceRangesChanged,
+  statusBusy = false,
+  statusError = null,
+}) {
   // 'info' | 'price' | null
   const [editing, setEditing] = useState(null);
+  const [configuringParameter, setConfiguringParameter] = useState(null);
   const close = () => setEditing(null);
   const type = SERVICE_TYPE_MAP[service.type];
   const examination = service.type === 'EXAMINATION';
+  const active = service.status === 'ACTIVE';
   const rooms = service.performingRooms ?? [];
+  const labParameters = service.labParameters ?? [];
 
   const infoRows = [
     ['Mã dịch vụ', <span className="font-mono">{service.code}</span>],
@@ -104,8 +126,19 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
             </div>
           </div>
         </div>
-        {(onUpdateInfo || onUpdatePrices) && (
+        {(onUpdateInfo || onUpdatePrices || onToggleStatus) && (
           <div className="flex flex-wrap gap-2.5 shrink-0">
+            {onToggleStatus && (
+              <button
+                type="button"
+                disabled={statusBusy}
+                onClick={onToggleStatus}
+                className={active ? DEACTIVATE_BUTTON_CLASS : ACTIVATE_BUTTON_CLASS}
+              >
+                {active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                {active ? 'Ngừng hoạt động' : 'Kích hoạt'}
+              </button>
+            )}
             {onUpdateInfo && (
               <button type="button" onClick={() => setEditing('info')} className={SECONDARY_BUTTON_CLASS}>
                 <Pencil className="w-4 h-4" />
@@ -121,6 +154,9 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
           </div>
         )}
       </section>
+
+      {/* UC-25 MSG52 / MSG55 / MSG73 are shown in line, under the status button. */}
+      {statusError && <FormAlert>{statusError}</FormAlert>}
 
       {editing === 'info' && (
         <ServiceInfoModal
@@ -140,6 +176,14 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
             await onUpdatePrices(form);
             close();
           }}
+        />
+      )}
+      {configuringParameter && referenceRangeApi && (
+        <LabReferenceRangeModal
+          parameter={configuringParameter}
+          api={referenceRangeApi}
+          onChanged={onReferenceRangesChanged}
+          onClose={() => setConfiguringParameter(null)}
         />
       )}
 
@@ -165,7 +209,8 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
           <SectionCard icon={DoorOpen} title="Phòng thực hiện">
             {rooms.length === 0 ? (
               <p className="text-sm text-slate-400">
-                {examination ? 'Dịch vụ khám bệnh dùng chung cho các phòng khám.' : 'Chưa có phòng nào thực hiện dịch vụ này.'}
+                {/* UC-21 EF-03: a paraclinical service without an active room shows MSG92. */}
+                {examination ? 'Dịch vụ khám bệnh dùng chung cho các phòng khám.' : MSG92}
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
@@ -183,6 +228,77 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
           </SectionCard>
         </div>
       </div>
+
+      {service.type === 'LAB' && (
+        <SectionCard
+          icon={FlaskConical}
+          title="Thông số xét nghiệm"
+          action={labParameters.length > 0 && (
+            <span className="text-xs font-semibold text-slate-500">{labParameters.length} chỉ số</span>
+          )}
+        >
+          {labParameters.length === 0 ? (
+            <p className="text-sm text-slate-400">{MSG92}</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#f6f8f9] text-xs font-semibold text-[#1b2533]">
+                    <th className="pl-4 pr-2 py-3 w-16 text-center">STT</th>
+                    <th className="px-3 py-3">Mã chỉ số</th>
+                    <th className="px-3 py-3">Tên chỉ số</th>
+                    <th className="px-3 py-3">Kiểu kết quả</th>
+                    <th className="px-3 py-3">Đơn vị</th>
+                    <th className="px-3 py-3">Chỉ số tham chiếu</th>
+                    {referenceRangeApi && <th className="px-3 py-3 text-center">Thao tác</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {labParameters.map((parameter) => (
+                    <tr key={parameter.parameterId} className="hover:bg-slate-50/70">
+                      <td className="pl-4 pr-2 py-3 text-center font-semibold text-[#127e7a]">{parameter.displayOrder}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">{parameter.code}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-800">{parameter.name}</td>
+                      <td className="px-3 py-3">
+                        <LabValueTypeBadge valueType={parameter.valueType} />
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{parameter.unit || '—'}</td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {(parameter.referenceRanges ?? []).length === 0 ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {parameter.referenceRanges.map((range) => (
+                              <li key={range.id}>{formatReferenceRangeLine(range)}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                      {referenceRangeApi && (
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setConfiguringParameter({
+                              id: parameter.parameterId,
+                              code: parameter.code,
+                              name: parameter.name,
+                              unit: parameter.unit,
+                            })}
+                            className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 text-xs font-semibold text-[#127e7a] transition-colors hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#127e7a]/30"
+                          >
+                            <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                            Cấu hình
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

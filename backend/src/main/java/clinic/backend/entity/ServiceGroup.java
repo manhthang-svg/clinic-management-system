@@ -1,6 +1,8 @@
 
 package clinic.backend.entity;
 
+import java.util.UUID;
+
 import clinic.backend.enums.ServiceGroupType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,9 +12,11 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "service_groups", uniqueConstraints = {
@@ -30,4 +34,10 @@ public class ServiceGroup extends VersionedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private ServiceGroupType type;
+
+    @Column(name = "department_id")
+    private UUID departmentId;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 }

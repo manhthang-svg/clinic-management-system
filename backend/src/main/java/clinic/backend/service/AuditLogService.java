@@ -40,5 +40,14 @@ public interface AuditLogService {
             Map<String, ?> values,
             Instant occurredAt);
 
+    void recordEntityChange(
+            UUID actorAccountId,
+            UUID entityId,
+            AuditLogAction action,
+            String entityType,
+            Map<String, ?> oldValues,
+            Map<String, ?> newValues,
+            Instant occurredAt);
+
     boolean hasAction(AuditLogAction action, String entityType, UUID entityId);
 }

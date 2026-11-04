@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Navigate, generatePath, matchPath, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -18,7 +18,9 @@ import {
   ServiceCreateView,
   ServiceDetailView,
 } from "../../components/services";
-import { serviceErrorMessage } from "../../components/services/serviceErrors";
+import { ConfirmModal } from "../../components/ui";
+import { msg39, serviceErrorMessage, serviceStatusErrorMessage } from "../../components/services/serviceErrors";
+import { MSG80, msg03, msg04, msg06 } from "../../components/services/serviceMessages";
 import {
   formToServiceRequest,
   infoFormToRequest,
@@ -56,6 +58,7 @@ export function ServiceManagementPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [groups, setGroups] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [labParameters, setLabParameters] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
@@ -73,6 +76,11 @@ export function ServiceManagementPage({
   // { id, service, error } of the detail screen; service is null while loading.
   const [detail, setDetail] = useState({ id: null, service: null, error: null });
   const [detailReloadKey, setDetailReloadKey] = useState(0);
+  // UC-25: { target } once the server check passes (steps 2-3 or AF-01.2).
+  const [statusConfirm, setStatusConfirm] = useState(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  // UC-25 inline message (MSG52 / MSG55 / MSG73) as { id, message }, shown only on that service.
+  const [statusError, setStatusError] = useState({ id: null, message: null });
 
   // The URL decides whether the list, the create form, or a detail is shown.
   // "/new" also matches ":id", so the create route is checked first.
@@ -95,16 +103,19 @@ export function ServiceManagementPage({
     return () => clearTimeout(handle);
   }, [searchQuery]);
 
+  const loadFormOptions = useCallback((signal) =>
+    serviceApi.formOptions(signal).then((options) => {
+      setGroups(options.serviceGroups ?? []);
+      setDepartments(options.departments ?? []);
+      setLabParameters(options.labParameters ?? []);
+    }), [serviceApi]);
+
   useEffect(() => {
     const controller = new AbortController();
-    serviceApi.formOptions(controller.signal)
-      .then((options) => {
-        setGroups(options.serviceGroups ?? []);
-        setDepartments(options.departments ?? []);
-      })
+    loadFormOptions(controller.signal)
       .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
     return () => controller.abort();
-  }, [serviceApi]);
+  }, [loadFormOptions]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -188,7 +199,7 @@ export function ServiceManagementPage({
   const createService = async (form) => {
     const request = formToServiceRequest(form);
     await serviceApi.create(request);
-    toast.success(`Đã thêm dịch vụ ${request.code.toUpperCase()}`);
+    toast.success(msg04(`dịch vụ ${request.code.toUpperCase()}`)); // MSG04
     setReloadKey((key) => key + 1);
     navigate(ADMIN.SERVICES, { replace: true });
   };
@@ -212,14 +223,53 @@ export function ServiceManagementPage({
   const updateInfo = (form) =>
     updateDetail(
       (id, version) => serviceApi.update(id, infoFormToRequest(form, version)),
-      "Đã cập nhật thông tin dịch vụ",
+      msg03(`Thông tin dịch vụ ${detail.service?.code ?? ""}`.trim()), // MSG03
     );
 
   const updatePrices = (form) =>
     updateDetail(
       (id, version) => serviceApi.updatePrices(id, priceFormToRequest(form, version)),
-      "Đã cập nhật giá dịch vụ",
+      msg03(`Giá dịch vụ ${detail.service?.code ?? ""}`.trim()), // MSG03
     );
+
+  // UC-23: reference ranges are maintained from the LAB service detail screen.
+  // Use the existing detail loader so a refresh failure cannot be mistaken for a failed save.
+  const refreshReferenceRanges = () => setDetailReloadKey((key) => key + 1);
+
+  // UC-25: the server checks the change first, then the admin confirms it.
+  const requestStatusChange = async () => {
+    const { id, service } = detail;
+    const deactivating = service.status === "ACTIVE";
+    setStatusBusy(true);
+    setStatusError({ id: null, message: null });
+    try {
+      const check = deactivating
+        ? await serviceApi.checkDeactivation(id)
+        : await serviceApi.checkActivation(id);
+      setStatusConfirm({ target: check.targetStatus });
+    } catch (error) {
+      setStatusError({ id, message: serviceStatusErrorMessage(error, `Dịch vụ "${service.name}"`, service.name) });
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const confirmStatusChange = async () => {
+    if (statusBusy) return;
+    const { target } = statusConfirm;
+    setStatusBusy(true);
+    try {
+      await updateDetail(
+        (id, version) => serviceApi.updateStatus(id, { status: target, version }),
+        msg03(`Trạng thái dịch vụ ${detail.service.code}`), // MSG03
+      );
+    } catch (error) {
+      setStatusError({ id: detail.id, message: serviceStatusErrorMessage(error, `Dịch vụ "${detail.service.name}"`, detail.service.name) });
+    } finally {
+      setStatusBusy(false);
+      setStatusConfirm(null);
+    }
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -244,6 +294,7 @@ export function ServiceManagementPage({
           <ServiceCreateView
             groups={groups}
             departments={departments}
+            labParameters={labParameters}
             onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}
@@ -259,25 +310,49 @@ export function ServiceManagementPage({
 
     let content;
     if (current.service) {
+      const deactivating = statusConfirm?.target === "INACTIVE";
       content = (
-        <ServiceDetailView
-          service={current.service}
-          onGoToList={showList}
-          onUpdateInfo={updateInfo}
-          onUpdatePrices={updatePrices}
-        />
+        <>
+          <ServiceDetailView
+            service={current.service}
+            onGoToList={showList}
+            onUpdateInfo={updateInfo}
+            onUpdatePrices={updatePrices}
+            onToggleStatus={requestStatusChange}
+            referenceRangeApi={serviceApi}
+            onReferenceRangesChanged={refreshReferenceRanges}
+            statusBusy={statusBusy}
+            statusError={statusError.id === detailId ? statusError.message : null}
+          />
+          <ConfirmModal
+            isOpen={Boolean(statusConfirm)}
+            title={deactivating ? "Ngừng hoạt động dịch vụ" : "Kích hoạt dịch vụ"}
+            description={
+              deactivating
+                ? msg06(`ngừng hoạt động dịch vụ "${current.service.name}"`)
+                : msg06(`kích hoạt dịch vụ "${current.service.name}"`)
+            }
+            confirmText={statusBusy ? "Đang cập nhật…" : deactivating ? "Ngừng hoạt động" : "Kích hoạt"}
+            variant={deactivating ? "destructive" : "mint"}
+            onConfirm={confirmStatusChange}
+            onClose={() => !statusBusy && setStatusConfirm(null)}
+          />
+        </>
       );
     } else if (current.error) {
       content = (
         <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-10 text-center">
-          <h1 className="text-xl! font-extrabold! text-[#1b2533]">
-            {notFound ? "Không tìm thấy dịch vụ" : "Không tải được dịch vụ"}
-          </h1>
-          <p role="alert" className="text-sm text-slate-500 mt-1">
-            {notFound
-              ? "Dịch vụ không tồn tại hoặc đường dẫn không đúng."
-              : "Đã xảy ra lỗi khi tải dịch vụ. Vui lòng thử lại."}
-          </p>
+          {notFound ? (
+            // UC-21 EF-02: MSG39 as a page notice.
+            <h1 role="alert" className="text-xl! font-extrabold! text-[#1b2533]">{msg39("dịch vụ")}</h1>
+          ) : (
+            <>
+              <h1 className="text-xl! font-extrabold! text-[#1b2533]">Không tải được dịch vụ</h1>
+              <p role="alert" className="text-sm text-slate-500 mt-1">
+                {MSG80}
+              </p>
+            </>
+          )}
           <button
             type="button"
             onClick={showList}

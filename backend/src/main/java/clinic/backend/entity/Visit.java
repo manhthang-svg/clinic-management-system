@@ -236,9 +236,56 @@ public class Visit extends VersionedEntity {
         this.status = VisitStatus.WAITING_PARACLINICAL;
     }
 
-    public void startExamination(UUID doctorAccountId) {
+    public void startExamination(UUID doctorAccountId, Instant startedAt) {
+        if (this.status != VisitStatus.WAITING) {
+            throw new IllegalStateException("Visit is not waiting for examination");
+        }
         this.doctorAccountId = doctorAccountId;
         this.status = VisitStatus.IN_EXAMINATION;
-        this.denkhambenhluc = Instant.now();
+        this.denkhambenhluc = startedAt;
+        touch(startedAt);
+    }
+
+    public void continueConclusion(UUID doctorAccountId, Instant continuedAt) {
+        if (this.status != VisitStatus.WAITING_CONCLUSION) {
+            throw new IllegalStateException("Visit is not waiting for conclusion");
+        }
+        this.doctorAccountId = doctorAccountId;
+        touch(continuedAt);
+    }
+
+    public void markSkipped(Instant skippedAt) {
+        if (this.status != VisitStatus.WAITING && this.status != VisitStatus.WAITING_CONCLUSION) {
+            throw new IllegalStateException("Visit is not waiting for a Doctor call");
+        }
+        if (this.isSkipped) {
+            throw new IllegalStateException("Visit is already skipped");
+        }
+        this.isSkipped = true;
+        this.skippedAt = skippedAt;
+        touch(skippedAt);
+    }
+
+    /**
+     * Accepts a patient who returned after being skipped and resumes the interrupted stage.
+     */
+    public void acceptSkipped(UUID acceptingDoctorAccountId, Instant acceptedAt) {
+        if (!isSkipped) {
+            throw new IllegalStateException("Visit is not skipped");
+        }
+
+        switch (status) {
+            case WAITING -> startExamination(acceptingDoctorAccountId, acceptedAt);
+            case WAITING_CONCLUSION -> {
+                if (doctorAccountId == null) {
+                    throw new IllegalStateException("Visit waiting for conclusion has no assigned Doctor");
+                }
+                touch(acceptedAt);
+            }
+            default -> throw new IllegalStateException("Skipped visit is not in a resumable stage");
+        }
+
+        isSkipped = false;
+        skippedAt = null;
     }
 }

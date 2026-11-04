@@ -92,7 +92,7 @@ public class AuthServiceImpl implements AuthService {
         if (account.isLoginBlocked(now)) {
             passwordHasher.simulateMatch(password);
             auditFailedLogin(SecurityAuditEventType.LOGIN_FAILED, account, now);
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+            throw new AppException(ErrorCode.ACCOUNT_TEMPORARILY_BLOCKED);
         }
 
         if (!passwordHasher.matches(password, account.getPasswordHash())) {
@@ -101,13 +101,14 @@ public class AuthServiceImpl implements AuthService {
             auditFailedLogin(SecurityAuditEventType.LOGIN_FAILED, account, now);
             if (blockStarted) {
                 auditFailedLogin(SecurityAuditEventType.LOGIN_THROTTLED, account, now);
+                throw new AppException(ErrorCode.ACCOUNT_TEMPORARILY_BLOCKED);
             }
             throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         if (!account.canAuthenticate()) {
             auditFailedLogin(SecurityAuditEventType.LOGIN_FAILED, account, now);
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }
 
         account.registerSuccessfulLogin(now);

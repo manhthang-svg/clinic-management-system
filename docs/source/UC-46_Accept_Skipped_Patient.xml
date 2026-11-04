@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<useCase id="UC-46" name="Accept Skipped Patient" section="9.4" feature="Clinical Examination" language="vi">
+  <actors>
+    <primaryActor>Doctor</primaryActor>
+    <secondaryActor>None</secondaryActor>
+  </actors>
+  <description>Bác sĩ tiếp nhận trực tiếp một bệnh nhân đã bị đánh dấu Skipped khi bệnh nhân quay lại phòng khám. Hệ thống dùng trạng thái WAITING hoặc WAITING_CONCLUSION đang được giữ lại để tiếp tục đúng bước xử lý. UC-46 chỉ áp dụng cho Visit của phòng EXAMINATION và không xử lý dịch vụ cận lâm sàng.</description>
+  <preconditions>
+    <condition number="1">Bác sĩ đã đăng nhập thành công và không bị yêu cầu đổi mật khẩu (UC-01).</condition>
+    <condition number="2">Tài khoản bác sĩ đang hoạt động.</condition>
+    <condition number="3">Bác sĩ được phân công vào một phòng loại EXAMINATION đang hoạt động (BR-05, BR-19).</condition>
+    <condition number="4">Bác sĩ đang trong ca trực của đúng phòng được phân công (BR-19, BR-55).</condition>
+    <condition number="5">Lượt khám thuộc tab Vắng mặt của UC-45, có isSkipped=true và đang giữ trạng thái WAITING hoặc WAITING_CONCLUSION.</condition>
+  </preconditions>
+  <normalFlow>
+    <step number="1"><action>Khi bệnh nhân quay lại, bác sĩ chọn Bắt đầu trên dòng tương ứng trong tab Vắng mặt; giao diện gửi yêu cầu ngay, không mở hộp thoại xác nhận.</action></step>
+    <step number="2"><action>Hệ thống xác định bác sĩ từ phiên đăng nhập và kiểm tra tài khoản bác sĩ đang hoạt động.</action></step>
+    <step number="3"><action>Hệ thống kiểm tra phòng được phân công là phòng EXAMINATION đang hoạt động và bác sĩ đang trong ca trực của phòng đó.</action></step>
+    <step number="4"><action>Hệ thống tải trạng thái mới nhất của lượt khám và kiểm tra lượt thuộc đúng phòng, có isSkipped=true, có trạng thái WAITING hoặc WAITING_CONCLUSION và version chưa bị thay đổi bởi request khác.</action></step>
+    <step number="5">
+      <action>Hệ thống tiếp nhận lượt theo trạng thái được giữ lại.</action>
+      <check>WAITING: đặt isSkipped=false, xóa skippedAt khỏi trạng thái hiện tại, gán doctorAccountId bằng bác sĩ hiện tại, chuyển trạng thái sang IN_EXAMINATION và ghi thời điểm bắt đầu khám.</check>
+      <check>WAITING_CONCLUSION: đặt isSkipped=false, xóa skippedAt khỏi trạng thái hiện tại, giữ nguyên WAITING_CONCLUSION và doctorAccountId đang phụ trách, sau đó tiếp tục bước kết luận.</check>
+      <note>Nếu lượt WAITING_CONCLUSION chưa có doctorAccountId do dữ liệu không hợp lệ, hệ thống từ chối thao tác thay vì tự gán người phụ trách mới.</note>
+    </step>
+    <step number="6"><action>Hệ thống cập nhật updatedAt/version và ghi audit ACCEPT_SKIPPED gồm lượt khám, giai đoạn được tiếp tục, người tiếp nhận và thời điểm tiếp nhận.</action></step>
+    <step number="7"><action>Hệ thống lưu thay đổi và audit trong cùng transaction.</action></step>
+    <step number="8">
+      <action>Hệ thống trả kết quả thành công và giao diện làm mới UC-43/UC-45.</action>
+      <check>Tiếp nhận từ WAITING: lượt biến mất khỏi tab Vắng mặt, xuất hiện trong tab Đang khám và bác sĩ tiếp tục UC-47.</check>
+      <check>Tiếp nhận từ WAITING_CONCLUSION: lượt biến mất khỏi tab Vắng mặt và bác sĩ tiếp tục bước kết luận tương ứng mà không khám lại từ đầu.</check>
+    </step>
+    <continuation>Use case kết thúc sau khi transaction được lưu thành công.</continuation>
+  </normalFlow>
+  <alternativeFlows>
+    <flow id="AF-01" atStep="1">
+      <title>Bệnh nhân chưa quay lại</title>
+      <step number="1.1">Bác sĩ không thực hiện thao tác.</step>
+      <step number="1.2">Lượt giữ nguyên isSkipped=true, skippedAt và trạng thái đang được bảo lưu trong tab Vắng mặt.</step>
+    </flow>
+  </alternativeFlows>
+  <exceptionFlows>
+    <flow id="EF-01" atStep="2">
+      <title>Tài khoản không phải bác sĩ hoặc không còn hoạt động</title>
+      <step number="1.1">Hệ thống từ chối thao tác và trả MSG13.</step>
+      <step number="1.2">Không có thay đổi nào được lưu.</step>
+    </flow>
+    <flow id="EF-02" atStep="3">
+      <title>Không có phòng khám hợp lệ hoặc ngoài ca trực</title>
+      <step number="2.1">Nếu không có phòng EXAMINATION đang hoạt động được phân công, hệ thống trả ROOM_ASSIGNMENT_REQUIRED.</step>
+      <step number="2.2">Nếu bác sĩ không trong ca trực của phòng, hệ thống từ chối thao tác và trả MSG48.</step>
+    </flow>
+    <flow id="EF-03" atStep="4">
+      <title>Lượt khám không thuộc phòng được phân công</title>
+      <step number="3.1">Hệ thống từ chối thao tác và trả MSG13.</step>
+      <step number="3.2">Hệ thống không thay đổi hoặc tiết lộ dữ liệu của phòng khác.</step>
+    </flow>
+    <flow id="EF-04" atStep="4 hoặc 5">
+      <title>Lượt không còn đủ điều kiện tiếp nhận</title>
+      <step number="4.1">Hệ thống từ chối nếu isSkipped không còn bằng true, trạng thái không còn là WAITING/WAITING_CONCLUSION, lượt đã chuyển sang ABANDONED hoặc dữ liệu WAITING_CONCLUSION không có bác sĩ phụ trách.</step>
+      <step number="4.2">Hệ thống trả MSG99 và giao diện tải lại danh sách.</step>
+      <step number="4.3">Không có thay đổi nào được lưu.</step>
+    </flow>
+    <flow id="EF-05" atStep="4 hoặc 7">
+      <title>Request bị gửi lặp hoặc version đã thay đổi</title>
+      <step number="5.1">Nếu optimistic version không còn hợp lệ, hệ thống rollback transaction và trả MSG99.</step>
+      <step number="5.2">Giao diện tải lại danh sách trước khi cho phép thử lại.</step>
+    </flow>
+    <flow id="EF-06" atStep="5, 6 hoặc 7">
+      <title>Lỗi lưu dữ liệu hoặc ghi audit</title>
+      <step number="6.1">Hệ thống rollback toàn bộ transaction và trả MSG80.</step>
+      <step number="6.2">Lượt giữ nguyên isSkipped, skippedAt và trạng thái trước thao tác.</step>
+    </flow>
+    <flow id="EF-07" atStep="bất kỳ">
+      <title>Phiên đăng nhập hết hạn</title>
+      <step number="7.1">Hệ thống hiển thị MSG12, chặn thao tác và chuyển người dùng về UC-01.</step>
+    </flow>
+  </exceptionFlows>
+  <postconditions>
+    <outcome type="success">Lượt rời Skip list và tiếp tục đúng bước: WAITING chuyển sang IN_EXAMINATION; WAITING_CONCLUSION tiếp tục kết luận. Người tiếp nhận, thời điểm và giai đoạn được ghi trong audit.</outcome>
+    <outcome type="failure">Lượt giữ nguyên trạng thái đã lưu; không có cập nhật một phần, tiếp nhận trùng hoặc thao tác trên dữ liệu của phòng khác.</outcome>
+  </postconditions>
+  <businessRules>BR-02, BR-05, BR-19, BR-20, BR-21, BR-42, BR-55</businessRules>
+  <messages>
+    <message id="MSG12" />
+    <message id="MSG13" />
+    <message id="MSG48" />
+    <message id="MSG80" />
+    <message id="MSG99" />
+    <message id="ROOM_ASSIGNMENT_REQUIRED" />
+  </messages>
+</useCase>
