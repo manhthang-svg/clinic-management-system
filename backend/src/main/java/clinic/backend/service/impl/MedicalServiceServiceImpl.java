@@ -150,35 +150,39 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
     @Transactional
     public CreatedMedicalServiceResponse createService(
             StaffPrincipal principal, CreateMedicalServiceRequest request) {
+        // BR-137: only paraclinical services are created; the shared examination service is not.
+        if (request.type() == MedicalServiceType.EXAMINATION) {
+            throw new AppException(ErrorCode.SERVICE_TYPE_NOT_CREATABLE, Map.of("type", "EXAMINATION"));
+        }
         String code = request.code().strip().toUpperCase(Locale.ROOT);
+        String name = request.name().strip();
         if (serviceRepository.existsByCode(code)) {
             throw new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
         }
+        if (serviceRepository.existsByTenchidinhIgnoreCase(name)) {
+            throw new AppException(ErrorCode.SERVICE_NAME_ALREADY_EXISTS, Map.of("name", "ALREADY_EXISTS"));
+        }
         validateAssignment(request);
         // The service starts active, so its group must already have an active room to perform it.
-        if (request.type() != MedicalServiceType.EXAMINATION
-                && !roomRepository.existsByServiceGroupIdAndStatus(request.serviceGroupId(), ActivationStatus.ACTIVE)) {
+        if (!roomRepository.existsByServiceGroupIdAndStatus(request.serviceGroupId(), ActivationStatus.ACTIVE)) {
             throw new AppException(ErrorCode.SERVICE_GROUP_HAS_NO_ACTIVE_ROOM);
         }
         List<LabParameterSelectionRequest> parameterSelections = validateLabParameters(request);
-        if (request.type() == MedicalServiceType.EXAMINATION
-                && serviceRepository.existsByTypeAndStatus(
-                        MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)) {
-            throw new AppException(ErrorCode.ACTIVE_EXAMINATION_SERVICE_EXISTS);
-        }
 
         Instant now = clock.instant();
         MedicalService medicalService = MedicalService.create(
-                ids.next(), now, code, request.name().strip(), request.type(),
+                ids.next(), now, code, name, request.type(),
                 request.departmentId(), request.serviceGroupId(), request.clinicPrice(),
                 request.insurancePrice(), normalizeOptional(request.description()));
         try {
             serviceRepository.saveAndFlush(medicalService);
         } catch (DataIntegrityViolationException exception) {
-            if (request.type() == MedicalServiceType.EXAMINATION) {
-                throw new AppException(ErrorCode.ACTIVE_EXAMINATION_SERVICE_EXISTS);
-            }
-            throw new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
+            // Another Admin saved the same code or name meanwhile. The failed flush aborts the transaction, so the
+            // violated unique index (V38 uq_services_name_ci) is read from the error instead of queried again.
+            String cause = String.valueOf(exception.getMostSpecificCause().getMessage());
+            throw cause.contains("uq_services_name_ci")
+                    ? new AppException(ErrorCode.SERVICE_NAME_ALREADY_EXISTS, Map.of("name", "ALREADY_EXISTS"))
+                    : new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
         }
         saveLabParameterMappings(medicalService, parameterSelections, now);
         auditLogService.recordEntityChange(
@@ -203,12 +207,21 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
         if (!Objects.equals(medicalService.getVersion(), request.version())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
+        // UC-23 EF: the new name must not belong to another service (uq_services_name_ci, V38).
+        if (serviceRepository.existsByTenchidinhIgnoreCaseAndIdNot(name, serviceId)) {
+            throw new AppException(ErrorCode.SERVICE_NAME_ALREADY_EXISTS, Map.of("name", "ALREADY_EXISTS"));
+        }
 
         Instant now = clock.instant();
         Map<String, Object> oldValues = changedInformation(medicalService, name, description, true);
         Map<String, Object> newValues = changedInformation(medicalService, name, description, false);
         medicalService.updateInformation(name, description, now);
-        serviceRepository.saveAndFlush(medicalService);
+        try {
+            serviceRepository.saveAndFlush(medicalService);
+        } catch (DataIntegrityViolationException exception) {
+            // Another Admin took the name meanwhile.
+            throw new AppException(ErrorCode.SERVICE_NAME_ALREADY_EXISTS, Map.of("name", "ALREADY_EXISTS"));
+        }
         auditLogService.recordEntityChange(
                 principal.accountId(), medicalService.getId(), AuditLogAction.UPDATE, SERVICE_ENTITY,
                 oldValues, newValues, now);
@@ -240,11 +253,8 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
     public MedicalServiceStatusCheckResponse checkDeactivation(UUID serviceId) {
         MedicalService medicalService = findService(serviceId);
         validateDeactivation(medicalService);
-        long unfinishedOrderCount = medicalService.getType() == MedicalServiceType.EXAMINATION
-                ? 0
-                : orderDetailRepository.countByServiceIdAndStatusIn(serviceId, UNFINISHED_ORDER_STATUSES);
-        return new MedicalServiceStatusCheckResponse(
-                medicalService.getStatus(), ActivationStatus.INACTIVE, unfinishedOrderCount);
+        // A service that passes the check has no unfinished orders.
+        return new MedicalServiceStatusCheckResponse(medicalService.getStatus(), ActivationStatus.INACTIVE, 0);
     }
 
     @Override
@@ -382,11 +392,16 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_NOT_FOUND));
     }
 
+    /** UC-25 steps 2-3: the examination service is never deactivated, nor a service with unfinished orders. */
     private void validateDeactivation(MedicalService medicalService) {
-        if (medicalService.getType() == MedicalServiceType.EXAMINATION
-                && !serviceRepository.existsByTypeAndStatusAndIdNot(
-                        MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE, medicalService.getId())) {
-            throw new AppException(ErrorCode.LAST_ACTIVE_EXAMINATION_SERVICE);
+        if (medicalService.getType() == MedicalServiceType.EXAMINATION) {
+            throw new AppException(ErrorCode.EXAMINATION_SERVICE_NOT_DEACTIVATABLE);
+        }
+        long unfinishedOrders = orderDetailRepository.countByServiceIdAndStatusIn(
+                medicalService.getId(), UNFINISHED_ORDER_STATUSES);
+        if (unfinishedOrders > 0) {
+            throw new AppException(ErrorCode.SERVICE_HAS_UNFINISHED_ORDERS,
+                    Map.of("unfinishedOrderCount", String.valueOf(unfinishedOrders)));
         }
     }
 

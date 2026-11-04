@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { Banknote, Pencil } from 'lucide-react';
 import {
   MAX_NAME_LENGTH,
+  MSG38,
+  PRICE_MSG06,
   serviceToInfoForm,
   serviceToPriceForm,
   validateServiceInfoForm,
   validateServicePriceForm,
 } from './serviceForm';
 import { serviceUpdateErrors } from './serviceErrors';
+import { ConfirmModal } from '../ui';
+import { formatPrice } from './serviceFormat';
 import { INPUT_CLASS, Field, FieldError, FieldHint, PriceInput, ServiceFormModal } from './ServiceFormParts';
 
 const NO_SERVER_ERRORS = { fields: {}, message: null };
@@ -44,15 +48,29 @@ function useServiceUpdateForm(initialForm, validate, onSubmit) {
     }
   };
 
-  return { form, update, shownErrors, unchanged, alert, submitting, submit };
+  // Shows the field errors without sending, for a dialog that confirms before it submits.
+  const check = () => {
+    setTouched(true);
+    return Object.keys(errors).length === 0;
+  };
+
+  return { form, update, shownErrors, unchanged, alert, submitting, submit, check };
 }
 
 /** UC-23 Update service information. */
 export function ServiceInfoModal({ service, onSubmit, onClose }) {
   const { form, update, shownErrors, unchanged, alert, submitting, submit } =
     useServiceUpdateForm(serviceToInfoForm(service), validateServiceInfoForm, onSubmit);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+
+  // AF-01: Hủy, the close button and Escape leave at once when nothing changed; otherwise MSG38 asks first.
+  const requestClose = () => {
+    if (unchanged) onClose();
+    else setConfirmingClose(true);
+  };
 
   return (
+    <>
     <ServiceFormModal
       id="service-info-modal"
       icon={Pencil}
@@ -63,7 +81,7 @@ export function ServiceInfoModal({ service, onSubmit, onClose }) {
       submitDisabled={unchanged}
       alert={alert}
       onSubmit={submit}
-      onClose={onClose}
+      onClose={requestClose}
     >
       <Field id="edit-service-name" label="Tên dịch vụ" required error={shownErrors.name}>
         <input
@@ -90,26 +108,56 @@ export function ServiceInfoModal({ service, onSubmit, onClose }) {
         />
       </Field>
     </ServiceFormModal>
+    <ConfirmModal
+      isOpen={confirmingClose}
+      description={MSG38}
+      cancelText="Tiếp tục chỉnh sửa"
+      confirmText="Loại bỏ"
+      variant="destructive"
+      onClose={() => setConfirmingClose(false)}
+      onConfirm={() => {
+        setConfirmingClose(false);
+        onClose();
+      }}
+    />
+    </>
   );
 }
 
 /** UC-24 Update service prices (BR-08, BR-09). */
 export function ServicePriceModal({ service, onSubmit, onClose }) {
-  const { form, update, shownErrors, unchanged, alert, submitting, submit } =
+  const { form, update, shownErrors, unchanged, alert, submitting, submit, check } =
     useServiceUpdateForm(serviceToPriceForm(service), validateServicePriceForm, onSubmit);
+  // null | 'save' (MSG06, steps 6-7) | 'discard' (MSG38, AF-01)
+  const [confirming, setConfirming] = useState(null);
+
+  // Step 5: valid prices are confirmed with MSG06 before they are saved.
+  const requestSave = (event) => {
+    event.preventDefault();
+    if (check()) setConfirming('save');
+  };
+
+  const requestClose = () => {
+    if (unchanged) onClose();
+    else setConfirming('discard');
+  };
+
+  const insurancePriceText = (covered, price) =>
+    (covered && price !== '' && price !== null && price !== undefined ? `${formatPrice(Number(price))} đ` : 'Không thuộc BHYT');
 
   return (
+    <>
     <ServiceFormModal
       id="service-price-modal"
       icon={Banknote}
       title="Cập nhật giá dịch vụ"
       description={`${service.code} · ${service.name}`}
-      submitLabel="Cập nhật giá"
+      submitLabel="Lưu"
       submitting={submitting}
       submitDisabled={unchanged}
       alert={alert}
-      onSubmit={submit}
-      onClose={onClose}
+      onSubmit={requestSave}
+      onClose={requestClose}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <Field id="edit-clinic-price" label="Giá viện phí" required error={shownErrors.clinicPrice} hint="Từ 1 đến 100.000.000 đ">
@@ -129,11 +177,11 @@ export function ServicePriceModal({ service, onSubmit, onClose }) {
             <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
               <input
                 type="checkbox"
-                checked={form.insuranceCovered}
-                onChange={(e) => update({ insuranceCovered: e.target.checked, insurancePrice: '' })}
+                checked={!form.insuranceCovered}
+                onChange={(e) => update({ insuranceCovered: !e.target.checked, insurancePrice: '' })}
                 className="w-4 h-4 rounded border-slate-300 accent-[#127e7a] cursor-pointer"
               />
-              Thuộc phạm vi BHYT
+              Không thuộc BHYT
             </label>
           </div>
           <PriceInput
@@ -157,5 +205,51 @@ export function ServicePriceModal({ service, onSubmit, onClose }) {
         Giá mới chỉ áp dụng cho các chỉ định tạo sau khi cập nhật. Các chỉ định đã tạo giữ nguyên giá cũ.
       </p>
     </ServiceFormModal>
+
+    <ConfirmModal
+      isOpen={confirming === 'save'}
+      description={PRICE_MSG06}
+      cancelText="Hủy"
+      confirmText="Xác nhận"
+      onClose={() => setConfirming(null)}
+      onConfirm={() => {
+        setConfirming(null);
+        submit({ preventDefault() {} });
+      }}
+    >
+      <dl className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Giá viện phí</dt>
+          <dd className="text-right font-semibold text-slate-800">
+            {formatPrice(service.clinicPrice)} đ → {formatPrice(Number(form.clinicPrice))} đ
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Giá BHYT</dt>
+          <dd className="text-right font-semibold text-slate-800">
+            {insurancePriceText(service.insurancePrice != null, service.insurancePrice)}
+            {' → '}
+            {insurancePriceText(form.insuranceCovered, form.insurancePrice)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-xs text-slate-500">
+        Giá mới chỉ áp dụng cho các chỉ định và phiếu thu tạo từ bây giờ; các chỉ định và phiếu thu đã tạo giữ nguyên giá cũ.
+      </p>
+    </ConfirmModal>
+
+    <ConfirmModal
+      isOpen={confirming === 'discard'}
+      description={MSG38}
+      cancelText="Tiếp tục chỉnh sửa"
+      confirmText="Loại bỏ"
+      variant="destructive"
+      onClose={() => setConfirming(null)}
+      onConfirm={() => {
+        setConfirming(null);
+        onClose();
+      }}
+    />
+    </>
   );
 }

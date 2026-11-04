@@ -17,6 +17,22 @@ export const EMPTY_SERVICE_FORM = {
   labParameterIds: [],
 };
 
+/** MSG38: confirm leaving a form with unsaved changes (UC-22 AF-04). */
+export const MSG38 = 'Bạn có các thay đổi chưa được lưu. Bạn có muốn loại bỏ những thay đổi này không?';
+
+// MSG06 is the SRS confirmation prompt ("Bạn có chắc muốn …?"); ASSUMPTION: its wording for a price update.
+export const PRICE_MSG06 = 'Bạn có chắc muốn cập nhật giá dịch vụ?';
+
+/** True once the Admin has entered or changed any field of the create form. */
+export function isServiceFormDirty(form) {
+  return Object.entries(EMPTY_SERVICE_FORM).some(([field, initial]) => {
+    const value = form[field];
+    if (Array.isArray(initial)) return value.length > 0;
+    if (typeof initial === 'string') return value.trim() !== initial;
+    return value !== initial;
+  });
+}
+
 function validateName(form, errors) {
   const name = form.name.trim();
   if (!name) errors.name = 'Vui lòng nhập tên dịch vụ.';

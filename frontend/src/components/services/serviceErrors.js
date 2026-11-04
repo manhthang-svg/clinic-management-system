@@ -1,5 +1,12 @@
 import { ApiError } from '../../apis/apiError';
 
+/** MSG01: the search or filters match nothing. */
+export const MSG01 = 'Không tìm thấy kết quả.';
+/** MSG92: a list or section has no data to display. */
+export const MSG92 = 'Chưa có dữ liệu để hiển thị.';
+/** MSG39: the requested record does not exist. */
+export const msg39 = (recordType) => `Không tìm thấy ${recordType}.`;
+
 const CODE_MESSAGE = {
   UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
   FORBIDDEN: 'Bạn không có quyền xem danh mục dịch vụ.',
@@ -20,6 +27,8 @@ const CREATE_CODE_MESSAGE = {
   UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
   FORBIDDEN: 'Bạn không có quyền thêm dịch vụ.',
   SERVICE_CODE_ALREADY_EXISTS: 'Mã dịch vụ đã tồn tại trong hệ thống.',
+  SERVICE_NAME_ALREADY_EXISTS: 'Tên dịch vụ đã tồn tại trong hệ thống.',
+  SERVICE_TYPE_NOT_CREATABLE: 'Chỉ được thêm dịch vụ Xét nghiệm, Chẩn đoán hình ảnh hoặc Thăm dò chức năng.',
   ACTIVE_EXAMINATION_SERVICE_EXISTS:
     'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước khi thêm dịch vụ khám bệnh mới.',
   SERVICE_ASSIGNMENT_INVALID: 'Khoa hoặc nhóm dịch vụ không hợp lệ. Vui lòng chọn lại.',
@@ -71,17 +80,25 @@ const STATUS_CODE_MESSAGE = {
   FORBIDDEN: 'Bạn không có quyền thay đổi trạng thái dịch vụ.',
   SERVICE_NOT_FOUND: 'Dịch vụ không còn tồn tại.',
   CONCURRENT_MODIFICATION: 'Dịch vụ vừa được cập nhật ở nơi khác. Thông tin mới đã được tải lại, vui lòng thử lại.',
-  LAST_ACTIVE_EXAMINATION_SERVICE: 'Không thể ngừng hoạt động dịch vụ khám bệnh duy nhất đang hoạt động.',
+  // MSG52 (UC-25 EF-01)
+  EXAMINATION_SERVICE_NOT_DEACTIVATABLE: 'Đây là dịch vụ khám duy nhất nên không thể ngừng hoạt động.',
   ACTIVE_EXAMINATION_SERVICE_EXISTS:
     'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước.',
+  // MSG73 (UC-25 EF-03)
   SERVICE_GROUP_HAS_NO_ACTIVE_ROOM: 'Nhóm dịch vụ chưa có phòng thực hiện nào đang hoạt động.',
 };
 
-/** One message for a failed UC-25 status check or change. */
-export function serviceStatusErrorMessage(error) {
+/** MSG55: a room or service that still has waiting or in-progress work cannot be changed. */
+export const msg55 = (item) =>
+  `${item} vẫn còn bệnh nhân hoặc dịch vụ đang chờ hoặc đang thực hiện nên hiện không thể thay đổi.`;
+
+/** One message for a failed UC-25 status check or change; item names the service in MSG55. */
+export function serviceStatusErrorMessage(error, item = 'Dịch vụ') {
   if (!(error instanceof ApiError)) return 'Đã xảy ra lỗi. Vui lòng thử lại.';
   const code = error.errorResponse?.code;
   if (!code && error.status === undefined) return NETWORK_MESSAGE;
+  // MSG55 (UC-25 EF-02)
+  if (code === 'SERVICE_HAS_UNFINISHED_ORDERS') return msg55(item);
   return STATUS_CODE_MESSAGE[code] || 'Không thay đổi được trạng thái dịch vụ. Vui lòng thử lại.';
 }
 
@@ -93,7 +110,10 @@ export function serviceUpdateErrors(error) {
 
   const details = error.errorResponse?.details ?? {};
   const fields = {};
-  if (code === 'REQUEST_VALIDATION_FAILED') {
+  if (code === 'SERVICE_NAME_ALREADY_EXISTS') {
+    // MSG07 (UC-23 EF-02)
+    fields.name = CREATE_CODE_MESSAGE.SERVICE_NAME_ALREADY_EXISTS;
+  } else if (code === 'REQUEST_VALIDATION_FAILED') {
     Object.keys(details).forEach((field) => {
       if (FIELD_LABEL[field]) fields[field] = `${FIELD_LABEL[field]} không hợp lệ.`;
     });
@@ -101,7 +121,8 @@ export function serviceUpdateErrors(error) {
 
   return {
     fields,
-    message: UPDATE_CODE_MESSAGE[code] || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
+    message: UPDATE_CODE_MESSAGE[code] || CREATE_CODE_MESSAGE[code]
+      || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
   };
 }
 
@@ -115,6 +136,10 @@ export function serviceCreateErrors(error) {
   const fields = {};
   if (code === 'SERVICE_CODE_ALREADY_EXISTS') {
     fields.code = CREATE_CODE_MESSAGE.SERVICE_CODE_ALREADY_EXISTS;
+  } else if (code === 'SERVICE_NAME_ALREADY_EXISTS') {
+    fields.name = CREATE_CODE_MESSAGE.SERVICE_NAME_ALREADY_EXISTS;
+  } else if (code === 'SERVICE_TYPE_NOT_CREATABLE') {
+    fields.type = CREATE_CODE_MESSAGE.SERVICE_TYPE_NOT_CREATABLE;
   } else if (code === 'SERVICE_GROUP_HAS_NO_ACTIVE_ROOM') {
     fields.serviceGroupId = 'Nhóm dịch vụ chưa có phòng nào đang hoạt động phụ trách.';
   } else if (code?.startsWith('LAB_PARAMETER') || code === 'LAB_PARAMETERS_NOT_ALLOWED') {

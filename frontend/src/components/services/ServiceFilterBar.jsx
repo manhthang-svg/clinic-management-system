@@ -75,7 +75,7 @@ export function ServiceFilterBar({
         className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all cursor-pointer whitespace-nowrap"
       >
         <RotateCcw className="w-3.5 h-3.5" />
-        <span>Đặt lại</span>
+        <span>Xóa bộ lọc</span>
       </button>
     </div>
   );

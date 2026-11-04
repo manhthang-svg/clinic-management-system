@@ -10,8 +10,11 @@ import {
   MAX_CODE_LENGTH,
   MAX_NAME_LENGTH,
   MAX_DESCRIPTION_LENGTH,
+  MSG38,
+  isServiceFormDirty,
   validateServiceForm,
 } from './serviceForm';
+import { ConfirmModal } from '../ui';
 import { serviceCreateErrors } from './serviceErrors';
 import { INPUT_CLASS, Field, FieldError, FieldHint, FormAlert, PriceInput } from './ServiceFormParts';
 import { LabParameterSelector } from './LabParameterSelector';
@@ -32,6 +35,13 @@ export function ServiceCreateView({
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState({ fields: {}, message: null });
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+
+  // AF-04: an untouched form closes at once; one with entered data asks first (MSG38).
+  const cancel = () => {
+    if (isServiceFormDirty(form)) setConfirmingCancel(true);
+    else onCancel();
+  };
 
   const errors = validateServiceForm(form);
   const shownErrors = touched ? { ...serverErrors.fields, ...errors } : {};
@@ -322,7 +332,7 @@ export function ServiceCreateView({
       <div className="flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-2xs sm:flex-row sm:justify-end">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={cancel}
           disabled={submitting}
           className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -339,6 +349,18 @@ export function ServiceCreateView({
         </button>
       </div>
       </form>
+      <ConfirmModal
+        isOpen={confirmingCancel}
+        description={MSG38}
+        cancelText="Tiếp tục chỉnh sửa"
+        confirmText="Loại bỏ"
+        variant="destructive"
+        onClose={() => setConfirmingCancel(false)}
+        onConfirm={() => {
+          setConfirmingCancel(false);
+          onCancel();
+        }}
+      />
     </>
   );
 }
