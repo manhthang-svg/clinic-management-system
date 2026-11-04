@@ -49,7 +49,7 @@ public class AuthController {
                     responseCode = "400", description = "REQUEST_VALIDATION_FAILED or MALFORMED_REQUEST.",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "401", description = "INVALID_CREDENTIALS; username, password and account status are not distinguished.",
+                    responseCode = "401", description = "INVALID_CREDENTIALS, ACCOUNT_LOCKED or ACCOUNT_TEMPORARILY_BLOCKED.",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "500", description = "INTERNAL_SERVER_ERROR.",

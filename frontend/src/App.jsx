@@ -121,7 +121,7 @@ export function App({
 
   async function handlePasswordChanged() {
     setChangingPassword(false);
-    setNotice('Đã đổi mật khẩu.');
+    setNotice('Đổi mật khẩu thành công.');
     await sessionManager.refresh();
     navigate(homePathForRole(session.account?.role), { replace: true });
   }
@@ -156,8 +156,7 @@ export function App({
               role="alert"
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             >
-              Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
-              các chức năng khác.
+              Bạn phải đổi mật khẩu trước khi tiếp tục.
             </p>
           )}
 
@@ -207,8 +206,7 @@ export function App({
               role="alert"
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             >
-              Bạn đang dùng mật khẩu tạm. Hãy đổi mật khẩu trước khi sử dụng
-              các chức năng khác.
+              Bạn phải đổi mật khẩu trước khi tiếp tục.
             </p>
           )}
 

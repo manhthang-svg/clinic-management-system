@@ -70,12 +70,13 @@ class AuthServiceImplTest {
     @Test
     void fiveFailuresBlockLoginEvenWithTheCorrectPasswordUntilTheBlockEnds() {
         fixture.activeAccount("cashier", "correct-password", Role.CASHIER);
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 4; attempt++) {
             assertRejected(() -> login("cashier", "wrong-password"));
         }
+        assertTemporarilyBlocked(() -> login("cashier", "wrong-password"));
         assertThat(fixture.auditTypes()).contains(SecurityAuditEventType.LOGIN_THROTTLED);
 
-        assertRejected(() -> login("cashier", "correct-password"));
+        assertTemporarilyBlocked(() -> login("cashier", "correct-password"));
 
         fixture.clock.advance(Duration.ofMinutes(15));
         assertThat(login("cashier", "correct-password").account().username()).isEqualTo("cashier");
@@ -85,7 +86,9 @@ class AuthServiceImplTest {
     void lockedAccountIsRejectedEvenWithTheCorrectPassword() {
         fixture.account("locked.user", "correct-password", Role.RECEPTIONIST, AccountStatus.LOCKED, false);
 
-        assertRejected(() -> login("locked.user", "correct-password"));
+        assertThatThrownBy(() -> login("locked.user", "correct-password"))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_LOCKED));
 
         assertThat(fixture.auditTypes()).containsExactly(SecurityAuditEventType.LOGIN_FAILED);
         assertThat(fixture.sessions).isEmpty();
@@ -156,6 +159,12 @@ class AuthServiceImplTest {
     private static void assertRejected(ThrowingCallable login) {
         assertThatThrownBy(login).isInstanceOfSatisfying(AppException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    private static void assertTemporarilyBlocked(ThrowingCallable login) {
+        assertThatThrownBy(login).isInstanceOfSatisfying(AppException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.ACCOUNT_TEMPORARILY_BLOCKED));
     }
 
     private static MockHttpServletRequest cookieRequest(String refreshToken, String origin) {

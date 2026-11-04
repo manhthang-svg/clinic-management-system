@@ -122,17 +122,24 @@ class AuthApiIT extends PostgresIntegrationTest {
 
         login(locked.getUsername(), PASSWORD)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
     }
 
     @Test
     void fiveFailedLoginsBlockTheAccountTemporarilyAndAreAudited() throws Exception {
         StaffAccount technician = account(Role.TECHNICIAN, AccountStatus.ACTIVE, false);
-        for (int attempt = 0; attempt < 5; attempt++) {
-            login(technician.getUsername(), "wrong-password").andExpect(status().isUnauthorized());
+        for (int attempt = 0; attempt < 4; attempt++) {
+            login(technician.getUsername(), "wrong-password")
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
         }
+        login(technician.getUsername(), "wrong-password")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_TEMPORARILY_BLOCKED"));
 
-        login(technician.getUsername(), PASSWORD).andExpect(status().isUnauthorized());
+        login(technician.getUsername(), PASSWORD)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_TEMPORARILY_BLOCKED"));
 
         StaffAccount stored = accounts.findById(technician.getId()).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(AccountStatus.ACTIVE);

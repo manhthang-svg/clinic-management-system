@@ -91,7 +91,7 @@ describe('App', () => {
             changePassword: vi.fn().mockResolvedValue(undefined),
         };
         render(<MemoryRouter><App sessionManager={sessionManager} accountApi={accountApi}/></MemoryRouter>);
-        expect(await screen.findByRole('alert')).toHaveTextContent('Bạn đang dùng mật khẩu tạm.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Bạn phải đổi mật khẩu trước khi tiếp tục.');
         expect(screen.getByRole('heading', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
         await userEvent.type(screen.getByLabelText('Mật khẩu hiện tại'), 'temporary-pass');
@@ -99,7 +99,7 @@ describe('App', () => {
         await userEvent.type(screen.getByLabelText('Nhập lại mật khẩu mới'), 'brand-new-password');
         await userEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
         expect(accountApi.changePassword).toHaveBeenCalledWith('temporary-pass', 'brand-new-password');
-        expect(await screen.findByRole('status')).toHaveTextContent('Đã đổi mật khẩu.');
+        expect(await screen.findByRole('status')).toHaveTextContent('Đổi mật khẩu thành công.');
         expect(screen.queryByRole('heading', { name: 'Đổi mật khẩu' })).not.toBeInTheDocument();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });

@@ -31,11 +31,10 @@ function passwordBytes(password) {
 
 function policyError(password) {
   const length = passwordLength(password);
-  if (length < MINIMUM_LENGTH) {
-    return `Mật khẩu mới phải có ít nhất ${MINIMUM_LENGTH} ký tự.`;
-  }
-  if (length > MAXIMUM_LENGTH || passwordBytes(password) > MAXIMUM_UTF8_BYTES) {
-    return `Mật khẩu mới quá dài (tối đa ${MAXIMUM_LENGTH} ký tự và ${MAXIMUM_UTF8_BYTES} byte UTF-8).`;
+  if (length < MINIMUM_LENGTH
+    || length > MAXIMUM_LENGTH
+    || passwordBytes(password) > MAXIMUM_UTF8_BYTES) {
+    return 'Mật khẩu phải có độ dài từ 8–64 ký tự.';
   }
   return null;
 }
@@ -46,7 +45,7 @@ function clientError(currentPassword, newPassword, confirmation) {
     return { message: policy, field: 'new' };
   }
   if (newPassword !== confirmation) {
-    return { message: 'Xác nhận mật khẩu không khớp.', field: 'confirmation' };
+    return { message: 'Mật khẩu xác nhận không khớp.', field: 'confirmation' };
   }
   if (newPassword === currentPassword) {
     return { message: 'Mật khẩu mới phải khác mật khẩu hiện tại.', field: 'new' };
@@ -58,20 +57,20 @@ function serverError(error) {
   if (error instanceof ApiError) {
     switch (error.errorResponse?.code) {
       case 'CURRENT_PASSWORD_INCORRECT':
-        return { message: 'Mật khẩu hiện tại không đúng.', field: 'current' };
+        return { message: 'Mật khẩu hiện tại không chính xác.', field: 'current' };
       case 'PASSWORD_POLICY_VIOLATION':
         return {
           message: error.errorResponse.details?.newPassword === 'SAME_AS_CURRENT'
             ? 'Mật khẩu mới phải khác mật khẩu hiện tại.'
-            : 'Mật khẩu mới không đáp ứng yêu cầu bảo mật.',
+            : 'Mật khẩu phải có độ dài từ 8–64 ký tự.',
           field: 'new',
         };
     }
   }
-  return { message: 'Không thể đổi mật khẩu lúc này. Vui lòng thử lại.', field: null };
+  return { message: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.', field: null };
 }
 
-function PasswordInput({ id, label, value, onChange, autoComplete, invalidProps }) {
+function PasswordInput({ id, label, value, onChange, onBlur, autoComplete, invalidProps, requiredMessage }) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -84,6 +83,7 @@ function PasswordInput({ id, label, value, onChange, autoComplete, invalidProps 
         autoComplete={autoComplete}
         value={value}
         onChange={onChange}
+        onBlur={onBlur}
         {...invalidProps}
       />
       <button
@@ -95,6 +95,11 @@ function PasswordInput({ id, label, value, onChange, autoComplete, invalidProps 
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
+      {requiredMessage && (
+        <p id={`${id}-required`} role="alert" className="mt-1.5 text-xs text-rose-600">
+          {requiredMessage}
+        </p>
+      )}
     </FormField>
   );
 }
@@ -115,6 +120,7 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [touched, setTouched] = useState({ current: false, new: false, confirmation: false });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -129,6 +135,10 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
 
   async function handleSubmit(event) {
     event.preventDefault();
+    setTouched({ current: true, new: true, confirmation: true });
+    if (currentPassword.trim() === '' || newPassword.trim() === '' || confirmation.trim() === '') {
+      return;
+    }
     const invalid = clientError(currentPassword, newPassword, confirmation);
     if (invalid) {
       setError(invalid);
@@ -156,10 +166,23 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
   }
 
   function invalidProps(field) {
+    const required = touched[field] && {
+      current: currentPassword,
+      new: newPassword,
+      confirmation,
+    }[field].trim() === '';
+    if (required) {
+      return { 'aria-invalid': true, 'aria-describedby': `${field === 'current' ? 'current-password' : field === 'new' ? 'new-password' : 'confirm-password'}-required` };
+    }
     return error?.field === field ? { 'aria-invalid': true, 'aria-describedby': ERROR_ID } : {};
   }
 
-  const formComplete = currentPassword !== '' && newPassword !== '' && confirmation !== '';
+  const formComplete = currentPassword.trim() !== '' && newPassword.trim() !== '' && confirmation.trim() !== '';
+  const requiredMessages = {
+    current: touched.current && currentPassword.trim() === '' ? 'Mật khẩu hiện tại là bắt buộc.' : null,
+    new: touched.new && newPassword.trim() === '' ? 'Mật khẩu mới là bắt buộc.' : null,
+    confirmation: touched.confirmation && confirmation.trim() === '' ? 'Mật khẩu xác nhận là bắt buộc.' : null,
+  };
 
   return (
     <div className="space-y-6" aria-labelledby="change-password-title">
@@ -194,7 +217,9 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
               autoComplete="current-password"
               value={currentPassword}
               onChange={updateField(setCurrentPassword)}
+              onBlur={() => setTouched((current) => ({ ...current, current: true }))}
               invalidProps={invalidProps('current')}
+              requiredMessage={requiredMessages.current}
             />
 
             <div className="border-t border-slate-100 pt-5">
@@ -204,7 +229,9 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={updateField(setNewPassword)}
+                onBlur={() => setTouched((current) => ({ ...current, new: true }))}
                 invalidProps={invalidProps('new')}
+                requiredMessage={requiredMessages.new}
               />
               <p className="mt-1.5 text-right text-xs text-slate-400" aria-live="polite">
                 {length}/{MAXIMUM_LENGTH} ký tự · {bytes}/{MAXIMUM_UTF8_BYTES} byte
@@ -217,7 +244,9 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
               autoComplete="new-password"
               value={confirmation}
               onChange={updateField(setConfirmation)}
+              onBlur={() => setTouched((current) => ({ ...current, confirmation: true }))}
               invalidProps={invalidProps('confirmation')}
+              requiredMessage={requiredMessages.confirmation}
             />
 
             {error && (
