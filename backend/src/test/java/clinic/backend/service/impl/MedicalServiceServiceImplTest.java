@@ -78,7 +78,7 @@ class MedicalServiceServiceImplTest {
     @InjectMocks MedicalServiceServiceImpl service;
 
     @Test
-    void createsInactiveLaboratoryServiceWithOrderedParameters() {
+    void createsActiveLaboratoryServiceWithOrderedParameters() {
         UUID serviceId = UUID.randomUUID();
         UUID mappingId = UUID.randomUUID();
         UUID parameterId = UUID.randomUUID();
@@ -93,6 +93,7 @@ class MedicalServiceServiceImplTest {
         when(group.getType()).thenReturn(ServiceGroupType.LAB);
         when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
         when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
+        when(roomRepository.existsByServiceGroupIdAndStatus(groupId, ActivationStatus.ACTIVE)).thenReturn(true);
         when(labParameterRepository.findAllByIdInAndActiveTrue(java.util.Set.of(parameterId)))
                 .thenReturn(List.of(parameter));
         when(ids.next()).thenReturn(serviceId, mappingId);
@@ -110,9 +111,34 @@ class MedicalServiceServiceImplTest {
         MedicalService created = captor.getValue();
         assertThat(created.getCode()).isEqualTo("XN-100");
         assertThat(created.getTenchidinh()).isEqualTo("Xet nghiem mau");
-        assertThat(created.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
+        assertThat(created.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(created.getInsurancePrice()).isNull();
         verify(serviceLabParameterRepository).saveAllAndFlush(any());
+    }
+
+    @Test
+    void rejectsServiceWhoseGroupHasNoActiveRoom() {
+        UUID departmentId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        Department department = new Department(
+                departmentId, "K-XN", "Khoa xet nghiem", DepartmentType.PARACLINICAL,
+                null, true, NOW);
+        ServiceGroup group = mock(ServiceGroup.class);
+        when(group.isActive()).thenReturn(true);
+        when(group.getType()).thenReturn(ServiceGroupType.LAB);
+        when(departmentRepository.findById(departmentId)).thenReturn(java.util.Optional.of(department));
+        when(serviceGroupRepository.findById(groupId)).thenReturn(java.util.Optional.of(group));
+        when(roomRepository.existsByServiceGroupIdAndStatus(groupId, ActivationStatus.ACTIVE)).thenReturn(false);
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "XN-100", "Xet nghiem mau", MedicalServiceType.LAB,
+                groupId, departmentId, BigDecimal.valueOf(120000), null, null,
+                List.of(new LabParameterSelectionRequest(UUID.randomUUID(), 1)));
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_GROUP_HAS_NO_ACTIVE_ROOM));
+        verify(serviceRepository, never()).saveAndFlush(any());
     }
 
     @Test

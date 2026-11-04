@@ -152,6 +152,11 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
             throw new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
         }
         validateAssignment(request);
+        // The service starts active, so its group must already have an active room to perform it.
+        if (request.type() != MedicalServiceType.EXAMINATION
+                && !roomRepository.existsByServiceGroupIdAndStatus(request.serviceGroupId(), ActivationStatus.ACTIVE)) {
+            throw new AppException(ErrorCode.SERVICE_GROUP_HAS_NO_ACTIVE_ROOM);
+        }
         List<LabParameterSelectionRequest> parameterSelections = validateLabParameters(request);
         if (request.type() == MedicalServiceType.EXAMINATION
                 && serviceRepository.existsByTypeAndStatus(

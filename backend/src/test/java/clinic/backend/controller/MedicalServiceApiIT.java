@@ -121,6 +121,7 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
         UUID groupId = UUID.randomUUID();
         UUID parameterId = insertLabParameter(suffix);
         insertCatalog(departmentId, groupId, suffix);
+        insertRoom(departmentId, groupId, "R-" + suffix, "ACTIVE");
         String adminToken = accessToken(admin);
 
         mockMvc.perform(get("/api/v1/services/form-options")
@@ -157,7 +158,7 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 "SELECT code, status FROM services WHERE id = ?", serviceId);
         assertThat(createdService)
                 .containsEntry("code", code)
-                .containsEntry("status", "INACTIVE");
+                .containsEntry("status", "ACTIVE");
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM service_lab_parameters WHERE service_id = ? AND parameter_id = ?",
                 Long.class, serviceId, parameterId)).isEqualTo(1L);
