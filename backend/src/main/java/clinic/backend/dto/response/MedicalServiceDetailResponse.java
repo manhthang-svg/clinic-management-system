@@ -21,5 +21,6 @@ public record MedicalServiceDetailResponse(
         String description,
         ActivationStatus status,
         Long version,
-        List<PerformingRoomResponse> performingRooms) {
+        List<PerformingRoomResponse> performingRooms,
+        List<ServiceLabParameterResponse> labParameters) {
 }

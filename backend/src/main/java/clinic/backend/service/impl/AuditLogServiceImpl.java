@@ -97,6 +97,26 @@ public class AuditLogServiceImpl implements AuditLogService {
     }
 
     @Override
+    public void recordEntityChange(
+            UUID actorAccountId,
+            UUID entityId,
+            AuditLogAction action,
+            String entityType,
+            Map<String, ?> oldValues,
+            Map<String, ?> newValues,
+            Instant occurredAt) {
+        if (newValues.isEmpty() || (!oldValues.isEmpty() && !oldValues.keySet().equals(newValues.keySet()))) {
+            throw new IllegalArgumentException("Audit values must contain the same changed fields");
+        }
+        auditLogRepository.save(AuditLog.entityChanged(
+                ids.next(), actorAccountId, action, entityType, entityId, occurredAt,
+                newValues.keySet().toArray(String[]::new),
+                oldValues.isEmpty() ? null : objectMapper.valueToTree(oldValues).toString(),
+                objectMapper.valueToTree(newValues).toString(),
+                MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME)));
+    }
+
+    @Override
     public boolean hasAction(AuditLogAction action, String entityType, UUID entityId) {
         return auditLogRepository.existsByActionAndEntityTypeAndEntityId(action, entityType, entityId);
     }

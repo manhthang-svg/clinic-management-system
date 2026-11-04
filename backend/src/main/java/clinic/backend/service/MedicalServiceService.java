@@ -14,6 +14,7 @@ import clinic.backend.dto.response.MedicalServiceStatusCheckResponse;
 import clinic.backend.dto.response.PageResponse;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.MedicalServiceType;
+import clinic.backend.security.user.StaffPrincipal;
 
 public interface MedicalServiceService {
 
@@ -21,9 +22,10 @@ public interface MedicalServiceService {
 
     MedicalServiceFormOptionsResponse getFormOptions();
 
-    CreatedMedicalServiceResponse createService(CreateMedicalServiceRequest request);
+    CreatedMedicalServiceResponse createService(StaffPrincipal principal, CreateMedicalServiceRequest request);
 
-    MedicalServiceDetailResponse updateService(UUID serviceId, UpdateMedicalServiceRequest request);
+    MedicalServiceDetailResponse updateService(
+            StaffPrincipal principal, UUID serviceId, UpdateMedicalServiceRequest request);
 
     MedicalServiceDetailResponse updatePrices(UUID serviceId, UpdateMedicalServicePriceRequest request);
 

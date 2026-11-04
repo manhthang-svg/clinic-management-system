@@ -57,6 +57,7 @@ export function ServiceManagementPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [groups, setGroups] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [labParameters, setLabParameters] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
@@ -105,6 +106,7 @@ export function ServiceManagementPage({
       .then((options) => {
         setGroups(options.serviceGroups ?? []);
         setDepartments(options.departments ?? []);
+        setLabParameters(options.labParameters ?? []);
       })
       .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
     return () => controller.abort();
@@ -282,6 +284,7 @@ export function ServiceManagementPage({
           <ServiceCreateView
             groups={groups}
             departments={departments}
+            labParameters={labParameters}
             onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}

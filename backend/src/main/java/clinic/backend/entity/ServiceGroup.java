@@ -37,4 +37,7 @@ public class ServiceGroup extends VersionedEntity {
 
     @Column(name = "department_id")
     private UUID departmentId;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 }

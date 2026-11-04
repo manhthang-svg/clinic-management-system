@@ -23,6 +23,10 @@ const CREATE_CODE_MESSAGE = {
   ACTIVE_EXAMINATION_SERVICE_EXISTS:
     'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước khi thêm dịch vụ khám bệnh mới.',
   SERVICE_ASSIGNMENT_INVALID: 'Khoa hoặc nhóm dịch vụ không hợp lệ. Vui lòng chọn lại.',
+  LAB_PARAMETER_REQUIRED: 'Dịch vụ xét nghiệm phải có ít nhất một thông số.',
+  LAB_PARAMETER_INVALID: 'Có thông số xét nghiệm không tồn tại hoặc đã ngừng hoạt động.',
+  LAB_PARAMETER_ORDER_INVALID: 'Thông số xét nghiệm bị trùng hoặc có thứ tự không hợp lệ.',
+  LAB_PARAMETERS_NOT_ALLOWED: 'Chỉ dịch vụ xét nghiệm mới được chọn thông số xét nghiệm.',
   REQUEST_VALIDATION_FAILED: 'Một số thông tin chưa hợp lệ. Vui lòng kiểm tra lại.',
   MALFORMED_REQUEST: 'Yêu cầu không hợp lệ. Vui lòng tải lại trang rồi thử lại.',
 };
@@ -32,6 +36,7 @@ const ASSIGNMENT_ERRORS = {
   DEPARTMENT_NOT_FOUND: ['departmentId', 'Khoa thực hiện không tồn tại.'],
   DEPARTMENT_NOT_ACTIVE_PARACLINICAL: ['departmentId', 'Khoa phải là khoa cận lâm sàng đang hoạt động.'],
   SERVICE_GROUP_NOT_FOUND: ['serviceGroupId', 'Nhóm dịch vụ không tồn tại.'],
+  SERVICE_GROUP_INACTIVE: ['serviceGroupId', 'Nhóm dịch vụ đã ngừng hoạt động.'],
   SERVICE_GROUP_TYPE_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc loại dịch vụ đã chọn.'],
   SERVICE_GROUP_DEPARTMENT_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc khoa thực hiện đã chọn.'],
   DEPARTMENT_AND_GROUP_REQUIRED: ['serviceGroupId', 'Vui lòng chọn khoa và nhóm dịch vụ.'],
@@ -46,6 +51,7 @@ const FIELD_LABEL = {
   clinicPrice: 'Giá viện phí',
   insurancePrice: 'Giá BHYT',
   description: 'Mô tả',
+  labParameters: 'Thông số xét nghiệm',
 };
 
 const UPDATE_CODE_MESSAGE = {
@@ -107,6 +113,8 @@ export function serviceCreateErrors(error) {
   const fields = {};
   if (code === 'SERVICE_CODE_ALREADY_EXISTS') {
     fields.code = CREATE_CODE_MESSAGE.SERVICE_CODE_ALREADY_EXISTS;
+  } else if (code?.startsWith('LAB_PARAMETER') || code === 'LAB_PARAMETERS_NOT_ALLOWED') {
+    fields.labParameterIds = CREATE_CODE_MESSAGE[code];
   } else if (code === 'SERVICE_ASSIGNMENT_INVALID' && ASSIGNMENT_ERRORS[details.assignment]) {
     const [field, message] = ASSIGNMENT_ERRORS[details.assignment];
     fields[field] = message;

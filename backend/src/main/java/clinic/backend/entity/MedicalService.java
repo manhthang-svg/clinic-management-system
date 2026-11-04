@@ -75,8 +75,8 @@ public class MedicalService extends VersionedEntity {
             BigDecimal insurancePrice,
             String description) {
         super(id, now);
-        this.code = requiredText(code, 50, "code");
-        this.tenchidinh = requiredText(name, 255, "name");
+        this.code = requiredText(code, 1, 50, "code");
+        this.tenchidinh = requiredText(name, 2, 255, "name");
         this.type = Objects.requireNonNull(type, "type");
         requireOwnership(type, departmentId, serviceGroupId);
         requirePrice(clinicPrice, false, "clinicPrice");
@@ -85,8 +85,10 @@ public class MedicalService extends VersionedEntity {
         this.serviceGroupId = serviceGroupId;
         this.clinicPrice = clinicPrice;
         this.insurancePrice = insurancePrice;
-        this.description = description;
-        this.status = ActivationStatus.ACTIVE;
+        this.description = optionalText(description, 500, "description");
+        this.status = type == MedicalServiceType.EXAMINATION
+                ? ActivationStatus.ACTIVE
+                : ActivationStatus.INACTIVE;
     }
 
     public static MedicalService create(
@@ -106,8 +108,8 @@ public class MedicalService extends VersionedEntity {
     }
 
     public void updateInformation(String name, String description, Instant now) {
-        this.tenchidinh = requiredText(name, 255, "name");
-        this.description = description;
+        this.tenchidinh = requiredText(name, 2, 255, "name");
+        this.description = optionalText(description, 500, "description");
         touch(now);
     }
 
@@ -140,7 +142,7 @@ public class MedicalService extends VersionedEntity {
             }
             throw new IllegalArgumentException(field + " is required");
         }
-        BigDecimal minimum = nullable ? BigDecimal.ZERO : BigDecimal.ONE;
+        BigDecimal minimum = BigDecimal.ONE;
         if (price.stripTrailingZeros().scale() > 0
                 || price.compareTo(minimum) < 0
                 || price.compareTo(MAX_PRICE) > 0) {
@@ -148,11 +150,18 @@ public class MedicalService extends VersionedEntity {
         }
     }
 
-    private static String requiredText(String value, int maximumLength, String field) {
+    private static String requiredText(String value, int minimumLength, int maximumLength, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " is required");
         }
-        if (value.length() > maximumLength) {
+        if (value.length() < minimumLength || value.length() > maximumLength) {
+            throw new IllegalArgumentException(field + " has an invalid length");
+        }
+        return value;
+    }
+
+    private static String optionalText(String value, int maximumLength, String field) {
+        if (value != null && value.length() > maximumLength) {
             throw new IllegalArgumentException(field + " is too long");
         }
         return value;
