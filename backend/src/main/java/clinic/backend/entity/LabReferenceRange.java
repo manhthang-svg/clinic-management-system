@@ -135,6 +135,25 @@ public class LabReferenceRange extends VersionedEntity {
         }
     }
 
+    /**
+     * Ends this range the day before {@code nextEffectiveFrom}, when a revised range takes over. A range that
+     * only started that day has no day left to cover, so it is switched off instead.
+     */
+    public void supersede(LocalDate nextEffectiveFrom, Instant now) {
+        LocalDate lastDay = nextEffectiveFrom.minusDays(1);
+        if (lastDay.isBefore(effectiveFrom)) {
+            this.active = false;
+        } else {
+            this.effectiveTo = lastDay;
+        }
+        touch(now);
+    }
+
+    /** True when the range is active and its effective period covers {@code day}. */
+    public boolean isCurrentOn(LocalDate day) {
+        return active && !effectiveFrom.isAfter(day) && (effectiveTo == null || !effectiveTo.isBefore(day));
+    }
+
     public List<String> normalValueList() {
         return normalValues == null ? List.of() : List.copyOf(Arrays.asList(normalValues));
     }

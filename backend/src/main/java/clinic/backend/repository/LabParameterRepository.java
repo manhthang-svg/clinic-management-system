@@ -11,5 +11,7 @@ public interface LabParameterRepository extends JpaRepository<LabParameter, UUID
 
     List<LabParameter> findAllByActiveTrueOrderByNameAsc();
 
+    List<LabParameter> findAllByOrderByCodeAsc();
+
     List<LabParameter> findAllByIdInAndActiveTrue(Collection<UUID> ids);
 }

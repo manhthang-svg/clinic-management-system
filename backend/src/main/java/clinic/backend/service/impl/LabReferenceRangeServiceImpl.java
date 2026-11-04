@@ -3,14 +3,18 @@ package clinic.backend.service.impl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import clinic.backend.dto.request.LabReferenceRangeRequest;
+import clinic.backend.dto.response.LabParameterManagementResponse;
 import clinic.backend.dto.response.LabReferenceRangeResponse;
 import clinic.backend.entity.LabReferenceRange;
 import clinic.backend.enums.AuditLogAction;
@@ -33,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LabReferenceRangeServiceImpl implements LabReferenceRangeService {
 
     private static final String ENTITY_TYPE = "lab_reference_ranges";
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final LabParameterRepository parameterRepository;
     private final LabReferenceRangeRepository rangeRepository;
@@ -101,6 +106,64 @@ public class LabReferenceRangeServiceImpl implements LabReferenceRangeService {
                 principal.accountId(), range.getId(), AuditLogAction.UPDATE, ENTITY_TYPE,
                 oldValues, values(range), now);
         return toResponse(range);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabParameterManagementResponse> listParameters() {
+        Map<UUID, List<LabReferenceRange>> rangesByParameter = rangeRepository.findAllByOrderByEffectiveFromDesc()
+                .stream()
+                .collect(Collectors.groupingBy(LabReferenceRange::getParameterId));
+        return parameterRepository.findAllByOrderByCodeAsc().stream()
+                .map(parameter -> new LabParameterManagementResponse(
+                        parameter.getId(), parameter.getCode(), parameter.getName(), parameter.getValueType(),
+                        parameter.getUnit(), parameter.isActive(),
+                        rangesByParameter.getOrDefault(parameter.getId(), List.of()).stream()
+                                .map(this::toResponse)
+                                .toList()))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public LabReferenceRangeResponse revise(
+            StaffPrincipal principal, UUID parameterId, UUID rangeId, LabReferenceRangeRequest request) {
+        requireParameter(parameterId);
+        LabReferenceRange previous = rangeRepository.findById(rangeId)
+                .filter(item -> item.getParameterId().equals(parameterId))
+                .orElseThrow(() -> new AppException(ErrorCode.LAB_REFERENCE_RANGE_NOT_FOUND));
+        if (request.version() == null || !Objects.equals(previous.getVersion(), request.version())) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+        Instant now = clock.instant();
+        LocalDate today = now.atZone(CLINIC_ZONE).toLocalDate();
+        // Only the range in force today can be revised; an ended one is history.
+        if (!previous.isCurrentOn(today)) {
+            throw new AppException(ErrorCode.LAB_REFERENCE_RANGE_INVALID, Map.of("referenceRange", "NOT_CURRENT"));
+        }
+
+        // The revision always starts today and stays open; the request's own dates are ignored.
+        LabReferenceRange revised;
+        try {
+            revised = LabReferenceRange.create(
+                    ids.next(), now, parameterId, request.referenceType(), request.lowerBound(),
+                    request.upperBound(), inclusive(request.lowerInclusive()), inclusive(request.upperInclusive()),
+                    request.normalValues(), request.referenceText(), request.sex(), request.ageMinDays(),
+                    request.ageMaxDays(), today, null, request.source(), true);
+        } catch (IllegalArgumentException exception) {
+            throw invalid(exception);
+        }
+        Map<String, Object> previousValues = values(previous);
+        previous.supersede(today, now);
+        rangeRepository.saveAndFlush(previous);
+        rangeRepository.saveAndFlush(revised);
+        auditLogService.recordEntityChange(
+                principal.accountId(), previous.getId(), AuditLogAction.UPDATE, ENTITY_TYPE,
+                previousValues, values(previous), now);
+        auditLogService.recordEntityChange(
+                principal.accountId(), revised.getId(), AuditLogAction.CREATE, ENTITY_TYPE,
+                Map.of(), values(revised), now);
+        return toResponse(revised);
     }
 
     private void requireParameter(UUID parameterId) {

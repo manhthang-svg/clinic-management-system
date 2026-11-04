@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,6 +73,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MedicalServiceServiceImpl implements MedicalServiceService {
 
     private static final String SERVICE_ENTITY = "services";
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private static final List<ParaclinicalOrderDetailStatus> UNFINISHED_ORDER_STATUSES = List.of(
             ParaclinicalOrderDetailStatus.PENDING_PAYMENT,
@@ -127,6 +129,7 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                 .findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(
                         parameters.stream().map(LabParameter::getId).toList())
                 .stream()
+                .filter(this::isCurrentToday)
                 .collect(Collectors.groupingBy(LabReferenceRange::getParameterId));
         return new MedicalServiceFormOptionsResponse(
                 List.of(MedicalServiceType.values()),
@@ -465,12 +468,13 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(LabParameter::getId, Function.identity()));
-        // Reference ranges belong to the parameter (V39); only active ones are shown, as in the form options.
+        // Reference ranges belong to the parameter (V39); only those in force today are shown, as in the form options.
         Map<UUID, List<LabReferenceRange>> rangesByParameter = parameters.isEmpty()
                 ? Map.of()
                 : labReferenceRangeRepository
                         .findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(parameters.keySet())
                         .stream()
+                        .filter(this::isCurrentToday)
                         .collect(Collectors.groupingBy(LabReferenceRange::getParameterId));
         return mappings.stream()
                 .map(mapping -> toServiceLabParameter(
@@ -498,6 +502,11 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                 parameter.getId(), parameter.getCode(), parameter.getName(),
                 parameter.getValueType(), parameter.getUnit(),
                 ranges.stream().map(this::toReferenceRangeResponse).toList());
+    }
+
+    // A revised range ends yesterday and its replacement starts today; only the one in force is shown.
+    private boolean isCurrentToday(LabReferenceRange range) {
+        return range.isCurrentOn(clock.instant().atZone(CLINIC_ZONE).toLocalDate());
     }
 
     private LabReferenceRangeResponse toReferenceRangeResponse(LabReferenceRange range) {

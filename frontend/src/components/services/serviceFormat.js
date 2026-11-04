@@ -37,9 +37,35 @@ function formatAgeRange(minDays, maxDays) {
  * A range that applies to every sex and age is just its value.
  */
 export function formatReferenceRangeLine(range) {
-  const conditions = [SEX_LABELS[range.sex], formatAgeRange(range.ageMinDays, range.ageMaxDays)]
-    .filter(Boolean)
-    .join(', ');
-  const value = range.displayText || '—';
+  const conditions = formatReferenceConditions(range);
+  const value = formatReferenceValue(range);
   return conditions ? `${conditions}: ${value}` : value;
+}
+
+/** Sex and age a range applies to, e.g. "Nữ, từ 18 tuổi"; empty when it applies to everyone. */
+export function formatReferenceConditions(range) {
+  return [SEX_LABELS[range.sex], formatAgeRange(range.ageMinDays, range.ageMaxDays)].filter(Boolean).join(', ');
+}
+
+const number = (value) => String(Number(value)).replace('.', ',');
+
+/**
+ * The normal value of a range, e.g. "4 – 10", "< 41", built from its bounds. Falls back to the backend
+ * displayText for a range without them.
+ */
+export function formatReferenceValue(range) {
+  switch (range.referenceType) {
+    case 'RANGE':
+      return `${number(range.lowerBound)} – ${number(range.upperBound)}`;
+    case 'UPPER_LIMIT':
+      return `${range.upperInclusive === false ? '<' : '≤'} ${number(range.upperBound)}`;
+    case 'LOWER_LIMIT':
+      return `${range.lowerInclusive === false ? '>' : '≥'} ${number(range.lowerBound)}`;
+    case 'QUALITATIVE':
+      return (range.normalValues ?? []).join(', ') || '—';
+    case 'TEXT':
+      return range.referenceText || '—';
+    default:
+      return range.displayText || '—';
+  }
 }
