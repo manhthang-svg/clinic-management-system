@@ -129,7 +129,7 @@ export function ScheduleManagementPage({
             const accountApi = createAccountApi(apiClient);
             const allAccounts = [];
             for (let page = 0; ; page += 1) {
-              const accRes = await accountApi.list({ page, size: 100 });
+              const accRes = await accountApi.list({ page, size: 50 });
               const items = accRes?.content || accRes?.data?.content || accRes?.items || [];
               allAccounts.push(...items);
               const totalPages = accRes?.page?.totalPages ?? accRes?.data?.page?.totalPages ?? 1;
@@ -138,15 +138,22 @@ export function ScheduleManagementPage({
 
             if (!isMounted) return;
 
-            const filteredAccounts = allAccounts.filter((a) => a.role === 'DOCTOR' || a.role === 'TECHNICIAN');
+            // Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN và tài khoản đang hoạt động (không lấy tài khoản bị khóa)
+            const filteredAccounts = allAccounts.filter(
+              (a) => (a.role === 'DOCTOR' || a.role === 'TECHNICIAN') && (a.status === 'ACTIVE' || !a.status)
+            );
             const dutyStaff = filteredAccounts.map((a) => {
-              const matchedRoom = rawRooms.find((r) =>
-                (a.roomId && r.id === a.roomId) ||
-                (a.roomName && (r.name === a.roomName || r.roomName === a.roomName))
-              );
+              const matchedRoom = rawRooms.find((r) => {
+                if (a.roomId && r.id && String(a.roomId).toLowerCase() === String(r.id).toLowerCase()) return true;
+                if (a.roomCode && r.code && a.roomCode.trim().toUpperCase() === r.code.trim().toUpperCase()) return true;
+                if (a.roomName && r.name && a.roomName.trim().toLowerCase() === r.name.trim().toLowerCase()) return true;
+                return false;
+              });
               return {
                 id: a.id,
-                fullName: (a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName,
+                fullName: (matchedRoom?.headPerson && matchedRoom.headPerson.includes(a.fullName))
+                  ? matchedRoom.headPerson
+                  : ((a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName),
                 role: a.role,
                 username: a.username,
                 roomId: a.roomId || matchedRoom?.id || null,
@@ -222,7 +229,7 @@ export function ScheduleManagementPage({
       return;
     }
 
-    const targetRoom = roomList.find((r) => r.id === roomId);
+    const targetRoom = roomList.find((r) => String(r.id).toLowerCase() === String(roomId).toLowerCase());
     const isTargetRoomInactive =
       targetRoom?.status === 'INACTIVE' ||
       targetRoom?.status === 'inactive' ||
@@ -273,12 +280,18 @@ export function ScheduleManagementPage({
 
     const requiredRole = isParaclinical ? 'TECHNICIAN' : 'DOCTOR';
 
-    const staffOfRoom = staffList.filter((s) =>
-      s.role === requiredRole && (
-        s.roomId === roomId ||
-        (targetRoom && (s.roomCode === targetRoom.code || s.roomName === targetRoom.name))
-      )
-    );
+    const targetRoomId = roomId ? String(roomId).toLowerCase() : '';
+    const staffOfRoom = staffList.filter((s) => {
+      if (s.role !== requiredRole) return false;
+      const sRoomId = s.roomId ? String(s.roomId).toLowerCase() : '';
+      const sCode = (s.roomCode || '').trim().toUpperCase();
+      const sName = (s.roomName || '').trim().toLowerCase();
+      return (
+        (sRoomId && targetRoomId && sRoomId === targetRoomId) ||
+        (roomCode && sCode && sCode === roomCode) ||
+        (targetRoom?.name && sName && sName === targetRoom.name.trim().toLowerCase())
+      );
+    });
     const freeStaffOfRoom = staffOfRoom.find((s) => !busyAccountIds.has(s.id));
     const defaultStaff = freeStaffOfRoom || staffOfRoom[0] || null;
 
@@ -289,7 +302,7 @@ export function ScheduleManagementPage({
       roomId,
       roomName: targetRoom?.name || targetRoom?.roomName || '',
       roomCode: targetRoom?.code || targetRoom?.roomCode || '',
-      staffAccountId: defaultStaff?.id || '',
+      staffAccountId: '',
       notes: '',
     });
     setModalDefaultDate(dateStr);
@@ -305,7 +318,7 @@ export function ScheduleManagementPage({
     }
     setEditingItem({
       ...item,
-      roomId: roomId || roomList[0]?.id || '',
+      roomId: roomId || '',
     });
     setModalDefaultDate(item.workDate);
     setModalOpen(true);
@@ -601,7 +614,7 @@ export function ScheduleManagementPage({
 
       {/* Weekly Matrix Schedule Grid */}
       <div className="relative min-h-[350px]">
-        {(loading || metadataLoading) && (
+        {loading && (
           <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-2xl transition-all">
             <div className="flex items-center gap-2.5 px-5 py-2.5 bg-white shadow-md rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold">
               <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
@@ -609,7 +622,13 @@ export function ScheduleManagementPage({
             </div>
           </div>
         )}
-        <DutyWeeklyMatrix
+        {metadataLoading && roomList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-16 flex flex-col items-center justify-center min-h-[350px]">
+            <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mb-3" />
+            <span className="text-slate-600 font-medium text-sm">Đang tải danh mục phòng và lịch trực...</span>
+          </div>
+        ) : (
+          <DutyWeeklyMatrix
           days={days}
           roomList={roomList}
           staffList={staffList}
@@ -620,6 +639,7 @@ export function ScheduleManagementPage({
           onEditDuty={handleOpenEdit}
           onDeleteDuty={handleConfirmDelete}
         />
+        )}
       </div>
 
       {/* Modal Phân công / Chỉnh sửa (Admin) hoặc Xem chi tiết (Role khác) */}
