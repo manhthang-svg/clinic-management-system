@@ -70,7 +70,7 @@ function serverError(error) {
   return { message: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.', field: null };
 }
 
-function PasswordInput({ id, label, value, onChange, onBlur, autoComplete, invalidProps, requiredMessage }) {
+function PasswordInput({ id, label, value, onChange, autoComplete, invalidProps, requiredMessage }) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -83,7 +83,6 @@ function PasswordInput({ id, label, value, onChange, onBlur, autoComplete, inval
         autoComplete={autoComplete}
         value={value}
         onChange={onChange}
-        onBlur={onBlur}
         {...invalidProps}
       />
       <button
@@ -177,7 +176,6 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
     return error?.field === field ? { 'aria-invalid': true, 'aria-describedby': ERROR_ID } : {};
   }
 
-  const formComplete = currentPassword.trim() !== '' && newPassword.trim() !== '' && confirmation.trim() !== '';
   const requiredMessages = {
     current: touched.current && currentPassword.trim() === '' ? 'Mật khẩu hiện tại là bắt buộc.' : null,
     new: touched.new && newPassword.trim() === '' ? 'Mật khẩu mới là bắt buộc.' : null,
@@ -217,7 +215,6 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
               autoComplete="current-password"
               value={currentPassword}
               onChange={updateField(setCurrentPassword)}
-              onBlur={() => setTouched((current) => ({ ...current, current: true }))}
               invalidProps={invalidProps('current')}
               requiredMessage={requiredMessages.current}
             />
@@ -229,7 +226,6 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={updateField(setNewPassword)}
-                onBlur={() => setTouched((current) => ({ ...current, new: true }))}
                 invalidProps={invalidProps('new')}
                 requiredMessage={requiredMessages.new}
               />
@@ -244,7 +240,6 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
               autoComplete="new-password"
               value={confirmation}
               onChange={updateField(setConfirmation)}
-              onBlur={() => setTouched((current) => ({ ...current, confirmation: true }))}
               invalidProps={invalidProps('confirmation')}
               requiredMessage={requiredMessages.confirmation}
             />
@@ -269,7 +264,7 @@ export function ChangePasswordForm({ onSubmit, onChanged, onCancel, onOpenProfil
               )}
               <button
                 type="submit"
-                disabled={submitting || !formComplete}
+                disabled={submitting}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#127e7a] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0f6f6b] focus:outline-none focus:ring-2 focus:ring-[#127e7a]/25 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
               >
                 <KeyRound className="h-4 w-4" />

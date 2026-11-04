@@ -52,22 +52,22 @@ describe('ChangePasswordForm', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu hiện tại không chính xác.');
         expect(screen.getByLabelText('Mật khẩu hiện tại')).toHaveAttribute('aria-invalid', 'true');
     });
-    it('shows MSG02 for required fields after they are touched', async () => {
+    it('shows MSG02 for required fields only after submit is clicked', async () => {
         const onSubmit = vi.fn();
         render(<ChangePasswordForm onSubmit={onSubmit} onChanged={vi.fn()}/>);
-        const currentPassword = screen.getByLabelText('Mật khẩu hiện tại');
-        const newPassword = screen.getByLabelText('Mật khẩu mới');
-        const confirmation = screen.getByLabelText('Nhập lại mật khẩu mới');
+        const submit = screen.getByRole('button', { name: 'Đổi mật khẩu' });
 
-        await userEvent.click(currentPassword);
-        await userEvent.click(newPassword);
-        await userEvent.click(confirmation);
-        await userEvent.tab();
+        expect(submit).toBeEnabled();
+        expect(screen.queryByText('Mật khẩu hiện tại là bắt buộc.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Mật khẩu mới là bắt buộc.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Mật khẩu xác nhận là bắt buộc.')).not.toBeInTheDocument();
+
+        await userEvent.click(submit);
 
         expect(screen.getByText('Mật khẩu hiện tại là bắt buộc.')).toBeInTheDocument();
         expect(screen.getByText('Mật khẩu mới là bắt buộc.')).toBeInTheDocument();
         expect(screen.getByText('Mật khẩu xác nhận là bắt buộc.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Đổi mật khẩu' })).toBeDisabled();
+        expect(submit).toBeEnabled();
         expect(onSubmit).not.toHaveBeenCalled();
     });
 });
