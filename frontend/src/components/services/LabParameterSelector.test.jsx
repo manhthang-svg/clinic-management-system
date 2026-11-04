@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LabParameterSelector } from './LabParameterSelector';
 
 const parameters = [
@@ -47,5 +47,20 @@ describe('LabParameterSelector', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Gỡ chỉ số Số lượng hồng cầu' }));
     expect(screen.queryByText('RBC')).not.toBeInTheDocument();
     expect(screen.getByText('WBC')).toBeInTheDocument();
+  });
+
+  it('opens reference range configuration for the selected parameter', async () => {
+    const onConfigure = vi.fn();
+    render(
+      <LabParameterSelector
+        parameters={parameters}
+        selectedIds={['wbc']}
+        onChange={vi.fn()}
+        onConfigure={onConfigure}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cấu hình' }));
+    expect(onConfigure).toHaveBeenCalledWith(parameters[0]);
   });
 });

@@ -112,12 +112,26 @@ public class LabReferenceRange extends VersionedEntity {
         boolean hasText = text != null && !text.isBlank();
         switch (type) {
             case RANGE -> {
-                if (lower == null || upper == null || lower.compareTo(upper) >= 0) throw new IllegalArgumentException("invalid numeric range");
+                if (lower == null || upper == null || lower.compareTo(upper) >= 0 || hasValues) {
+                    throw new IllegalArgumentException("invalid numeric range");
+                }
             }
-            case UPPER_LIMIT -> { if (lower != null || upper == null) throw new IllegalArgumentException("invalid upper limit"); }
-            case LOWER_LIMIT -> { if (lower == null || upper != null) throw new IllegalArgumentException("invalid lower limit"); }
-            case QUALITATIVE -> { if (!hasValues) throw new IllegalArgumentException("normalValues required"); }
-            case TEXT -> { if (!hasText) throw new IllegalArgumentException("referenceText required"); }
+            case UPPER_LIMIT -> {
+                if (lower != null || upper == null || hasValues) throw new IllegalArgumentException("invalid upper limit");
+            }
+            case LOWER_LIMIT -> {
+                if (lower == null || upper != null || hasValues) throw new IllegalArgumentException("invalid lower limit");
+            }
+            case QUALITATIVE -> {
+                if (lower != null || upper != null || !hasValues) {
+                    throw new IllegalArgumentException("normalValues required");
+                }
+            }
+            case TEXT -> {
+                if (lower != null || upper != null || hasValues || !hasText) {
+                    throw new IllegalArgumentException("referenceText required");
+                }
+            }
         }
     }
 

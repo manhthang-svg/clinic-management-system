@@ -16,13 +16,24 @@ import {
 import { serviceCreateErrors } from './serviceErrors';
 import { INPUT_CLASS, Field, FieldError, FieldHint, FormAlert, PriceInput } from './ServiceFormParts';
 import { LabParameterSelector } from './LabParameterSelector';
+import { LabReferenceRangeModal } from './LabReferenceRangeModal';
 
 /** Create Service (UC-22). */
-export function ServiceCreateView({ groups = [], departments = [], labParameters = [], onCreate, onCancel, onGoToList }) {
+export function ServiceCreateView({
+  groups = [],
+  departments = [],
+  labParameters = [],
+  referenceRangeApi,
+  onReferenceRangesChanged,
+  onCreate,
+  onCancel,
+  onGoToList,
+}) {
   const [form, setForm] = useState(EMPTY_SERVICE_FORM);
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState({ fields: {}, message: null });
+  const [referenceParameter, setReferenceParameter] = useState(null);
 
   const errors = validateServiceForm(form);
   const shownErrors = touched ? { ...serverErrors.fields, ...errors } : {};
@@ -105,7 +116,8 @@ export function ServiceCreateView({ groups = [], departments = [], labParameters
       : serverErrors.message;
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-5">
+    <>
+      <form onSubmit={submit} noValidate className="space-y-5">
       <AccountPageHeader
         title="Thêm dịch vụ"
         description="Tạo dịch vụ khám hoặc cận lâm sàng mới kèm giá và, với xét nghiệm, các chỉ số."
@@ -316,6 +328,7 @@ export function ServiceCreateView({ groups = [], departments = [], labParameters
             parameters={labParameters}
             selectedIds={form.labParameterIds}
             onChange={(ids) => onChange('labParameterIds', ids)}
+            onConfigure={setReferenceParameter}
             error={shownErrors.labParameterIds}
           />
         </FormSection>
@@ -342,7 +355,16 @@ export function ServiceCreateView({ groups = [], departments = [], labParameters
           {submitting ? 'Đang lưu…' : 'Lưu dịch vụ'}
         </button>
       </div>
-    </form>
+      </form>
+      {referenceParameter && referenceRangeApi && (
+        <LabReferenceRangeModal
+          parameter={referenceParameter}
+          api={referenceRangeApi}
+          onChanged={onReferenceRangesChanged}
+          onClose={() => setReferenceParameter(null)}
+        />
+      )}
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Navigate, generatePath, matchPath, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -100,17 +100,19 @@ export function ServiceManagementPage({
     return () => clearTimeout(handle);
   }, [searchQuery]);
 
+  const loadFormOptions = useCallback((signal) =>
+    serviceApi.formOptions(signal).then((options) => {
+      setGroups(options.serviceGroups ?? []);
+      setDepartments(options.departments ?? []);
+      setLabParameters(options.labParameters ?? []);
+    }), [serviceApi]);
+
   useEffect(() => {
     const controller = new AbortController();
-    serviceApi.formOptions(controller.signal)
-      .then((options) => {
-        setGroups(options.serviceGroups ?? []);
-        setDepartments(options.departments ?? []);
-        setLabParameters(options.labParameters ?? []);
-      })
+    loadFormOptions(controller.signal)
       .catch((error) => error.name !== "AbortError" && toast.error(serviceErrorMessage(error)));
     return () => controller.abort();
-  }, [serviceApi]);
+  }, [loadFormOptions]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -285,6 +287,9 @@ export function ServiceManagementPage({
             groups={groups}
             departments={departments}
             labParameters={labParameters}
+            referenceRangeApi={serviceApi}
+            onReferenceRangesChanged={() => loadFormOptions()
+              .catch((error) => toast.error(serviceErrorMessage(error)))}
             onCreate={createService}
             onCancel={goBack}
             onGoToList={showList}

@@ -175,6 +175,40 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void adminCanConfigureLabReferenceRangesAndNonAdminIsForbidden() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID parameterId = insertLabParameter(UUID.randomUUID().toString().substring(0, 8));
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "referenceType", "RANGE",
+                "lowerBound", 4,
+                "upperBound", 10,
+                "lowerInclusive", true,
+                "upperInclusive", true,
+                "effectiveFrom", "2026-01-01",
+                "source", "Clinic laboratory catalog",
+                "active", true));
+
+        mockMvc.perform(post("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.parameterId").value(parameterId.toString()))
+                .andExpect(jsonPath("$.data.active").value(true))
+                .andExpect(jsonPath("$.data.displayText").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+
+        mockMvc.perform(get("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void createServiceRejectsInvalidAssignmentAndPrice() throws Exception {
         StaffAccount admin = account(Role.ADMIN);
         String token = accessToken(admin);

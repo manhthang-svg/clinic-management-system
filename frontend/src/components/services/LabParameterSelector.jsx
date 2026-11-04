@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Settings2, Trash2 } from 'lucide-react';
 import { INPUT_CLASS, FieldError, FieldHint } from './ServiceFormParts';
 
 const TABLE_HEADER_CLASS =
   'border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500';
 
-export function LabParameterSelector({ parameters = [], selectedIds = [], onChange, error }) {
+export function LabParameterSelector({ parameters = [], selectedIds = [], onChange, onConfigure, error }) {
   const [parameterId, setParameterId] = useState('');
   const parameterById = useMemo(
     () => new Map(parameters.map((parameter) => [String(parameter.id), parameter])),
@@ -76,7 +76,7 @@ export function LabParameterSelector({ parameters = [], selectedIds = [], onChan
                 <th scope="col" className={TABLE_HEADER_CLASS}>Tên chỉ số</th>
                 <th scope="col" className={`${TABLE_HEADER_CLASS} w-28`}>Đơn vị</th>
                 <th scope="col" className={TABLE_HEADER_CLASS}>Trị số tham chiếu</th>
-                <th scope="col" className={`${TABLE_HEADER_CLASS} w-24 text-center`}>Thao tác</th>
+                <th scope="col" className={`${TABLE_HEADER_CLASS} w-48 text-center`}>Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -111,7 +111,16 @@ export function LabParameterSelector({ parameters = [], selectedIds = [], onChan
                     <td className="px-4 py-3 text-sm font-medium text-slate-800">{parameter.name}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{parameter.unit || '—'}</td>
                     <td className="whitespace-pre-line px-4 py-3 text-sm leading-5 text-slate-600">{reference}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onConfigure?.(parameter)}
+                          className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-teal-200 px-3 text-xs font-semibold text-[#127e7a] transition-colors hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#127e7a]/30"
+                        >
+                          <Settings2 aria-hidden="true" className="h-3.5 w-3.5" />
+                          Cấu hình
+                        </button>
                       <button
                         type="button"
                         onClick={() => onChange(selectedIds.filter((selectedId) => selectedId !== id))}
@@ -121,6 +130,7 @@ export function LabParameterSelector({ parameters = [], selectedIds = [], onChan
                         <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
                         Gỡ
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );
