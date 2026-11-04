@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Edit3, FlaskConical, Plus, RotateCcw } from 'lucide-react';
+import { MSG12, MSG13, MSG80, msg05, msg75 } from './serviceMessages';
 import { Field, FieldError, FormAlert, INPUT_CLASS, ServiceFormModal } from './ServiceFormParts';
 import {
   emptyReferenceRangeForm,
@@ -18,12 +19,13 @@ const TYPE_OPTIONS = [
 
 function apiErrorMessage(error) {
   const code = error?.errorResponse?.code;
-  if (code === 'CONCURRENT_MODIFICATION') return 'Dữ liệu vừa được cập nhật ở nơi khác. Vui lòng tải lại và thử lại.';
+  if (code === 'CONCURRENT_MODIFICATION') return msg75('Trị số tham chiếu');
   if (code === 'LAB_REFERENCE_RANGE_INVALID' || code === 'REQUEST_VALIDATION_FAILED') {
-    return 'Trị số tham chiếu chưa hợp lệ. Vui lòng kiểm tra các trường đã nhập.';
+    return msg05('Trị số tham chiếu');
   }
-  if (code === 'FORBIDDEN') return 'Bạn không có quyền cấu hình trị số tham chiếu.';
-  return 'Không lưu được trị số tham chiếu. Vui lòng thử lại.';
+  if (code === 'UNAUTHORIZED') return MSG12;
+  if (code === 'FORBIDDEN') return MSG13;
+  return MSG80;
 }
 
 export function LabReferenceRangeModal({ parameter, api, onChanged, onClose }) {
@@ -42,7 +44,7 @@ export function LabReferenceRangeModal({ parameter, api, onChanged, onClose }) {
     setLoadError(null);
     api.listReferenceRanges(parameter.id)
       .then(setRanges)
-      .catch(() => setLoadError('Không tải được danh sách trị số tham chiếu.'))
+      .catch(() => setLoadError(MSG80))
       .finally(() => setLoading(false));
   };
 
@@ -50,7 +52,7 @@ export function LabReferenceRangeModal({ parameter, api, onChanged, onClose }) {
     let ignore = false;
     api.listReferenceRanges(parameter.id)
       .then((items) => !ignore && setRanges(items))
-      .catch(() => !ignore && setLoadError('Không tải được danh sách trị số tham chiếu.'))
+      .catch(() => !ignore && setLoadError(MSG80))
       .finally(() => !ignore && setLoading(false));
     return () => { ignore = true; };
   }, [api, parameter.id]);

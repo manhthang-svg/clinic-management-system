@@ -1,57 +1,40 @@
 import { ApiError } from '../../apis/apiError';
+import {
+  MSG01,
+  MSG12,
+  MSG13,
+  MSG52,
+  MSG80,
+  MSG92,
+  msg05,
+  msg07,
+  msg39,
+  msg40,
+  msg55,
+  msg73,
+  msg75,
+} from './serviceMessages';
 
-/** MSG01: the search or filters match nothing. */
-export const MSG01 = 'Không tìm thấy kết quả.';
-/** MSG92: a list or section has no data to display. */
-export const MSG92 = 'Chưa có dữ liệu để hiển thị.';
-/** MSG39: the requested record does not exist. */
-export const msg39 = (recordType) => `Không tìm thấy ${recordType}.`;
+export { MSG01, MSG92, msg39, msg55 };
 
-const CODE_MESSAGE = {
-  UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
-  FORBIDDEN: 'Bạn không có quyền xem danh mục dịch vụ.',
-  REQUEST_VALIDATION_FAILED: 'Điều kiện tìm kiếm không hợp lệ. Vui lòng kiểm tra lại.',
+// Messages for failures every service request shares: session (MSG12), role (MSG13), system (MSG80).
+const COMMON_MESSAGE = {
+  UNAUTHORIZED: MSG12,
+  FORBIDDEN: MSG13,
 };
 
-const FALLBACK_MESSAGE = 'Không tải được danh sách dịch vụ. Vui lòng thử lại.';
-const NETWORK_MESSAGE = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
-
-export function serviceErrorMessage(error) {
-  if (!(error instanceof ApiError)) return FALLBACK_MESSAGE;
-  const code = error.errorResponse?.code;
-  if (!code && error.status === undefined) return NETWORK_MESSAGE;
-  return CODE_MESSAGE[code] || FALLBACK_MESSAGE;
+function isApiError(error) {
+  return error instanceof ApiError;
 }
 
-const CREATE_CODE_MESSAGE = {
-  UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
-  FORBIDDEN: 'Bạn không có quyền thêm dịch vụ.',
-  SERVICE_CODE_ALREADY_EXISTS: 'Mã dịch vụ đã tồn tại trong hệ thống.',
-  SERVICE_NAME_ALREADY_EXISTS: 'Tên dịch vụ đã tồn tại trong hệ thống.',
-  SERVICE_TYPE_NOT_CREATABLE: 'Chỉ được thêm dịch vụ Xét nghiệm, Chẩn đoán hình ảnh hoặc Thăm dò chức năng.',
-  ACTIVE_EXAMINATION_SERVICE_EXISTS:
-    'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước khi thêm dịch vụ khám bệnh mới.',
-  SERVICE_ASSIGNMENT_INVALID: 'Khoa hoặc nhóm dịch vụ không hợp lệ. Vui lòng chọn lại.',
-  SERVICE_GROUP_HAS_NO_ACTIVE_ROOM:
-    'Nhóm dịch vụ chưa có phòng nào đang hoạt động phụ trách. Hãy kích hoạt hoặc tạo phòng cho nhóm này trước khi thêm dịch vụ.',
-  LAB_PARAMETER_REQUIRED: 'Dịch vụ xét nghiệm phải có ít nhất một thông số.',
-  LAB_PARAMETER_INVALID: 'Có thông số xét nghiệm không tồn tại hoặc đã ngừng hoạt động.',
-  LAB_PARAMETER_ORDER_INVALID: 'Thông số xét nghiệm bị trùng hoặc có thứ tự không hợp lệ.',
-  LAB_PARAMETERS_NOT_ALLOWED: 'Chỉ dịch vụ xét nghiệm mới được chọn thông số xét nghiệm.',
-  REQUEST_VALIDATION_FAILED: 'Một số thông tin chưa hợp lệ. Vui lòng kiểm tra lại.',
-  MALFORMED_REQUEST: 'Yêu cầu không hợp lệ. Vui lòng tải lại trang rồi thử lại.',
-};
+function codeOf(error) {
+  return isApiError(error) ? error.errorResponse?.code : undefined;
+}
 
-// SERVICE_ASSIGNMENT_INVALID details.assignment -> form field and message.
-const ASSIGNMENT_ERRORS = {
-  DEPARTMENT_NOT_FOUND: ['departmentId', 'Khoa thực hiện không tồn tại.'],
-  DEPARTMENT_NOT_ACTIVE_PARACLINICAL: ['departmentId', 'Khoa phải là khoa cận lâm sàng đang hoạt động.'],
-  SERVICE_GROUP_NOT_FOUND: ['serviceGroupId', 'Nhóm dịch vụ không tồn tại.'],
-  SERVICE_GROUP_INACTIVE: ['serviceGroupId', 'Nhóm dịch vụ đã ngừng hoạt động.'],
-  SERVICE_GROUP_TYPE_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc loại dịch vụ đã chọn.'],
-  SERVICE_GROUP_DEPARTMENT_MISMATCH: ['serviceGroupId', 'Nhóm dịch vụ không thuộc khoa thực hiện đã chọn.'],
-  DEPARTMENT_AND_GROUP_REQUIRED: ['serviceGroupId', 'Vui lòng chọn khoa và nhóm dịch vụ.'],
-};
+/** UC-20 / UC-21 load failures. */
+export function serviceErrorMessage(error) {
+  return COMMON_MESSAGE[codeOf(error)] || MSG80;
+}
 
 const FIELD_LABEL = {
   code: 'Mã dịch vụ',
@@ -62,99 +45,104 @@ const FIELD_LABEL = {
   clinicPrice: 'Giá viện phí',
   insurancePrice: 'Giá BHYT',
   description: 'Mô tả',
-  labParameters: 'Thông số xét nghiệm',
+  labParameters: 'Chỉ số xét nghiệm',
 };
 
-const UPDATE_CODE_MESSAGE = {
-  UNAUTHORIZED: CREATE_CODE_MESSAGE.UNAUTHORIZED,
-  FORBIDDEN: 'Bạn không có quyền cập nhật dịch vụ.',
-  SERVICE_NOT_FOUND: 'Dịch vụ không còn tồn tại.',
-  CONCURRENT_MODIFICATION:
-    'Dịch vụ vừa được cập nhật ở nơi khác. Thông tin mới đã được tải lại, vui lòng kiểm tra rồi lưu lại.',
-  REQUEST_VALIDATION_FAILED: CREATE_CODE_MESSAGE.REQUEST_VALIDATION_FAILED,
-  MALFORMED_REQUEST: CREATE_CODE_MESSAGE.MALFORMED_REQUEST,
+// SERVICE_ASSIGNMENT_INVALID details.assignment -> form field and message (MSG40: the selection is no longer usable).
+const ASSIGNMENT_ERRORS = {
+  DEPARTMENT_NOT_FOUND: ['departmentId', msg40('Khoa thực hiện')],
+  DEPARTMENT_NOT_ACTIVE_PARACLINICAL: ['departmentId', msg40('Khoa thực hiện')],
+  SERVICE_GROUP_NOT_FOUND: ['serviceGroupId', msg40('Nhóm dịch vụ')],
+  SERVICE_GROUP_INACTIVE: ['serviceGroupId', msg40('Nhóm dịch vụ')],
+  SERVICE_GROUP_TYPE_MISMATCH: ['serviceGroupId', msg40('Nhóm dịch vụ')],
+  SERVICE_GROUP_DEPARTMENT_MISMATCH: ['serviceGroupId', msg40('Nhóm dịch vụ')],
+  DEPARTMENT_AND_GROUP_REQUIRED: ['serviceGroupId', msg40('Nhóm dịch vụ')],
 };
 
-const STATUS_CODE_MESSAGE = {
-  UNAUTHORIZED: CREATE_CODE_MESSAGE.UNAUTHORIZED,
-  FORBIDDEN: 'Bạn không có quyền thay đổi trạng thái dịch vụ.',
-  SERVICE_NOT_FOUND: 'Dịch vụ không còn tồn tại.',
-  CONCURRENT_MODIFICATION: 'Dịch vụ vừa được cập nhật ở nơi khác. Thông tin mới đã được tải lại, vui lòng thử lại.',
-  // MSG52 (UC-25 EF-01)
-  EXAMINATION_SERVICE_NOT_DEACTIVATABLE: 'Đây là dịch vụ khám duy nhất nên không thể ngừng hoạt động.',
-  ACTIVE_EXAMINATION_SERVICE_EXISTS:
-    'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước.',
-  // MSG73 (UC-25 EF-03)
-  SERVICE_GROUP_HAS_NO_ACTIVE_ROOM: 'Nhóm dịch vụ chưa có phòng thực hiện nào đang hoạt động.',
-};
+// REQUEST_VALIDATION_FAILED details name the fields the backend rejected (MSG05).
+function validationFields(error) {
+  const details = error.errorResponse?.details ?? {};
+  const fields = {};
+  Object.keys(details).forEach((field) => {
+    if (FIELD_LABEL[field]) fields[field] = msg05(FIELD_LABEL[field]);
+  });
+  return fields;
+}
 
-/** MSG55: a room or service that still has waiting or in-progress work cannot be changed. */
-export const msg55 = (item) =>
-  `${item} vẫn còn bệnh nhân hoặc dịch vụ đang chờ hoặc đang thực hiện nên hiện không thể thay đổi.`;
+/** Field errors and one summary message for a failed create-service request (UC-22). */
+export function serviceCreateErrors(error, serviceName = 'dịch vụ') {
+  if (!isApiError(error)) return { fields: {}, message: MSG80 };
+  const code = codeOf(error);
+  const details = error.errorResponse?.details ?? {};
+  let fields = {};
+  let message = COMMON_MESSAGE[code] || null;
 
-/** One message for a failed UC-25 status check or change; item names the service in MSG55. */
-export function serviceStatusErrorMessage(error, item = 'Dịch vụ') {
-  if (!(error instanceof ApiError)) return 'Đã xảy ra lỗi. Vui lòng thử lại.';
-  const code = error.errorResponse?.code;
-  if (!code && error.status === undefined) return NETWORK_MESSAGE;
-  // MSG55 (UC-25 EF-02)
-  if (code === 'SERVICE_HAS_UNFINISHED_ORDERS') return msg55(item);
-  return STATUS_CODE_MESSAGE[code] || 'Không thay đổi được trạng thái dịch vụ. Vui lòng thử lại.';
+  if (code === 'SERVICE_CODE_ALREADY_EXISTS') {
+    fields.code = msg07('Mã dịch vụ'); // MSG07, EF-03
+  } else if (code === 'SERVICE_NAME_ALREADY_EXISTS') {
+    fields.name = msg07('Tên dịch vụ'); // MSG07, EF-03
+  } else if (code === 'SERVICE_TYPE_NOT_CREATABLE') {
+    fields.type = msg40('Loại dịch vụ');
+  } else if (code === 'SERVICE_GROUP_HAS_NO_ACTIVE_ROOM') {
+    message = msg73(serviceName); // MSG73, EF-05
+    fields.serviceGroupId = message;
+  } else if (code?.startsWith('LAB_PARAMETER') || code === 'LAB_PARAMETERS_NOT_ALLOWED') {
+    fields.labParameterIds = msg40('Chỉ số xét nghiệm');
+  } else if (code === 'SERVICE_ASSIGNMENT_INVALID' && ASSIGNMENT_ERRORS[details.assignment]) {
+    const [field, fieldMessage] = ASSIGNMENT_ERRORS[details.assignment];
+    fields[field] = fieldMessage;
+  } else if (code === 'REQUEST_VALIDATION_FAILED') {
+    fields = validationFields(error);
+    if (Object.keys(fields).length === 0) message = MSG80;
+  } else if (!message) {
+    message = MSG80;
+  }
+
+  return { fields, message };
 }
 
 /** Field errors and one summary message for a failed UC-23 / UC-24 update. */
 export function serviceUpdateErrors(error) {
-  if (!(error instanceof ApiError)) return { fields: {}, message: 'Đã xảy ra lỗi. Vui lòng thử lại.' };
-  const code = error.errorResponse?.code;
-  if (!code && error.status === undefined) return { fields: {}, message: NETWORK_MESSAGE };
+  if (!isApiError(error)) return { fields: {}, message: MSG80 };
+  const code = codeOf(error);
+  let fields = {};
+  let message = COMMON_MESSAGE[code] || null;
 
-  const details = error.errorResponse?.details ?? {};
-  const fields = {};
   if (code === 'SERVICE_NAME_ALREADY_EXISTS') {
-    // MSG07 (UC-23 EF-02)
-    fields.name = CREATE_CODE_MESSAGE.SERVICE_NAME_ALREADY_EXISTS;
+    fields.name = msg07('Tên dịch vụ'); // MSG07, UC-23 EF-02
+  } else if (code === 'CONCURRENT_MODIFICATION') {
+    message = msg75('Dịch vụ'); // MSG75, BR-119
+  } else if (code === 'SERVICE_NOT_FOUND') {
+    message = msg39('dịch vụ'); // MSG39
   } else if (code === 'REQUEST_VALIDATION_FAILED') {
-    Object.keys(details).forEach((field) => {
-      if (FIELD_LABEL[field]) fields[field] = `${FIELD_LABEL[field]} không hợp lệ.`;
-    });
+    fields = validationFields(error);
+    if (Object.keys(fields).length === 0) message = MSG80;
+  } else if (!message) {
+    message = MSG80;
   }
 
-  return {
-    fields,
-    message: UPDATE_CODE_MESSAGE[code] || CREATE_CODE_MESSAGE[code]
-      || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
-  };
+  return { fields, message };
 }
 
-/** Field errors and one summary message for a failed create-service request. */
-export function serviceCreateErrors(error) {
-  if (!(error instanceof ApiError)) return { fields: {}, message: 'Đã xảy ra lỗi. Vui lòng thử lại.' };
-  const code = error.errorResponse?.code;
-  if (!code && error.status === undefined) return { fields: {}, message: NETWORK_MESSAGE };
-
-  const details = error.errorResponse?.details ?? {};
-  const fields = {};
-  if (code === 'SERVICE_CODE_ALREADY_EXISTS') {
-    fields.code = CREATE_CODE_MESSAGE.SERVICE_CODE_ALREADY_EXISTS;
-  } else if (code === 'SERVICE_NAME_ALREADY_EXISTS') {
-    fields.name = CREATE_CODE_MESSAGE.SERVICE_NAME_ALREADY_EXISTS;
-  } else if (code === 'SERVICE_TYPE_NOT_CREATABLE') {
-    fields.type = CREATE_CODE_MESSAGE.SERVICE_TYPE_NOT_CREATABLE;
-  } else if (code === 'SERVICE_GROUP_HAS_NO_ACTIVE_ROOM') {
-    fields.serviceGroupId = 'Nhóm dịch vụ chưa có phòng nào đang hoạt động phụ trách.';
-  } else if (code?.startsWith('LAB_PARAMETER') || code === 'LAB_PARAMETERS_NOT_ALLOWED') {
-    fields.labParameterIds = CREATE_CODE_MESSAGE[code];
-  } else if (code === 'SERVICE_ASSIGNMENT_INVALID' && ASSIGNMENT_ERRORS[details.assignment]) {
-    const [field, message] = ASSIGNMENT_ERRORS[details.assignment];
-    fields[field] = message;
-  } else if (code === 'REQUEST_VALIDATION_FAILED') {
-    Object.keys(details).forEach((field) => {
-      if (FIELD_LABEL[field]) fields[field] = `${FIELD_LABEL[field]} không hợp lệ.`;
-    });
+/**
+ * One message for a failed UC-25 status check or change. item names the service in MSG55 (e.g. 'Dịch vụ "X"');
+ * serviceName fills MSG73.
+ */
+export function serviceStatusErrorMessage(error, item = 'Dịch vụ', serviceName = 'dịch vụ') {
+  const code = codeOf(error);
+  if (COMMON_MESSAGE[code]) return COMMON_MESSAGE[code];
+  switch (code) {
+    case 'EXAMINATION_SERVICE_NOT_DEACTIVATABLE':
+      return MSG52; // EF-01
+    case 'SERVICE_HAS_UNFINISHED_ORDERS':
+      return msg55(item); // EF-02
+    case 'SERVICE_GROUP_HAS_NO_ACTIVE_ROOM':
+      return msg73(serviceName); // EF-03
+    case 'CONCURRENT_MODIFICATION':
+      return msg75('Dịch vụ');
+    case 'SERVICE_NOT_FOUND':
+      return msg39('dịch vụ');
+    default:
+      return MSG80; // EF-04
   }
-
-  return {
-    fields,
-    message: CREATE_CODE_MESSAGE[code] || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
-  };
 }

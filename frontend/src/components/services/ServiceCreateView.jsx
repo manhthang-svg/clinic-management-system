@@ -105,7 +105,7 @@ export function ServiceCreateView({
     try {
       await onCreate(form);
     } catch (error) {
-      setServerErrors(serviceCreateErrors(error));
+      setServerErrors(serviceCreateErrors(error, form.name.trim() || "dịch vụ"));
     } finally {
       setSubmitting(false);
     }

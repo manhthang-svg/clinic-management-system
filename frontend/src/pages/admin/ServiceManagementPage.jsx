@@ -20,6 +20,7 @@ import {
 } from "../../components/services";
 import { ConfirmModal } from "../../components/ui";
 import { msg39, serviceErrorMessage, serviceStatusErrorMessage } from "../../components/services/serviceErrors";
+import { MSG80, msg03, msg04, msg06 } from "../../components/services/serviceMessages";
 import {
   formToServiceRequest,
   infoFormToRequest,
@@ -198,7 +199,7 @@ export function ServiceManagementPage({
   const createService = async (form) => {
     const request = formToServiceRequest(form);
     await serviceApi.create(request);
-    toast.success(`Đã thêm dịch vụ ${request.code.toUpperCase()}`);
+    toast.success(msg04(`dịch vụ ${request.code.toUpperCase()}`)); // MSG04
     setReloadKey((key) => key + 1);
     navigate(ADMIN.SERVICES, { replace: true });
   };
@@ -222,13 +223,13 @@ export function ServiceManagementPage({
   const updateInfo = (form) =>
     updateDetail(
       (id, version) => serviceApi.update(id, infoFormToRequest(form, version)),
-      "Đã cập nhật thông tin dịch vụ",
+      msg03(`Thông tin dịch vụ ${detail.service?.code ?? ""}`.trim()), // MSG03
     );
 
   const updatePrices = (form) =>
     updateDetail(
       (id, version) => serviceApi.updatePrices(id, priceFormToRequest(form, version)),
-      "Đã cập nhật giá dịch vụ",
+      msg03(`Giá dịch vụ ${detail.service?.code ?? ""}`.trim()), // MSG03
     );
 
   // UC-23: reference ranges are maintained from the LAB service detail screen.
@@ -247,7 +248,7 @@ export function ServiceManagementPage({
         : await serviceApi.checkActivation(id);
       setStatusConfirm({ target: check.targetStatus });
     } catch (error) {
-      setStatusError({ id, message: serviceStatusErrorMessage(error, `Dịch vụ "${service.name}"`) });
+      setStatusError({ id, message: serviceStatusErrorMessage(error, `Dịch vụ "${service.name}"`, service.name) });
     } finally {
       setStatusBusy(false);
     }
@@ -260,10 +261,10 @@ export function ServiceManagementPage({
     try {
       await updateDetail(
         (id, version) => serviceApi.updateStatus(id, { status: target, version }),
-        target === "INACTIVE" ? "Đã ngừng hoạt động dịch vụ" : "Đã kích hoạt dịch vụ",
+        msg03(`Trạng thái dịch vụ ${detail.service.code}`), // MSG03
       );
     } catch (error) {
-      setStatusError({ id: detail.id, message: serviceStatusErrorMessage(error, `Dịch vụ "${detail.service.name}"`) });
+      setStatusError({ id: detail.id, message: serviceStatusErrorMessage(error, `Dịch vụ "${detail.service.name}"`, detail.service.name) });
     } finally {
       setStatusBusy(false);
       setStatusConfirm(null);
@@ -328,8 +329,8 @@ export function ServiceManagementPage({
             title={deactivating ? "Ngừng hoạt động dịch vụ" : "Kích hoạt dịch vụ"}
             description={
               deactivating
-                ? `Dịch vụ "${current.service.name}" sẽ bị ẩn khỏi danh sách chỉ định.`
-                : `Kích hoạt lại dịch vụ "${current.service.name}"?`
+                ? msg06(`ngừng hoạt động dịch vụ "${current.service.name}"`)
+                : msg06(`kích hoạt dịch vụ "${current.service.name}"`)
             }
             confirmText={statusBusy ? "Đang cập nhật…" : deactivating ? "Ngừng hoạt động" : "Kích hoạt"}
             variant={deactivating ? "destructive" : "mint"}
@@ -348,7 +349,7 @@ export function ServiceManagementPage({
             <>
               <h1 className="text-xl! font-extrabold! text-[#1b2533]">Không tải được dịch vụ</h1>
               <p role="alert" className="text-sm text-slate-500 mt-1">
-                Đã xảy ra lỗi khi tải dịch vụ. Vui lòng thử lại.
+                {MSG80}
               </p>
             </>
           )}

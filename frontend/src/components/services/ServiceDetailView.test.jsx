@@ -56,3 +56,12 @@ describe('ServiceDetailView UC-23 lab reference ranges', () => {
     expect(screen.queryByRole('button', { name: 'Cấu hình' })).not.toBeInTheDocument();
   });
 });
+
+describe('ServiceDetailView empty sections (UC-21 EF-03)', () => {
+  it('shows MSG92 in a section without data and the other sections normally', () => {
+    render(<ServiceDetailView service={{ ...labService, labParameters: [] }} onGoToList={vi.fn()} />);
+
+    expect(screen.getAllByText('Chưa có dữ liệu để hiển thị.')).toHaveLength(2);
+    expect(screen.getByText('Tổng phân tích tế bào máu', { selector: 'div' })).toBeInTheDocument();
+  });
+});

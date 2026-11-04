@@ -11,6 +11,7 @@ import { LabRangeRevisionModal } from '../../components/services/LabRangeRevisio
 import { formatReferenceConditions, formatReferenceValue } from '../../components/services/serviceFormat';
 import { clinicToday, isCurrentRange } from '../../components/services/labRangeRevision';
 import { serviceErrorMessage } from '../../components/services/serviceErrors';
+import { msg03 } from '../../components/services/serviceMessages';
 import { createServiceApi } from '../../apis/serviceApi';
 import { apiClient } from '../../services/session';
 
@@ -156,7 +157,7 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
   const revise = async (request) => {
     const { parameter, range } = revising;
     await api.reviseReferenceRange(parameter.id, range.id, request);
-    toast.success(`Đã cập nhật chỉ số tham chiếu của ${parameter.code}, áp dụng từ hôm nay.`);
+    toast.success(msg03(`Chỉ số tham chiếu của ${parameter.code}`)); // MSG03
     setRevising(null);
     await load();
   };

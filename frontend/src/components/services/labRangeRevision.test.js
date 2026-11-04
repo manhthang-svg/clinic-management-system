@@ -71,8 +71,8 @@ describe('validateRevisionForm', () => {
     );
 
     expect(errors).toEqual({
-      normalValues: 'Vui lòng nhập ít nhất một giá trị bình thường.',
-      source: 'Vui lòng nhập nguồn tham chiếu.',
+      normalValues: 'Giá trị bình thường là bắt buộc.',
+      source: 'Nguồn tham chiếu là bắt buộc.',
     });
   });
 });
