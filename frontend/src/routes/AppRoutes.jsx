@@ -29,6 +29,7 @@ import ReceptionistRoomQueuePage from "../pages/receptionist/ReceptionistRoomQue
 import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorQueuePage from "../pages/doctor/DoctorQueuePage.jsx";
 import DoctorWaitingListPage from "../pages/doctor/DoctorWaitingListPage.jsx";
+import ClinicalExaminationPage from "../pages/doctor/ClinicalExaminationPage.jsx";
 import OwnProfilePage from "../pages/profile/OwnProfilePage.jsx";
 import {
   TechnicianDashboardPage,
@@ -270,7 +271,7 @@ export function AppRoutes({
           <Route path="appointments" element={<DoctorWaitingListPage />} />
           <Route path="conclusion" element={<DoctorWaitingListPage initialTab="conclusion" />} />
           <Route path="postponed" element={<DoctorWaitingListPage initialTab="skipped" />} />
-          <Route path="clinical-examination" element={<DoctorQueuePage />} />
+          <Route path="clinical-examination" element={<ClinicalExaminationPage />} />
           <Route path="paraclinical-orders" element={<DoctorQueuePage />} />
           <Route path="room-transfers" element={<DoctorQueuePage />} />
           <Route
