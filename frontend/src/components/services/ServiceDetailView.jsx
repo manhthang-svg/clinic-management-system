@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FileText, Banknote, DoorOpen, FlaskConical, Pencil, Power, PowerOff } from 'lucide-react';
 import { SERVICE_TYPE_MAP, SERVICE_STATUS_LABELS } from '../../constants/serviceData';
 import { AccountPageHeader } from '../accounts/AccountFormParts';
-import { formatPrice } from './serviceFormat';
+import { formatPrice, formatReferenceRangeLine } from './serviceFormat';
 import { ServiceInfoModal, ServicePriceModal } from './ServiceUpdateModals';
 
 const SECONDARY_BUTTON_CLASS =
@@ -13,6 +13,23 @@ const DEACTIVATE_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-rose-600 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
 const ACTIVATE_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#127e7a] bg-white border border-[#bfe0dc] rounded-xl hover:bg-teal-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
+
+// lab_parameters.value_type: label and tone of its badge.
+const LAB_VALUE_TYPES = {
+  NUMERIC: { label: 'Định lượng', tone: 'bg-[#e8f0fe] text-[#3b6fd8] border-[#cfdffb]' },
+  QUALITATIVE: { label: 'Định tính', tone: 'bg-[#f1edfd] text-[#7c5cdb] border-[#e2d9fb]' },
+  TEXT: { label: 'Văn bản', tone: 'bg-[#fdf3e1] text-[#c98a1b] border-[#f8e2b8]' },
+};
+
+function LabValueTypeBadge({ valueType }) {
+  const type = LAB_VALUE_TYPES[valueType];
+  if (!type) return <span className="text-slate-400">{valueType ?? '—'}</span>;
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold border whitespace-nowrap ${type.tone}`}>
+      {type.label}
+    </span>
+  );
+}
 
 const STATUS_TONES = {
   ACTIVE: 'bg-emerald-50 text-emerald-600',
@@ -179,31 +196,6 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
             </div>
           </SectionCard>
 
-          {service.type === 'LAB' && (
-            <SectionCard icon={FlaskConical} title="Thông số xét nghiệm">
-              {labParameters.length === 0 ? (
-                <p className="text-sm text-slate-400">Chưa cấu hình thông số xét nghiệm.</p>
-              ) : (
-                <ol className="divide-y divide-slate-100">
-                  {labParameters.map((parameter) => (
-                    <li key={parameter.parameterId} className="flex items-center gap-3 py-2.5 text-sm">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-xs font-bold text-[#127e7a]">
-                        {parameter.displayOrder}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-slate-800">{parameter.name}</div>
-                        <div className="text-xs text-slate-400">
-                          <span className="font-mono">{parameter.code}</span>
-                          {parameter.unit ? ` · ${parameter.unit}` : ''}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </SectionCard>
-          )}
-
           <SectionCard icon={DoorOpen} title="Phòng thực hiện">
             {rooms.length === 0 ? (
               <p className="text-sm text-slate-400">
@@ -225,6 +217,59 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
           </SectionCard>
         </div>
       </div>
+
+      {service.type === 'LAB' && (
+        <SectionCard
+          icon={FlaskConical}
+          title="Thông số xét nghiệm"
+          action={labParameters.length > 0 && (
+            <span className="text-xs font-semibold text-slate-500">{labParameters.length} chỉ số</span>
+          )}
+        >
+          {labParameters.length === 0 ? (
+            <p className="text-sm text-slate-400">Chưa cấu hình thông số xét nghiệm.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#f6f8f9] text-xs font-semibold text-[#1b2533]">
+                    <th className="pl-4 pr-2 py-3 w-16 text-center">STT</th>
+                    <th className="px-3 py-3">Mã chỉ số</th>
+                    <th className="px-3 py-3">Tên chỉ số</th>
+                    <th className="px-3 py-3">Kiểu kết quả</th>
+                    <th className="px-3 py-3">Đơn vị</th>
+                    <th className="px-3 py-3">Chỉ số tham chiếu</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {labParameters.map((parameter) => (
+                    <tr key={parameter.parameterId} className="hover:bg-slate-50/70">
+                      <td className="pl-4 pr-2 py-3 text-center font-semibold text-[#127e7a]">{parameter.displayOrder}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">{parameter.code}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-800">{parameter.name}</td>
+                      <td className="px-3 py-3">
+                        <LabValueTypeBadge valueType={parameter.valueType} />
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{parameter.unit || '—'}</td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {(parameter.referenceRanges ?? []).length === 0 ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {parameter.referenceRanges.map((range) => (
+                              <li key={range.id}>{formatReferenceRangeLine(range)}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

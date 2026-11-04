@@ -460,20 +460,31 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(LabParameter::getId, Function.identity()));
+        // Reference ranges belong to the parameter (V39); only active ones are shown, as in the form options.
+        Map<UUID, List<LabReferenceRange>> rangesByParameter = parameters.isEmpty()
+                ? Map.of()
+                : labReferenceRangeRepository
+                        .findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(parameters.keySet())
+                        .stream()
+                        .collect(Collectors.groupingBy(LabReferenceRange::getParameterId));
         return mappings.stream()
-                .map(mapping -> toServiceLabParameter(mapping, parameters.get(mapping.getParameterId())))
+                .map(mapping -> toServiceLabParameter(
+                        mapping,
+                        parameters.get(mapping.getParameterId()),
+                        rangesByParameter.getOrDefault(mapping.getParameterId(), List.of())))
                 .filter(Objects::nonNull)
                 .toList();
     }
 
     private ServiceLabParameterResponse toServiceLabParameter(
-            ServiceLabParameter mapping, LabParameter parameter) {
+            ServiceLabParameter mapping, LabParameter parameter, List<LabReferenceRange> ranges) {
         if (parameter == null) {
             return null;
         }
         return new ServiceLabParameterResponse(
                 parameter.getId(), parameter.getCode(), parameter.getName(),
-                parameter.getValueType(), parameter.getUnit(), mapping.getDisplayOrder());
+                parameter.getValueType(), parameter.getUnit(), mapping.getDisplayOrder(),
+                ranges.stream().map(this::toReferenceRangeResponse).toList());
     }
 
     private LabParameterOptionResponse toLabParameterOption(
