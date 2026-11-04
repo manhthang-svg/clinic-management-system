@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,6 +28,7 @@ import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
 import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.Department;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
@@ -53,6 +55,7 @@ import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
+import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.MedicalServiceRepository;
@@ -96,6 +99,7 @@ public class VisitServiceImpl implements VisitService {
     private final PaymentRepository paymentRepository;
     private final PatientRepository patientRepository;
     private final RoomRepository roomRepository;
+    private final DepartmentRepository departmentRepository;
     private final VisitRepository visitRepository;
     private final VisitTransferRepository visitTransferRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
@@ -566,10 +570,49 @@ public class VisitServiceImpl implements VisitService {
         LocalDate queryDate = date != null ? date : LocalDate.now(clock.withZone(CLINIC_ZONE));
         Map<UUID, List<VisitRepository.RoomQueueCount>> countsByRoom = visitRepository.countRoomQueues(queryDate)
                 .stream().collect(Collectors.groupingBy(VisitRepository.RoomQueueCount::getRoomId));
-        return roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE)
+        List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
+                RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        Map<UUID, String> departmentNames = departmentRepository.findAllById(rooms.stream()
+                        .map(Room::getDepartmentId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()))
                 .stream()
-                .map(room -> toQueueStatus(room, countsByRoom.getOrDefault(room.getId(), List.of())))
+                .collect(Collectors.toMap(Department::getId, Department::getDepartmentName));
+        Map<UUID, List<String>> doctorsByRoom = activeDoctorNamesByRoom();
+        // UC-42 bước 2: nhóm theo khoa (tên khoa A–Z), trong khoa giữ thứ tự mã phòng.
+        return rooms.stream()
+                .map(room -> toQueueStatus(
+                        room,
+                        departmentNames.get(room.getDepartmentId()),
+                        doctorsByRoom.getOrDefault(room.getId(), List.of()),
+                        countsByRoom.getOrDefault(room.getId(), List.of())))
+                .sorted(Comparator.comparing(
+                        RoomQueueStatusResponse::departmentName,
+                        Comparator.nullsLast(Comparator.<String>naturalOrder())))
                 .toList();
+    }
+
+    /** Active doctors currently assigned to each room, as "academic title + full name" (UC-42 bước 2). */
+    private Map<UUID, List<String>> activeDoctorNamesByRoom() {
+        List<StaffRoomAssignment> assignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
+        Map<UUID, String> doctorNames = staffAccountRepository.findAllById(assignments.stream()
+                        .map(StaffRoomAssignment::getStaffAccountId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .filter(account -> account.getRole() == Role.DOCTOR)
+                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
+                .collect(Collectors.toMap(
+                        StaffAccount::getId,
+                        account -> staffDisplayName(account.getAcademicTitle(), account.getFullName())));
+        return assignments.stream()
+                .filter(assignment -> doctorNames.containsKey(assignment.getStaffAccountId()))
+                .collect(Collectors.groupingBy(
+                        StaffRoomAssignment::getRoomId,
+                        Collectors.collectingAndThen(
+                                Collectors.mapping(
+                                        assignment -> doctorNames.get(assignment.getStaffAccountId()),
+                                        Collectors.toList()),
+                                names -> names.stream().sorted().toList())));
     }
 
     @Override
@@ -649,7 +692,12 @@ public class VisitServiceImpl implements VisitService {
         };
     }
 
-    private RoomQueueStatusResponse toQueueStatus(Room room, List<VisitRepository.RoomQueueCount> counts) {
+    private RoomQueueStatusResponse toQueueStatus(
+            Room room,
+            String departmentName,
+            List<String> doctorNames,
+            List<VisitRepository.RoomQueueCount> counts) {
+        long waitingPayment = 0;
         long waiting = 0;
         long inExamination = 0;
         long waitingParaclinical = 0;
@@ -661,6 +709,7 @@ public class VisitServiceImpl implements VisitService {
                 continue;
             }
             switch (count.getStatus()) {
+                case WAITING_FEE_PAYMENT -> waitingPayment += count.getTotal();
                 case WAITING -> waiting += count.getTotal();
                 case IN_EXAMINATION -> inExamination += count.getTotal();
                 case WAITING_PARACLINICAL -> waitingParaclinical += count.getTotal();
@@ -669,8 +718,9 @@ public class VisitServiceImpl implements VisitService {
             }
         }
         return new RoomQueueStatusResponse(
-                room.getId(), room.getRoomCode(), room.getRoomName(), room.getLocation(), waiting,
-                inExamination, waitingParaclinical, waitingConclusion, skipped);
+                room.getId(), room.getRoomCode(), room.getRoomName(), room.getLocation(),
+                room.getDepartmentId(), departmentName, doctorNames, !doctorNames.isEmpty(),
+                waitingPayment, waiting, inExamination, waitingParaclinical, waitingConclusion, skipped);
     }
 
     private VisitResponse toResponse(Visit visit) {
