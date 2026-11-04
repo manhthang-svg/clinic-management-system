@@ -11,6 +11,7 @@ import {
   MapPin,
   ShieldAlert,
   Play,
+  SkipForward,
   Ban,
 } from 'lucide-react';
 
@@ -47,6 +48,7 @@ export function PatientClinicalDrawer({
   onClose,
   order,
   onStartOrder,
+  onSkipOrder,
   onCompleteOrder,
   onOpenRejectModal,
 }) {
@@ -67,6 +69,7 @@ export function PatientClinicalDrawer({
   }, [isOpen, onClose]);
 
   const isCurrentRoomWaiting = currentOrder.status === 'WAITING';
+  const isCurrentRoomSkipped = currentOrder.status === 'SKIPPED';
   const isCurrentRoomInProgress = currentOrder.status === 'IN_PROGRESS';
   const isCurrentRoomCompleted = currentOrder.status === 'COMPLETED';
   const isCancelled = currentOrder.status === 'CANCELLED';
@@ -378,32 +381,43 @@ export function PatientClinicalDrawer({
 
             <div className="flex items-center gap-3">
               {isCurrentRoomWaiting && (
-                <button
-                  type="button"
-                  onClick={() => onStartOrder(currentOrder)}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Tiếp nhận & Thực hiện</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onStartOrder(currentOrder)}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Tiếp nhận</span>
+                  </button>
+                  {onSkipOrder && (
+                    <button
+                      type="button"
+                      onClick={() => onSkipOrder(currentOrder)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+                    >
+                      <SkipForward className="w-4 h-4 text-slate-600" />
+                      <span>Bỏ qua</span>
+                    </button>
+                  )}
+                </>
               )}
 
-              {isCurrentRoomInProgress && (
-                <button
-                  type="button"
-                  onClick={() => onCompleteOrder(currentOrder)}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Hoàn thành kỹ thuật</span>
-                </button>
-              )}
-
-              {isCurrentRoomCompleted && (
-                <span className="px-5 py-2.5 text-sm font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 shadow-2xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Đã hoàn thành kỹ thuật
-                </span>
+              {isCurrentRoomSkipped && (
+                <div className="flex items-center gap-2">
+                  <span className="px-4 py-2.5 text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 shadow-2xs">
+                    <SkipForward className="w-4 h-4 text-amber-600" />
+                    Đã bỏ qua
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onStartOrder(currentOrder)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Tiếp nhận lại</span>
+                  </button>
+                </div>
               )}
 
               {isCancelled && (
