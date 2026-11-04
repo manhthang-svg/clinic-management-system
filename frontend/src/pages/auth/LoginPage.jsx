@@ -5,33 +5,54 @@ import { Alert, AlertDescription, Badge, Button, Input, Label } from '../../comp
 import { toast } from 'sonner';
 
 function errorMessage(error) {
+    if (error instanceof ApiError && error.errorResponse?.code === 'ACCOUNT_LOCKED') {
+        return 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.';
+    }
+    if (error instanceof ApiError && error.errorResponse?.code === 'ACCOUNT_TEMPORARILY_BLOCKED') {
+        return 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.';
+    }
     if (error instanceof ApiError && error.status === 401) {
-        return 'Tên đăng nhập hoặc mật khẩu không đúng.';
+        return 'Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
     }
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    return 'Không thể đăng nhập lúc này. Vui lòng thử lại.';
+    return 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 }
 
 export function LoginPage({ onLogin }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [touched, setTouched] = useState({ username: false, password: false });
     const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
+    const usernameRequired = touched.username && username.trim() === '';
+    const passwordRequired = touched.password && password.trim() === '';
 
     async function handleSubmit(event) {
         event.preventDefault();
+        setTouched({ username: true, password: true });
+        if (username.trim() === '' || password.trim() === '') {
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {
             await onLogin(username.trim(), password);
         }
         catch (cause) {
+            if (cause instanceof ApiError
+                && cause.errorResponse?.code === 'REQUEST_VALIDATION_FAILED') {
+                const details = cause.errorResponse.details ?? {};
+                setTouched((current) => ({
+                    username: current.username || Object.hasOwn(details, 'username'),
+                    password: current.password || Object.hasOwn(details, 'password'),
+                }));
+                setError(null);
+                return;
+            }
             setError(errorMessage(cause));
             setPassword('');
+            setTouched((current) => ({ ...current, password: false }));
         }
         finally {
             setSubmitting(false);
@@ -84,7 +105,12 @@ export function LoginPage({ onLogin }) {
                   <Label htmlFor="login-username" className="text-xs font-medium text-slate-700">
                     Tên đăng nhập
                   </Label>
-                  <Input id="login-username" name="username" autoComplete="username" placeholder="Nhập mã nhân viên hoặc username..." required maxLength={100} value={username} onChange={(event) => setUsername(event.target.value)} leadingIcon={<User className="w-4 h-4 text-slate-400"/>}/>
+                  <Input id="login-username" name="username" autoComplete="username" placeholder="Nhập mã nhân viên hoặc username..." required maxLength={100} value={username} onChange={(event) => setUsername(event.target.value)} onBlur={() => setTouched((current) => ({ ...current, username: true }))} aria-invalid={usernameRequired} aria-describedby={usernameRequired ? 'login-username-error' : undefined} className={usernameRequired ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/15' : undefined} leadingIcon={<User className="w-4 h-4 text-slate-400"/>}/>
+                  {usernameRequired && (
+                    <p id="login-username-error" className="text-xs text-rose-600" role="alert">
+                      Tên đăng nhập là bắt buộc.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -101,9 +127,14 @@ export function LoginPage({ onLogin }) {
                       Quên mật khẩu?
                     </a>
                   </div>
-                  <Input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Nhập mật khẩu..." required maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} leadingIcon={<Lock className="w-4 h-4 text-slate-400"/>} trailingIcon={<button type="button" onClick={() => setShowPassword((prev) => !prev)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} tabIndex={-1}>
+                  <Input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Nhập mật khẩu..." required maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} onBlur={() => setTouched((current) => ({ ...current, password: true }))} aria-invalid={passwordRequired} aria-describedby={passwordRequired ? 'login-password-error' : undefined} className={passwordRequired ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/15' : undefined} leadingIcon={<Lock className="w-4 h-4 text-slate-400"/>} trailingIcon={<button type="button" onClick={() => setShowPassword((prev) => !prev)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} tabIndex={-1}>
                         {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                       </button>}/>
+                  {passwordRequired && (
+                    <p id="login-password-error" className="text-xs text-rose-600" role="alert">
+                      Mật khẩu là bắt buộc.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
@@ -118,7 +149,7 @@ export function LoginPage({ onLogin }) {
                   </Alert>)}
 
                 <div className="pt-2">
-                  <Button type="submit" variant="default" className="w-full h-11 sm:h-12 rounded-xl text-sm font-semibold bg-[#5b6b78] hover:bg-[#4a5864] text-white shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer" disabled={submitting || username.trim() === '' || password === ''}>
+                  <Button type="submit" variant="default" className="w-full h-11 sm:h-12 rounded-xl text-sm font-semibold bg-[#5b6b78] hover:bg-[#4a5864] text-white shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer" disabled={submitting || username.trim() === '' || password.trim() === ''}>
                     <span>{submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}</span>
                     {!submitting && <ArrowRight className="w-4 h-4"/>}
                   </Button>

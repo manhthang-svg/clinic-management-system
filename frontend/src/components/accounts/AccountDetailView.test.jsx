@@ -50,3 +50,27 @@ describe('AccountDetailView room assignment action', () => {
     expect(screen.getByRole('button', { name: 'Đổi vai trò' })).toHaveClass('col-span-2');
   });
 });
+
+describe('AccountDetailView locked account actions', () => {
+  it('allows only unlocking and disables all account-management entry points', () => {
+    renderDetail({
+      ...doctor,
+      status: 'LOCKED',
+      allowedActions: {
+        update: true,
+        assignRole: true,
+        assignRoom: true,
+        resetPassword: true,
+        unlock: true,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'Mở khóa tài khoản' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa tài khoản' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đổi vai trò' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Phân công phòng' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đặt lại mật khẩu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Tài khoản đang bị khóa');
+  });
+});
