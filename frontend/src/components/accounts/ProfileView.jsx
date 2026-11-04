@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { accountErrorMessage, accountFieldErrors, withoutField } from './accountErrors';
 import { Mail, Phone, AtSign, UserRound, Briefcase, ShieldCheck, KeyRound, Save, Info } from 'lucide-react';
 import { ROLE_MAP, STATUS_LABELS } from '../../constants/accountData';
@@ -35,6 +35,12 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
     ? { name: account.roomName, department: account.departmentName }
     : null;
 
+  useEffect(() => {
+    if (!saved) return undefined;
+    const timer = window.setTimeout(() => setSaved(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
+
   const onChange = (field, value) => {
     setSaved(false);
     setServerErrors((prev) => withoutField(prev, field));
@@ -67,7 +73,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
 
       {saved && (
         <div role="status" className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-sm font-semibold">
-          Đã cập nhật thông tin liên hệ.
+          Hồ sơ cập nhật thành công.
         </div>
       )}
       {submitError && <div role="alert" className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">{submitError}</div>}

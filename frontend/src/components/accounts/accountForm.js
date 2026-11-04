@@ -78,14 +78,14 @@ export function validateAccountForm(form, { accounts = [], exceptId, fields }) {
   check('address', form.address.trim().length > 255 ? 'Địa chỉ tối đa 255 ký tự.' : null);
   const phone = form.phone.trim();
   check('phone',
-    !phone ? 'Vui lòng nhập số điện thoại.'
-      : !PHONE_PATTERN.test(phone) ? 'Số điện thoại gồm 10 chữ số, bắt đầu bằng 0 và đúng đầu số di động Việt Nam.' : null);
+    !phone ? 'Số điện thoại là bắt buộc.'
+      : !PHONE_PATTERN.test(phone) ? 'Số điện thoại không đúng định dạng.' : null);
 
   const email = form.email.trim();
   // Email is optional (UC-04, UC-07, UC-08); validate only when entered.
   check('email',
     !email ? null
-      : email.length > 100 ? 'Email tối đa 100 ký tự.'
+      : email.length > 100 ? 'Vượt quá độ dài tối đa 100 ký tự.'
         : !EMAIL_PATTERN.test(email) ? 'Email không đúng định dạng.'
           : isEmailTaken(email, accounts, exceptId) ? 'Email đã được dùng cho tài khoản khác.' : null);
 
