@@ -2,6 +2,7 @@ import { Power, PowerOff, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { SERVICE_TYPE_MAP, SERVICE_STATUS_LABELS } from '../../constants/serviceData';
 import { PAGE_SIZE_OPTIONS } from '../../constants/accountData';
 import { formatPrice } from './serviceFormat';
+import { MSG01, MSG92 } from './serviceErrors';
 
 const STATUS_TONES = {
   ACTIVE: 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]',
@@ -45,7 +46,8 @@ export function ServiceTable({
   let message = null;
   if (error) message = <span role="alert" className="text-rose-600">{error}</span>;
   else if (loading && services.length === 0) message = <span role="status">Đang tải danh sách dịch vụ…</span>;
-  else if (services.length === 0) message = filtered ? 'Không tìm thấy dịch vụ phù hợp.' : 'Chưa có dịch vụ nào.';
+  // UC-20 EF-01: MSG01 when the search or filters match nothing, MSG92 when the catalog is empty.
+  else if (services.length === 0) message = filtered ? MSG01 : MSG92;
 
   return (
     <div>

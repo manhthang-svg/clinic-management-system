@@ -155,6 +155,35 @@ class MedicalServiceServiceImplTest {
     }
 
     @Test
+    void rejectsDuplicateServiceNameIgnoringCaseBeforeSaving() {
+        when(serviceRepository.existsByCode("XN-101")).thenReturn(false);
+        when(serviceRepository.existsByTenchidinhIgnoreCase("Xet nghiem mau")).thenReturn(true);
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "xn-101", "  Xet nghiem mau ", MedicalServiceType.LAB,
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, null, null, List.of());
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_NAME_ALREADY_EXISTS);
+                    assertThat(exception.getDetails()).containsEntry("name", "ALREADY_EXISTS");
+                });
+        verify(serviceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsCreatingAnExaminationService() {
+        CreateMedicalServiceRequest request = new CreateMedicalServiceRequest(
+                "KB-02", "Kham benh", MedicalServiceType.EXAMINATION,
+                null, null, BigDecimal.valueOf(150000), null, null, List.of());
+
+        assertThatThrownBy(() -> service.createService(PRINCIPAL, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.SERVICE_TYPE_NOT_CREATABLE));
+        verifyNoInteractions(serviceRepository);
+    }
+
+    @Test
     void rejectsServiceGroupWhoseTypeDoesNotMatchService() {
         UUID departmentId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
@@ -220,6 +249,25 @@ class MedicalServiceServiceImplTest {
         assertThat(response).isEqualTo(detail);
         verify(entity).updateInformation("New name", "New description", NOW);
         verify(serviceRepository).saveAndFlush(entity);
+    }
+
+    @Test
+    void rejectsRenamingToTheNameOfAnotherService() {
+        UUID serviceId = UUID.randomUUID();
+        MedicalService entity = mock(MedicalService.class);
+        when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
+        when(entity.getTenchidinh()).thenReturn("Old name");
+        when(entity.getVersion()).thenReturn(3L);
+        when(serviceRepository.existsByTenchidinhIgnoreCaseAndIdNot("Glucose mau", serviceId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.updateService(
+                PRINCIPAL, serviceId, new UpdateMedicalServiceRequest(" Glucose mau ", null, 3L)))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_NAME_ALREADY_EXISTS);
+                    assertThat(exception.getDetails()).containsEntry("name", "ALREADY_EXISTS");
+                });
+        verify(entity, never()).updateInformation(any(), any(), any());
+        verify(serviceRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -300,33 +348,49 @@ class MedicalServiceServiceImplTest {
     }
 
     @Test
-    void deactivationCheckReturnsUnfinishedOrderCount() {
+    void deactivationCheckPassesForServiceWithoutUnfinishedOrders() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
+        when(entity.getId()).thenReturn(serviceId);
         when(entity.getType()).thenReturn(MedicalServiceType.LAB);
         when(entity.getStatus()).thenReturn(ActivationStatus.ACTIVE);
-        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(3L);
+        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(0L);
 
         var response = service.checkDeactivation(serviceId);
 
         assertThat(response.currentStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(response.targetStatus()).isEqualTo(ActivationStatus.INACTIVE);
-        assertThat(response.unfinishedOrderCount()).isEqualTo(3);
+        assertThat(response.unfinishedOrderCount()).isZero();
     }
 
     @Test
-    void rejectsDeactivationOfLastActiveExaminationService() {
+    void rejectsDeactivationOfServiceWithUnfinishedOrders() {
         UUID serviceId = UUID.randomUUID();
         MedicalService entity = mock(MedicalService.class);
         when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getId()).thenReturn(serviceId);
+        when(entity.getType()).thenReturn(MedicalServiceType.LAB);
+        when(orderDetailRepository.countByServiceIdAndStatusIn(any(), any())).thenReturn(3L);
+
+        assertThatThrownBy(() -> service.checkDeactivation(serviceId))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SERVICE_HAS_UNFINISHED_ORDERS);
+                    assertThat(exception.getDetails()).containsEntry("unfinishedOrderCount", "3");
+                });
+    }
+
+    @Test
+    void rejectsDeactivationOfAnyExaminationService() {
+        UUID serviceId = UUID.randomUUID();
+        MedicalService entity = mock(MedicalService.class);
+        when(serviceRepository.findById(serviceId)).thenReturn(java.util.Optional.of(entity));
         when(entity.getType()).thenReturn(MedicalServiceType.EXAMINATION);
 
         assertThatThrownBy(() -> service.checkDeactivation(serviceId))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.LAST_ACTIVE_EXAMINATION_SERVICE));
+                                .isEqualTo(ErrorCode.EXAMINATION_SERVICE_NOT_DEACTIVATABLE));
         verifyNoInteractions(orderDetailRepository);
     }
 

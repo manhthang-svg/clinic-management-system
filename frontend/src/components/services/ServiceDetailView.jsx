@@ -5,6 +5,8 @@ import { AccountPageHeader } from '../accounts/AccountFormParts';
 import { formatPrice, formatReferenceRangeLine } from './serviceFormat';
 import { LabValueTypeBadge } from './LabValueTypeBadge';
 import { ServiceInfoModal, ServicePriceModal } from './ServiceUpdateModals';
+import { FormAlert } from './ServiceFormParts';
+import { MSG92 } from './serviceErrors';
 import { LabReferenceRangeModal } from './LabReferenceRangeModal';
 
 const SECONDARY_BUTTON_CLASS =
@@ -76,6 +78,7 @@ export function ServiceDetailView({
   referenceRangeApi,
   onReferenceRangesChanged,
   statusBusy = false,
+  statusError = null,
 }) {
   // 'info' | 'price' | null
   const [editing, setEditing] = useState(null);
@@ -152,6 +155,9 @@ export function ServiceDetailView({
         )}
       </section>
 
+      {/* UC-25 MSG52 / MSG55 / MSG73 are shown in line, under the status button. */}
+      {statusError && <FormAlert>{statusError}</FormAlert>}
+
       {editing === 'info' && (
         <ServiceInfoModal
           service={service}
@@ -203,7 +209,8 @@ export function ServiceDetailView({
           <SectionCard icon={DoorOpen} title="Phòng thực hiện">
             {rooms.length === 0 ? (
               <p className="text-sm text-slate-400">
-                {examination ? 'Dịch vụ khám bệnh dùng chung cho các phòng khám.' : 'Chưa có phòng nào thực hiện dịch vụ này.'}
+                {/* UC-21 EF-03: a paraclinical service without an active room shows MSG92. */}
+                {examination ? 'Dịch vụ khám bệnh dùng chung cho các phòng khám.' : MSG92}
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
@@ -231,7 +238,7 @@ export function ServiceDetailView({
           )}
         >
           {labParameters.length === 0 ? (
-            <p className="text-sm text-slate-400">Chưa cấu hình thông số xét nghiệm.</p>
+            <p className="text-sm text-slate-400">{MSG92}</p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-100">
               <table className="w-full text-left border-collapse">
