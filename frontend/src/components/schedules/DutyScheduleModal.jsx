@@ -48,11 +48,15 @@ function categorizeStaff({ roomId, roomObj, staffList = [] }) {
 
   // CHỈ LẤY NHÂN VIÊN ĐƯỢC LIÊN KẾT VỚI PHÒNG ĐÓ TRONG DB (s.roomId === roomId hoặc mã phòng / tên phòng khớp)
   // KHÔNG FALLBACK SANG NHÂN VIÊN NGOÀI PHÒNG
+  const targetRoomId = roomId ? String(roomId).toLowerCase() : '';
   const assignedStaff = roleFilteredStaff.filter(s => {
+    const sRoomId = s.roomId ? String(s.roomId).toLowerCase() : '';
+    const sCode = (s.roomCode || '').trim().toUpperCase();
+    const sName = (s.roomName || '').trim().toLowerCase();
     return (
-      (s.roomId && s.roomId === roomId) ||
-      (roomCode && s.roomCode && s.roomCode.toUpperCase() === roomCode) ||
-      (roomName && s.roomName && s.roomName.toLowerCase() === roomName)
+      (sRoomId && targetRoomId && sRoomId === targetRoomId) ||
+      (roomCode && sCode && sCode === roomCode) ||
+      (roomName && sName && sName === roomName)
     );
   });
 
@@ -74,7 +78,7 @@ function buildInitialFormData({ initialData, weekStartDate, staffList, roomList,
     let roomId = initialData.roomId || '';
     let staffAccountId = initialData.staffAccountId || '';
 
-    const roomObj = roomList.find(r => r.id === roomId);
+    const roomObj = roomList.find(r => String(r.id).toLowerCase() === String(roomId).toLowerCase());
     const { availableStaff } = categorizeStaff({
       roomId,
       roomObj,
@@ -83,8 +87,8 @@ function buildInitialFormData({ initialData, weekStartDate, staffList, roomList,
     });
 
     // Chỉ tự động chọn người đầu tiên nếu là tạo mới (chưa có ID ca trực)
-    if (!initialData.id && (!staffAccountId || !availableStaff.some(s => s.id === staffAccountId))) {
-      staffAccountId = availableStaff[0] ? availableStaff[0].id : '';
+    if (!initialData.id) {
+      staffAccountId = '';
     }
 
     return {
@@ -102,16 +106,15 @@ function buildInitialFormData({ initialData, weekStartDate, staffList, roomList,
     };
   }
 
-  // Phân công ca trực mới mặc định
-  const defaultStaff = staffList.find(s => s.roomId) || staffList[0];
+  // Phân công ca trực mới mặc định (không fallback sang phòng hay nhân viên ngẫu nhiên)
   return {
     id: null,
     workDate: defaultDate,
     shift: 'MORNING',
-    staffAccountId: defaultStaff?.id || '',
+    staffAccountId: '',
     staffName: '',
     staffRole: '',
-    roomId: defaultStaff?.roomId || '',
+    roomId: '',
     roomName: '',
     roomCode: '',
     notes: '',
@@ -155,7 +158,7 @@ function DutyScheduleModalContent({
   );
 
   const selectedRoom = useMemo(
-    () => roomList.find(r => r.id === formData.roomId),
+    () => roomList.find(r => String(r.id).toLowerCase() === String(formData.roomId).toLowerCase()),
     [roomList, formData.roomId]
   );
 
@@ -486,8 +489,8 @@ function DutyScheduleModalContent({
                 >
                   <option value="">
                     {isPrimary
-                      ? `-- Chọn ${roleName} thuộc phòng này (${availableStaff.length} người) --`
-                      : `-- Chọn ${roleName} phụ trách ca (${availableStaff.length} người) --`}
+                      ? `-- Chọn ${roleName ? roleName.toLowerCase() : 'bác sĩ'} tại phòng này --`
+                      : `-- Chọn ${roleName ? roleName.toLowerCase() : 'bác sĩ'} tại phòng này --`}
                   </option>
                   {availableStaff.map(s => (
                     <option key={s.id} value={s.id}>
