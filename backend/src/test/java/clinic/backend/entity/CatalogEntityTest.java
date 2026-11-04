@@ -86,7 +86,7 @@ class CatalogEntityTest {
     }
 
     @Test
-    void createsAnInactiveParaclinicalServiceWithWholeVndPrices() {
+    void createsAnActiveParaclinicalServiceWithWholeVndPrices() {
         UUID departmentId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
 
@@ -95,7 +95,7 @@ class CatalogEntityTest {
                 MedicalServiceType.LAB, departmentId, groupId,
                 BigDecimal.valueOf(120000), null, null);
 
-        assertThat(service.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
+        assertThat(service.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(service.getDepartmentId()).isEqualTo(departmentId);
         assertThat(service.getServiceGroupId()).isEqualTo(groupId);
     }

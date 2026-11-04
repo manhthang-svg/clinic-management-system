@@ -86,9 +86,8 @@ public class MedicalService extends VersionedEntity {
         this.clinicPrice = clinicPrice;
         this.insurancePrice = insurancePrice;
         this.description = optionalText(description, 500, "description");
-        this.status = type == MedicalServiceType.EXAMINATION
-                ? ActivationStatus.ACTIVE
-                : ActivationStatus.INACTIVE;
+        // A new service is active at once; a paraclinical one is only created when its group has an active room.
+        this.status = ActivationStatus.ACTIVE;
     }
 
     public static MedicalService create(

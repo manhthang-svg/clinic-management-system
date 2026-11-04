@@ -23,6 +23,8 @@ const CREATE_CODE_MESSAGE = {
   ACTIVE_EXAMINATION_SERVICE_EXISTS:
     'Đã có một dịch vụ khám bệnh đang hoạt động. Hãy ngừng hoạt động dịch vụ đó trước khi thêm dịch vụ khám bệnh mới.',
   SERVICE_ASSIGNMENT_INVALID: 'Khoa hoặc nhóm dịch vụ không hợp lệ. Vui lòng chọn lại.',
+  SERVICE_GROUP_HAS_NO_ACTIVE_ROOM:
+    'Nhóm dịch vụ chưa có phòng nào đang hoạt động phụ trách. Hãy kích hoạt hoặc tạo phòng cho nhóm này trước khi thêm dịch vụ.',
   LAB_PARAMETER_REQUIRED: 'Dịch vụ xét nghiệm phải có ít nhất một thông số.',
   LAB_PARAMETER_INVALID: 'Có thông số xét nghiệm không tồn tại hoặc đã ngừng hoạt động.',
   LAB_PARAMETER_ORDER_INVALID: 'Thông số xét nghiệm bị trùng hoặc có thứ tự không hợp lệ.',
@@ -113,6 +115,8 @@ export function serviceCreateErrors(error) {
   const fields = {};
   if (code === 'SERVICE_CODE_ALREADY_EXISTS') {
     fields.code = CREATE_CODE_MESSAGE.SERVICE_CODE_ALREADY_EXISTS;
+  } else if (code === 'SERVICE_GROUP_HAS_NO_ACTIVE_ROOM') {
+    fields.serviceGroupId = 'Nhóm dịch vụ chưa có phòng nào đang hoạt động phụ trách.';
   } else if (code?.startsWith('LAB_PARAMETER') || code === 'LAB_PARAMETERS_NOT_ALLOWED') {
     fields.labParameterIds = CREATE_CODE_MESSAGE[code];
   } else if (code === 'SERVICE_ASSIGNMENT_INVALID' && ASSIGNMENT_ERRORS[details.assignment]) {
