@@ -15,6 +15,8 @@ import DashboardLayout from './layouts/DashboardlLayout';
 import AppRoutes from './routes/AppRoutes';
 import { ownProfileFromApi } from './utils/ownProfile';
 
+const NOTICE_DURATION_MS = 4_000;
+
 function homePathForRole(role) {
   switch (role?.toUpperCase().replace(/^ROLE_/, '')) {
     case 'ADMIN':
@@ -49,6 +51,12 @@ export function App({
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState('');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     sessionManager.restore().catch((error) => {
