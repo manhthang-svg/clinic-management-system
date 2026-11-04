@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Banknote, DoorOpen, Pencil, Power, PowerOff } from 'lucide-react';
+import { FileText, Banknote, DoorOpen, FlaskConical, Pencil, Power, PowerOff } from 'lucide-react';
 import { SERVICE_TYPE_MAP, SERVICE_STATUS_LABELS } from '../../constants/serviceData';
 import { AccountPageHeader } from '../accounts/AccountFormParts';
 import { formatPrice } from './serviceFormat';
@@ -72,6 +72,7 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
   const examination = service.type === 'EXAMINATION';
   const active = service.status === 'ACTIVE';
   const rooms = service.performingRooms ?? [];
+  const labParameters = service.labParameters ?? [];
 
   const infoRows = [
     ['Mã dịch vụ', <span className="font-mono">{service.code}</span>],
@@ -177,6 +178,31 @@ export function ServiceDetailView({ service, onGoToList, onUpdateInfo, onUpdateP
               />
             </div>
           </SectionCard>
+
+          {service.type === 'LAB' && (
+            <SectionCard icon={FlaskConical} title="Thông số xét nghiệm">
+              {labParameters.length === 0 ? (
+                <p className="text-sm text-slate-400">Chưa cấu hình thông số xét nghiệm.</p>
+              ) : (
+                <ol className="divide-y divide-slate-100">
+                  {labParameters.map((parameter) => (
+                    <li key={parameter.parameterId} className="flex items-center gap-3 py-2.5 text-sm">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-xs font-bold text-[#127e7a]">
+                        {parameter.displayOrder}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-800">{parameter.name}</div>
+                        <div className="text-xs text-slate-400">
+                          <span className="font-mono">{parameter.code}</span>
+                          {parameter.unit ? ` · ${parameter.unit}` : ''}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </SectionCard>
+          )}
 
           <SectionCard icon={DoorOpen} title="Phòng thực hiện">
             {rooms.length === 0 ? (

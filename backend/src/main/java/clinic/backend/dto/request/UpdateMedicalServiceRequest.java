@@ -6,7 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 public record UpdateMedicalServiceRequest(
-        @NotBlank @Size(max = 255) String name,
-        String description,
+        @NotBlank @Size(min = 2, max = 255) String name,
+        @Size(max = 500) String description,
         @NotNull @PositiveOrZero Long version) {
 }

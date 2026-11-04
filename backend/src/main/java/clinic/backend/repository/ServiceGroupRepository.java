@@ -12,5 +12,5 @@ public interface ServiceGroupRepository extends JpaRepository<ServiceGroup, UUID
 
     Optional<ServiceGroup> findByServiceGroupCode(String serviceGroupCode);
 
-    List<ServiceGroup> findAllByOrderByServiceGroupNameAsc();
+    List<ServiceGroup> findAllByActiveTrueOrderByServiceGroupNameAsc();
 }

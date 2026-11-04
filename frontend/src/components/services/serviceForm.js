@@ -1,6 +1,8 @@
 export const MAX_PRICE = 100000000;
 export const MAX_CODE_LENGTH = 50;
 export const MAX_NAME_LENGTH = 255;
+export const MIN_NAME_LENGTH = 2;
+export const MAX_DESCRIPTION_LENGTH = 500;
 
 export const EMPTY_SERVICE_FORM = {
   code: '',
@@ -12,11 +14,13 @@ export const EMPTY_SERVICE_FORM = {
   insuranceCovered: true,
   insurancePrice: '',
   description: '',
+  labParameterIds: [],
 };
 
 function validateName(form, errors) {
   const name = form.name.trim();
   if (!name) errors.name = 'Vui lòng nhập tên dịch vụ.';
+  else if (name.length < MIN_NAME_LENGTH) errors.name = `Tên dịch vụ phải có ít nhất ${MIN_NAME_LENGTH} ký tự.`;
   else if (name.length > MAX_NAME_LENGTH) errors.name = `Tên dịch vụ tối đa ${MAX_NAME_LENGTH} ký tự.`;
 }
 
@@ -42,6 +46,14 @@ export function validateServiceForm(form) {
 
   validateName(form, errors);
 
+  if (form.description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.description = `Mô tả tối đa ${MAX_DESCRIPTION_LENGTH} ký tự.`;
+  }
+
+  if (form.type === 'LAB' && form.labParameterIds.length === 0) {
+    errors.labParameterIds = 'Vui lòng chọn ít nhất một thông số xét nghiệm.';
+  }
+
   // The shared examination service has no department or group.
   if (form.type !== 'EXAMINATION') {
     if (!form.departmentId) errors.departmentId = 'Vui lòng chọn khoa thực hiện.';
@@ -56,6 +68,9 @@ export function validateServiceForm(form) {
 export function validateServiceInfoForm(form) {
   const errors = {};
   validateName(form, errors);
+  if (form.description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.description = `Mô tả tối đa ${MAX_DESCRIPTION_LENGTH} ký tự.`;
+  }
   return errors;
 }
 
@@ -105,5 +120,8 @@ export function formToServiceRequest(form) {
     clinicPrice: Number(form.clinicPrice),
     insurancePrice: form.insuranceCovered ? Number(form.insurancePrice) : null,
     description: form.description.trim() || null,
+    labParameters: form.type === 'LAB'
+      ? form.labParameterIds.map((parameterId, index) => ({ parameterId, displayOrder: index + 1 }))
+      : [],
   };
 }

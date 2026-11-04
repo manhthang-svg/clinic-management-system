@@ -7,6 +7,7 @@ import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.PerformingRoomResponse;
 import clinic.backend.dto.response.DepartmentOptionResponse;
 import clinic.backend.dto.response.ServiceGroupOptionResponse;
+import clinic.backend.dto.response.ServiceLabParameterResponse;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
@@ -27,11 +28,13 @@ public interface MedicalServiceMapper {
     @Mapping(target = "serviceGroupName", source = "serviceGroupName")
     @Mapping(target = "departmentName", source = "departmentName")
     @Mapping(target = "performingRooms", source = "performingRooms")
+    @Mapping(target = "labParameters", source = "labParameters")
     MedicalServiceDetailResponse toDetail(
             MedicalService service,
             String serviceGroupName,
             String departmentName,
-            List<PerformingRoomResponse> performingRooms);
+            List<PerformingRoomResponse> performingRooms,
+            List<ServiceLabParameterResponse> labParameters);
 
     @Mapping(target = "code", source = "roomCode")
     @Mapping(target = "name", source = "roomName")

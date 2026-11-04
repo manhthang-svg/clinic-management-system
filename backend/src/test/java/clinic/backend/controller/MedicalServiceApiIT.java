@@ -119,6 +119,7 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         UUID departmentId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
+        UUID parameterId = insertLabParameter(suffix);
         insertCatalog(departmentId, groupId, suffix);
         String adminToken = accessToken(admin);
 
@@ -127,7 +128,8 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.types", hasItem("LAB")))
                 .andExpect(jsonPath("$.data.serviceGroups[*].id", hasItem(groupId.toString())))
-                .andExpect(jsonPath("$.data.departments[*].id", hasItem(departmentId.toString())));
+                .andExpect(jsonPath("$.data.departments[*].id", hasItem(departmentId.toString())))
+                .andExpect(jsonPath("$.data.labParameters[*].id", hasItem(parameterId.toString())));
 
         String code = ("NEW-" + suffix).toUpperCase(Locale.ROOT);
         String requestBody = objectMapper.writeValueAsString(Map.of(
@@ -137,8 +139,10 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 "serviceGroupId", groupId,
                 "departmentId", departmentId,
                 "clinicPrice", 150000,
-                "insurancePrice", 0,
-                "description", "Mo ta"));
+                "description", "Mo ta",
+                "labParameters", java.util.List.of(Map.of(
+                        "parameterId", parameterId,
+                        "displayOrder", 1))));
         String responseBody = mockMvc.perform(post("/api/v1/services")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -153,7 +157,10 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                 "SELECT code, status FROM services WHERE id = ?", serviceId);
         assertThat(createdService)
                 .containsEntry("code", code)
-                .containsEntry("status", "ACTIVE");
+                .containsEntry("status", "INACTIVE");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM service_lab_parameters WHERE service_id = ? AND parameter_id = ?",
+                Long.class, serviceId, parameterId)).isEqualTo(1L);
         mockMvc.perform(post("/api/v1/services")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -164,6 +171,40 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanConfigureLabReferenceRangesAndNonAdminIsForbidden() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        UUID parameterId = insertLabParameter(UUID.randomUUID().toString().substring(0, 8));
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "referenceType", "RANGE",
+                "lowerBound", 4,
+                "upperBound", 10,
+                "lowerInclusive", true,
+                "upperInclusive", true,
+                "effectiveFrom", "2026-01-01",
+                "source", "Clinic laboratory catalog",
+                "active", true));
+
+        mockMvc.perform(post("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.parameterId").value(parameterId.toString()))
+                .andExpect(jsonPath("$.data.active").value(true))
+                .andExpect(jsonPath("$.data.displayText").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+
+        mockMvc.perform(get("/api/v1/lab-parameters/{parameterId}/reference-ranges", parameterId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
                 .andExpect(status().isForbidden());
     }
 
@@ -392,6 +433,17 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
                     type, status, created_at, updated_at, version)
                 VALUES (?, ?, ?, ?, ?, ?, 'PARACLINICAL', ?, ?, ?, 0)
                 """, UUID.randomUUID(), departmentId, groupId, code, "Phòng " + code, "Tầng 2", status, now, now);
+    }
+
+    private UUID insertLabParameter(String suffix) {
+        UUID parameterId = UUID.randomUUID();
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.update("""
+                INSERT INTO lab_parameters (id, code, name, value_type, unit, is_active,
+                    created_at, updated_at, version)
+                VALUES (?, ?, ?, 'NUMERIC', 'mmol/L', true, ?, ?, 0)
+                """, parameterId, "LP-" + suffix, "Thông số " + suffix, now, now);
+        return parameterId;
     }
 
     private StaffAccount account(Role role) {

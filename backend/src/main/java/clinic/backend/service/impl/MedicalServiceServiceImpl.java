@@ -7,11 +7,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import clinic.backend.dto.request.CreateMedicalServiceRequest;
+import clinic.backend.dto.request.LabParameterSelectionRequest;
 import clinic.backend.dto.request.UpdateMedicalServiceRequest;
 import clinic.backend.dto.request.UpdateMedicalServicePriceRequest;
 import clinic.backend.dto.request.UpdateMedicalServiceStatusRequest;
@@ -20,10 +24,16 @@ import clinic.backend.dto.response.MedicalServiceDetailResponse;
 import clinic.backend.dto.response.MedicalServiceFormOptionsResponse;
 import clinic.backend.dto.response.MedicalServiceSummaryResponse;
 import clinic.backend.dto.response.MedicalServiceStatusCheckResponse;
+import clinic.backend.dto.response.LabParameterOptionResponse;
+import clinic.backend.dto.response.LabReferenceRangeResponse;
+import clinic.backend.dto.response.ServiceLabParameterResponse;
 import clinic.backend.dto.response.PageResponse;
 import clinic.backend.dto.response.PerformingRoomResponse;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.MedicalService;
+import clinic.backend.entity.LabParameter;
+import clinic.backend.entity.LabReferenceRange;
+import clinic.backend.entity.ServiceLabParameter;
 import clinic.backend.entity.ServiceGroup;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
@@ -31,6 +41,7 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ServiceGroupType;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.mapper.MedicalServiceMapper;
 import clinic.backend.repository.DepartmentRepository;
@@ -38,6 +49,11 @@ import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
+import clinic.backend.repository.LabParameterRepository;
+import clinic.backend.repository.LabReferenceRangeRepository;
+import clinic.backend.repository.ServiceLabParameterRepository;
+import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.service.MedicalServiceService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +71,8 @@ import org.springframework.transaction.annotation.Transactional;
 @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
 public class MedicalServiceServiceImpl implements MedicalServiceService {
 
+    private static final String SERVICE_ENTITY = "services";
+
     private static final List<ParaclinicalOrderDetailStatus> UNFINISHED_ORDER_STATUSES = List.of(
             ParaclinicalOrderDetailStatus.PENDING_PAYMENT,
             ParaclinicalOrderDetailStatus.WAITING,
@@ -64,8 +82,12 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
     private final MedicalServiceRepository serviceRepository;
     private final DepartmentRepository departmentRepository;
     private final ServiceGroupRepository serviceGroupRepository;
+    private final LabParameterRepository labParameterRepository;
+    private final LabReferenceRangeRepository labReferenceRangeRepository;
+    private final ServiceLabParameterRepository serviceLabParameterRepository;
     private final RoomRepository roomRepository;
     private final ParaclinicalOrderDetailRepository orderDetailRepository;
+    private final AuditLogService auditLogService;
     private final MedicalServiceMapper serviceMapper;
     private final UuidV7Generator ids;
     private final Clock clock;
@@ -93,31 +115,44 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                         .map(serviceMapper::toPerformingRoom)
                         .toList();
         return serviceMapper.toDetail(
-                medicalService, nameOf(serviceGroup), nameOf(department), performingRooms);
+                medicalService, nameOf(serviceGroup), nameOf(department), performingRooms,
+                labParametersOf(medicalService));
     }
 
     @Override
     @Transactional(readOnly = true)
     public MedicalServiceFormOptionsResponse getFormOptions() {
+        List<LabParameter> parameters = labParameterRepository.findAllByActiveTrueOrderByNameAsc();
+        Map<UUID, List<LabReferenceRange>> rangesByParameter = labReferenceRangeRepository
+                .findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(
+                        parameters.stream().map(LabParameter::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(LabReferenceRange::getParameterId));
         return new MedicalServiceFormOptionsResponse(
                 List.of(MedicalServiceType.values()),
-                serviceGroupRepository.findAllByOrderByServiceGroupNameAsc().stream()
+                serviceGroupRepository.findAllByActiveTrueOrderByServiceGroupNameAsc().stream()
                         .map(serviceMapper::toServiceGroupOption)
                         .toList(),
                 departmentRepository.findAllByTypeAndActiveTrueOrderByDepartmentNameAsc(DepartmentType.PARACLINICAL)
                         .stream()
                         .map(serviceMapper::toDepartmentOption)
+                        .toList(),
+                parameters.stream()
+                        .map(parameter -> toLabParameterOption(
+                                parameter, rangesByParameter.getOrDefault(parameter.getId(), List.of())))
                         .toList());
     }
 
     @Override
     @Transactional
-    public CreatedMedicalServiceResponse createService(CreateMedicalServiceRequest request) {
+    public CreatedMedicalServiceResponse createService(
+            StaffPrincipal principal, CreateMedicalServiceRequest request) {
         String code = request.code().strip().toUpperCase(Locale.ROOT);
         if (serviceRepository.existsByCode(code)) {
             throw new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
         }
         validateAssignment(request);
+        List<LabParameterSelectionRequest> parameterSelections = validateLabParameters(request);
         if (request.type() == MedicalServiceType.EXAMINATION
                 && serviceRepository.existsByTypeAndStatus(
                         MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)) {
@@ -137,12 +172,17 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
             }
             throw new AppException(ErrorCode.SERVICE_CODE_ALREADY_EXISTS, Map.of("code", "ALREADY_EXISTS"));
         }
+        saveLabParameterMappings(medicalService, parameterSelections, now);
+        auditLogService.recordEntityChange(
+                principal.accountId(), medicalService.getId(), AuditLogAction.CREATE, SERVICE_ENTITY,
+                Map.of(), serviceValues(medicalService, parameterSelections), now);
         return new CreatedMedicalServiceResponse(medicalService.getId());
     }
 
     @Override
     @Transactional
-    public MedicalServiceDetailResponse updateService(UUID serviceId, UpdateMedicalServiceRequest request) {
+    public MedicalServiceDetailResponse updateService(
+            StaffPrincipal principal, UUID serviceId, UpdateMedicalServiceRequest request) {
         MedicalService medicalService = serviceRepository.findById(serviceId)
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_NOT_FOUND));
         String name = request.name().strip();
@@ -157,8 +197,13 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
         }
 
         Instant now = clock.instant();
+        Map<String, Object> oldValues = changedInformation(medicalService, name, description, true);
+        Map<String, Object> newValues = changedInformation(medicalService, name, description, false);
         medicalService.updateInformation(name, description, now);
         serviceRepository.saveAndFlush(medicalService);
+        auditLogService.recordEntityChange(
+                principal.accountId(), medicalService.getId(), AuditLogAction.UPDATE, SERVICE_ENTITY,
+                oldValues, newValues, now);
         return toDetail(medicalService);
     }
 
@@ -313,6 +358,9 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
         }
         ServiceGroup serviceGroup = serviceGroupRepository.findById(request.serviceGroupId())
                 .orElseThrow(() -> invalidAssignment("SERVICE_GROUP_NOT_FOUND"));
+        if (!serviceGroup.isActive()) {
+            throw invalidAssignment("SERVICE_GROUP_INACTIVE");
+        }
         if (serviceGroup.getType() != ServiceGroupType.valueOf(request.type().name())) {
             throw invalidAssignment("SERVICE_GROUP_TYPE_MISMATCH");
         }
@@ -350,6 +398,138 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
 
     private AppException invalidAssignment(String reason) {
         return new AppException(ErrorCode.SERVICE_ASSIGNMENT_INVALID, Map.of("assignment", reason));
+    }
+
+    private List<LabParameterSelectionRequest> validateLabParameters(CreateMedicalServiceRequest request) {
+        List<LabParameterSelectionRequest> selections = request.labParameters() == null
+                ? List.of()
+                : request.labParameters();
+        if (request.type() != MedicalServiceType.LAB) {
+            if (!selections.isEmpty()) {
+                throw new AppException(ErrorCode.LAB_PARAMETERS_NOT_ALLOWED);
+            }
+            return List.of();
+        }
+        if (selections.isEmpty()) {
+            throw new AppException(ErrorCode.LAB_PARAMETER_REQUIRED);
+        }
+
+        Set<UUID> parameterIds = new HashSet<>();
+        Set<Integer> displayOrders = new HashSet<>();
+        for (LabParameterSelectionRequest selection : selections) {
+            if (!parameterIds.add(selection.parameterId()) || !displayOrders.add(selection.displayOrder())) {
+                throw new AppException(ErrorCode.LAB_PARAMETER_ORDER_INVALID);
+            }
+        }
+        for (int expectedOrder = 1; expectedOrder <= selections.size(); expectedOrder++) {
+            if (!displayOrders.contains(expectedOrder)) {
+                throw new AppException(ErrorCode.LAB_PARAMETER_ORDER_INVALID);
+            }
+        }
+        if (labParameterRepository.findAllByIdInAndActiveTrue(parameterIds).size() != parameterIds.size()) {
+            throw new AppException(ErrorCode.LAB_PARAMETER_INVALID);
+        }
+        return selections.stream()
+                .sorted(java.util.Comparator.comparingInt(LabParameterSelectionRequest::displayOrder))
+                .toList();
+    }
+
+    private void saveLabParameterMappings(
+            MedicalService medicalService,
+            List<LabParameterSelectionRequest> selections,
+            Instant now) {
+        if (selections.isEmpty()) {
+            return;
+        }
+        List<ServiceLabParameter> mappings = selections.stream()
+                .map(selection -> ServiceLabParameter.create(
+                        ids.next(), now, medicalService.getId(),
+                        selection.parameterId(), selection.displayOrder()))
+                .toList();
+        serviceLabParameterRepository.saveAllAndFlush(mappings);
+    }
+
+    private List<ServiceLabParameterResponse> labParametersOf(MedicalService medicalService) {
+        if (medicalService.getType() != MedicalServiceType.LAB) {
+            return List.of();
+        }
+        List<ServiceLabParameter> mappings =
+                serviceLabParameterRepository.findAllByServiceIdOrderByDisplayOrderAsc(medicalService.getId());
+        Map<UUID, LabParameter> parameters = labParameterRepository.findAllById(mappings.stream()
+                        .map(ServiceLabParameter::getParameterId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(LabParameter::getId, Function.identity()));
+        return mappings.stream()
+                .map(mapping -> toServiceLabParameter(mapping, parameters.get(mapping.getParameterId())))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private ServiceLabParameterResponse toServiceLabParameter(
+            ServiceLabParameter mapping, LabParameter parameter) {
+        if (parameter == null) {
+            return null;
+        }
+        return new ServiceLabParameterResponse(
+                parameter.getId(), parameter.getCode(), parameter.getName(),
+                parameter.getValueType(), parameter.getUnit(), mapping.getDisplayOrder());
+    }
+
+    private LabParameterOptionResponse toLabParameterOption(
+            LabParameter parameter, List<LabReferenceRange> ranges) {
+        return new LabParameterOptionResponse(
+                parameter.getId(), parameter.getCode(), parameter.getName(),
+                parameter.getValueType(), parameter.getUnit(),
+                ranges.stream().map(this::toReferenceRangeResponse).toList());
+    }
+
+    private LabReferenceRangeResponse toReferenceRangeResponse(LabReferenceRange range) {
+        String displayText = range.getReferenceText();
+        if (displayText == null) {
+            displayText = switch (range.getReferenceType()) {
+                case RANGE -> range.getLowerBound().stripTrailingZeros().toPlainString()
+                        + " – " + range.getUpperBound().stripTrailingZeros().toPlainString();
+                case UPPER_LIMIT -> "< " + range.getUpperBound().stripTrailingZeros().toPlainString();
+                case LOWER_LIMIT -> "> " + range.getLowerBound().stripTrailingZeros().toPlainString();
+                case QUALITATIVE -> String.join(", ", range.normalValueList());
+                case TEXT -> "";
+            };
+        }
+        return new LabReferenceRangeResponse(
+                range.getId(), range.getParameterId(), range.getReferenceType(),
+                range.getLowerBound(), range.getUpperBound(), range.isLowerInclusive(),
+                range.isUpperInclusive(), range.normalValueList(), range.getReferenceText(),
+                range.getSex(), range.getAgeMinDays(), range.getAgeMaxDays(), range.getEffectiveFrom(),
+                range.getEffectiveTo(), range.getSource(), range.isActive(), range.getVersion(), displayText);
+    }
+
+    private Map<String, Object> serviceValues(
+            MedicalService service, List<LabParameterSelectionRequest> selections) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("code", service.getCode());
+        values.put("name", service.getTenchidinh());
+        values.put("type", service.getType());
+        values.put("departmentId", service.getDepartmentId());
+        values.put("serviceGroupId", service.getServiceGroupId());
+        values.put("clinicPrice", service.getClinicPrice());
+        values.put("insurancePrice", service.getInsurancePrice());
+        values.put("description", service.getDescription());
+        values.put("status", service.getStatus());
+        values.put("labParameters", selections);
+        return values;
+    }
+
+    private Map<String, Object> changedInformation(
+            MedicalService service, String name, String description, boolean oldValues) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (!Objects.equals(service.getTenchidinh(), name)) {
+            values.put("name", oldValues ? service.getTenchidinh() : name);
+        }
+        if (!Objects.equals(service.getDescription(), description)) {
+            values.put("description", oldValues ? service.getDescription() : description);
+        }
+        return values;
     }
 
     private String normalizeOptional(String value) {

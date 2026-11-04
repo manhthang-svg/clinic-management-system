@@ -33,24 +33,37 @@ class ServiceCatalogSchemaIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void rejectsNormalizedDuplicateServiceCodesAndNames() {
+    void rejectsNormalizedDuplicateServiceCodes() {
         CatalogFixture fixture = insertCatalogFixture("UNIQUE");
         insertLabService(fixture, "XN-UNIQUE", "Cong thuc mau", null);
 
         assertThatThrownBy(() -> insertLabService(
                 fixture, " xn-unique ", "Dich vu khac", null))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertLabService(
-                fixture, "XN-OTHER", "  CONG THUC MAU  ", null))
-                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void rejectsInvalidServiceNameAndDescriptionLengths() {
+    void allowsDuplicateServiceNames() {
+        CatalogFixture fixture = insertCatalogFixture("NAMES");
+        insertLabService(fixture, "XN-NAME-1", "Cong thuc mau", null);
+
+        UUID secondService = insertLabService(fixture, "XN-NAME-2", "Cong thuc mau", null);
+
+        assertThat(secondService).isNotNull();
+    }
+
+    @Test
+    void rejectsInvalidServiceNameLength() {
         CatalogFixture fixture = insertCatalogFixture("LENGTH");
 
         assertThatThrownBy(() -> insertLabService(fixture, "XN-SHORT", "X", null))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsInvalidServiceDescriptionLength() {
+        CatalogFixture fixture = insertCatalogFixture("DESCRIPTION-LENGTH");
+
         assertThatThrownBy(() -> insertLabService(
                 fixture, "XN-DESCRIPTION", "Mo ta qua dai", "x".repeat(501)))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -102,6 +115,29 @@ class ServiceCatalogSchemaIT extends PostgresIntegrationTest {
                 values (?, ?, 'TEXT', 'Am tinh', current_date, 'TEST', now(), now())
                 """, UUID.randomUUID(), UUID.randomUUID()))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void referenceRangeCanBeActivatedWithoutVerificationColumns() {
+        UUID parameterId = insertLabParameter("PARAM-DIRECT-ACTIVE");
+        UUID rangeId = UUID.randomUUID();
+
+        jdbcTemplate.update("""
+                insert into lab_reference_ranges
+                    (id, parameter_id, reference_type, lower_bound, upper_bound,
+                     effective_from, source, is_active, created_at, updated_at)
+                values (?, ?, 'RANGE', 1, 2, current_date, 'TEST', true, now(), now())
+                """, rangeId, parameterId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select is_active from lab_reference_ranges where id = ?", Boolean.class, rangeId))
+                .isTrue();
+        assertThat(jdbcTemplate.queryForList("""
+                select column_name from information_schema.columns
+                where table_schema = current_schema()
+                  and table_name = 'lab_reference_ranges'
+                  and column_name in ('verified_at', 'verified_by_account_id')
+                """, String.class)).isEmpty();
     }
 
     private CatalogFixture insertCatalogFixture(String suffix) {
