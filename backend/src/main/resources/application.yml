@@ -60,6 +60,8 @@ clinic:
     end-of-day:
       enabled: ${VISIT_END_OF_DAY_ENABLED:true}
       cron: ${VISIT_END_OF_DAY_CRON:0 5 0 * * *}
+      # Also run once at startup to catch up on a missed run (e.g. a laptop that was off at midnight).
+      run-on-startup: ${VISIT_END_OF_DAY_RUN_ON_STARTUP:true}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
