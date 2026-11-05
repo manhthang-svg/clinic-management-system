@@ -2212,7 +2212,7 @@ tables:
         - (category IS NULL OR category IN ('CHRONIC_DISEASE', 'SURGERY', 'FAMILY', 'OTHER'))
         proposal: new
         standard: Không
-        description: Nhóm tiền sử (bệnh mạn tính, phẫu thuật, gia đình, khác); chỉ dùng cho PERSONAL (UC-39, V42)
+        description: Nhóm tiền sử (bệnh mạn tính, phẫu thuật, gia đình, khác); chỉ dùng cho PERSONAL (UC-39, V43)
       severity:
         field: severity
         sql_type: varchar(20)
@@ -2230,7 +2230,7 @@ tables:
         - (severity IS NULL OR severity IN ('MILD', 'MODERATE', 'SEVERE'))
         proposal: new
         standard: Không
-        description: Mức độ dị ứng thuốc; chỉ dùng cho DRUG_ALLERGY (UC-39, V42)
+        description: Mức độ dị ứng thuốc; chỉ dùng cho DRUG_ALLERGY (UC-39, V43)
       updated_by_account_id:
         field: updatedByAccountId
         sql_type: uuid
