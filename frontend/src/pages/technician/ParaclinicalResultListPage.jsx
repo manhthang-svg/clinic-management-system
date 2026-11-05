@@ -491,7 +491,7 @@ export function ParaclinicalResultListPage() {
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#127e7a] hover:bg-[#0e6b67] active:scale-[0.98] text-white inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#dbe8fd] hover:bg-[#c9ddfc] text-[#2558c4] border border-[#b8d2fa] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5 shrink-0" />
                               <span>Nhập kết quả</span>
@@ -500,7 +500,7 @@ export function ParaclinicalResultListPage() {
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#0284c7] hover:bg-[#0369a1] active:scale-[0.98] text-white inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#f1e6d8] hover:bg-[#e6d8c7] text-[#714b28] border border-[#e2d2be] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5 shrink-0" />
                               <span>Nhập tiếp</span>
