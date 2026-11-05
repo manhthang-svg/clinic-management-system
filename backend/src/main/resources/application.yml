@@ -55,6 +55,11 @@ clinic:
       cookie-secure: ${REFRESH_COOKIE_SECURE:true}
     password:
       bcrypt-strength: ${BCRYPT_STRENGTH:12}
+  visit:
+    # End-of-day job (BR-22): closes unfinished visits of earlier days; clinic time Asia/Ho_Chi_Minh (Q-32).
+    end-of-day:
+      enabled: ${VISIT_END_OF_DAY_ENABLED:true}
+      cron: ${VISIT_END_OF_DAY_CRON:0 5 0 * * *}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

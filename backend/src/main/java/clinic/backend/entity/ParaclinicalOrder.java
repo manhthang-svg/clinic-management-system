@@ -110,6 +110,15 @@ public class ParaclinicalOrder extends VersionedEntity {
         }
     }
 
+    /** End-of-day job: an order of an abandoned visit that never finished is cancelled (BR-22, O11). */
+    public void cancelAtEndOfDay(Instant now) {
+        if (status != ParaclinicalOrderStatus.PENDING_PAYMENT && status != ParaclinicalOrderStatus.RELEASED) {
+            throw new IllegalStateException("Paraclinical order is already finished");
+        }
+        status = ParaclinicalOrderStatus.CANCELLED;
+        touch(now);
+    }
+
     public void release() {
         if (this.status == ParaclinicalOrderStatus.PENDING_PAYMENT) {
             this.status = ParaclinicalOrderStatus.RELEASED;

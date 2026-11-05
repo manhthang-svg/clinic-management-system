@@ -94,6 +94,59 @@ class PayOSPaymentServiceTest {
     }
 
     @Test
+    void endOfDayNeedsNoPayOSCallForAReceiptWithoutALink() {
+        assertThat(service.closeLinkBeforeCancel(payment)).isTrue();
+    }
+
+    @Test
+    void endOfDayCancelsTheOpenPayOSLink() throws Exception {
+        attachLink();
+        PaymentLink cancelled = link(PaymentLinkStatus.CANCELLED);
+        when(payOS.paymentRequests().cancel(ORDER_CODE, "Hết ngày khám")).thenReturn(cancelled);
+
+        assertThat(service.closeLinkBeforeCancel(payment)).isTrue();
+    }
+
+    @Test
+    void endOfDayAcceptsALinkThatAlreadyExpired() throws Exception {
+        attachLink();
+        when(payOS.paymentRequests().cancel(ORDER_CODE, "Hết ngày khám")).thenThrow(new RuntimeException("closed"));
+        PaymentLink expired = link(PaymentLinkStatus.EXPIRED);
+        when(payOS.paymentRequests().get(ORDER_CODE)).thenReturn(expired);
+
+        assertThat(service.closeLinkBeforeCancel(payment)).isTrue();
+    }
+
+    @Test
+    void endOfDayKeepsAReceiptWhoseLinkWasPaid() throws Exception {
+        attachLink();
+        when(payOS.paymentRequests().cancel(ORDER_CODE, "Hết ngày khám")).thenThrow(new RuntimeException("paid"));
+        PaymentLink paid = link(PaymentLinkStatus.PAID);
+        when(payOS.paymentRequests().get(ORDER_CODE)).thenReturn(paid);
+
+        assertThat(service.closeLinkBeforeCancel(payment)).isFalse();
+    }
+
+    @Test
+    void endOfDayKeepsAReceiptWhenPayOSCannotBeReached() throws Exception {
+        attachLink();
+        when(payOS.paymentRequests().cancel(ORDER_CODE, "Hết ngày khám")).thenThrow(new RuntimeException("timeout"));
+        when(payOS.paymentRequests().get(ORDER_CODE)).thenThrow(new RuntimeException("timeout"));
+
+        assertThat(service.closeLinkBeforeCancel(payment)).isFalse();
+    }
+
+    private void attachLink() {
+        payment.attachPayOSPayment(ORDER_CODE, "https://pay.example/checkout", "qr", "link-1");
+    }
+
+    private static PaymentLink link(PaymentLinkStatus status) {
+        PaymentLink link = mock(PaymentLink.class);
+        when(link.getStatus()).thenReturn(status);
+        return link;
+    }
+
+    @Test
     void theResultCarriesNoPatientData() {
         when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
 

@@ -29,6 +29,9 @@ import lombok.NoArgsConstructor;
 })
 public class ParaclinicalOrderDetail extends VersionedEntity {
 
+    /** Cancel reason of a service abandoned with its visit (docs/state-transitions.md, `BO_KHAM`). */
+    public static final String ABANDONED_REASON = "BO_KHAM";
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private ParaclinicalOrder order;
@@ -154,6 +157,26 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         this.roomId = roomId;
         this.status = status;
         this.isSkipped = false;
+    }
+
+    /** True once the service is performed, cancelled or abandoned. */
+    public boolean isFinished() {
+        return status == ParaclinicalOrderDetailStatus.COMPLETED
+                || status == ParaclinicalOrderDetailStatus.CANCELLED
+                || status == ParaclinicalOrderDetailStatus.ABANDONED;
+    }
+
+    /**
+     * End-of-day job: an unperformed service of an abandoned visit is abandoned, paid or not (BR-22, O11); paid
+     * services are not refunded (Q-10). No staff account cancels it, so the cancelling account and time stay empty.
+     */
+    public void abandonAtEndOfDay(Instant now) {
+        if (isFinished()) {
+            throw new IllegalStateException("Paraclinical service is already finished");
+        }
+        status = ParaclinicalOrderDetailStatus.ABANDONED;
+        cancelReason = ABANDONED_REASON;
+        touch(now);
     }
 
     public void release(Instant when) {

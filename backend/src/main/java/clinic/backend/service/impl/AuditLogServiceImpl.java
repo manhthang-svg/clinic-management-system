@@ -97,6 +97,19 @@ public class AuditLogServiceImpl implements AuditLogService {
     }
 
     @Override
+    public void recordSystemChange(
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt) {
+        auditLogRepository.save(AuditLog.systemChange(
+                ids.next(), action, entityType, entityId, sovaovien, occurredAt,
+                objectMapper.valueToTree(values).toString()));
+    }
+
+    @Override
     public void recordEntityChange(
             UUID actorAccountId,
             UUID entityId,

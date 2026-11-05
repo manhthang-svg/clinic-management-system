@@ -175,6 +175,26 @@ public class AuditLog extends UuidEntity {
         return auditLog;
     }
 
+    /** A business change made by a scheduled system task, so no staff account is the actor. */
+    public static AuditLog systemChange(
+            UUID id,
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Instant occurredAt,
+            String newValue) {
+        AuditLog auditLog = new AuditLog(id);
+        auditLog.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
+        auditLog.action = Objects.requireNonNull(action, "action");
+        auditLog.entityType = Objects.requireNonNull(entityType, "entityType");
+        auditLog.entityId = Objects.requireNonNull(entityId, "entityId");
+        auditLog.sovaovien = sovaovien;
+        auditLog.outcome = AuditOutcome.SUCCESS;
+        auditLog.newValue = newValue;
+        return auditLog;
+    }
+
     public static AuditLog entityChanged(
             UUID id,
             UUID actorAccountId,
