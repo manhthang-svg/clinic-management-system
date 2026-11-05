@@ -95,7 +95,7 @@ export function AccountTable({
             ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan="7" className="p-10 text-center text-slate-400">
-                  Không tìm thấy tài khoản nào phù hợp với điều kiện lọc.
+                  Không tìm thấy kết quả.
                 </td>
               </tr>
             ) : (

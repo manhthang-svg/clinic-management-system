@@ -32,7 +32,11 @@ import {
   AccountStatCard,
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
-import { accountErrorMessage } from "../../components/accounts/accountErrors";
+import {
+  REASON_LENGTH_MESSAGE,
+  accountErrorMessage,
+  msg47,
+} from "../../components/accounts/accountErrors";
 import { describeApiError } from "../../utils/describeApiError";
 import { createAccountApi } from "../../apis/accountApi";
 import { departmentApi } from "../../apis/departmentApi";
@@ -43,6 +47,17 @@ import {
 } from "../../constants";
 
 const defaultAccountApi = createAccountApi(apiClient);
+
+const MSG46 = "Không thể thực hiện thao tác này đối với tài khoản Admin.";
+// BR-97: an action reason has 5–500 characters after trimming.
+const LOCK_REASON_MIN = 5;
+const LOCK_REASON_MAX = 500;
+
+/** UC-10 lock reason check; returns the message to show under the field, or "". */
+function lockReasonMessage(reason) {
+  if (!reason) return "Vui lòng nhập lý do."; // MSG31
+  return reason.length < LOCK_REASON_MIN ? REASON_LENGTH_MESSAGE : "";
+}
 
 function fromApi(account) {
   if (!account) return account;
@@ -366,6 +381,7 @@ export function AccountManagementPage({
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [lockPrompt, setLockPrompt] = useState(null);
   const [lockReasonInput, setLockReasonInput] = useState("");
+  const [lockReasonError, setLockReasonError] = useState("");
   const [roomAssignment, setRoomAssignment] = useState(null);
   const [roomOptions, setRoomOptions] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
@@ -440,9 +456,7 @@ export function AccountManagementPage({
 
   const toggleLock = async (account) => {
     if (account.role === "ADMIN") {
-      toast.error(
-        "Không thể khóa hoặc thao tác trạng thái tài khoản Quản trị viên",
-      );
+      toast.error(MSG46);
       return;
     }
 
@@ -452,21 +466,22 @@ export function AccountManagementPage({
       try {
         const currentWork = await accountApi.workInProgress(account.id);
         if (currentWork.visitsInProgress + currentWork.ordersInProgress > 0) {
-          toast.error(`Không thể khóa tài khoản: còn ${currentWork.visitsInProgress} lượt khám và ${currentWork.ordersInProgress} chỉ định đang xử lý.`);
+          toast.error(msg47(account.fullName));
           return;
         }
       } catch (error) {
-        toast.error(accountErrorMessage(error));
+        toast.error(accountErrorMessage(error, { action: "khóa", fullName: account.fullName }));
         return;
       }
       setLockReasonInput("");
+      setLockReasonError("");
       setLockPrompt(account);
       return;
     }
 
     requestConfirm({
       title: "Mở khóa tài khoản",
-      description: `Mở khóa tài khoản ${account.username}?`,
+      description: `Bạn có chắc chắn muốn mở khóa tài khoản ${account.username} không?`, // MSG06
       confirmText: "Mở khóa",
       variant: "mint",
       onConfirm: async () => {
@@ -480,7 +495,7 @@ export function AccountManagementPage({
           toast.success(`Đã mở khóa tài khoản ${account.username}`);
           setConfirmDialog(null);
         } catch (error) {
-          toast.error(accountErrorMessage(error));
+          toast.error(accountErrorMessage(error, { action: "mở khóa" }));
         }
       },
     });
@@ -490,9 +505,10 @@ export function AccountManagementPage({
     if (!lockPrompt) return;
 
     const trimmed = lockReasonInput.trim();
+    const reasonError = lockReasonMessage(trimmed);
 
-    if (!trimmed) {
-      toast.error("Vui lòng nhập lý do khóa tài khoản");
+    if (reasonError) {
+      setLockReasonError(reasonError);
       return;
     }
 
@@ -500,7 +516,7 @@ export function AccountManagementPage({
 
     try {
       const updated = fromApi(await accountApi.lock(account.id, {
-        reason: trimmed.slice(0, 500),
+        reason: trimmed,
         expectedStatus: account.status,
         expectedVersion: account.version,
       }));
@@ -510,7 +526,7 @@ export function AccountManagementPage({
       setLockPrompt(null);
       setLockReasonInput("");
     } catch (error) {
-      toast.error(accountErrorMessage(error));
+      toast.error(accountErrorMessage(error, { action: "khóa", fullName: account.fullName }));
     }
   };
 
@@ -600,6 +616,17 @@ export function AccountManagementPage({
         }}
         onCancel={goBack}
         onChangePassword={onChangePassword}
+      />
+    );
+  } else if (
+    selected &&
+    view.name === "edit" &&
+    (isSelf(selected) || selected.role === "ADMIN")
+  ) {
+    subPage = (
+      <Navigate
+        to={generatePath(ADMIN.ACCOUNT_DETAIL, { id: selected.id })}
+        replace
       />
     );
   } else if (selected && view.name === "edit") {
@@ -722,6 +749,7 @@ export function AccountManagementPage({
           onClose={() => {
             setLockPrompt(null);
             setLockReasonInput("");
+            setLockReasonError("");
           }}
         >
           <div className="mt-3">
@@ -735,14 +763,24 @@ export function AccountManagementPage({
               id="lock-reason"
               rows={3}
               value={lockReasonInput}
-              onChange={(e) => setLockReasonInput(e.target.value)}
+              onChange={(e) => {
+                setLockReasonInput(e.target.value);
+                setLockReasonError("");
+              }}
               placeholder="Ví dụ: Nghỉ việc, chuyển công tác, vi phạm quy định..."
-              maxLength={500}
+              maxLength={LOCK_REASON_MAX}
               autoFocus
+              aria-invalid={Boolean(lockReasonError)}
+              aria-describedby={lockReasonError ? "lock-reason-error" : undefined}
               className="w-full text-xs rounded-xl border border-[#d5e0dc] p-3 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent"
             />
-            <div className="text-[11px] text-slate-400 text-right mt-1">
-              {lockReasonInput.length}/500 ký tự
+            <div className="flex justify-between gap-2 mt-1">
+              <p id="lock-reason-error" role="alert" className="text-[11px] text-rose-600">
+                {lockReasonError}
+              </p>
+              <span className="text-[11px] text-slate-400 shrink-0">
+                {lockReasonInput.length}/{LOCK_REASON_MAX} ký tự
+              </span>
             </div>
           </div>
         </ConfirmModal>

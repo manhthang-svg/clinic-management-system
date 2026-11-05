@@ -10,6 +10,7 @@ const WITH_ICON = `${INPUT_CLASS} pl-10`;
  */
 export function AccountPersonalFields({ form, errors, onChange, editable, showUsername = true, gridClass = 'md:grid-cols-2' }) {
   const canEdit = (field) => editable.includes(field);
+  const requiresProfessionalInfo = form.role === 'DOCTOR' || form.role === 'TECHNICIAN';
   const props = (field) => ({
     id: `account-${field}`,
     value: form[field],
@@ -59,19 +60,44 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
         <input type="email" placeholder="ten@clinic.example" maxLength={100} className={WITH_ICON} {...props('email')} />
       </FormField>
 
-      <FormField id="account-title" label="Học hàm / học vị" error={errors.title} hint={canEdit('title') ? 'Không bắt buộc, vd: BSCKI, ThS.BS' : null} icon={GraduationCap}>
-        <input type="text" placeholder="vd: ThS.BS" maxLength={50} className={WITH_ICON} {...props('title')} />
+      <FormField
+        id="account-title"
+        label="Học hàm / học vị"
+        required={canEdit('title') && requiresProfessionalInfo}
+        error={errors.title}
+        hint={canEdit('title')
+          ? requiresProfessionalInfo
+            ? 'Bắt buộc đối với Bác sĩ và Kỹ thuật viên.'
+            : 'Không bắt buộc, vd: BSCKI, ThS.BS'
+          : null}
+        icon={GraduationCap}
+      >
+        <input
+          type="text"
+          placeholder="vd: ThS.BS"
+          maxLength={50}
+          required={canEdit('title') && requiresProfessionalInfo}
+          className={WITH_ICON}
+          {...props('title')}
+        />
       </FormField>
 
       <FormField
         id="account-practiceLicenseNo"
         label="Số giấy phép hành nghề"
-        required={canEdit('practiceLicenseNo') && (form.role === 'DOCTOR' || form.role === 'TECHNICIAN')}
+        required={canEdit('practiceLicenseNo') && requiresProfessionalInfo}
         error={errors.practiceLicenseNo}
         hint={canEdit('practiceLicenseNo') ? 'Bắt buộc đối với Bác sĩ và Kỹ thuật viên.' : null}
         icon={BadgeCheck}
       >
-        <input type="text" placeholder="vd: 000123/HCM-CCHN" maxLength={255} className={WITH_ICON} {...props('practiceLicenseNo')} />
+        <input
+          type="text"
+          placeholder="vd: 000123/HCM-CCHN"
+          maxLength={255}
+          required={canEdit('practiceLicenseNo') && requiresProfessionalInfo}
+          className={WITH_ICON}
+          {...props('practiceLicenseNo')}
+        />
       </FormField>
 
       <FormField
