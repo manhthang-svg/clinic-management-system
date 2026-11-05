@@ -51,7 +51,10 @@ public class PaymentCompletionService {
     private final AuditLogService auditLogService;
     private final Clock clock;
 
-    /** Runs in the caller's transaction so the receipt, the visit and the orders change together (all or nothing). */
+    /**
+     * Runs in the caller's transaction so the receipt, the visit and the orders change together (all or nothing).
+     * {@code actorAccountId} is the cashier, or {@code null} when PayOS confirmed the payment.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void completePaidReceipt(Payment payment, UUID actorAccountId) {
         Instant now = clock.instant();
@@ -86,8 +89,15 @@ public class PaymentCompletionService {
         if (!unroutedServices.isEmpty()) {
             audit.put("unroutedServices", unroutedServices);
         }
-        auditLogService.recordBusinessChange(
-                actorAccountId, AuditLogAction.UPDATE, "payments", payment.getId(), visit.getSovaovien(), audit, now);
+        if (actorAccountId == null) {
+            // Confirmed by PayOS, not by a cashier: the audit row has no actor.
+            auditLogService.recordSystemChange(
+                    AuditLogAction.UPDATE, "payments", payment.getId(), visit.getSovaovien(), audit, now);
+        } else {
+            auditLogService.recordBusinessChange(
+                    actorAccountId, AuditLogAction.UPDATE, "payments", payment.getId(), visit.getSovaovien(), audit,
+                    now);
+        }
     }
 
     /**
