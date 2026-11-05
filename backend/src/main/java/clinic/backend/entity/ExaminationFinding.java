@@ -42,4 +42,18 @@ public class ExaminationFinding extends CreatedOnlyEntity {
     /** CV 365 II.25.x.3. */
     @Column(name = "dauchung_ghichu")
     private String dauchungGhichu;
+
+    public ExaminationFinding(
+            java.util.UUID id,
+            java.time.Instant createdAt,
+            ClinicalExamination examination,
+            String organGroup,
+            String finding,
+            String notes) {
+        super(id, createdAt);
+        this.examination = examination;
+        this.coquan = organGroup;
+        this.dauchung = finding;
+        this.dauchungGhichu = notes;
+    }
 }

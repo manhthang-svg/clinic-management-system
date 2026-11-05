@@ -222,6 +222,11 @@ public class Visit extends VersionedEntity {
         this.followupAppointmentId = appointmentId;
     }
 
+    public void updateReasonForVisit(String reasonForVisit, Instant now) {
+        this.lydovaovien = reasonForVisit;
+        touch(now);
+    }
+
     public void markAsWaiting() {
         if (this.status != VisitStatus.WAITING_FEE_PAYMENT) {
             throw new IllegalStateException(

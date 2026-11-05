@@ -63,4 +63,34 @@ public class VitalSign extends CreatedOnlyEntity {
 
     @Column(name = "measured_by_account_id", nullable = false)
     private UUID measuredByAccountId;
+
+    public VitalSign(
+            UUID id,
+            Instant createdAt,
+            UUID medicalRecordId,
+            boolean initial,
+            Short pulse,
+            BigDecimal temperature,
+            Short respiratoryRate,
+            Short systolic,
+            Short diastolic,
+            BigDecimal weight,
+            BigDecimal height,
+            Short spo2,
+            Instant measuredAt,
+            UUID measuredByAccountId) {
+        super(id, createdAt);
+        this.medicalRecordId = medicalRecordId;
+        this.isInitial = initial;
+        this.mach = pulse;
+        this.nhietdo = temperature;
+        this.nhiptho = respiratoryRate;
+        this.huyetapTamthu = systolic;
+        this.huyetapTamtruong = diastolic;
+        this.cannang = weight;
+        this.chieucao = height;
+        this.spo2 = spo2;
+        this.thoidiem = measuredAt;
+        this.measuredByAccountId = measuredByAccountId;
+    }
 }

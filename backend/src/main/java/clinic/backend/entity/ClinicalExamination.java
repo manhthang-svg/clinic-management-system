@@ -61,11 +61,48 @@ public class ClinicalExamination extends VersionedEntity {
     @Column(name = "khambenh_chandoanvaovienmaicd", length = 10)
     private String khambenhChandoanvaovienmaicd;
 
+    @Column(name = "treatment_care_performed")
+    private String treatmentCarePerformed;
+
     @Getter(AccessLevel.NONE)
     @OneToMany(mappedBy = "examination", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExaminationFinding> findings = new ArrayList<>();
 
     public List<ExaminationFinding> getFindings() {
         return Collections.unmodifiableList(findings);
+    }
+
+    public ClinicalExamination(
+            UUID id,
+            java.time.Instant createdAt,
+            UUID medicalRecordId,
+            String sophieu,
+            UUID examinedByAccountId) {
+        super(id, createdAt);
+        this.medicalRecordId = medicalRecordId;
+        this.sophieu = sophieu;
+        this.examinedByAccountId = examinedByAccountId;
+    }
+
+    public void updateClinicalData(
+            UUID doctorAccountId,
+            String presentIllness,
+            String generalFinding,
+            String preliminaryDiagnosis,
+            String icd10Code,
+            String icd10Name,
+            String treatmentCare,
+            List<ExaminationFinding> newFindings,
+            java.time.Instant now) {
+        this.examinedByAccountId = doctorAccountId;
+        this.quatrinhbenhly = presentIllness;
+        this.khambenhToanthan = generalFinding;
+        this.chandoansobo = preliminaryDiagnosis;
+        this.khambenhChandoanvaovienmaicd = icd10Code;
+        this.chandoanvaovien = icd10Name;
+        this.treatmentCarePerformed = treatmentCare;
+        this.findings.clear();
+        this.findings.addAll(newFindings);
+        touch(now);
     }
 }

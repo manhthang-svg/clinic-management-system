@@ -22,6 +22,7 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.RoomQueueCounterRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +71,28 @@ class Iteration1SchemaIT {
 
     @Autowired
     private StaffAccountRepository staffAccounts;
+
+    @Autowired
+    private RoomQueueCounterRepository queueCounters;
+
+    @Test
+    void allocatesQueueNumberAfterExistingVisitWhenCounterIsMissing() {
+        insertVisit("DK-QUEUE-RECOVERY", "BN00000003", "DV", false, null, null, null);
+        UUID roomId = jdbcTemplate.queryForObject(
+                "select id from rooms where maphongkham = 'PK-NOI-TQ'", UUID.class);
+        LocalDate queueDate = jdbcTemplate.queryForObject(
+                "select queue_date from visits where sovaovien = 'DK-QUEUE-RECOVERY'", LocalDate.class);
+        int currentMaximum = jdbcTemplate.queryForObject(
+                "select max(queue_number) from visits where room_id = ? and queue_date = ?",
+                Integer.class, roomId, queueDate);
+        jdbcTemplate.update(
+                "delete from room_queue_counters where room_id = ? and queue_date = ?", roomId, queueDate);
+
+        int allocated = transactionTemplate.execute(
+                status -> queueCounters.takeNext(roomId, queueDate));
+
+        assertThat(allocated).isEqualTo(currentMaximum + 1);
+    }
 
     @Test
     void mapsAllStaffAccountFieldsToTheDatabase() {
