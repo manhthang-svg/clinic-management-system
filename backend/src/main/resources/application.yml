@@ -8,6 +8,9 @@ spring:
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
+    # TBD: the shared database has V42 "reconcile room queue counters" applied (04/11/2026) but its file was
+    # never pushed. Ignore that missing version until its author adds the file, then remove this line.
+    ignore-migration-patterns: "*:missing"
   jpa:
     open-in-view: false
     hibernate:
