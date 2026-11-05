@@ -136,21 +136,6 @@ export const visitApi = {
         });
     },
 
-    /** UC-39 within UC-47 (AF-02); resolves to the patient's refreshed history list. */
-    addMedicalHistory(visitId, payload) {
-        return apiClient.request(`/clinical-examinations/visits/${encodeURIComponent(visitId)}/medical-histories`, {
-            method: 'POST',
-            body: payload,
-        });
-    },
-
-    updateMedicalHistory(visitId, historyId, payload) {
-        return apiClient.request(
-            `/clinical-examinations/visits/${encodeURIComponent(visitId)}/medical-histories/${encodeURIComponent(historyId)}`,
-            { method: 'PUT', body: payload },
-        );
-    },
-
     searchIcd10(keyword, signal) {
         const query = new URLSearchParams({ keyword, limit: '10' });
         return apiClient.request(`/clinical-examinations/icd10?${query.toString()}`, { signal });
