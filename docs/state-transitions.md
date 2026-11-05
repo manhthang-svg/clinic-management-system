@@ -4,7 +4,7 @@
 | --- | --- |
 | Phiên bản | v1 — bản nháp, chờ nhóm duyệt |
 | Ngày | 13/10/2026 |
-| Nguồn | `bo-tai-lieu-quy-trinh-nghiep-vu-v7.xlsx` (BR-29 và các sheet F01–F06), `usecases_v3.xlsx` (UC-01 → UC-67), quyết định nhóm ngày 13/10/2026 về Q-24, đề xuất cho Q-18 và Q-25 |
+| Nguồn | `bo-tai-lieu-quy-trinh-nghiep-vu-v7.xlsx` (BR-29 và các sheet F01–F06), `usecases_v3.xlsx` (UC-01 → UC-67), quyết định nhóm ngày 13/10/2026 về Q-24, quyết định ngày 06/11/2026 về Q-31 (theo BR-22), đề xuất cho Q-18 và Q-25 |
 | Phạm vi | Lượt khám, Chỉ định CLS, Hóa đơn, Hồ sơ bệnh án, Tài khoản, Dịch vụ, Phòng khám |
 
 BR-29 trong bộ tài liệu v7 vẫn ở trạng thái "Đề xuất — cần nhóm duyệt", nên toàn bộ tài liệu này là bản nháp. Tài liệu bổ sung vào BR-29 các trạng thái **Đã bỏ qua** (Q-18) và **Đã hủy** (Q-25, lượt bỏ về trước khi trả phí). Trạng thái kết thúc **Đã chuyển phòng** bị bỏ theo quyết định Q-24.
@@ -47,7 +47,7 @@ Mã trạng thái viết không dấu, in hoa, dùng làm giá trị lưu trong 
 | `CHO_CLS` | Chờ CLS | Có ít nhất một chỉ định CLS chưa kết thúc | Danh sách chờ phòng, nhãn "đang làm CLS" | Không |
 | `CHO_KET_LUAN` | Chờ kết luận | Không cần CLS, hoặc mọi chỉ định đã kết thúc | Danh sách chờ phòng, nhãn "đủ kết quả" | Không |
 | `HOAN_THANH` | Hoàn thành | Bác sĩ đã đóng hồ sơ | Lịch sử khám | Có |
-| `BO_KHAM` | Bỏ khám | Bệnh nhân bị bỏ qua và không quay lại, không có kết luận | Lịch sử khám, thống kê | Có |
+| `BO_KHAM` | Bỏ khám | Bệnh nhân bị bỏ qua và không quay lại, hoặc lượt chưa hoàn thành khi hết ngày (BR-22); không có kết luận | Lịch sử khám, thống kê | Có |
 | `DA_HUY` | Đã hủy | Bệnh nhân bỏ về trước khi trả phí khám | Lịch sử khám, thống kê | Có |
 
 Thuộc tính đi kèm lượt khám:
@@ -122,6 +122,7 @@ stateDiagram-v2
 | V17 | `DA_BO_QUA` | Bác sĩ bấm "Gọi lại" | `bo_qua_tu = CHO_KET_LUAN`; bệnh nhân có mặt | `CHO_KET_LUAN` | Bác sĩ | UC-40 | F04-01 | Đề xuất (Q-28) |
 | V18 | `CHO_KET_LUAN` | Bác sĩ chỉ định CLS bổ sung sau khi xem kết quả | Hồ sơ chưa khóa | `CHO_CLS` | Bác sĩ | UC-43 | — | Đề xuất (Q-30) |
 | V19 | `CHO_KET_LUAN` | Bác sĩ đóng hồ sơ | Đã lưu kết luận (UC-50); đơn thuốc và lịch tái khám nếu có đã lưu | `HOAN_THANH` | Bác sĩ, Hệ thống | UC-52 | F04-08, F04-09; BR-11, BR-28 | Nguồn |
+| V20 | `CHO_KHAM`, `DANG_KHAM`, `CHO_CLS`, `CHO_KET_LUAN` | Tác vụ cuối ngày | Lượt của ngày trước, chưa ở trạng thái kết thúc lúc chạy tác vụ | `BO_KHAM` | Hệ thống | — | Mục 8; BR-22 | Quyết định (Q-31) |
 
 ### 2.4 Ghi chú
 
@@ -193,7 +194,7 @@ stateDiagram-v2
 | O09 | `DA_BO_QUA` | Tác vụ cuối ngày | `ly_do_huy = BO_KHAM` | `DA_HUY` | Hệ thống | — | Mục 8 | Đề xuất (Q-18) |
 | O10 | `DANG_TH` | KTV thực hiện và lưu kết quả | Đã nhập kết quả (giá trị, hình ảnh, kết luận) | `HOAN_THANH` | Kỹ thuật viên, Hệ thống | UC-58, UC-59 | F03-12 → F03-14; BR-29 | Nguồn |
 | O11 | `CHO_TT`, `CHO_TH` | Lượt khám chuyển `BO_KHAM` (S6) | `ly_do_huy = BO_KHAM` | `DA_HUY` | Hệ thống | — | BR-10 | Đề xuất |
-| O12 | `CHO_TH` | Bệnh nhân từ chối tại phòng CLS sau khi đã trả tiền | Phụ thuộc chính sách hoàn tiền | — | — | — | — | Mở (Q-10) |
+| O12 | `CHO_TH` | Bệnh nhân từ chối tại phòng CLS sau khi đã trả tiền | Không hoàn tiền (Q-10); trạng thái đích của chỉ định chưa chốt | — | — | — | — | Mở |
 
 In và xem lại kết quả (UC-60) không đổi trạng thái chỉ định.
 
@@ -247,7 +248,7 @@ stateDiagram-v2
 | I04 | `CHO_TT` | Thu ngân hủy hóa đơn | Bắt buộc nhập `ly_do_huy` | `DA_HUY` | Thu ngân | UC-66 | F03-16; BR-18 | Nguồn; danh mục lý do: Đề xuất (Q-29) |
 | I05 | `CHO_TT` | Tác vụ cuối ngày | `ly_do_huy = HET_NGAY` | `DA_HUY` | Hệ thống | — | Mục 8 | Đề xuất |
 | I06 | — | Hủy với lý do `SAI_THONG_TIN` | Hệ thống tạo hóa đơn thay thế cùng nội dung đã sửa, ghi `thay_the_cho`; lượt khám và chỉ định giữ nguyên trạng thái | `CHO_TT` (hóa đơn mới) | Hệ thống | UC-66 | — | Đề xuất (Q-29) |
-| I07 | `DA_TT` | Hủy hoặc hoàn tiền hóa đơn đã thanh toán | — | — | — | — | — | Mở (Q-10) |
+| I07 | `DA_TT` | Hủy hoặc hoàn tiền hóa đơn đã thanh toán | Không cho phép: không hoàn tiền | — | — | — | — | Quyết định (Q-10) |
 
 Lý do hủy quyết định tác động sang entity khác (mục 7): `SAI_THONG_TIN` → tạo hóa đơn thay thế, không đổi lượt khám; `BN_KHONG_KHAM` → lượt khám `DA_HUY`; `BN_TU_CHOI_CLS` → chỉ định `DA_HUY`; `HET_NGAY` → theo mục 8.
 
@@ -299,7 +300,7 @@ Tác vụ này dọn các lượt bị bỏ dở, không phải bước "đóng 
 | 2 | Lượt khám `DA_BO_QUA` | → `BO_KHAM` (V09); hồ sơ → `DA_KHOA` | `HET_NGAY` |
 | 3 | Chỉ định `DA_BO_QUA` | → `DA_HUY (BO_KHAM)` (O09); kéo theo S6 | `HET_NGAY` |
 | 4 | Chỉ định `CHO_TT` (bệnh nhân không trả CLS, cũng không báo từ chối) | Hóa đơn → `DA_HUY (HET_NGAY)`; chỉ định → `DA_HUY (BO_KHAM)`; kéo theo S6 | `HET_NGAY` |
-| 5 | Lượt khám còn `CHO_KHAM`, `DANG_KHAM`, `CHO_CLS` (chỉ định đã trả nhưng chưa làm), `CHO_KET_LUAN` | Không tự đóng; đưa vào báo cáo "lượt tồn cuối ngày" cho Admin | Mở (Q-31) |
+| 5 | Lượt khám còn `CHO_KHAM`, `DANG_KHAM`, `CHO_CLS`, `CHO_KET_LUAN` | Lượt khám → `BO_KHAM` (V20), không có kết luận; kéo theo S7 (hồ sơ → `DA_KHOA`, hóa đơn còn `CHO_TT` → `DA_HUY (HET_NGAY)`); chỉ định chưa kết thúc → `DA_HUY (BO_KHAM)` (O11). Chỉ định đã trả nhưng chưa làm không được hoàn tiền; hóa đơn `DA_TT` giữ nguyên (Q-10) | `HET_NGAY` |
 
 ## 9. Chuyển trạng thái bị cấm
 
@@ -314,7 +315,7 @@ Danh sách này dùng để kiểm thử: mọi thao tác dưới đây phải b
 | Chỉ định CLS | `CHO_TT` → `DANG_TH` | Chưa thanh toán (BR-09, UC-57) |
 | Chỉ định CLS | `HOAN_THANH` → bất kỳ | Kết quả đã gắn vào hồ sơ |
 | Hóa đơn | `MIEN_PHI` → `CHO_TT` | Số tiền được tính một lần khi tạo |
-| Hóa đơn | `DA_TT` → `DA_HUY` | Chờ chính sách hoàn tiền (Q-10) |
+| Hóa đơn | `DA_TT` → `DA_HUY` | Không hoàn tiền (Q-10) |
 | Hồ sơ | Sửa nội dung khi `DA_KHOA` | BR-28 |
 | Tài khoản | Đăng nhập khi `DA_KHOA` | UC-09 |
 
@@ -342,12 +343,12 @@ Khi nhóm duyệt tài liệu này, các vị trí sau cần cập nhật để 
 
 | Mã | Câu hỏi | Phương án trong tài liệu | Ảnh hưởng |
 | --- | --- | --- | --- |
-| Q-10 | Bệnh nhân đã trả tiền rồi bỏ khám hoặc từ chối CLS: có hoàn tiền không? | Chưa có; I07, O12 bị khóa | Hóa đơn, Chỉ định CLS |
+| Q-10 | Bệnh nhân đã trả tiền rồi bỏ khám hoặc từ chối CLS: có hoàn tiền không? | Đã quyết định 06/11/2026: không hoàn tiền; hóa đơn đã thanh toán không bị hủy (I07) | Hóa đơn, Chỉ định CLS; O12, I07 |
 | Q-18 | Bỏ qua là trạng thái hay cờ; khi nào chuyển Bỏ khám? | Trạng thái riêng; gọi lại 1 lần; tác vụ cuối ngày làm lưới an toàn | V06–V09, O06–O09 |
 | Q-24 | Chuyển phòng | Đã quyết định: dùng lại lượt cũ, xếp theo thời gian đến, không thu thêm phí | V11 |
 | Q-25 | Bệnh nhân từ chối CLS | Trước chỉ định: ghi chú rồi kết luận; sau chỉ định: hủy hóa đơn, hủy chỉ định, về Chờ kết luận | V13, V14, O04, S4 |
 | Q-28 *(mới)* | Bệnh nhân vắng khi được gọi vào nghe kết luận xử lý thế nào? | Dùng chung cơ chế bỏ qua, quay về `Chờ kết luận` | V16, V17 |
 | Q-29 *(mới)* | Hủy hóa đơn sai thì tạo lại hóa đơn thế nào? | Hệ thống tự tạo hóa đơn thay thế khi lý do là `SAI_THONG_TIN` | I04, I06 |
 | Q-30 *(mới)* | Bác sĩ có được chỉ định CLS bổ sung sau khi xem kết quả không? | Cho phép, lượt khám quay lại `Chờ CLS` | V18 |
-| Q-31 *(mới)* | Lượt đã trả tiền nhưng chưa được khám hoặc đang dở lúc hết ngày xử lý thế nào? | Không tự đóng; đưa vào báo cáo tồn cuối ngày | Mục 8, bước 5 |
+| Q-31 *(mới)* | Lượt đã trả tiền nhưng chưa được khám hoặc đang dở lúc hết ngày xử lý thế nào? | Đã quyết định 06/11/2026 theo BR-22: tác vụ cuối ngày chuyển sang `BO_KHAM`; không hoàn tiền (Q-10) | V20; Mục 8, bước 5 |
 | Q-32 *(mới)* | Tác vụ cuối ngày chạy lúc mấy giờ? | Cấu hình được | Mục 8 |
