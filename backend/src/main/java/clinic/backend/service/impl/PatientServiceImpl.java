@@ -446,6 +446,8 @@ public class PatientServiceImpl implements PatientService {
                 .orElse(null);
         List<String> drugAllergies = medicalHistoryRepository
                 .findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(id, MedicalHistoryType.DRUG_ALLERGY).stream()
+                // UC-39 AF-01: the "no known drug allergy" statement is not an allergy.
+                .filter(item -> !item.isNoKnownDrugAllergy())
                 .map(MedicalHistory::getThongtinNoidung)
                 .toList();
 

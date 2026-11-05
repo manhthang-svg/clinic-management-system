@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ParaclinicalOrderDialog from '../../components/paraclinical/ParaclinicalOrderDialog';
+import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import { ROUTES } from '../../routes/routes';
 import visitApi from '../../apis/visitApi';
 
@@ -162,6 +163,7 @@ export default function ClinicalExaminationPage() {
         }
     });
     const [orderOpen, setOrderOpen] = useState(false);
+    const [medicalHistory, setMedicalHistory] = useState(null);
     const [activeSection, setActiveSection] = useState('clinical');
     const set = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
     const bmi = useMemo(() => {
@@ -216,6 +218,7 @@ export default function ClinicalExaminationPage() {
                     <div className="bg-white px-4 py-3"><Info label="Bác sĩ khám">{queueInfo?.doctorName}</Info></div>
                     <div className="bg-white px-4 py-3"><Info label="Giờ bắt đầu">{formatTime(new Date())}</Info></div>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5 text-xs"><span className="font-semibold text-slate-500">Dị ứng thuốc:</span><AllergyLabels data={medicalHistory} /></div>
             </section>
 
             <nav className="flex gap-2 overflow-x-auto" aria-label="Các bước khám bệnh">
@@ -227,6 +230,8 @@ export default function ClinicalExaminationPage() {
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="space-y-3">
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">II. Lý do vào viện</h2><Field label="" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." /></section>
+
+                    <MedicalHistoryPanel visitId={visit.id} onLoaded={setMedicalHistory} />
 
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-sm font-bold">III. Hỏi bệnh</h2><div className="grid gap-3 md:grid-cols-2"><Field label="Quá trình bệnh lý" value={form.progression} onChange={set('progression')} placeholder="Nhập quá trình bệnh lý..." maxLength={1000} /><Field label="Tiền sử bản thân" value={form.personalHistory} onChange={set('personalHistory')} placeholder="Nhập tiền sử bản thân..." /><Field label="Tiền sử gia đình" value={form.familyHistory} onChange={set('familyHistory')} placeholder="Nhập tiền sử gia đình..." /><Field label="Dị ứng (thuốc, thức ăn, khác)" value={form.allergies} onChange={set('allergies')} placeholder="Nhập thông tin dị ứng (nếu có)..." /></div></section>
 
