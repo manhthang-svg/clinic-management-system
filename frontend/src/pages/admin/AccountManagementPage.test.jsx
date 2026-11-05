@@ -1,8 +1,15 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountManagementPage } from './AccountManagementPage';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const admin = { id: 'admin-1', username: 'admin', fullName: 'Quản trị hệ thống', role: 'ADMIN' };
 const staff = {
@@ -39,6 +46,13 @@ function renderPage(path, api) {
 }
 
 describe('AccountManagementPage backend integration surface', () => {
+  it('displays MSG01 when no account matches the current criteria', async () => {
+    const api = accountApi({ list: vi.fn().mockResolvedValue(page([])) });
+    renderPage('/admin/accounts', api);
+
+    expect(await screen.findByText('Không tìm thấy kết quả.')).toBeInTheDocument();
+  });
+
   it('loads department options and sends department plus sorting to the list API', async () => {
     const api = accountApi();
     const user = userEvent.setup();
@@ -78,6 +92,17 @@ describe('AccountManagementPage backend integration surface', () => {
     expect(api.workInProgress).toHaveBeenCalledWith('acc-1', expect.any(AbortSignal));
   });
 
+  it.each([
+    ['the signed-in Admin account', admin],
+    ['another Admin account', { ...admin, id: 'admin-2', username: 'admin.khac' }],
+  ])('does not expose the edit form for %s', async (_caseName, protectedAccount) => {
+    const api = accountApi({ detail: vi.fn().mockResolvedValue(protectedAccount) });
+    renderPage(`/admin/accounts/${protectedAccount.id}/edit`, api);
+
+    expect(await screen.findByRole('heading', { name: 'Chi tiết tài khoản' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chỉnh sửa tài khoản' })).not.toBeInTheDocument();
+  });
+
   it('uses backend-generated mode by default when resetting a password', async () => {
     const api = accountApi();
     const user = userEvent.setup();
@@ -93,5 +118,68 @@ describe('AccountManagementPage backend integration surface', () => {
     }));
     expect(await screen.findByText('TempPass1@')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'In' })).toBeInTheDocument();
+  });
+});
+
+describe('AccountManagementPage UC-10 Lock/Unlock messages', () => {
+  it('shows MSG31 and the BR-97 length message under the lock reason without calling the API', async () => {
+    const api = accountApi({ lock: vi.fn() });
+    const user = userEvent.setup();
+    renderPage('/admin/accounts/acc-1', api);
+
+    await user.click(await screen.findByRole('button', { name: 'Khóa tài khoản' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Khóa tài khoản' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Vui lòng nhập lý do.');
+
+    await user.type(within(dialog).getByLabelText(/Lý do khóa/), '  abc  ');
+    await user.click(within(dialog).getByRole('button', { name: 'Khóa tài khoản' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Lý do phải có từ 5 đến 500 ký tự.');
+    expect(api.lock).not.toHaveBeenCalled();
+  });
+
+  it('sends the trimmed lock reason', async () => {
+    const api = accountApi({ lock: vi.fn().mockResolvedValue({ ...staff, status: 'LOCKED' }) });
+    const user = userEvent.setup();
+    renderPage('/admin/accounts/acc-1', api);
+
+    await user.click(await screen.findByRole('button', { name: 'Khóa tài khoản' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Lý do khóa/), '  Nghỉ việc  ');
+    await user.click(within(dialog).getByRole('button', { name: 'Khóa tài khoản' }));
+
+    await waitFor(() => expect(api.lock).toHaveBeenCalledWith('acc-1', {
+      reason: 'Nghỉ việc', expectedStatus: 'ACTIVE', expectedVersion: 2,
+    }));
+    expect(toast.success).toHaveBeenCalledWith('Đã khóa tài khoản bs.an');
+  });
+
+  it('shows MSG47 and does not open the lock dialog while work is in progress', async () => {
+    const api = accountApi({
+      workInProgress: vi.fn().mockResolvedValue({ visitsInProgress: 1, ordersInProgress: 2 }),
+      lock: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage('/admin/accounts/acc-1', api);
+
+    await user.click(await screen.findByRole('button', { name: 'Khóa tài khoản' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'Nguyễn An đang có lượt khám hoặc dịch vụ đang thực hiện. Vui lòng hoàn tất các công việc này trước.',
+    ));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(api.lock).not.toHaveBeenCalled();
+  });
+
+  it('asks for unlock confirmation with MSG06', async () => {
+    const locked = { ...staff, status: 'LOCKED', allowedActions: { ...staff.allowedActions, lock: false, unlock: true } };
+    const api = accountApi({ detail: vi.fn().mockResolvedValue(locked) });
+    const user = userEvent.setup();
+    renderPage('/admin/accounts/acc-1', api);
+
+    await user.click(await screen.findByRole('button', { name: 'Mở khóa tài khoản' }));
+
+    expect(within(await screen.findByRole('dialog'))
+      .getByText('Bạn có chắc chắn muốn mở khóa tài khoản bs.an không?')).toBeInTheDocument();
   });
 });

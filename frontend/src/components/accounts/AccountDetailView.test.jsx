@@ -52,7 +52,9 @@ describe('AccountDetailView room assignment action', () => {
 });
 
 describe('AccountDetailView locked account actions', () => {
-  it('allows only unlocking and disables all account-management entry points', () => {
+  it('allows changing the role and unlocking while other actions remain unavailable', async () => {
+    const user = userEvent.setup();
+    const onAssignRole = vi.fn();
     renderDetail({
       ...doctor,
       status: 'LOCKED',
@@ -63,12 +65,13 @@ describe('AccountDetailView locked account actions', () => {
         resetPassword: true,
         unlock: true,
       },
-    });
+    }, { onAssignRole });
 
     expect(screen.getByRole('button', { name: 'Mở khóa tài khoản' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Đổi vai trò' }));
+    expect(onAssignRole).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Chỉnh sửa tài khoản' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Đổi vai trò' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Phân công phòng' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Đặt lại mật khẩu' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Tài khoản đang bị khóa');

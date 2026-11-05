@@ -338,7 +338,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             <Pencil className="w-4 h-4" />
             Chỉnh sửa tài khoản
           </button>}
-          {!locked && actions.assignRole && (
+          {actions.assignRole && (
             <button
               type="button"
               onClick={onAssignRole}

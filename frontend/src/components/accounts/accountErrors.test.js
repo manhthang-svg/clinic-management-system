@@ -19,10 +19,30 @@ describe('accountErrors', () => {
   });
 
   it('uses Vietnamese messages for error codes and never the raw backend text', () => {
+    expect(accountErrorMessage(apiError('UNAUTHORIZED', undefined, 401)))
+      .toBe('Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.');
     expect(accountErrorMessage(apiError('ADMIN_ACCOUNT_PROTECTED', undefined, 422)))
-      .toBe('Không thể thực hiện thao tác này trên tài khoản Quản trị viên.');
+      .toBe('Không thể thực hiện thao tác này đối với tài khoản Admin.');
+    expect(accountErrorMessage(apiError('SELF_ADMINISTRATION_FORBIDDEN', undefined, 422)))
+      .toBe('Bạn không thể thực hiện thao tác này trên tài khoản của chính mình.');
+    expect(accountErrorMessage(apiError('CONCURRENT_MODIFICATION', undefined, 409)))
+      .toBe('Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
     expect(accountErrorMessage(apiError('SOMETHING_NEW', undefined, 500)))
       .toBe('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
+  });
+
+  it('fills MSG45 and MSG47 from the action context and maps state conflicts to MSG75', () => {
+    expect(accountErrorMessage(apiError('SELF_ADMINISTRATION_FORBIDDEN', undefined, 422), { action: 'khóa' }))
+      .toBe('Bạn không thể khóa tài khoản của chính mình.');
+    expect(accountErrorMessage(apiError('WORK_IN_PROGRESS', { visits: '1', orders: '0' }), { fullName: 'Nguyễn An' }))
+      .toBe('Nguyễn An đang có lượt khám hoặc dịch vụ đang thực hiện. Vui lòng hoàn tất các công việc này trước.');
+    expect(accountErrorMessage(apiError('ACCOUNT_STATE_CONFLICT')))
+      .toBe('Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
+  });
+
+  it('maps a too-short action reason to the BR-97 length message', () => {
+    expect(accountErrorMessage(apiError('REQUEST_VALIDATION_FAILED', { reason: 'TOO_SHORT' }, 400)))
+      .toBe('Lý do phải có từ 5 đến 500 ký tự.');
   });
 
   it('removes only the edited field from server errors', () => {
