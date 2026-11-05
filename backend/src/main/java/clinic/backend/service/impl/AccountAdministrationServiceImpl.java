@@ -2,12 +2,14 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import clinic.backend.dto.request.CreateAccountRequest;
 import clinic.backend.dto.request.AssignRoomRequest;
@@ -77,6 +79,12 @@ import org.springframework.transaction.annotation.Transactional;
 @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
 public class AccountAdministrationServiceImpl implements AccountAdministrationService {
 
+    private static final Pattern PRACTICE_LICENSE_FORMAT =
+            Pattern.compile("^[\\p{L}\\p{N}/-]{5,50}$");
+
+    /** BR-97: an action reason has 5–500 characters after trimming; the request DTO enforces the maximum. */
+    private static final int LOCK_REASON_MIN_LENGTH = 5;
+
     private static final String ACCOUNT_ENTITY = "staff_accounts";
 
     private final StaffAccountRepository accountRepository;
@@ -143,6 +151,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         requireNonAdminRole(request.role());
         requireProfessionalInformation(request.role(), request.academicTitle(), request.practiceLicenseNo());
+        requireValidStaffInformation(request.dateOfBirth(), request.practiceLicenseNo());
         String username = StaffAccount.normalizeUsername(request.username())
                 .orElseThrow(() -> new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
                         Map.of("username", "INVALID_FORMAT")));
@@ -178,6 +187,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         rejectAdminOrSelf(principal, account);
         requireVersion(account, request.version());
         requireProfessionalInformation(account.getRole(), request.academicTitle(), request.practiceLicenseNo());
+        requireValidStaffInformation(request.dateOfBirth(), request.practiceLicenseNo());
         String email = normalizeEmail(request.email());
         String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
         checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo);
@@ -291,6 +301,10 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     @Override
     @Transactional
     public AccountDetailResponse lock(StaffPrincipal principal, UUID accountId, LockAccountRequest request) {
+        String reason = request.reason().strip();
+        if (reason.length() < LOCK_REASON_MIN_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("reason", "TOO_SHORT"));
+        }
         StaffAccount account = requiredAccount(accountId);
         rejectAdminOrSelf(principal, account);
         requireState(account, request.expectedStatus(), request.expectedVersion());
@@ -305,7 +319,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                     "orders", Long.toString(orders)));
         }
         Instant now = clock.instant();
-        account.lock(request.reason().strip(), principal.accountId(), now);
+        account.lock(reason, principal.accountId(), now);
         accountRepository.saveAndFlush(account);
         sessionRepository.revokeAllForAccount(accountId, SessionRevocationReason.ACCOUNT_LOCKED, now);
         Map<String, Object> oldValues = new LinkedHashMap<>();
@@ -313,7 +327,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         oldValues.put("status", AccountStatus.ACTIVE);
         oldValues.put("lockReason", null);
         newValues.put("status", AccountStatus.LOCKED);
-        newValues.put("lockReason", request.reason().strip());
+        newValues.put("lockReason", reason);
         auditLogService.recordAccountChange(
                 principal.accountId(), accountId, AuditLogAction.LOCK, oldValues, newValues, now);
         securityAuditService.record(
@@ -544,6 +558,21 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         if (needsRoom(role) && (practiceLicenseNo == null || practiceLicenseNo.isBlank())) {
             throw new AppException(
                     ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("practiceLicenseNo", "REQUIRED"));
+        }
+    }
+
+    private void requireValidStaffInformation(LocalDate dateOfBirth, String practiceLicenseNo) {
+        if (dateOfBirth != null) {
+            LocalDate today = LocalDate.now(clock);
+            if (dateOfBirth.isAfter(today.minusYears(18))) {
+                throw new AppException(
+                        ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateOfBirth", "INVALID_FORMAT"));
+            }
+        }
+        String normalizedLicense = normalizeOptional(practiceLicenseNo);
+        if (normalizedLicense != null && !PRACTICE_LICENSE_FORMAT.matcher(normalizedLicense).matches()) {
+            throw new AppException(
+                    ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("practiceLicenseNo", "INVALID_FORMAT"));
         }
     }
 

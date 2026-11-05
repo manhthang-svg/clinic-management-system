@@ -2,6 +2,8 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -131,6 +133,51 @@ class AccountAdministrationServiceImplTest {
     }
 
     @Test
+    void creationRejectsStaffYoungerThanEighteen() {
+        when(clock.instant()).thenReturn(NOW);
+        when(clock.getZone()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
+
+        assertThatThrownBy(() -> service.createAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateAccountRequest("staff.young", "Young Staff", null, null,
+                        LocalDate.of(2009, 10, 24), null, "0901234567", null, null,
+                        Role.RECEPTIONIST, TemporaryPasswordMode.MANUAL, "InitialPass1", UUID.randomUUID())))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).containsEntry("dateOfBirth", "INVALID_FORMAT");
+                });
+    }
+
+    @Test
+    void creationAcceptsStaffOnTheirEighteenthBirthday() {
+        when(ids.next()).thenReturn(UUID.randomUUID());
+        when(clock.instant()).thenReturn(NOW);
+        when(clock.getZone()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(passwordHasher.hash("InitialPass1")).thenReturn("{bcrypt}test-hash");
+
+        service.createAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateAccountRequest("staff.adult", "Adult Staff", null, null,
+                        LocalDate.of(2008, 10, 23), null, "0901234567", null, null,
+                        Role.RECEPTIONIST, TemporaryPasswordMode.MANUAL, "InitialPass1", UUID.randomUUID()));
+
+        verify(accountRepository).saveAndFlush(any(StaffAccount.class));
+    }
+
+    @Test
+    void creationRejectsInvalidPracticeLicenseFormat() {
+        assertThatThrownBy(() -> service.createAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateAccountRequest("doctor.new", "New Doctor", "BS", "AB 12",
+                        null, null, "0901234567", null, null, Role.DOCTOR,
+                        TemporaryPasswordMode.MANUAL, "InitialPass1", UUID.randomUUID())))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).containsEntry("practiceLicenseNo", "INVALID_FORMAT");
+                });
+    }
+
+    @Test
     void lockIsRejectedWhileTheTargetHasAVisitInExamination() {
         StaffAccount target = account(Role.DOCTOR);
         StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
@@ -142,6 +189,20 @@ class AccountAdministrationServiceImplTest {
                 new LockAccountRequest("Đang nghỉ việc", AccountStatus.ACTIVE, target.getVersion())))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.WORK_IN_PROGRESS));
+    }
+
+    @Test
+    void lockRejectsAReasonShorterThanFiveCharactersAfterTrimming() {
+        StaffAccount target = account(Role.RECEPTIONIST);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.lock(admin, target.getId(),
+                new LockAccountRequest("  abc   ", AccountStatus.ACTIVE, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).containsEntry("reason", "TOO_SHORT");
+                });
+        verifyNoInteractions(accountRepository, sessionRepository, auditLogService, securityAuditService);
     }
 
     @Test
