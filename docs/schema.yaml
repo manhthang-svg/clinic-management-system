@@ -2180,7 +2180,7 @@ tables:
         appendix:
         - I.45.3
         standard: Có – I.45.3
-        description: 1 có / 0 không
+        description: 1 có / 0 không. Dòng DRUG_ALLERGY có giá trị 0 là khẳng định "Không có tiền sử dị ứng thuốc" (UC-39 AF-01)
         note: Field theo chuẩn/Phụ lục
       thongtin_ghichu:
         field: thongtinGhichu
@@ -2192,8 +2192,45 @@ tables:
         appendix:
         - I.45.4
         standard: Có – I.45.4
-        description: Thời gian, mức độ
-        note: Field theo chuẩn/Phụ lục
+        description: Biểu hiện dị ứng (UC-39); với tiền sử thì để trống
+        note: Field theo chuẩn/Phụ lục. Mức độ dị ứng lưu ở cột severity
+      category:
+        field: category
+        sql_type: varchar(30)
+        base_type: varchar
+        length: 30
+        nullable: true
+        java_type: MedicalHistoryCategory
+        enumerated: STRING
+        enum_name: MedicalHistoryCategory
+        enum_values:
+        - CHRONIC_DISEASE
+        - SURGERY
+        - FAMILY
+        - OTHER
+        checks:
+        - (category IS NULL OR category IN ('CHRONIC_DISEASE', 'SURGERY', 'FAMILY', 'OTHER'))
+        proposal: new
+        standard: Không
+        description: Nhóm tiền sử (bệnh mạn tính, phẫu thuật, gia đình, khác); chỉ dùng cho PERSONAL (UC-39, V42)
+      severity:
+        field: severity
+        sql_type: varchar(20)
+        base_type: varchar
+        length: 20
+        nullable: true
+        java_type: AllergySeverity
+        enumerated: STRING
+        enum_name: AllergySeverity
+        enum_values:
+        - MILD
+        - MODERATE
+        - SEVERE
+        checks:
+        - (severity IS NULL OR severity IN ('MILD', 'MODERATE', 'SEVERE'))
+        proposal: new
+        standard: Không
+        description: Mức độ dị ứng thuốc; chỉ dùng cho DRUG_ALLERGY (UC-39, V42)
       updated_by_account_id:
         field: updatedByAccountId
         sql_type: uuid

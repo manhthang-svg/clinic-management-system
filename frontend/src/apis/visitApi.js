@@ -50,6 +50,18 @@ export const visitApi = {
         return apiClient.request(`/visits/doctor-queue${suffix}`, { signal });
     },
 
+    // UC-39: medical history and drug allergies of the patient of a visit (Doctor only).
+    getMedicalHistory(visitId, signal) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/medical-history`, { signal });
+    },
+
+    updateMedicalHistory(visitId, data) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/medical-history`, {
+            method: 'PUT',
+            body: data,
+        });
+    },
+
     // UC-42: counts per active examination room, for the receptionist.
     getQueueStatus(signal) {
         return apiClient.request('/visits/queue-status', { signal });

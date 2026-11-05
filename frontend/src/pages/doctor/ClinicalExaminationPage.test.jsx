@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ClinicalExaminationPage from './ClinicalExaminationPage';
 import visitApi from '../../apis/visitApi';
 
@@ -26,6 +26,21 @@ function renderPage(state = { visitId: visit.id, visit, queueInfo: { roomName: '
 }
 
 describe('ClinicalExaminationPage', () => {
+    beforeEach(() => {
+        vi.spyOn(visitApi, 'getMedicalHistory').mockResolvedValue({
+            visitId: visit.id, editable: true, readOnlyReason: null, history: [],
+            allergies: [{ drug: 'Penicillin', reaction: null, severity: 'SEVERE' }],
+            noKnownDrugAllergy: false, updatedAt: null, updatedByName: null,
+        });
+    });
+
+    it('shows the medical history panel and the allergy label of the patient (UC-39)', async () => {
+        renderPage();
+        expect(screen.getByRole('heading', { name: 'Tiền sử & dị ứng thuốc' })).toBeInTheDocument();
+        expect((await screen.findAllByText('Dị ứng: Penicillin (Nặng)')).length).toBe(2);
+        expect(visitApi.getMedicalHistory).toHaveBeenCalledWith(visit.id, expect.any(AbortSignal));
+    });
+
     it('shows visit context and the clinical examination form', () => {
         renderPage();
         expect(screen.getByRole('heading', { name: 'Khám lâm sàng' })).toBeInTheDocument();

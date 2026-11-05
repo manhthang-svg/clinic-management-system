@@ -11,4 +11,7 @@ public interface MedicalHistoryRepository extends JpaRepository<MedicalHistory, 
 
     /** UC-36: drug allergies shown read-only on the patient profile (BR-23). */
     List<MedicalHistory> findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(UUID patientId, MedicalHistoryType historyType);
+
+    /** UC-39: every history and allergy item of the patient. */
+    List<MedicalHistory> findByPatientIdOrderByCreatedAtAsc(UUID patientId);
 }
