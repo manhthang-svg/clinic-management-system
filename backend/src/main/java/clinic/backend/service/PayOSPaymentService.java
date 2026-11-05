@@ -34,6 +34,7 @@ import java.util.UUID;
 public class PayOSPaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PayOSPaymentService.class);
+    private static final String END_OF_DAY_CANCELLATION_REASON = "Hết ngày khám";
 
     private final PayOS payOS;
     private final PaymentRepository paymentRepository;
@@ -256,6 +257,39 @@ public class PayOSPaymentService {
         }
 
         return payment.getId();
+    }
+
+    /**
+     * End-of-day job (BR-22): closes the PayOS link of an unpaid receipt before the receipt is cancelled, so the
+     * patient cannot pay a cancelled receipt. Returns {@code true} when the receipt has no link or its link can no
+     * longer be paid; {@code false} when the link may have been paid or PayOS cannot be reached, in which case the
+     * caller leaves the receipt for a later run. Not transactional: it only calls PayOS.
+     */
+    public boolean closeLinkBeforeCancel(Payment payment) {
+        Long orderCode = payment.getPayosOrderCode();
+        if (orderCode == null) {
+            return true;
+        }
+        try {
+            PaymentLink cancelled = payOS.paymentRequests().cancel(orderCode, END_OF_DAY_CANCELLATION_REASON);
+            if (cancelled != null && isClosed(cancelled.getStatus())) {
+                return true;
+            }
+        } catch (Exception ex) {
+            log.warn("Không thể hủy link PayOS cho đơn hàng {}: {}", orderCode, ex.getMessage());
+        }
+        // The link may already be cancelled or expired (for example after an earlier run that rolled back).
+        try {
+            PaymentLink link = payOS.paymentRequests().get(orderCode);
+            return link != null && isClosed(link.getStatus());
+        } catch (Exception ex) {
+            log.warn("Không thể kiểm tra link PayOS cho đơn hàng {}: {}", orderCode, ex.getMessage());
+            return false;
+        }
+    }
+
+    private static boolean isClosed(PaymentLinkStatus status) {
+        return status == PaymentLinkStatus.CANCELLED || status == PaymentLinkStatus.EXPIRED;
     }
 
     public UUID getPaymentIdByOrderCode(Long orderCode) {

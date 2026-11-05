@@ -159,7 +159,7 @@ Inconsistencies found while transcribing the sources. None of these may be resol
 | OQ-07 | **TBD:** There is no use case for creating or deactivating departments (only view/update), for a drug catalog used by prescriptions, or for doctors on duty per day. | UC-12 → UC-14, UC-59 |
 | OQ-08 | **TBD:** BR-37 defines three receipt statuses and does not cover fee-exempt receipts (patient-payable amount 0). Is a zero-amount receipt created and auto-paid, or not created? | BR-15, BR-26, BR-37 |
 | OQ-09 | **TBD:** The `01 - Scope` sheet lists the Receptionist as a user of medical records (F05), but UC-51 → UC-53 are Doctor-only; UC-36 gives the Receptionist visit history. | F05, UC-36, UC-51 |
-| OQ-10 | **TBD:** BR-22 states which visits become Abandoned but not what happens to paid but unperformed paraclinical orders, or whether a refund is considered. | BR-22 |
+| OQ-10 | **Decided 06/11/2026:** no refund. At day end, paid but unperformed paraclinical orders are cancelled with the visit; their paid receipts stay paid (`docs/state-transitions.md` Q-10, Q-31). | BR-22 |
 | OQ-11 | **TBD:** End-of-day job run time, and whether the "day" boundary uses the clinic's local time zone. | BR-22 |
 | OQ-12 | **TBD:** Export formats for medical records (UC-53) and the required Ministry of Health form templates noted in sheet `01 - Scope`. | UC-53 |
 | OQ-13 | **TBD:** The `Actors` sheet descriptions and the `01 - Scope` UC ranges still follow the superseded numbering and flows (e.g. cashier "issues" and "cancels" invoices). They need updating in the workbook. | `usecases.xlsx`, `Business_flow.xlsx` |

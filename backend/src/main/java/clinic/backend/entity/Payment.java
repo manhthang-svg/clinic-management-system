@@ -350,6 +350,16 @@ public class Payment extends VersionedEntity {
     }
 
 
+    /** End-of-day job: an unpaid receipt is cancelled; paid receipts are never cancelled or refunded (BR-22, Q-10). */
+    public void cancelAtEndOfDay(Instant now) {
+        if (this.status != PaymentStatus.PENDING) {
+            throw new IllegalStateException("Phiếu thu không ở trạng thái chờ thanh toán");
+        }
+        this.status = PaymentStatus.CANCELLED;
+        this.cancelledAt = now;
+        touch(now);
+    }
+
     public void markAsPaidByPayOS(String receiptNumber) {
         if (this.status != PaymentStatus.PENDING) {
             throw new IllegalStateException(

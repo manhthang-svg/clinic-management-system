@@ -222,6 +222,11 @@ public class Visit extends VersionedEntity {
         this.followupAppointmentId = appointmentId;
     }
 
+    public void updateReasonForVisit(String reasonForVisit, Instant now) {
+        this.lydovaovien = reasonForVisit;
+        touch(now);
+    }
+
     public void markAsWaiting() {
         if (this.status != VisitStatus.WAITING_FEE_PAYMENT) {
             throw new IllegalStateException(
@@ -287,5 +292,26 @@ public class Visit extends VersionedEntity {
 
         isSkipped = false;
         skippedAt = null;
+    }
+
+    /** End-of-day job: the patient left before paying the examination fee (BR-22, V04). */
+    public void cancelAtEndOfDay(Instant now) {
+        if (status != VisitStatus.WAITING_FEE_PAYMENT) {
+            throw new IllegalStateException("Visit is not waiting for fee payment");
+        }
+        status = VisitStatus.CANCELLED;
+        touch(now);
+    }
+
+    /**
+     * End-of-day job: an unfinished visit ends without a conclusion (BR-22, V09, V20). The skip flag is kept as
+     * history.
+     */
+    public void abandonAtEndOfDay(Instant now) {
+        switch (status) {
+            case WAITING, IN_EXAMINATION, WAITING_PARACLINICAL, WAITING_CONCLUSION -> status = VisitStatus.ABANDONED;
+            default -> throw new IllegalStateException("Visit cannot be abandoned from " + status);
+        }
+        touch(now);
     }
 }

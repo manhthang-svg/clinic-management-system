@@ -89,4 +89,14 @@ public class MedicalRecord extends VersionedEntity {
         this.openedAt = openedAt != null ? openedAt : Instant.now();
         this.openedByAccountId = openedByAccountId;
     }
+
+    /** End-of-day job: the record of a visit that ended without a conclusion is locked by the system (S7, R03). */
+    public void lockAtEndOfDay(Instant now) {
+        if (status != MedicalRecordStatus.OPEN) {
+            throw new IllegalStateException("Medical record is not open");
+        }
+        status = MedicalRecordStatus.LOCKED;
+        closedAt = now;
+        touch(now);
+    }
 }

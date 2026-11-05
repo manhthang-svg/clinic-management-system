@@ -105,4 +105,23 @@ public class MedicalHistory extends VersionedEntity {
     public boolean isNoKnownDrugAllergy() {
         return historyType == MedicalHistoryType.DRUG_ALLERGY && ABSENT.equals(thongtinGiatri);
     }
+
+    public MedicalHistory(
+            UUID id, Instant createdAt, UUID patientId, UUID medicalRecordId, MedicalHistoryType historyType,
+            String content, String notes, UUID updatedByAccountId) {
+        this(id, createdAt, patientId, medicalRecordId, historyType, content, null, notes, null, null,
+                updatedByAccountId);
+    }
+
+    /** UC-39 during examination: only the Doctor changes history and allergies (BR-23). */
+    public void update(
+            MedicalHistoryType historyType, String content, String notes, UUID medicalRecordId,
+            UUID updatedByAccountId, Instant now) {
+        this.historyType = historyType;
+        this.thongtinNoidung = content;
+        this.thongtinGhichu = notes;
+        this.medicalRecordId = medicalRecordId;
+        this.updatedByAccountId = updatedByAccountId;
+        touch(now);
+    }
 }

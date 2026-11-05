@@ -1,0 +1,12 @@
+package clinic.backend.enums;
+
+public enum OrganSystem {
+    CARDIOVASCULAR,
+    RESPIRATORY,
+    GASTROINTESTINAL,
+    RENAL_URINARY,
+    NEUROLOGICAL,
+    MUSCULOSKELETAL,
+    EAR_NOSE_THROAT,
+    ENDOCRINE_NUTRITIONAL_OTHER
+}

@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MedicalHistoryRepository extends JpaRepository<MedicalHistory, UUID> {
 
+    List<MedicalHistory> findAllByPatientIdOrderByCreatedAtAsc(UUID patientId);
+
     /** UC-36: drug allergies shown read-only on the patient profile (BR-23). */
     List<MedicalHistory> findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(UUID patientId, MedicalHistoryType historyType);
 

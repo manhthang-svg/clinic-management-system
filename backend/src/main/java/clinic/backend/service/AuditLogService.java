@@ -40,6 +40,15 @@ public interface AuditLogService {
             Map<String, ?> values,
             Instant occurredAt);
 
+    /** A change made by a scheduled system task; the actor stays empty. */
+    void recordSystemChange(
+            AuditLogAction action,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt);
+
     void recordEntityChange(
             UUID actorAccountId,
             UUID entityId,

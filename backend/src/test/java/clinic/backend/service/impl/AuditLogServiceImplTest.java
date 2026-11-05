@@ -71,6 +71,27 @@ class AuditLogServiceImplTest {
     }
 
     @Test
+    void recordsASystemChangeWithoutAnActor() {
+        UUID auditId = UUID.randomUUID();
+        UUID visitId = UUID.randomUUID();
+        Instant occurredAt = Instant.parse("2026-11-05T17:05:00Z");
+        when(ids.next()).thenReturn(auditId);
+
+        service.recordSystemChange(AuditLogAction.UPDATE, "visits", visitId, "VV1",
+                Map.of("status", "ABANDONED"), occurredAt);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog saved = captor.getValue();
+        assertThat(saved.getActorAccountId()).isNull();
+        assertThat(saved.getAction()).isEqualTo(AuditLogAction.UPDATE);
+        assertThat(saved.getEntityId()).isEqualTo(visitId);
+        assertThat(saved.getSovaovien()).isEqualTo("VV1");
+        assertThat(saved.getNewValue()).isEqualTo("{\"status\":\"ABANDONED\"}");
+        assertThat(saved.getOccurredAt()).isEqualTo(occurredAt);
+    }
+
+    @Test
     void rejectsAccountUpdateWhenChangedFieldSetsDiffer() {
         assertThatThrownBy(() -> service.recordAccountUpdate(
                 UUID.randomUUID(),

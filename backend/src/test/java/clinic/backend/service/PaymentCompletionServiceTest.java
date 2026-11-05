@@ -130,9 +130,11 @@ class PaymentCompletionServiceTest {
         assertThat(detail.getRoomId()).isNull();
         verify(queueCounterRepository, never()).takeNext(any(), any());
         ArgumentCaptor<Map<String, ?>> audit = ArgumentCaptor.captor();
-        verify(auditLogService).recordBusinessChange(
-                eq(null), eq(AuditLogAction.UPDATE), eq("payments"), eq(payment.getId()),
+        // Confirmed by PayOS: no cashier, so the audit row is a system change without an actor.
+        verify(auditLogService).recordSystemChange(
+                eq(AuditLogAction.UPDATE), eq("payments"), eq(payment.getId()),
                 any(), audit.capture(), eq(NOW));
+        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), any(), any());
         assertThat(audit.getValue().get("unroutedServices")).isEqualTo(List.of("Siêu âm ổ bụng"));
         assertThat(audit.getValue().get("paymentMethod")).isEqualTo("BANK_TRANSFER");
     }

@@ -21,6 +21,16 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
 
     boolean existsBySovaovien(String sovaovien);
 
+    /** End-of-day job (BR-22): visits of earlier days that are not finished, oldest first. */
+    @Query("""
+            select v.id from Visit v
+            where v.queueDate < :date and v.status not in :finishedStatuses
+            order by v.queueDate, v.thoigianvaovien
+            """)
+    List<UUID> findUnfinishedIdsBefore(
+            @Param("date") LocalDate date,
+            @Param("finishedStatuses") Collection<VisitStatus> finishedStatuses);
+
     /** UC-77 BR-77-02: the facility code is locked once any visit exists. */
     @Query("select count(v) > 0 from Visit v")
     boolean existsAny();
