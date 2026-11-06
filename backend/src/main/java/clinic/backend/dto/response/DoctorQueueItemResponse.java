@@ -24,6 +24,8 @@ public record DoctorQueueItemResponse(
         VisitStatus status,
         boolean isSkipped,
         Instant skippedAt,
+        // UC-45/UC-46: a skipped visit the Doctor can accept again; false for visits that are not skipped.
+        boolean canAcceptAgain,
         String sourceRoomName,
         Instant transferredAt,
         String note) {

@@ -16,6 +16,7 @@ import defaultVisitApi from '../../apis/visitApi';
 import { createAccountApi } from '../../apis/accountApi';
 import { apiClient } from '../../services/session';
 import { PRIORITY_REASON_LABELS } from '../../constants/visitData';
+import { ApiError } from '../../apis/apiError';
 import { ROUTES } from '../../routes/routes';
 
 const REFRESH_MS = 10_000;
@@ -28,12 +29,25 @@ const TABS = [
     { id: 'skipped', apiValue: 'SKIPPED', countKey: 'skippedCount', label: 'Vắng mặt' },
 ];
 
-const EMPTY_COPY = {
-    waiting: ['Chưa có bệnh nhân chờ khám', 'Danh sách hiển thị lượt khám BHYT và lượt khám dịch vụ đã thanh toán.'],
-    'in-examination': ['Chưa có bệnh nhân đang khám', 'Bệnh nhân đã được gọi vào khám sẽ hiển thị tại đây.'],
-    conclusion: ['Chưa có bệnh nhân chờ kết luận', 'Bệnh nhân hoàn tất cận lâm sàng sẽ xuất hiện tại đây.'],
-    skipped: ['Chưa có bệnh nhân bỏ lượt', 'Bệnh nhân vắng mặt khi được gọi sẽ xuất hiện tại đây.'],
+// System messages of UC-43, word for word from the SRS message list.
+const MSG01 = 'Không tìm thấy kết quả.';
+const MSG12 = 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.';
+const MSG13 = 'Bạn không có quyền thực hiện thao tác này.';
+const MSG23 = 'Bệnh nhân này đã được gọi.';
+const MSG48 = 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.';
+const msg54 = (patientName) => `${patientName} không có mặt khi được gọi và đã được chuyển sang danh sách bỏ qua.`;
+const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+const MSG92 = 'Chưa có dữ liệu để hiển thị.';
+const MSG96 = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+
+// AF-01 shows MSG92 with this hint per tab; AF-03 (search or filter matches nothing) shows MSG01 with FILTER_HINT.
+const EMPTY_HINT = {
+    waiting: 'Danh sách hiển thị lượt khám BHYT và lượt khám dịch vụ đã thanh toán.',
+    'in-examination': 'Bệnh nhân đã được gọi vào khám sẽ hiển thị tại đây.',
+    conclusion: 'Bệnh nhân hoàn tất cận lâm sàng sẽ xuất hiện tại đây.',
+    skipped: 'Bệnh nhân vắng mặt khi được gọi sẽ xuất hiện tại đây.',
 };
+const FILTER_HINT = 'Hãy sửa điều kiện tìm kiếm, bộ lọc hoặc chọn "Xóa bộ lọc".';
 
 const STATUS_BADGE = {
     WAITING: ['Đang chờ', 'bg-amber-50 text-amber-700 border-amber-200'],
@@ -77,14 +91,16 @@ function StatusBadge({ visit }) {
     return <Badge className={className}>{label}</Badge>;
 }
 
-function queueErrorMessage(error, fallback) {
+/** Maps a failed queue load or call action to its message; NOT_FOUND and unexpected errors show MSG80. */
+function queueErrorMessage(error) {
     const code = error?.errorResponse?.code;
     if (code === 'ROOM_ASSIGNMENT_REQUIRED') return 'Bạn chưa được phân công vào phòng khám đang hoạt động.';
-    if (code === 'DOCTOR_OFF_DUTY') return 'Bạn không trong ca trực của phòng này. Vui lòng kiểm tra lịch trực.';
-    if (code === 'FORBIDDEN') return 'Bạn không có quyền thao tác trên lượt khám này.';
-    if (code === 'CONCURRENT_MODIFICATION') return 'Lượt khám đã được cập nhật. Danh sách sẽ được tải lại.';
-    if (error?.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-    return fallback;
+    if (code === 'DOCTOR_OFF_DUTY') return MSG48;
+    if (code === 'FORBIDDEN') return MSG13;
+    if (code === 'CONCURRENT_MODIFICATION') return MSG23;
+    if (error?.status === 401) return MSG12;
+    if (error instanceof ApiError && !error.errorResponse && error.status === undefined) return MSG96;
+    return MSG80;
 }
 
 function paginationItems(currentPage, pageCount) {
@@ -187,7 +203,7 @@ export default function DoctorWaitingListPage({
             setLastUpdated(response?.refreshedAt ? new Date(response.refreshedAt) : new Date());
         } catch (error) {
             if (error?.name !== 'AbortError' && requestId === latestQueueRequest.current) {
-                setLoadError(queueErrorMessage(error, 'Không thể tải danh sách khám bệnh. Vui lòng thử lại.'));
+                setLoadError(queueErrorMessage(error));
             }
         } finally {
             if (requestId === latestQueueRequest.current) setLoading(false);
@@ -234,7 +250,7 @@ export default function DoctorWaitingListPage({
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab } },
             );
         } catch (error) {
-            toast.error(queueErrorMessage(error, 'Không thể bắt đầu lượt khám. Vui lòng tải lại danh sách rồi thử lại.'));
+            toast.error(queueErrorMessage(error));
             await fetchQueue();
         } finally {
             setCalling(false);
@@ -248,10 +264,10 @@ export default function DoctorWaitingListPage({
         setProcessingVisitId(visit.id);
         try {
             await visitApi.skipVisit(visit.id);
-            toast.success(`Đã chuyển bệnh nhân ${visit.patientName} sang danh sách vắng mặt.`);
+            toast.success(msg54(visit.patientName));
             await fetchQueue();
         } catch (error) {
-            toast.error(queueErrorMessage(error, 'Không thể đánh dấu bệnh nhân vắng mặt. Vui lòng thử lại.'));
+            toast.error(queueErrorMessage(error));
             await fetchQueue();
         } finally {
             setCalling(false);
@@ -271,7 +287,7 @@ export default function DoctorWaitingListPage({
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, acceptedFromSkipped: true, returnTab: activeTab } },
             );
         } catch (error) {
-            toast.error(queueErrorMessage(error, 'Không thể tiếp nhận lại bệnh nhân. Vui lòng thử lại.'));
+            toast.error(queueErrorMessage(error));
             await fetchQueue();
         } finally {
             setCalling(false);
@@ -289,7 +305,10 @@ export default function DoctorWaitingListPage({
     const [updatedTime, updatedDate] = formatDateTime(lastUpdated);
     const doctorName = queueInfo?.doctorName || (profile ? [profile.academicTitle, profile.fullName].filter(Boolean).join(' ') : '—');
     const roomName = queueInfo?.roomName || profile?.roomName;
-    const emptyCopy = EMPTY_COPY[activeTab];
+    const filtersActive = search.trim() !== '' || priority !== 'ALL' || visitType !== 'ALL'
+        || (activeTab === 'skipped' && interruptedStage !== 'ALL');
+    // A first load that failed has no list to call empty; EF-02 shows only the error then.
+    const showEmptyState = rows.length === 0 && !(loadError && !lastUpdated);
     const actionsBlocked = queueInfo?.onDuty === false;
 
     return (
@@ -373,7 +392,7 @@ export default function DoctorWaitingListPage({
                         {loadError && <p role="alert" className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-xs text-rose-700">{loadError}</p>}
                         {actionsBlocked && (
                             <p role="status" className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
-                                Bạn đang ngoài ca trực. Có thể xem danh sách nhưng không thể bắt đầu hoặc đánh dấu bệnh nhân vắng mặt.
+                                {MSG48}
                             </p>
                         )}
 
@@ -421,9 +440,9 @@ export default function DoctorWaitingListPage({
                                                 <td className="break-words whitespace-normal px-3 py-3"><VisitNotes visit={visit} /></td>
                                                 <td className="px-3 py-3"><StatusBadge visit={visit} /></td>
                                                 <td className="px-3 py-3">
-                                                    {callable && visit.isSkipped
+                                                    {callable && visit.isSkipped && visit.canAcceptAgain
                                                         ? <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Tiếp nhận lại'}</button>
-                                                        : callable
+                                                        : callable && !visit.isSkipped
                                                             ? <div className="flex min-w-40 justify-center gap-2">
                                                                 <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
                                                                 <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void skipPatient(visit)} className="h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng mặt</button>
@@ -435,11 +454,11 @@ export default function DoctorWaitingListPage({
                                     })}
                                 </tbody>
                             </table>
-                            {rows.length === 0 && (
+                            {showEmptyState && (
                                 <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
                                     <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600"><UsersRound className="h-7 w-7" /></div>
-                                    <h3 className="text-sm font-bold">{loading ? 'Đang tải danh sách…' : emptyCopy[0]}</h3>
-                                    {!loading && <p className="mt-1.5 max-w-md text-xs leading-5 text-slate-500">{emptyCopy[1]}</p>}
+                                    <h3 className="text-sm font-bold">{loading ? 'Đang tải danh sách…' : filtersActive ? MSG01 : MSG92}</h3>
+                                    {!loading && <p className="mt-1.5 max-w-md text-xs leading-5 text-slate-500">{filtersActive ? FILTER_HINT : EMPTY_HINT[activeTab]}</p>}
                                 </div>
                             )}
                         </div>

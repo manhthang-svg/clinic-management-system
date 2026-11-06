@@ -274,14 +274,18 @@ class VisitServiceImplTest {
                 20, VisitStatus.WAITING_CONCLUSION, clock.instant().minusSeconds(60));
         Visit waiting = skippedVisit(
                 10, VisitStatus.WAITING, clock.instant().minusSeconds(120));
+        Visit examinedConclusion = skippedVisit(
+                30, VisitStatus.WAITING_CONCLUSION, clock.instant().minusSeconds(30));
+        when(examinedConclusion.getDoctorAccountId()).thenReturn(DOCTOR_ID);
         Patient waitingPatient = patient(waiting.getPatientId(), "Chờ khám");
         Patient conclusionPatient = patient(waitingConclusion.getPatientId(), "Chờ kết luận");
+        Patient examinedPatient = patient(examinedConclusion.getPatientId(), "Đã khám");
         when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
                 BUSY_ROOM_ID, QUEUE_DATE,
                 List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
-                .thenReturn(List.of(waitingConclusion, waiting));
+                .thenReturn(List.of(waitingConclusion, examinedConclusion, waiting));
         when(patientRepository.findAllById(any()))
-                .thenReturn(List.of(conclusionPatient, waitingPatient));
+                .thenReturn(List.of(conclusionPatient, examinedPatient, waitingPatient));
         when(visitTransferRepository.findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(
                 any(), org.mockito.ArgumentMatchers.eq(BUSY_ROOM_ID))).thenReturn(List.of());
 
@@ -289,15 +293,18 @@ class VisitServiceImplTest {
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
                 DoctorQueueTab.SKIPPED, null, null, null, null, 0, 20);
 
-        assertThat(queue.skippedCount()).isEqualTo(2);
+        assertThat(queue.skippedCount()).isEqualTo(3);
         assertThat(queue.visits().content()).extracting("patientName")
-                .containsExactly("Chờ khám", "Chờ kết luận");
+                .containsExactly("Chờ khám", "Chờ kết luận", "Đã khám");
+        // A skipped conclusion with no examining Doctor recorded cannot be accepted again (UC-46).
+        assertThat(queue.visits().content()).extracting("canAcceptAgain")
+                .containsExactly(true, false, true);
 
         var filtered = service.getDoctorQueue(
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
                 DoctorQueueTab.SKIPPED, null, null, null, VisitStatus.WAITING_CONCLUSION, 0, 20);
         assertThat(filtered.visits().content()).extracting("patientName")
-                .containsExactly("Chờ kết luận");
+                .containsExactly("Chờ kết luận", "Đã khám");
     }
 
     @Test

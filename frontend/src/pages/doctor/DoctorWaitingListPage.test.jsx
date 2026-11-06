@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import DoctorWaitingListPage from './DoctorWaitingListPage';
+import { toast } from 'sonner';
+import { ApiError } from '../../apis/apiError';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function renderPage(props = {}) {
     return render(<MemoryRouter><DoctorWaitingListPage {...props} /></MemoryRouter>);
@@ -114,6 +118,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             queueNumber: 7,
             status: 'WAITING',
             isSkipped: true,
+            canAcceptAgain: true,
             note: 'Ưu tiên: Người cao tuổi',
         };
         const visitApi = {
@@ -138,6 +143,33 @@ describe('DoctorWaitingListPage backend integration', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Tiếp nhận lại' }));
         await waitFor(() => expect(visitApi.acceptSkippedVisit).toHaveBeenCalledWith('visit-skipped'));
+    });
+
+    it('offers no action for a skipped visit that cannot be accepted again (UC-45)', async () => {
+        const visit = {
+            id: 'visit-not-eligible',
+            patientName: 'Lê Thị Hoa',
+            queueNumber: 8,
+            status: 'WAITING_CONCLUSION',
+            isSkipped: true,
+            canAcceptAgain: false,
+        };
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                skippedCount: 1,
+                visits: { content: [visit], page: { number: 0, size: 10, totalElements: 1, totalPages: 1 } },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
+        };
+
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}), initialTab: 'skipped' });
+
+        expect(await screen.findByText('Lê Thị Hoa')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Tiếp nhận lại' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Bắt đầu' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Vắng mặt' })).not.toBeInTheDocument();
     });
 
     it('keeps pagination compact when the queue has many pages', async () => {
@@ -173,7 +205,7 @@ describe('DoctorWaitingListPage backend integration', () => {
 
         renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
 
-        expect(await screen.findByText(/Bạn đang ngoài ca trực/)).toBeInTheDocument();
+        expect(await screen.findByText('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Vắng mặt' })).toBeDisabled();
     });
@@ -239,5 +271,145 @@ describe('DoctorWaitingListPage backend integration', () => {
             '/doctor/clinical-examination|visit-in-examination|Nguyễn Minh Khôi',
         );
         expect(visitApi.startExamination).not.toHaveBeenCalled();
+    });
+});
+
+describe('DoctorWaitingListPage messages', () => {
+    const MSG01 = 'Không tìm thấy kết quả.';
+    const MSG12 = 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.';
+    const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+    const MSG92 = 'Chưa có dữ liệu để hiển thị.';
+    const MSG96 = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+
+    function apiWith(getDoctorQueue) {
+        return { getDoctorQueue, startExamination: vi.fn(), skipVisit: vi.fn(), acceptSkippedVisit: vi.fn() };
+    }
+
+    const emptyQueue = () => queueResponse({
+        waitingCount: 0,
+        visits: { content: [], page: { number: 0, size: 10, totalElements: 0, totalPages: 0 } },
+    });
+
+    it('shows MSG92 for an empty waiting list (AF-01)', async () => {
+        renderPage({ visitApi: apiWith(vi.fn().mockResolvedValue(emptyQueue())), loadProfile: vi.fn().mockResolvedValue({}) });
+
+        expect(await screen.findByRole('heading', { name: MSG92 })).toBeInTheDocument();
+        expect(screen.getByText(/lượt khám BHYT và lượt khám dịch vụ đã thanh toán/)).toBeInTheDocument();
+    });
+
+    it('shows MSG01 with a clear-filter hint when the search matches nothing (AF-03)', async () => {
+        const getDoctorQueue = vi.fn().mockResolvedValue(emptyQueue());
+        renderPage({ visitApi: apiWith(getDoctorQueue), loadProfile: vi.fn().mockResolvedValue({}) });
+
+        fireEvent.change(screen.getByLabelText('Tìm bệnh nhân'), { target: { value: 'không có' } });
+
+        await waitFor(() => expect(getDoctorQueue).toHaveBeenLastCalledWith(
+            expect.objectContaining({ keyword: 'không có' }), expect.any(AbortSignal)));
+        expect(await screen.findByRole('heading', { name: MSG01 })).toBeInTheDocument();
+        expect(screen.getByText(/chọn "Xóa bộ lọc"/)).toBeInTheDocument();
+        expect(screen.getByLabelText('Tìm bệnh nhân')).toHaveValue('không có');
+    });
+
+    it('shows MSG80 without an empty-list message when the first load fails (EF-02)', async () => {
+        renderPage({
+            visitApi: apiWith(vi.fn().mockRejectedValue(new ApiError('Internal error', { status: 500 }))),
+            loadProfile: vi.fn().mockResolvedValue({}),
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG80);
+        expect(screen.queryByRole('heading', { name: MSG92 })).not.toBeInTheDocument();
+    });
+
+    it('keeps the last loaded list and shows MSG80 when a reload fails (EF-02)', async () => {
+        const visit = { id: 'visit-1', patientName: 'Nguyễn Văn An', queueNumber: 1, status: 'WAITING', isSkipped: false };
+        const getDoctorQueue = vi.fn()
+            .mockResolvedValueOnce(queueResponse({
+                visits: { content: [visit], page: { number: 0, size: 10, totalElements: 1, totalPages: 1 } },
+            }))
+            .mockRejectedValue(new ApiError('Internal error', { status: 500 }));
+        renderPage({ visitApi: apiWith(getDoctorQueue), loadProfile: vi.fn().mockResolvedValue({}) });
+
+        expect(await screen.findByText('Nguyễn Văn An')).toBeInTheDocument();
+        fireEvent.click(screen.getByTitle('Tải lại ngay'));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG80);
+        expect(screen.getByText('Nguyễn Văn An')).toBeInTheDocument();
+    });
+
+    it('shows MSG13 when the account may not view the list (UC-45 EF-01)', async () => {
+        renderPage({
+            visitApi: apiWith(vi.fn().mockRejectedValue(new ApiError('Forbidden', {
+                status: 403,
+                errorResponse: { code: 'FORBIDDEN', message: 'You do not have permission to access this resource.' },
+            }))),
+            loadProfile: vi.fn().mockResolvedValue({}),
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Bạn không có quyền thực hiện thao tác này.');
+    });
+
+    it('shows MSG12 when the session has expired (EF-03)', async () => {
+        renderPage({
+            visitApi: apiWith(vi.fn().mockRejectedValue(new ApiError('Unauthorized', { status: 401 }))),
+            loadProfile: vi.fn().mockResolvedValue({}),
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG12);
+    });
+
+    it('shows MSG96 when the server cannot be reached', async () => {
+        renderPage({
+            visitApi: apiWith(vi.fn().mockRejectedValue(new ApiError('Failed to fetch'))),
+            loadProfile: vi.fn().mockResolvedValue({}),
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG96);
+    });
+
+    const waitingVisit = { id: 'visit-1', patientName: 'Nguyễn Văn An', queueNumber: 1, status: 'WAITING', isSkipped: false };
+
+    function queueWith(visit) {
+        return queueResponse({ visits: { content: [visit], page: { number: 0, size: 10, totalElements: 1, totalPages: 1 } } });
+    }
+
+    it('shows MSG54 after marking a patient absent (UC-44 AF-01)', async () => {
+        const visitApi = { ...apiWith(vi.fn().mockResolvedValue(queueWith(waitingVisit))), skipVisit: vi.fn().mockResolvedValue({}) };
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Vắng mặt' }));
+
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+            'Nguyễn Văn An không có mặt khi được gọi và đã được chuyển sang danh sách bỏ qua.'));
+    });
+
+    it('shows MSG23 and reloads when the patient was already called (UC-44 EF-04)', async () => {
+        const getDoctorQueue = vi.fn().mockResolvedValue(queueWith(waitingVisit));
+        const visitApi = {
+            ...apiWith(getDoctorQueue),
+            startExamination: vi.fn().mockRejectedValue(new ApiError('Conflict', {
+                status: 409, errorResponse: { code: 'CONCURRENT_MODIFICATION' },
+            })),
+        };
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Bệnh nhân này đã được gọi.'));
+        expect(getDoctorQueue.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it('shows MSG80 when a skipped visit is no longer found (UC-46 EF-03)', async () => {
+        const skipped = { ...waitingVisit, id: 'visit-skipped', isSkipped: true, canAcceptAgain: true };
+        const visitApi = {
+            ...apiWith(vi.fn().mockResolvedValue(queueWith(skipped))),
+            acceptSkippedVisit: vi.fn().mockRejectedValue(new ApiError('Not found', {
+                status: 404, errorResponse: { code: 'NOT_FOUND' },
+            })),
+        };
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}), initialTab: 'skipped' });
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận lại' }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG80));
     });
 });
