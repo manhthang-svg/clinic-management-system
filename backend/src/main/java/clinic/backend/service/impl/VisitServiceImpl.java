@@ -43,7 +43,6 @@ import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
-import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalServiceType;
@@ -70,6 +69,7 @@ import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.service.VisitService;
 import clinic.backend.utils.UuidV7Generator;
@@ -91,10 +91,6 @@ public class VisitServiceImpl implements VisitService {
             VisitStatus.WAITING,
             VisitStatus.IN_EXAMINATION,
             VisitStatus.WAITING_CONCLUSION);
-    private static final LocalTime MORNING_START = LocalTime.of(8, 0);
-    private static final LocalTime MORNING_END = LocalTime.of(11, 30);
-    private static final LocalTime AFTERNOON_START = LocalTime.of(13, 0);
-    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 30);
 
     private final MedicalServiceRepository medicalServiceRepository;
     private final PaymentRepository paymentRepository;
@@ -113,6 +109,7 @@ public class VisitServiceImpl implements VisitService {
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
     private final ExaminationRoomDuty examinationRoomDuty;
+    private final DutyShiftConfigService dutyShiftConfigService;
     private final Clock clock;
 
     @Override
@@ -555,24 +552,11 @@ public class VisitServiceImpl implements VisitService {
     }
 
     private boolean isOnDuty(UUID doctorId, UUID roomId, LocalDate date, LocalTime time) {
-        DutyShift shift = currentShift(time);
-        if (shift == null) {
-            return false;
-        }
-        return dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(date, shift, doctorId)
+        return dutyShiftConfigService.shiftAt(date, time)
+                .flatMap(shift -> dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(date, shift, doctorId))
                 .map(DutySchedule::getRoomId)
                 .filter(roomId::equals)
                 .isPresent();
-    }
-
-    private static DutyShift currentShift(LocalTime time) {
-        if (!time.isBefore(MORNING_START) && !time.isAfter(MORNING_END)) {
-            return DutyShift.MORNING;
-        }
-        if (!time.isBefore(AFTERNOON_START) && !time.isAfter(AFTERNOON_END)) {
-            return DutyShift.AFTERNOON;
-        }
-        return null;
     }
 
     private UUID currentAssignedRoom() {

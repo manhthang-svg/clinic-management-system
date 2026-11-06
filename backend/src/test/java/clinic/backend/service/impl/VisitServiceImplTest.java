@@ -52,6 +52,7 @@ import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -151,6 +152,7 @@ class VisitServiceImplTest {
                 auditLogService,
                 uuidV7Generator,
                 examinationRoomDuty,
+                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
                 clock);
     }
 

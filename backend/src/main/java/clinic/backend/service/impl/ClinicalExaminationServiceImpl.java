@@ -37,7 +37,6 @@ import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ClinicalExaminationNextStep;
 import clinic.backend.enums.ClinicalExaminationSaveMode;
-import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.Role;
@@ -59,6 +58,7 @@ import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ClinicalExaminationService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -69,10 +69,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClinicalExaminationServiceImpl implements ClinicalExaminationService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final LocalTime MORNING_START = LocalTime.of(8, 0);
-    private static final LocalTime MORNING_END = LocalTime.of(11, 30);
-    private static final LocalTime AFTERNOON_START = LocalTime.of(13, 0);
-    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 30);
     private static final String EXAMINATION_AUDIT_ENTITY = "clinical_examinations";
     private static final String HISTORY_AUDIT_ENTITY = "medical_histories";
 
@@ -91,6 +87,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     private final AuditLogService auditLogService;
     private final ClinicalExaminationMapper mapper;
     private final UuidV7Generator ids;
+    private final DutyShiftConfigService dutyShiftConfigService;
     private final Clock clock;
 
     @Override
@@ -250,16 +247,9 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     }
 
     private boolean isOnDuty(UUID doctorId, UUID roomId, LocalDate date, LocalTime time) {
-        DutyShift shift = currentShift(time);
-        if (shift == null) return false;
-        return dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(date, shift, doctorId)
+        return dutyShiftConfigService.shiftAt(date, time)
+                .flatMap(shift -> dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(date, shift, doctorId))
                 .map(DutySchedule::getRoomId).filter(roomId::equals).isPresent();
-    }
-
-    private static DutyShift currentShift(LocalTime time) {
-        if (!time.isBefore(MORNING_START) && !time.isAfter(MORNING_END)) return DutyShift.MORNING;
-        if (!time.isBefore(AFTERNOON_START) && !time.isAfter(AFTERNOON_END)) return DutyShift.AFTERNOON;
-        return null;
     }
 
     private static void requireOpen(MedicalRecord record) {
