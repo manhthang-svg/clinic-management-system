@@ -70,6 +70,25 @@ java -jar clinic-backend-<version>.jar --spring.profiles.active=admin-recovery
 
 The command opens no HTTP port. It generates and displays one temporary password, requires that password to be changed at the next login, clears login throttling, revokes every Admin session, writes `PASSWORD_RESET`, and exits. Do not redirect or retain its console output. It does not unlock a `LOCKED` Admin.
 
+### Load the ICD-10 list
+
+The ICD-10 catalog (TT 06/2026/TT-BYT, 15,844 codes) is not loaded by a migration. Load or refresh it once per database with the operator-only import profile, using the same environment variables as the backend:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=icd10-import"
+```
+
+The command opens no HTTP port and exits. It validates the whole file first and writes nothing if any row is invalid; one run is one transaction. It adds new codes, updates changed ones, and retires codes no longer in the list (they stay for existing records but can no longer be selected). Running it again changes nothing.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ICD10_IMPORT_FILE` | `classpath:db/reference/icd10.csv` | List to load; use `file:C:/path/icd10.csv` for another file |
+| `ICD10_IMPORT_EFFECTIVE_FROM` | `2026-07-01` | Day the list takes effect; retired codes end the day before |
+| `ICD10_IMPORT_SOURCE` | `TT 06/2026/TT-BYT` | Document recorded on each code |
+
+The CSV is extracted from the official appendix PDF with the scripts in `backend/tools/icd10/` (header `ma,ten,ma_cha,ghi_chu`; `ghi_chu` holds the column 18 and 24–29 rules as `|`-separated flags).
+
 ## Testing
 
 - Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).
