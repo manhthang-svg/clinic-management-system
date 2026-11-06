@@ -68,6 +68,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/clinic-facility").hasRole("ADMIN")
                         .requestMatchers("/api/v1/patients", "/api/v1/patients/**").authenticated()
                         .requestMatchers("/api/v1/visits", "/api/v1/visits/**").authenticated()
+                        .requestMatchers("/api/v1/clinical-examinations", "/api/v1/clinical-examinations/**").authenticated()
+                        .requestMatchers("/api/v1/follow-up-appointments", "/api/v1/follow-up-appointments/**").authenticated()
                         .requestMatchers(
                                 "/api/v1/insurance/verifications",
                                 "/api/v1/insurance/verifications/**")
