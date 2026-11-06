@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import PaymentReceipt from '../../components/payments/PaymentReceipt';
+import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { PRINT_MSG, confirmErrorMessage, confirmedNoticeText, printErrorMessage } from '../../components/payments/paymentConfirm';
 
 const money = (n) =>
@@ -532,6 +533,12 @@ export default function PaymentDetailPage() {
                                         <strong>{qrData.orderCode}</strong>
                                     </p>
                                 </div>
+
+                                <PayosQrCountdown
+                                    expiredAt={qrData.expiredAt}
+                                    onRenew={handleOpenPayosQr}
+                                    renewing={loadingQr}
+                                />
 
                                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 space-y-1">
                                     <p>• Hệ thống tự động kiểm tra mỗi 3 giây.</p>
