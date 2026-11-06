@@ -112,6 +112,7 @@ public class VisitServiceImpl implements VisitService {
     private final RoomQueueCounterRepository queueCounterRepository;
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
+    private final ExaminationRoomDuty examinationRoomDuty;
     private final Clock clock;
 
     @Override
@@ -140,7 +141,7 @@ public class VisitServiceImpl implements VisitService {
                 normalize(request.lydotiepnhan()), normalize(request.noigioithieuLoai()),
                 request.lydovaovien().strip(), Boolean.TRUE.equals(request.isPriority()), priorityReason,
                 queueDate, queueNumber,
-                initialStatusFor(fee),
+                initialStatusFor(request.doituongbnLoai(), fee),
                 insurance.status());
 
         if (appointment != null) {
@@ -205,9 +206,10 @@ public class VisitServiceImpl implements VisitService {
     private Room requireAvailableExaminationRoom(UUID roomId) {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_AVAILABLE));
+        // BR-96: an active examination room with a doctor on duty in the current registration shift.
         if (room.getStatus() != ActivationStatus.ACTIVE
                 || room.getType() != RoomType.EXAMINATION
-                || !staffRoomAssignmentRepository.hasActiveDoctor(roomId)) {
+                || examinationRoomDuty.onDutyDoctor(roomId, clock.instant()).isEmpty()) {
             throw new AppException(ErrorCode.ROOM_NOT_AVAILABLE);
         }
         return room;
@@ -224,13 +226,19 @@ public class VisitServiceImpl implements VisitService {
         if (!Boolean.TRUE.equals(priority)) {
             return null;
         }
+        PriorityReason reason;
         try {
-            return PriorityReason.valueOf(value == null ? "" : value.strip());
+            reason = PriorityReason.valueOf(value == null ? "" : value.strip());
         } catch (IllegalArgumentException exception) {
+            reason = null;
+        }
+        // Legacy reasons are kept for old visits only; a new visit uses the current BR-14 groups.
+        if (reason == null || reason.isLegacy()) {
             throw new AppException(
                     ErrorCode.REQUEST_VALIDATION_FAILED,
                     Map.of("priorityReason", "Vui lòng chọn lý do ưu tiên hợp lệ"));
         }
+        return reason;
     }
 
     private InsuranceData resolveInsurance(Patient patient, CreateVisitRequest request) {
@@ -480,11 +488,7 @@ public class VisitServiceImpl implements VisitService {
             Map<UUID, String> sourceRoomNames) {
         List<String> notes = new ArrayList<>(2);
         if (visit.isPriority() && visit.getPriorityReason() != null) {
-            String reason = switch (visit.getPriorityReason()) {
-                case ELDERLY -> "Người cao tuổi";
-                case FRAIL_DISABLED -> "Người suy kiệt / khuyết tật";
-            };
-            notes.add("Ưu tiên: " + reason);
+            notes.add("Ưu tiên: " + visit.getPriorityReason().label());
         }
         if (transfer != null) {
             String sourceRoomName = sourceRoomNames.get(transfer.getFromRoomId());
@@ -776,10 +780,15 @@ public class VisitServiceImpl implements VisitService {
                 visit.getThoigianvaovien(), payment.getPatientTotalAmount(), visit.getStatus(), reprint);
     }
 
-    private static VisitStatus initialStatusFor(FeeCalculation fee) {
-        return fee.patientAmount().signum() == 0
-                ? VisitStatus.WAITING
-                : VisitStatus.WAITING_FEE_PAYMENT;
+    /**
+     * BR-15: an insurance visit joins the waiting list at once and its fee stays pending until after the
+     * conclusion; a self-paid visit waits for the cashier unless the patient pays nothing.
+     */
+    private static VisitStatus initialStatusFor(VisitDoituongbnLoai visitType, FeeCalculation fee) {
+        if (visitType == VisitDoituongbnLoai.BHYT || fee.patientAmount().signum() == 0) {
+            return VisitStatus.WAITING;
+        }
+        return VisitStatus.WAITING_FEE_PAYMENT;
     }
 
     private List<String> activeDoctorNames(UUID roomId) {

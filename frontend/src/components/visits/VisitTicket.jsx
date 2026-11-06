@@ -15,6 +15,10 @@ function ticketGuidance(ticket, loading) {
   if (!ticket) {
     return loading ? 'Đang tải dữ liệu phiếu khám…' : 'Chưa thể xác định hướng dẫn thanh toán.';
   }
+  // BR-15: an insured patient waits at once and pays everything after the conclusion.
+  if (ticket.visitType === 'BHYT') {
+    return 'Hướng dẫn bệnh nhân đến khu chờ của phòng khám. Phí khám được thanh toán tại quầy thu ngân sau khi có kết luận.';
+  }
   if (ticket.patientAmount > 0) {
     return 'Đưa phiếu cho bệnh nhân và hướng dẫn ra quầy thu ngân thanh toán phí khám trước khi vào khu chờ.';
   }
@@ -105,7 +109,10 @@ export function VisitTicket({
             <Row label="Thời điểm đăng ký">{formatDateTime(ticket.registeredAt)}</Row>
           </dl>
           <footer className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-            {payable === 0 ? (
+            {/* BR-16: only a self-paid ticket shows the fee to pay before waiting. */}
+            {ticket.visitType === 'BHYT' ? (
+              <p className="font-semibold text-emerald-700">Mời đến khu chờ – thanh toán sau khi có kết luận</p>
+            ) : payable === 0 ? (
               <p className="font-semibold text-emerald-700">Phí khám đã được chi trả toàn bộ – mời đến khu chờ</p>
             ) : (
               <>

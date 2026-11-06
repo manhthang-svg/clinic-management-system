@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import patientApi from '../../apis/patientApi';
 import visitApi from '../../apis/visitApi';
+import { PRIORITY_REASON_OPTIONS } from '../../constants/visitData';
 
 function formatGender(gender) {
     if (gender === 1 || gender === '1') return 'Nam';
@@ -73,7 +74,7 @@ export default function ReceptionistOverviewPage() {
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [lydovaovien, setLydovaovien] = useState('Khám nội tổng quát / theo yêu cầu');
     const [isPriority, setIsPriority] = useState(false);
-    const [priorityReason, setPriorityReason] = useState('ELDERLY');
+    const [priorityReason, setPriorityReason] = useState(PRIORITY_REASON_OPTIONS[0][0]);
     const [submittingVisit, setSubmittingVisit] = useState(false);
     const [visitSuccessData, setVisitSuccessData] = useState(null);
 
@@ -148,7 +149,7 @@ export default function ReceptionistOverviewPage() {
         setVisitPatient(patient);
         setLydovaovien('Khám nội tổng quát / theo yêu cầu');
         setIsPriority(false);
-        setPriorityReason('ELDERLY');
+        setPriorityReason(PRIORITY_REASON_OPTIONS[0][0]);
         setVisitSuccessData(null);
 
         try {
@@ -633,8 +634,9 @@ export default function ReceptionistOverviewPage() {
                                                     onChange={(e) => setPriorityReason(e.target.value)}
                                                     className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                                                 >
-                                                    <option value="ELDERLY">Người cao tuổi (≥ 75 tuổi)</option>
-                                                    <option value="FRAIL_DISABLED">Người khuyết tật nặng / suy kiệt</option>
+                                                    {PRIORITY_REASON_OPTIONS.map(([value, label]) => (
+                                                        <option key={value} value={value}>{label}</option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         )}

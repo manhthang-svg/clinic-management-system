@@ -38,16 +38,4 @@ public interface StaffRoomAssignmentRepository extends JpaRepository<StaffRoomAs
               and account.status = clinic.backend.enums.AccountStatus.ACTIVE
             """)
     boolean hasActiveDoctor(@Param("roomId") UUID roomId);
-
-    @Query("""
-            select account.fullName
-            from StaffRoomAssignment assignment, StaffAccount account
-            where assignment.roomId = :roomId
-              and assignment.removedAt is null
-              and account.id = assignment.staffAccountId
-              and account.role = clinic.backend.enums.Role.DOCTOR
-              and account.status = clinic.backend.enums.AccountStatus.ACTIVE
-            order by account.fullName
-            """)
-    List<String> findActiveDoctorNames(@Param("roomId") UUID roomId);
 }

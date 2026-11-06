@@ -33,7 +33,7 @@ import {
   visitCreateError,
 } from '../../components/visits/visitErrors';
 import {
-  PRIORITY_REASON_LABELS,
+  PRIORITY_REASON_OPTIONS,
   REFERRAL_SOURCE_LABELS,
   VISIT_STATUS_LABELS,
   VISIT_TYPE_LABELS,
@@ -463,7 +463,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                         className={`${INPUT_CLASS} cursor-pointer`}
                       >
                         <option value="">Chọn lý do</option>
-                        {Object.entries(PRIORITY_REASON_LABELS).map(([value, label]) => (
+                        {PRIORITY_REASON_OPTIONS.map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>

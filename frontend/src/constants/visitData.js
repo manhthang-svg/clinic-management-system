@@ -7,7 +7,19 @@ export const VISIT_TYPE_LABELS = {
 };
 
 // PriorityReason (BR-14, I1-D39).
+// BR-14 priority groups that fit this clinic (no emergency care), offered for a new visit.
+export const PRIORITY_REASON_OPTIONS = [
+  ['CHILD_UNDER_6', 'Trẻ em dưới 06 tuổi'],
+  ['PREGNANT', 'Phụ nữ có thai'],
+  ['EXTREME_DISABILITY', 'Người khuyết tật đặc biệt nặng'],
+  ['SEVERE_DISABILITY', 'Người khuyết tật nặng'],
+  ['AGED_75_PLUS', 'Người từ đủ 75 tuổi trở lên'],
+  ['MERITORIOUS', 'Người có công với cách mạng'],
+];
+
+// Labels for display, including the legacy reasons of visits recorded before V46.
 export const PRIORITY_REASON_LABELS = {
+  ...Object.fromEntries(PRIORITY_REASON_OPTIONS),
   ELDERLY: 'Người cao tuổi',
   FRAIL_DISABLED: 'Người suy kiệt / khuyết tật',
 };

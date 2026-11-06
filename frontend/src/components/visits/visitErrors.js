@@ -14,8 +14,9 @@ export function msg22(visit, statusLabel) {
   return `Bệnh nhân đang có lượt khám chưa kết thúc (${visit.sovaovien} – ${visit.roomName ?? 'phòng khám'} – ${statusLabel}).`;
 }
 
+// MSG53: the selected room cannot receive patients (inactive, or no doctor on duty; BR-96).
 export function msg56(roomName) {
-  return `${roomName ?? 'Phòng khám'} không hoạt động hoặc chưa có bác sĩ được phân công, không thể tiếp nhận bệnh nhân.`;
+  return `${roomName ?? 'Phòng khám'} đã ngừng hoạt động hoặc không có bác sĩ làm việc trong ngày nên không thể tiếp nhận bệnh nhân.`;
 }
 
 function codeOf(error) {

@@ -10,7 +10,6 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
-import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.service.RoomService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +32,9 @@ public class RoomServiceImpl implements RoomService {
     private final RoomRepository roomRepository;
     private final DepartmentRepository departmentRepository;
     private final ServiceGroupRepository serviceGroupRepository;
-    private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final UuidV7Generator uuidV7Generator;
+    private final ExaminationRoomDuty examinationRoomDuty;
+    private final Clock clock;
 
     @Override
     public void assignStaffToRoom(Long roomId, Long staffId) {
@@ -125,14 +126,15 @@ public class RoomServiceImpl implements RoomService {
                 .stream()
                 .collect(Collectors.toMap(Department::getId, Department::getDepartmentName));
 
-        // Only rooms with an active assigned doctor can take patients; their names are joined in name order.
+        // BR-96: only rooms with a doctor on duty in the current registration shift can take patients,
+        // and the room shows that doctor only.
+        Instant now = clock.instant();
         return rooms.stream()
-                .map(room -> Map.entry(room, staffRoomAssignmentRepository.findActiveDoctorNames(room.getId())))
-                .filter(entry -> !entry.getValue().isEmpty())
-                .map(entry -> toResponse(
-                        entry.getKey(),
-                        departmentNames.get(entry.getKey().getDepartmentId()),
-                        String.join(", ", entry.getValue())))
+                .flatMap(room -> examinationRoomDuty.onDutyDoctor(room.getId(), now).stream()
+                        .map(doctor -> toResponse(
+                                room,
+                                departmentNames.get(room.getDepartmentId()),
+                                ExaminationRoomDuty.displayName(doctor))))
                 .toList();
     }
 

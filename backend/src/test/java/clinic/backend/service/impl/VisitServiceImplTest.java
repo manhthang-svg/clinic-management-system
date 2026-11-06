@@ -123,6 +123,9 @@ class VisitServiceImplTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private ExaminationRoomDuty examinationRoomDuty;
+
     private final Clock clock = Clock.fixed(
             Instant.parse("2026-10-30T02:00:00Z"), ZoneOffset.UTC);
 
@@ -147,6 +150,7 @@ class VisitServiceImplTest {
                 roomQueueCounterRepository,
                 auditLogService,
                 uuidV7Generator,
+                examinationRoomDuty,
                 clock);
     }
 
@@ -434,7 +438,8 @@ class VisitServiceImplTest {
                 .thenReturn(false);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
-        when(staffRoomAssignmentRepository.hasActiveDoctor(BUSY_ROOM_ID)).thenReturn(true);
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
+                .thenReturn(Optional.of(mock(StaffAccount.class)));
         when(medicalServiceRepository.findByTypeAndDepartmentIdIsNullAndServiceGroupIdIsNullAndStatus(
                 MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(Optional.of(examination));
         when(roomQueueCounterRepository.takeNext(BUSY_ROOM_ID, QUEUE_DATE)).thenReturn(1);
@@ -461,10 +466,11 @@ class VisitServiceImplTest {
     }
 
     @Test
-    void insuredVisitWithPatientShareWaitsForPayment() {
+    void insuredVisitWithPatientShareJoinsWaitingListAndPaysAfterConclusion() {
         var result = registerInsuredVisit((short) 80);
 
-        assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING_FEE_PAYMENT);
+        // BR-15: the insured patient waits for the examination now; the receipt stays pending until the end.
+        assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING);
         assertThat(result.payment().getPatientTotalAmount()).isEqualByComparingTo("20000");
         assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.PENDING);
     }
@@ -476,6 +482,33 @@ class VisitServiceImplTest {
         assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING);
         assertThat(result.payment().getPatientTotalAmount()).isZero();
         assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.FEE_EXEMPT);
+    }
+
+    @Test
+    void rejectsALegacyPriorityReasonForANewVisit() {
+        UUID patientId = UUID.randomUUID();
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(visitRepository.existsByPatientIdAndStatusNotIn(patientId, VisitRepository.FINISHED_STATUSES))
+                .thenReturn(false);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(mock(Patient.class)));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
+                .thenReturn(Optional.of(mock(StaffAccount.class)));
+
+        // ELDERLY predates V46; a new visit must use one of the BR-14 groups.
+        assertThatThrownBy(() -> service.createVisit(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateVisitRequest(
+                        patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
+                        "Đau đầu", "EXAMINATION", "TU_DEN", true, "ELDERLY",
+                        null, null)))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).containsKey("priorityReason");
+                });
+        verifyNoInteractions(paymentRepository);
     }
 
     @Test
@@ -672,7 +705,8 @@ class VisitServiceImplTest {
         when(patient.getGioitinh()).thenReturn((short) 1);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
-        when(staffRoomAssignmentRepository.hasActiveDoctor(BUSY_ROOM_ID)).thenReturn(true);
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
+                .thenReturn(Optional.of(mock(StaffAccount.class)));
         when(medicalServiceRepository.findByTypeAndDepartmentIdIsNullAndServiceGroupIdIsNullAndStatus(
                 MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(Optional.of(examination));
         when(insuranceVerificationService.verify(any())).thenReturn(new InsuranceVerificationResponse(

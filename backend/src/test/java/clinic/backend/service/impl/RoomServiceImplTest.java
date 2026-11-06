@@ -1,6 +1,8 @@
 package clinic.backend.service.impl;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -17,7 +19,7 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
-import clinic.backend.repository.StaffRoomAssignmentRepository;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,7 +50,7 @@ class RoomServiceImplTest {
     private ServiceGroupRepository serviceGroupRepository;
 
     @Mock
-    private StaffRoomAssignmentRepository staffRoomAssignmentRepository;
+    private ExaminationRoomDuty examinationRoomDuty;
 
     @Mock
     private UuidV7Generator ids;
@@ -57,7 +60,7 @@ class RoomServiceImplTest {
     private RoomServiceImpl service() {
         return new RoomServiceImpl(
                 roomRepository, departmentRepository, serviceGroupRepository,
-                staffRoomAssignmentRepository, ids);
+                ids, examinationRoomDuty, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -91,7 +94,7 @@ class RoomServiceImplTest {
     }
 
     @Test
-    void listsActiveExaminationRoomsWithDoctorsAndDepartmentName() {
+    void listsOnlyRoomsWithADoctorOnDutyAndShowsThatDoctor() {
         Room room = new Room(
                 UUID.randomUUID(), NOW, departmentId, null,
                 "PK-01", "Phòng khám", "Tầng 1",
@@ -104,9 +107,10 @@ class RoomServiceImplTest {
                 RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room, roomWithoutDoctor));
         when(departmentRepository.findAllById(Set.of(departmentId))).thenReturn(List.of(department()));
-        when(staffRoomAssignmentRepository.findActiveDoctorNames(room.getId()))
-                .thenReturn(List.of("Lê Thị Hoa", "Trần Văn Minh"));
-        when(staffRoomAssignmentRepository.findActiveDoctorNames(roomWithoutDoctor.getId())).thenReturn(List.of());
+        StaffAccount onDuty = mock(StaffAccount.class);
+        when(onDuty.getFullName()).thenReturn("Lê Thị Bình");
+        when(examinationRoomDuty.onDutyDoctor(room.getId(), NOW)).thenReturn(Optional.of(onDuty));
+        when(examinationRoomDuty.onDutyDoctor(roomWithoutDoctor.getId(), NOW)).thenReturn(Optional.empty());
 
         List<RoomResponse> response = service().getActiveExaminationRooms();
 
@@ -115,7 +119,7 @@ class RoomServiceImplTest {
             assertThat(item.type()).isEqualTo(RoomType.EXAMINATION);
             assertThat(item.status()).isEqualTo(ActivationStatus.ACTIVE);
             assertThat(item.departmentName()).isEqualTo("Khoa Nội");
-            assertThat(item.doctorName()).isEqualTo("Lê Thị Hoa, Trần Văn Minh");
+            assertThat(item.doctorName()).isEqualTo("Lê Thị Bình");
         });
     }
 
