@@ -50,7 +50,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             tab: 'WAITING',
             keyword: '',
             priority: undefined,
-            visitType: 'ALL',
+            visitType: undefined,
             interruptedStage: undefined,
             page: 0,
             size: 10,
@@ -136,8 +136,25 @@ describe('DoctorWaitingListPage backend integration', () => {
         expect(screen.getByText('Ưu tiên: Người cao tuổi')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Vắng' })).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Tiếp nhận lại' }));
         await waitFor(() => expect(visitApi.acceptSkippedVisit).toHaveBeenCalledWith('visit-skipped'));
+    });
+
+    it('keeps pagination compact when the queue has many pages', async () => {
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                visits: { content: [], page: { number: 0, size: 10, totalElements: 200, totalPages: 20 } },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
+        };
+
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
+
+        expect(await screen.findByRole('button', { name: 'Trang 20' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Trang 1' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Trang 10' })).not.toBeInTheDocument();
     });
 
     it('disables attendance actions outside the assigned shift', async () => {

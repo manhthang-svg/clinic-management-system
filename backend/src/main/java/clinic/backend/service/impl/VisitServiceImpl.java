@@ -686,7 +686,7 @@ public class VisitServiceImpl implements VisitService {
                 .filter(room -> room.getStatus() == ActivationStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
         if (!isOnDuty(doctor.getId(), roomId, today, localTime)) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
+            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
         }
         return roomId;
     }

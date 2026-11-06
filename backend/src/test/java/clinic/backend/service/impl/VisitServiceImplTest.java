@@ -241,6 +241,31 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void doctorOutsideAssignedShiftCannotStartExamination() {
+        Room assignedRoom = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Nguyễn Văn An")
+                .role(clinic.backend.enums.Role.DOCTOR).status(AccountStatus.ACTIVE)
+                .build();
+        StaffRoomAssignment assignment = new StaffRoomAssignment(
+                UUID.randomUUID(), DOCTOR_ID, BUSY_ROOM_ID, clock.instant(), null, null, null, 0L);
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.of(assignment));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
+        when(dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
+                QUEUE_DATE, DutyShift.MORNING, DOCTOR_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.startExamination(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), UUID.randomUUID()))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.DOCTOR_OFF_DUTY));
+    }
+
+    @Test
     void skippedQueueOrdersBySkippedTimeAndFiltersInterruptedStage() {
         stubDoctorOnDuty();
         Visit waitingConclusion = skippedVisit(
