@@ -26,6 +26,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -62,7 +63,7 @@ public class MedicalServiceController {
     @Operation(summary = "UC-20 Xem và tìm kiếm danh sách dịch vụ, bảng giá")
     @GetMapping
     public ApiResponse<PageResponse<MedicalServiceSummaryResponse>> list(
-            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) @Size(max = 100) String keyword,
             @RequestParam(required = false) MedicalServiceType type,
             @RequestParam(name = "group", required = false) UUID serviceGroupId,
             @RequestParam(name = "department", required = false) UUID departmentId,

@@ -233,8 +233,9 @@ export function ServiceManagementPage({
     );
 
   // UC-23: reference ranges are maintained from the LAB service detail screen.
+  // Reference range configuration on the detail is hidden for now (BR-46).
   // Use the existing detail loader so a refresh failure cannot be mistaken for a failed save.
-  const refreshReferenceRanges = () => setDetailReloadKey((key) => key + 1);
+  // const refreshReferenceRanges = () => setDetailReloadKey((key) => key + 1);
 
   // UC-25: the server checks the change first, then the admin confirms it.
   const requestStatusChange = async () => {
@@ -319,8 +320,8 @@ export function ServiceManagementPage({
             onUpdateInfo={updateInfo}
             onUpdatePrices={updatePrices}
             onToggleStatus={requestStatusChange}
-            referenceRangeApi={serviceApi}
-            onReferenceRangesChanged={refreshReferenceRanges}
+            // referenceRangeApi={serviceApi}
+            // onReferenceRangesChanged={refreshReferenceRanges}
             statusBusy={statusBusy}
             statusError={statusError.id === detailId ? statusError.message : null}
           />
