@@ -24,6 +24,9 @@ clinic:
   visit:
     end-of-day:
       enabled: false
+  icd10:
+    search-cache:
+      preload: false
 
 springdoc:
   api-docs:

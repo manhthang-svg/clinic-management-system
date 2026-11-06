@@ -2,6 +2,7 @@ package clinic.backend.service.impl;
 
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -98,7 +99,8 @@ class ClinicalExaminationServiceImplTest {
         service = new ClinicalExaminationServiceImpl(
                 visitRepository, patientRepository, roomRepository, staffAccountRepository, assignmentRepository,
                 dutyScheduleRepository, medicalRecordRepository, examinationRepository, vitalSignRepository,
-                historyRepository, icd10Repository, auditLogService, mapper,
+                historyRepository, icd10Repository,
+                new Icd10SearchCache(icd10Repository, clock, Duration.ofHours(1), false), auditLogService, mapper,
                 new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 
@@ -163,13 +165,23 @@ class ClinicalExaminationServiceImplTest {
     }
 
     @Test
-    void searchesOnlyCodesUsableOnTheClinicDay() {
-        when(icd10Repository.searchActive(eq("viêm"), eq(LocalDate.of(2026, 11, 3)), any()))
-                .thenReturn(List.of(icd10("J00", null, false, null)));
+    void searchesOnlyCodesUsableOnTheClinicDayWithoutAccents() {
+        when(icd10Repository.findSearchable()).thenReturn(List.of(
+                Icd10SearchCacheTest.code("J00", "Viêm mũi họng cấp", LocalDate.of(2026, 7, 1), null),
+                Icd10SearchCacheTest.code("J01.0", "Viêm xoang hàm cấp", LocalDate.of(2026, 12, 1), null)));
 
-        var result = service.searchActiveIcd10("viêm", 10);
+        var result = service.searchActiveIcd10("viem", 10);
 
-        assertThat(result).singleElement().satisfies(option -> assertThat(option.code()).isEqualTo("J00"));
+        assertThat(result).singleElement().satisfies(option -> {
+            assertThat(option.code()).isEqualTo("J00");
+            assertThat(option.name()).isEqualTo("Viêm mũi họng cấp");
+        });
+    }
+
+    @Test
+    void doesNotSearchWithFewerThanTwoCharacters() {
+        assertThat(service.searchActiveIcd10(" j ", 10)).isEmpty();
+        verify(icd10Repository, never()).findSearchable();
     }
 
     private static SaveClinicalExaminationRequest draftWithIcd10(String code) {

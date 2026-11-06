@@ -87,6 +87,8 @@ The command opens no HTTP port and exits. It validates the whole file first and 
 | `ICD10_IMPORT_EFFECTIVE_FROM` | `2026-07-01` | Day the list takes effect; retired codes end the day before |
 | `ICD10_IMPORT_SOURCE` | `TT 06/2026/TT-BYT` | Document recorded on each code |
 
+A running backend serves ICD-10 search from memory and reloads the list every hour (`clinic.icd10.search-cache.ttl`, default `1h`), so it sees a new import within an hour; restart the backend to see it at once. Saving a code always checks the database.
+
 The CSV is extracted from the official appendix PDF with the scripts in `backend/tools/icd10/` (header `ma,ten,ma_cha,ghi_chu`; `ghi_chu` holds the column 18 and 24–29 rules as `|`-separated flags).
 
 ## Testing
