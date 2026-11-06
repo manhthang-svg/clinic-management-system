@@ -7,7 +7,8 @@ import { LabValueTypeBadge } from './LabValueTypeBadge';
 import { ServiceInfoModal, ServicePriceModal } from './ServiceUpdateModals';
 import { FormAlert } from './ServiceFormParts';
 import { MSG92 } from './serviceErrors';
-import { LabReferenceRangeModal } from './LabReferenceRangeModal';
+// Reference range configuration is hidden for now (BR-46: the indicator catalog is built in).
+// import { LabReferenceRangeModal } from './LabReferenceRangeModal';
 
 const SECONDARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer';
@@ -75,14 +76,14 @@ export function ServiceDetailView({
   onUpdateInfo,
   onUpdatePrices,
   onToggleStatus,
-  referenceRangeApi,
-  onReferenceRangesChanged,
+  // referenceRangeApi,
+  // onReferenceRangesChanged,
   statusBusy = false,
   statusError = null,
 }) {
   // 'info' | 'price' | null
   const [editing, setEditing] = useState(null);
-  const [configuringParameter, setConfiguringParameter] = useState(null);
+  // const [configuringParameter, setConfiguringParameter] = useState(null);
   const close = () => setEditing(null);
   const type = SERVICE_TYPE_MAP[service.type];
   const examination = service.type === 'EXAMINATION';
@@ -178,14 +179,14 @@ export function ServiceDetailView({
           }}
         />
       )}
-      {configuringParameter && referenceRangeApi && (
+      {/* {configuringParameter && referenceRangeApi && (
         <LabReferenceRangeModal
           parameter={configuringParameter}
           api={referenceRangeApi}
           onChanged={onReferenceRangesChanged}
           onClose={() => setConfiguringParameter(null)}
         />
-      )}
+      )} */}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <SectionCard icon={FileText} title="Thông tin dịch vụ">
@@ -250,7 +251,7 @@ export function ServiceDetailView({
                     <th className="px-3 py-3">Kiểu kết quả</th>
                     <th className="px-3 py-3">Đơn vị</th>
                     <th className="px-3 py-3">Chỉ số tham chiếu</th>
-                    {referenceRangeApi && <th className="px-3 py-3 text-center">Thao tác</th>}
+                    {/* {referenceRangeApi && <th className="px-3 py-3 text-center">Thao tác</th>} */}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -274,7 +275,7 @@ export function ServiceDetailView({
                           </ul>
                         )}
                       </td>
-                      {referenceRangeApi && (
+                      {/* {referenceRangeApi && (
                         <td className="px-3 py-3 text-center">
                           <button
                             type="button"
@@ -290,7 +291,7 @@ export function ServiceDetailView({
                             Cấu hình
                           </button>
                         </td>
-                      )}
+                      )} */}
                     </tr>
                   ))}
                 </tbody>

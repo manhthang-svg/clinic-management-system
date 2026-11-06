@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ServiceDetailView } from './ServiceDetailView';
 
@@ -24,36 +23,41 @@ const labService = {
   }],
 };
 
-function referenceRangeApi() {
-  return {
-    listReferenceRanges: vi.fn().mockResolvedValue([]),
-    createReferenceRange: vi.fn(),
-    updateReferenceRange: vi.fn(),
-  };
-}
+// Reference range configuration on the detail is hidden for now (BR-46); restore these with the button.
+// function referenceRangeApi() {
+//   return {
+//     listReferenceRanges: vi.fn().mockResolvedValue([]),
+//     createReferenceRange: vi.fn(),
+//     updateReferenceRange: vi.fn(),
+//   };
+// }
+//
+// describe('ServiceDetailView UC-23 lab reference ranges', () => {
+//   it('opens reference range configuration for a parameter of a LAB service', async () => {
+//     const api = referenceRangeApi();
+//     render(
+//       <ServiceDetailView
+//         service={labService}
+//         onGoToList={vi.fn()}
+//         referenceRangeApi={api}
+//         onReferenceRangesChanged={vi.fn()}
+//       />,
+//     );
+//
+//     await userEvent.click(screen.getByRole('button', { name: 'Cấu hình' }));
+//
+//     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+//     await waitFor(() => expect(api.listReferenceRanges).toHaveBeenCalledWith('parameter-1'));
+//   });
+// });
 
-describe('ServiceDetailView UC-23 lab reference ranges', () => {
-  it('opens reference range configuration for a parameter of a LAB service', async () => {
-    const api = referenceRangeApi();
-    render(
-      <ServiceDetailView
-        service={labService}
-        onGoToList={vi.fn()}
-        referenceRangeApi={api}
-        onReferenceRangesChanged={vi.fn()}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Cấu hình' }));
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    await waitFor(() => expect(api.listReferenceRanges).toHaveBeenCalledWith('parameter-1'));
-  });
-
-  it('does not expose configuration when no reference range API is supplied', () => {
+describe('ServiceDetailView lab indicators (UC-21 step 3)', () => {
+  it('lists the indicators read-only, without a configure action (BR-46)', () => {
     render(<ServiceDetailView service={labService} onGoToList={vi.fn()} />);
 
+    expect(screen.getByText('Số lượng bạch cầu')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cấu hình' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Thao tác' })).not.toBeInTheDocument();
   });
 });
 

@@ -62,6 +62,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -332,16 +334,26 @@ public class MedicalServiceServiceImpl implements MedicalServiceService {
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
     }
 
+    private static Expression<String> searchable(CriteriaBuilder cb, Expression<String> value) {
+        return cb.lower(cb.function("unaccent", String.class, value));
+    }
+
+    // The keyword is matched literally: % and _ typed by the Admin are not wildcards.
+    private static String escapeLike(String keyword) {
+        return keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     private Specification<MedicalService> specification(
             String keyword, MedicalServiceType type, UUID serviceGroupId, UUID departmentId,
             ActivationStatus status) {
         return (root, query, cb) -> {
             var predicate = cb.conjunction();
+            // BR-110: contains-match on code or name, ignoring case and Vietnamese accents (unaccent, V11).
             if (keyword != null && !keyword.isBlank()) {
-                String term = "%" + keyword.strip().toLowerCase(Locale.ROOT) + "%";
+                Expression<String> term = searchable(cb, cb.literal("%" + escapeLike(keyword.strip()) + "%"));
                 predicate = cb.and(predicate, cb.or(
-                        cb.like(cb.lower(root.get("code")), term),
-                        cb.like(cb.lower(root.get("tenchidinh")), term)));
+                        cb.like(searchable(cb, root.get("code")), term, '\\'),
+                        cb.like(searchable(cb, root.get("tenchidinh")), term, '\\')));
             }
             if (type != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("type"), type));

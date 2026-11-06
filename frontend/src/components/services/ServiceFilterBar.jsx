@@ -40,6 +40,7 @@ export function ServiceFilterBar({
           aria-label="Tìm kiếm dịch vụ"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          maxLength={100}
           placeholder="Tìm theo mã hoặc tên dịch vụ..."
           className="w-full pl-10 pr-4 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 transition-all placeholder:text-slate-400"
         />

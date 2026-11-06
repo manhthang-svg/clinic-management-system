@@ -75,6 +75,27 @@ class MedicalServiceApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void searchIgnoresCaseAccentsAndSurroundingSpaces() throws Exception {
+        StaffAccount admin = account(Role.ADMIN);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        insertCatalog(UUID.randomUUID(), UUID.randomUUID(), suffix);
+        String token = accessToken(admin);
+
+        // The service is named "Xét nghiệm <suffix>" (BR-110).
+        mockMvc.perform(get("/api/v1/services")
+                        .param("keyword", "  XET NGHIEM " + suffix.toUpperCase(Locale.ROOT) + "  ")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].code").value("XN-" + suffix));
+
+        mockMvc.perform(get("/api/v1/services")
+                        .param("keyword", "x".repeat(101))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void adminCanViewServiceDetailWithOnlyActiveRoomsInTheSameGroup() throws Exception {
         StaffAccount admin = account(Role.ADMIN);
         StaffAccount receptionist = account(Role.RECEPTIONIST);
