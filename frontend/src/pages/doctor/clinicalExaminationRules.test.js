@@ -78,6 +78,10 @@ describe('fieldErrorsFromApi', () => {
 
     it('marks the diagnosis and ICD-10 fields for their business errors', () => {
         expect(fieldErrorsFromApi({ errorResponse: { code: 'ICD10_INVALID' } })).toEqual({ icd10: MSG.ICD10_INVALID });
+        expect(fieldErrorsFromApi({ errorResponse: { code: 'ICD10_NOT_DETAILED' } }))
+            .toEqual({ icd10: MSG.ICD10_NOT_DETAILED });
+        expect(fieldErrorsFromApi({ errorResponse: { code: 'ICD10_SEX_MISMATCH' } }))
+            .toEqual({ icd10: MSG.ICD10_SEX_MISMATCH });
         expect(fieldErrorsFromApi({ errorResponse: { code: 'PRELIMINARY_DIAGNOSIS_REQUIRED' } }))
             .toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED });
     });

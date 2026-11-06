@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -126,8 +127,9 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         validateRequest(request);
-        Icd10 icd10 = resolveIcd10(request.preliminaryDiagnosisIcd10Code());
         Instant now = clock.instant();
+        Icd10 icd10 = resolveIcd10(
+                request.preliminaryDiagnosisIcd10Code(), context.patient(), LocalDate.ofInstant(now, CLINIC_ZONE));
         Map<String, Object> oldValues = auditValues(context.visit(), examination);
 
         context.visit().updateReasonForVisit(normalize(request.reasonForVisit()), now);
@@ -152,7 +154,8 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     public List<Icd10OptionResponse> searchActiveIcd10(String keyword, int limit) {
         String query = keyword == null ? "" : keyword.strip();
         if (query.length() < 2) return List.of();
-        return icd10Repository.searchActive(query, PageRequest.of(0, Math.min(Math.max(limit, 1), 30)))
+        LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        return icd10Repository.searchActive(query, today, PageRequest.of(0, Math.min(Math.max(limit, 1), 30)))
                 .stream().map(mapper::toIcd10Option).toList();
     }
 
@@ -298,12 +301,23 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         }
     }
 
-    private Icd10 resolveIcd10(String code) {
+    /**
+     * The code must be usable on the visit day, be the most detailed level (TT 06/2026 column 26) and fit the
+     * patient's sex (columns 28, 29). Main-diagnosis rules (columns 24, 25, 27) belong to the conclusion (UC-50).
+     */
+    private Icd10 resolveIcd10(String code, Patient patient, LocalDate day) {
         String normalized = normalize(code);
         if (normalized == null) return null;
-        return icd10Repository.findById(normalized.toUpperCase())
-                .filter(Icd10::isActive)
+        Icd10 icd10 = icd10Repository.findById(normalized.toUpperCase(Locale.ROOT))
+                .filter(item -> item.isUsableOn(day))
                 .orElseThrow(() -> new AppException(ErrorCode.ICD10_INVALID));
+        if (icd10.isCoMaChiTietHon()) {
+            throw new AppException(ErrorCode.ICD10_NOT_DETAILED);
+        }
+        if (!icd10.appliesToSex(patient.getGioitinh())) {
+            throw new AppException(ErrorCode.ICD10_SEX_MISMATCH);
+        }
+        return icd10;
     }
 
     private List<ExaminationFinding> buildFindings(

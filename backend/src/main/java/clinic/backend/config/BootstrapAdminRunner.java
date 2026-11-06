@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@Profile("!admin-recovery")
+@Profile("!admin-recovery & !icd10-import")
 @RequiredArgsConstructor
 public class BootstrapAdminRunner implements ApplicationRunner {
 

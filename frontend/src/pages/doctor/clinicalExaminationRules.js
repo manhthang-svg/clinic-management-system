@@ -47,6 +47,8 @@ export const MSG = {
     DIASTOLIC_NOT_BELOW_SYSTOLIC: 'Huyết áp tâm trương phải nhỏ hơn huyết áp tâm thu.', // MSG97
     DIAGNOSIS_REQUIRED: 'Chẩn đoán ban đầu phải có từ 2 đến 1.000 ký tự trước khi tiếp tục.', // MSG98
     ICD10_INVALID: 'Mã ICD-10 không còn khả dụng. Vui lòng chọn mã khác hoặc để trống.',
+    ICD10_NOT_DETAILED: 'Mã ICD-10 này có mã chi tiết hơn. Vui lòng chọn mã chi tiết.', // TT 06/2026, cột 26
+    ICD10_SEX_MISMATCH: 'Mã ICD-10 này không áp dụng cho giới tính của người bệnh.', // TT 06/2026, cột 28-29
     NOT_IN_EXAMINATION: 'Lượt khám không còn ở trạng thái đang khám.',
     VISIT_NOT_FOUND: 'Không tìm thấy lượt khám.',
     CONCURRENT_MODIFICATION: 'Hồ sơ vừa được cập nhật ở nơi khác. Vui lòng tải lại.',
@@ -68,6 +70,8 @@ const CODE_MESSAGES = {
     VITAL_SIGNS_INVALID: MSG.CHECK_FIELDS,
     PRELIMINARY_DIAGNOSIS_REQUIRED: MSG.DIAGNOSIS_REQUIRED,
     ICD10_INVALID: MSG.ICD10_INVALID,
+    ICD10_NOT_DETAILED: MSG.ICD10_NOT_DETAILED,
+    ICD10_SEX_MISMATCH: MSG.ICD10_SEX_MISMATCH,
     CLINICAL_EXAMINATION_INVALID: MSG.INVALID_DATA,
     REQUEST_VALIDATION_FAILED: MSG.INVALID_DATA,
 };
@@ -91,7 +95,9 @@ const API_FIELDS = {
 export function fieldErrorsFromApi(error, sentOrgans = []) {
     const code = error?.errorResponse?.code;
     if (code === 'PRELIMINARY_DIAGNOSIS_REQUIRED') return { preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED };
-    if (code === 'ICD10_INVALID') return { icd10: MSG.ICD10_INVALID };
+    if (code === 'ICD10_INVALID' || code === 'ICD10_NOT_DETAILED' || code === 'ICD10_SEX_MISMATCH') {
+        return { icd10: MSG[code] };
+    }
     if (code === 'VITAL_SIGNS_REQUIRED') return { vitals: MSG.VITALS_REQUIRED };
     const details = error?.errorResponse?.details;
     if (code !== 'REQUEST_VALIDATION_FAILED' || !details || typeof details !== 'object') return {};

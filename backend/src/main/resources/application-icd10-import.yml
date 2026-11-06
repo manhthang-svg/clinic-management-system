@@ -1,0 +1,32 @@
+# Operator-only ICD-10 list import (README, "Load the ICD-10 list"). It loads one file and exits without opening an HTTP port.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+  datasource:
+    hikari:
+      data-source-properties:
+        # Lets the PostgreSQL driver send each insert batch as one statement, so ~16,000 rows need few round trips.
+        reWriteBatchedInserts: true
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 500
+        order_inserts: true
+        order_updates: true
+
+clinic:
+  icd10-import:
+    file: ${ICD10_IMPORT_FILE:classpath:db/reference/icd10.csv}
+    effective-from: ${ICD10_IMPORT_EFFECTIVE_FROM:2026-07-01}
+    source: ${ICD10_IMPORT_SOURCE:TT 06/2026/TT-BYT}
+  visit:
+    end-of-day:
+      enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

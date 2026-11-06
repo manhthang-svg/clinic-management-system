@@ -38,6 +38,7 @@ import clinic.backend.exceptions.AppException;
 import clinic.backend.mapper.ClinicalExaminationMapper;
 import clinic.backend.repository.ClinicalExaminationRepository;
 import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.entity.Icd10;
 import clinic.backend.repository.Icd10Repository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicalRecordRepository;
@@ -128,6 +129,60 @@ class ClinicalExaminationServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         error -> org.assertj.core.api.Assertions.assertThat(error.getErrorCode())
                                 .isEqualTo(ErrorCode.PRELIMINARY_DIAGNOSIS_REQUIRED));
+    }
+
+    @Test
+    void rejectsACategoryThatHasMoreDetailedCodes() {
+        stubEditableExamination();
+        when(icd10Repository.findById("A00")).thenReturn(Optional.of(icd10("A00", null, true, null)));
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, draftWithIcd10("a00")))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ICD10_NOT_DETAILED));
+    }
+
+    @Test
+    void rejectsAFemaleOnlyCodeForAMalePatient() {
+        stubEditableExamination();
+        when(icd10Repository.findById("A34")).thenReturn(Optional.of(icd10("A34", null, false, (short) 2)));
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, draftWithIcd10("A34")))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ICD10_SEX_MISMATCH));
+    }
+
+    @Test
+    void rejectsACodeNotYetInEffectOnTheVisitDay() {
+        stubEditableExamination();
+        when(icd10Repository.findById("U07.1")).thenReturn(Optional.of(
+                icd10("U07.1", LocalDate.of(2026, 12, 1), false, null)));
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, draftWithIcd10("U07.1")))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ICD10_INVALID));
+    }
+
+    @Test
+    void searchesOnlyCodesUsableOnTheClinicDay() {
+        when(icd10Repository.searchActive(eq("viêm"), eq(LocalDate.of(2026, 11, 3)), any()))
+                .thenReturn(List.of(icd10("J00", null, false, null)));
+
+        var result = service.searchActiveIcd10("viêm", 10);
+
+        assertThat(result).singleElement().satisfies(option -> assertThat(option.code()).isEqualTo("J00"));
+    }
+
+    private static SaveClinicalExaminationRequest draftWithIcd10(String code) {
+        return new SaveClinicalExaminationRequest(
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
+                new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
+                List.of(), "Theo dõi", code, null, null);
+    }
+
+    private static Icd10 icd10(String code, LocalDate effectiveFrom, boolean moreDetailed, Short sex) {
+        return Icd10.fromCatalog(
+                new Icd10.CatalogEntry(code, "Bệnh " + code, null, false, false, moreDetailed, false, sex, null, null),
+                effectiveFrom == null ? LocalDate.of(2026, 7, 1) : effectiveFrom, "TT 06/2026/TT-BYT");
     }
 
     @Test
