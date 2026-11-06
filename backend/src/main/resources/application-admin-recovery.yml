@@ -4,6 +4,12 @@ spring:
     web-application-type: none
     banner-mode: off
 
+# A one-shot maintenance run must not close visits (the end-of-day job also runs at startup).
+clinic:
+  visit:
+    end-of-day:
+      enabled: false
+
 springdoc:
   api-docs:
     enabled: false
