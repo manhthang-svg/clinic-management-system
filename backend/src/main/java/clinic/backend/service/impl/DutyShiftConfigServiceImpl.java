@@ -10,24 +10,25 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import clinic.backend.dto.request.DutyShiftConfigRequest;
 import clinic.backend.dto.response.DutyShiftConfigResponse;
+import clinic.backend.enums.DutyShift;
 import clinic.backend.service.DutyShiftConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
 
     public static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -38,7 +39,18 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
 
     private final ObjectMapper objectMapper;
     private final Map<String, DutyShiftConfigResponse> configMap = new ConcurrentHashMap<>();
-    private final Path storageFile = Paths.get("data", "duty_shift_config.json");
+    private final Path storageFile;
+
+    @Autowired
+    public DutyShiftConfigServiceImpl(ObjectMapper objectMapper) {
+        this(objectMapper, Paths.get("data", "duty_shift_config.json"));
+    }
+
+    /** Stores the configuration in {@code storageFile}; tests pass a temporary file. */
+    DutyShiftConfigServiceImpl(ObjectMapper objectMapper, Path storageFile) {
+        this.objectMapper = objectMapper;
+        this.storageFile = storageFile;
+    }
 
     @PostConstruct
     public void init() {
@@ -162,5 +174,44 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
                 monday, currentUserId, morningStartStr, morningEndStr, afternoonStartStr, afternoonEndStr);
 
         return updated;
+    }
+
+    @Override
+    public Optional<DutyShift> shiftAt(LocalDate date, LocalTime time) {
+        DutyShiftConfigResponse config = getConfigForDate(date);
+        if (within(time, parse(config.getMorningStartTime(), DEFAULT_MORNING_START),
+                parse(config.getMorningEndTime(), DEFAULT_MORNING_END))) {
+            return Optional.of(DutyShift.MORNING);
+        }
+        if (within(time, parse(config.getAfternoonStartTime(), DEFAULT_AFTERNOON_START),
+                parse(config.getAfternoonEndTime(), DEFAULT_AFTERNOON_END))) {
+            return Optional.of(DutyShift.AFTERNOON);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<DutyShift> registrationShift(LocalDate date, LocalTime time) {
+        DutyShiftConfigResponse config = getConfigForDate(date);
+        if (!time.isAfter(parse(config.getMorningEndTime(), DEFAULT_MORNING_END))) {
+            return Optional.of(DutyShift.MORNING);
+        }
+        if (!time.isAfter(parse(config.getAfternoonEndTime(), DEFAULT_AFTERNOON_END))) {
+            return Optional.of(DutyShift.AFTERNOON);
+        }
+        return Optional.empty();
+    }
+
+    private static boolean within(LocalTime time, LocalTime start, LocalTime end) {
+        return !time.isBefore(start) && !time.isAfter(end);
+    }
+
+    /** Stored values are validated on update; a malformed value loaded from the file falls back to the default. */
+    private static LocalTime parse(String value, String fallback) {
+        try {
+            return LocalTime.parse(value == null ? fallback : value.trim());
+        } catch (Exception e) {
+            return LocalTime.parse(fallback);
+        }
     }
 }

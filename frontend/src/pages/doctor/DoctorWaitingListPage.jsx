@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import {
     ChevronDown,
@@ -80,10 +80,26 @@ function StatusBadge({ visit }) {
 function queueErrorMessage(error, fallback) {
     const code = error?.errorResponse?.code;
     if (code === 'ROOM_ASSIGNMENT_REQUIRED') return 'Bạn chưa được phân công vào phòng khám đang hoạt động.';
-    if (code === 'ACCESS_DENIED') return 'Bạn không trong ca trực của phòng này. Vui lòng kiểm tra lịch trực.';
+    if (code === 'DOCTOR_OFF_DUTY') return 'Bạn không trong ca trực của phòng này. Vui lòng kiểm tra lịch trực.';
+    if (code === 'FORBIDDEN') return 'Bạn không có quyền thao tác trên lượt khám này.';
     if (code === 'CONCURRENT_MODIFICATION') return 'Lượt khám đã được cập nhật. Danh sách sẽ được tải lại.';
     if (error?.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
     return fallback;
+}
+
+function paginationItems(currentPage, pageCount) {
+    if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+
+    const pages = new Set([1, pageCount, currentPage - 1, currentPage, currentPage + 1]);
+    const visiblePages = [...pages]
+        .filter((pageNumber) => pageNumber >= 1 && pageNumber <= pageCount)
+        .sort((left, right) => left - right);
+    const items = [];
+    visiblePages.forEach((pageNumber, index) => {
+        if (index > 0 && pageNumber - visiblePages[index - 1] > 1) items.push(`ellipsis-${pageNumber}`);
+        items.push(pageNumber);
+    });
+    return items;
 }
 
 function VisitNotes({ visit }) {
@@ -139,6 +155,7 @@ export default function DoctorWaitingListPage({
     const [pageSize, setPageSize] = useState(10);
     const [calling, setCalling] = useState(false);
     const [processingVisitId, setProcessingVisitId] = useState(null);
+    const latestQueueRequest = useRef(0);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -147,17 +164,20 @@ export default function DoctorWaitingListPage({
     }, [loadProfile]);
 
     const fetchQueue = useCallback(async (signal) => {
+        const requestId = latestQueueRequest.current + 1;
+        latestQueueRequest.current = requestId;
         try {
             const tab = TABS.find(({ id }) => id === activeTab) ?? TABS[0];
             const response = await visitApi.getDoctorQueue({
                 tab: tab.apiValue,
                 keyword: search.trim(),
                 priority: priority === 'ALL' ? undefined : priority === 'PRIORITY',
-                visitType,
+                visitType: visitType === 'ALL' ? undefined : visitType,
                 interruptedStage: activeTab === 'skipped' ? interruptedStage : undefined,
                 page: page - 1,
                 size: pageSize,
             }, signal);
+            if (requestId !== latestQueueRequest.current) return;
             const pageData = response?.visits;
             setVisits(Array.isArray(pageData?.content) ? pageData.content : []);
             setQueueInfo(response ?? null);
@@ -166,11 +186,11 @@ export default function DoctorWaitingListPage({
             setLoadError('');
             setLastUpdated(response?.refreshedAt ? new Date(response.refreshedAt) : new Date());
         } catch (error) {
-            if (error?.name !== 'AbortError') {
+            if (error?.name !== 'AbortError' && requestId === latestQueueRequest.current) {
                 setLoadError(queueErrorMessage(error, 'Không thể tải danh sách khám bệnh. Vui lòng thử lại.'));
             }
         } finally {
-            setLoading(false);
+            if (requestId === latestQueueRequest.current) setLoading(false);
         }
     }, [activeTab, interruptedStage, page, pageSize, priority, search, visitApi, visitType]);
 
@@ -402,7 +422,7 @@ export default function DoctorWaitingListPage({
                                                 <td className="px-3 py-3"><StatusBadge visit={visit} /></td>
                                                 <td className="px-3 py-3">
                                                     {callable && visit.isSkipped
-                                                        ? <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
+                                                        ? <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Tiếp nhận lại'}</button>
                                                         : callable
                                                             ? <div className="flex min-w-40 justify-center gap-2">
                                                                 <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
@@ -431,8 +451,10 @@ export default function DoctorWaitingListPage({
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1">
                                     <button type="button" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
-                                    {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
-                                        <button key={n} type="button" aria-current={n === currentPage ? 'page' : undefined} onClick={() => setPage(n)} className={`h-8 w-8 cursor-pointer rounded-full text-xs font-semibold ${n === currentPage ? 'border border-teal-600 text-teal-700' : 'text-slate-600 hover:bg-slate-100'}`}>{n}</button>
+                                    {paginationItems(currentPage, pageCount).map((item) => (
+                                        typeof item === 'number'
+                                            ? <button key={item} type="button" aria-label={`Trang ${item}`} aria-current={item === currentPage ? 'page' : undefined} onClick={() => setPage(item)} className={`h-8 w-8 cursor-pointer rounded-full text-xs font-semibold ${item === currentPage ? 'border border-teal-600 text-teal-700' : 'text-slate-600 hover:bg-slate-100'}`}>{item}</button>
+                                            : <span key={item} aria-hidden="true" className="flex h-8 w-6 items-center justify-center text-slate-400">…</span>
                                     ))}
                                     <button type="button" aria-label="Trang sau" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
                                 </div>

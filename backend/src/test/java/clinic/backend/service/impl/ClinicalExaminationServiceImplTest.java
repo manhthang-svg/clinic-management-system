@@ -52,6 +52,7 @@ import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -101,7 +102,8 @@ class ClinicalExaminationServiceImplTest {
                 dutyScheduleRepository, medicalRecordRepository, examinationRepository, vitalSignRepository,
                 historyRepository, icd10Repository,
                 new Icd10SearchCache(icd10Repository, clock, Duration.ofHours(1), false), auditLogService, mapper,
-                new UuidV7Generator(clock, new SecureRandom()), clock);
+                new UuidV7Generator(clock, new SecureRandom()),
+                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()), clock);
     }
 
     @Test

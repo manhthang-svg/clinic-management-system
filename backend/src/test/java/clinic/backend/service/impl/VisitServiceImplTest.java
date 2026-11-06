@@ -52,6 +52,7 @@ import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -151,6 +152,7 @@ class VisitServiceImplTest {
                 auditLogService,
                 uuidV7Generator,
                 examinationRoomDuty,
+                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
                 clock);
     }
 
@@ -238,6 +240,31 @@ class VisitServiceImplTest {
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
         verifyNoInteractions(visitRepository);
+    }
+
+    @Test
+    void doctorOutsideAssignedShiftCannotStartExamination() {
+        Room assignedRoom = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Nguyễn Văn An")
+                .role(clinic.backend.enums.Role.DOCTOR).status(AccountStatus.ACTIVE)
+                .build();
+        StaffRoomAssignment assignment = new StaffRoomAssignment(
+                UUID.randomUUID(), DOCTOR_ID, BUSY_ROOM_ID, clock.instant(), null, null, null, 0L);
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.of(assignment));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
+        when(dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
+                QUEUE_DATE, DutyShift.MORNING, DOCTOR_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.startExamination(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), UUID.randomUUID()))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.DOCTOR_OFF_DUTY));
     }
 
     @Test

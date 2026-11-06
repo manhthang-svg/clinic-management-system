@@ -2,7 +2,6 @@ package clinic.backend.service.impl;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,9 +12,10 @@ import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.Role;
 import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,15 +35,12 @@ class ExaminationRoomDutyTest {
 
     @Mock DutyScheduleRepository dutyScheduleRepository;
     @Mock StaffAccountRepository staffAccountRepository;
-    @InjectMocks ExaminationRoomDuty duty;
+    ExaminationRoomDuty duty;
 
-    @Test
-    void picksTheShiftARegistrationIsFor() {
-        assertThat(ExaminationRoomDuty.registrationShift(LocalTime.of(7, 30))).contains(DutyShift.MORNING);
-        assertThat(ExaminationRoomDuty.registrationShift(LocalTime.of(11, 30))).contains(DutyShift.MORNING);
-        assertThat(ExaminationRoomDuty.registrationShift(LocalTime.of(12, 15))).contains(DutyShift.AFTERNOON);
-        assertThat(ExaminationRoomDuty.registrationShift(LocalTime.of(17, 30))).contains(DutyShift.AFTERNOON);
-        assertThat(ExaminationRoomDuty.registrationShift(LocalTime.of(18, 0))).isEmpty();
+    @BeforeEach
+    void setUp() {
+        duty = new ExaminationRoomDuty(dutyScheduleRepository, staffAccountRepository,
+                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()));
     }
 
     @Test
