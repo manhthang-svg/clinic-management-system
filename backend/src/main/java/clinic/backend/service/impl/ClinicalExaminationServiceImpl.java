@@ -61,7 +61,6 @@ import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ClinicalExaminationService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,6 +87,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     private final VitalSignRepository vitalSignRepository;
     private final MedicalHistoryRepository historyRepository;
     private final Icd10Repository icd10Repository;
+    private final Icd10SearchCache icd10SearchCache;
     private final AuditLogService auditLogService;
     private final ClinicalExaminationMapper mapper;
     private final UuidV7Generator ids;
@@ -150,13 +150,14 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Icd10OptionResponse> searchActiveIcd10(String keyword, int limit) {
         String query = keyword == null ? "" : keyword.strip();
         if (query.length() < 2) return List.of();
+        // Served from memory (Icd10SearchCache): no database round trip per keystroke.
         LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
-        return icd10Repository.searchActive(query, today, PageRequest.of(0, Math.min(Math.max(limit, 1), 30)))
-                .stream().map(mapper::toIcd10Option).toList();
+        return icd10SearchCache.search(query, today, Math.min(Math.max(limit, 1), 30)).stream()
+                .map(entry -> new Icd10OptionResponse(entry.code(), entry.name()))
+                .toList();
     }
 
     @Override

@@ -4,9 +4,13 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
+import clinic.backend.repository.Icd10Repository;
 import clinic.backend.service.Icd10ImportService;
 import clinic.backend.service.Icd10ImportService.InvalidCatalogException;
 import clinic.backend.service.Icd10ImportService.Result;
@@ -31,6 +35,12 @@ class Icd10ImportIT extends PostgresIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private Icd10Repository icd10Repository;
+
+    @Autowired
+    private Clock clock;
 
     /** The container is shared: leave no imported codes behind for other tests (they insert E11, K29 themselves). */
     @BeforeEach
@@ -59,6 +69,30 @@ class Icd10ImportIT extends PostgresIntegrationTest {
         Result second = importReal();
 
         assertThat(second).isEqualTo(new Result(15_844, 0, 0, 15_844, 0));
+    }
+
+    @Test
+    void searchesTheWholeListInMemoryWithoutAccents() throws Exception {
+        importReal();
+        // A fresh cache: the application's one was loaded before this test imported the list.
+        Icd10SearchCache cache = new Icd10SearchCache(icd10Repository, clock, Duration.ofHours(1), false);
+        LocalDate day = LocalDate.of(2026, 11, 6);
+
+        assertThat(cache.entries()).hasSize(15_844 - 2_119);
+        List<String> pneumonia = cache.search("viem phoi", day, 10).stream().map(Icd10SearchCache.Entry::code).toList();
+        assertThat(pneumonia).isNotEmpty().allMatch(code -> code.startsWith("J") || code.startsWith("P")
+                || code.startsWith("A") || code.startsWith("B"));
+        assertThat(cache.search("J18.0", day, 10)).first().satisfies(entry -> assertThat(entry.code()).isEqualTo("J18.0"));
+        assertThat(cache.search("A00", day, 10)).extracting(Icd10SearchCache.Entry::code)
+                .doesNotContain("A00").contains("A00.0");
+
+        for (int i = 0; i < 200; i++) cache.search("viem", day, 30);   // warm up the JIT
+        long started = System.nanoTime();
+        for (int i = 0; i < 200; i++) cache.search("viem", day, 30);
+        long perSearchMicros = (System.nanoTime() - started) / 200 / 1_000;
+        System.out.println("ICD-10 in-memory search: ~" + perSearchMicros + " µs per search over "
+                + cache.entries().size() + " codes");
+        assertThat(perSearchMicros).isLessThan(50_000);
     }
 
     @Test
