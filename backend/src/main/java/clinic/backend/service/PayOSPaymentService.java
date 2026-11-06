@@ -25,6 +25,8 @@ import vn.payos.model.webhooks.Webhook;
 import vn.payos.model.webhooks.WebhookData;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -58,6 +60,8 @@ public class PayOSPaymentService {
         this.cancelUrl = cancelUrl;
     }
 
+
+
     @Transactional
     public PaymentQrResponse createQr(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
@@ -75,7 +79,9 @@ public class PayOSPaymentService {
 
         if (payment.getPayosOrderCode() != null
                 && payment.getPayosCheckoutUrl() != null
-                && payment.getPayosQrCode() != null) {
+                && payment.getPayosQrCode() != null
+                && (payment.getPayosExpiredAt() == null
+                    || Instant.now().isBefore(payment.getPayosExpiredAt()))) {
             return toResponse(payment);
         }
 
@@ -102,6 +108,10 @@ public class PayOSPaymentService {
             description = description.substring(0, 25);
         }
 
+        long expiredAt = Instant.now()
+                .plus(Duration.ofMinutes(15))
+                .getEpochSecond();
+
         CreatePaymentLinkRequest request =
                 CreatePaymentLinkRequest.builder()
                         .orderCode(orderCode)
@@ -109,6 +119,7 @@ public class PayOSPaymentService {
                         .description(description)
                         .returnUrl(returnUrl)
                         .cancelUrl(cancelUrl)
+                        .expiredAt(expiredAt)
                         .build();
 
         final CreatePaymentLinkResponse result;
@@ -127,7 +138,8 @@ public class PayOSPaymentService {
                 orderCode,
                 result.getCheckoutUrl(),
                 result.getQrCode(),
-                result.getPaymentLinkId()
+                result.getPaymentLinkId(),
+                Instant.ofEpochSecond(expiredAt)
         );
 
         Payment saved = paymentRepository.save(payment);
@@ -331,7 +343,8 @@ public class PayOSPaymentService {
                 payment.getPayosOrderCode(),
                 payment.getPayosCheckoutUrl(),
                 payment.getPayosQrCode(),
-                payment.getStatus().name()
+                payment.getStatus().name(),
+                payment.getPayosExpiredAt()
         );
     }
 }

@@ -1,6 +1,7 @@
 
 package clinic.backend.dto.response;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public record PaymentQrResponse(
@@ -9,6 +10,7 @@ public record PaymentQrResponse(
         Long orderCode,
         String checkoutUrl,
         String qrCode,
-        String status
+        String status,
+        Instant expiredAt
 ) {
 }

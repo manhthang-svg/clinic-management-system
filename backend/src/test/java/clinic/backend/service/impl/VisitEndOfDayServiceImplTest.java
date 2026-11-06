@@ -292,7 +292,7 @@ class VisitEndOfDayServiceImplTest {
     }
 
     private static Payment withPayOSLink(Payment payment) {
-        payment.attachPayOSPayment(1793704131724L, "https://pay.example/checkout", "qr", "link-1");
+        payment.attachPayOSPayment(1793704131724L, "https://pay.example/checkout", "qr", "link-1", java.time.Instant.now().plusSeconds(900));
         return payment;
     }
 

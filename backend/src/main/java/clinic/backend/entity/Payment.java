@@ -121,6 +121,9 @@ public class Payment extends VersionedEntity {
     @Column(name = "payos_payment_link_id", length = 100)
     private String payosPaymentLinkId;
 
+    @Column(name = "payos_expired_at")
+    private Instant payosExpiredAt;
+
     @Getter(AccessLevel.NONE)
     @OneToMany(
             mappedBy = "payment",
@@ -288,7 +291,8 @@ public class Payment extends VersionedEntity {
             Long orderCode,
             String checkoutUrl,
             String qrCode,
-            String paymentLinkId
+            String paymentLinkId,
+            Instant expiredAt
     ) {
         if (this.status != PaymentStatus.PENDING) {
             throw new IllegalStateException(
@@ -310,6 +314,7 @@ public class Payment extends VersionedEntity {
         this.payosCheckoutUrl = checkoutUrl;
         this.payosQrCode = qrCode;
         this.payosPaymentLinkId = paymentLinkId;
+        this.payosExpiredAt = expiredAt;
         this.paymentMethod = PaymentMethod.BANK_TRANSFER;
     }
 

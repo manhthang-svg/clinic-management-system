@@ -137,7 +137,7 @@ class PayOSPaymentServiceTest {
     }
 
     private void attachLink() {
-        payment.attachPayOSPayment(ORDER_CODE, "https://pay.example/checkout", "qr", "link-1");
+        payment.attachPayOSPayment(ORDER_CODE, "https://pay.example/checkout", "qr", "link-1", java.time.Instant.now().plusSeconds(900));
     }
 
     private static PaymentLink link(PaymentLinkStatus status) {

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
+import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 
 function formatMoney(amount) {
     if (amount === undefined || amount === null) return '0 ₫';
@@ -765,6 +766,12 @@ export default function CashierOverviewPage() {
                                             <span className="font-mono font-bold text-blue-700">{qrModal.qrData.description || qrModal.payment.paymentCode}</span>
                                         </div>
                                     </div>
+
+                                    <PayosQrCountdown
+                                        expiredAt={qrModal.qrData.expiredAt}
+                                        onRenew={() => handleOpenQrModal(qrModal.payment)}
+                                        renewing={loadingQr}
+                                    />
 
                                     <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                                         <Clock className="h-4 w-4 animate-spin text-blue-500" />
