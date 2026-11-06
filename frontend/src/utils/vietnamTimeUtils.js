@@ -4,10 +4,10 @@
 
 export const VN_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
-// Giờ kết thúc các ca trực tại phòng khám
+// Giờ kết thúc mặc định các ca trực tại phòng khám
 export const SHIFT_END_TIMES = {
-  MORNING: { hour: 11, minute: 30 }, // Ca sáng kết thúc lúc 11:30
-  AFTERNOON: { hour: 17, minute: 30 }, // Ca chiều kết thúc lúc 17:30
+  MORNING: { hour: 11, minute: 30 }, // Ca sáng mặc định kết thúc lúc 11:30
+  AFTERNOON: { hour: 17, minute: 30 }, // Ca chiều mặc định kết thúc lúc 17:30
 };
 
 /**
@@ -47,18 +47,19 @@ export function getVietnamCurrentTime() {
  * Kiểm tra xem một ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian trong quá khứ hay chưa
  * @param {string} workDate - Ngày trực dạng 'YYYY-MM-DD'
  * @param {'MORNING' | 'AFTERNOON'} [shift] - Ca làm việc
- * @returns {boolean} - true nếu ca trực đã qua giờ thực tế tại Việt Nam
+ * @param {object} [shiftConfig] - Cấu hình khung giờ ca trực ({ morningEndTime, afternoonEndTime })
+ * @returns {boolean} - true nếu ca trực đã qua giờ thực tế tại Việt Nam (bị khóa)
  */
-export function isShiftPast(workDate, shift) {
+export function isShiftPast(workDate, shift, shiftConfig = null) {
   if (!workDate) return false;
   const todayVN = getVietnamTodayStr();
 
-  // 1. Ngày trực trước ngày hôm nay theo giờ VN -> Đã qua
+  // 1. Ngày trực trước ngày hôm nay theo giờ VN -> Đã qua (tự động khóa)
   if (workDate < todayVN) {
     return true;
   }
 
-  // 2. Ngày trực sau ngày hôm nay -> Trong tương lai
+  // 2. Ngày trực sau ngày hôm nay -> Trong tương lai (cho phép sửa bình thường)
   if (workDate > todayVN) {
     return false;
   }
@@ -68,9 +69,37 @@ export function isShiftPast(workDate, shift) {
     const { hour, minute } = getVietnamCurrentTime();
     const currentMinutes = hour * 60 + minute;
 
-    const endTime = SHIFT_END_TIMES[shift];
-    if (endTime) {
-      const endMinutes = endTime.hour * 60 + endTime.minute;
+    if (shift === 'MORNING') {
+      let endHour = SHIFT_END_TIMES.MORNING.hour;
+      let endMinute = SHIFT_END_TIMES.MORNING.minute;
+
+      if (shiftConfig?.morningEndTime && typeof shiftConfig.morningEndTime === 'string') {
+        const [h, m] = shiftConfig.morningEndTime.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          endHour = h;
+          endMinute = m;
+        }
+      }
+
+      const endMinutes = endHour * 60 + endMinute;
+      // Ca sáng tự động khóa khi đã quá giờ kết thúc ca hoặc quá 11:59
+      return currentMinutes >= endMinutes || currentMinutes > 11 * 60 + 59;
+    }
+
+    if (shift === 'AFTERNOON') {
+      let endHour = SHIFT_END_TIMES.AFTERNOON.hour;
+      let endMinute = SHIFT_END_TIMES.AFTERNOON.minute;
+
+      if (shiftConfig?.afternoonEndTime && typeof shiftConfig.afternoonEndTime === 'string') {
+        const [h, m] = shiftConfig.afternoonEndTime.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          endHour = h;
+          endMinute = m;
+        }
+      }
+
+      const endMinutes = endHour * 60 + endMinute;
+      // Ca chiều tự động khóa khi đã quá giờ kết thúc ca hoặc quá 23:59
       return currentMinutes >= endMinutes;
     }
   }

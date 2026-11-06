@@ -59,6 +59,24 @@ export const dutyScheduleApi = {
       method: 'DELETE',
     });
   },
+
+  async getShiftConfig(startDate, signal) {
+    const query = startDate ? `?startDate=${encodeURIComponent(startDate)}` : '';
+    return apiClient.request(`/duty-schedules/shift-config${query}`, { signal });
+  },
+
+  async updateShiftConfig(data) {
+    return apiClient.request('/duty-schedules/shift-config', {
+      method: 'PUT',
+      body: {
+        startDate: data.startDate,
+        morningStartTime: data.morningStartTime,
+        morningEndTime: data.morningEndTime,
+        afternoonStartTime: data.afternoonStartTime,
+        afternoonEndTime: data.afternoonEndTime,
+      },
+    });
+  },
 };
 
 export default dutyScheduleApi;

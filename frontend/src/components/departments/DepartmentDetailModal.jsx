@@ -20,6 +20,7 @@ import {
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { formatPrice } from '../services/serviceFormat';
 import { describeApiError } from '../../utils/describeApiError';
+import { getVietnamTodayStr } from '../../utils/vietnamTimeUtils';
 
 const ROLE_LABELS = {
   ADMIN: 'Quản trị viên',
@@ -52,7 +53,7 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
   useEffect(() => {
     if (isDept || !item?.id) return;
     let isMounted = true;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getVietnamTodayStr();
 
     async function loadTodayRoomDuties() {
       setRoomDuties(prev => ({ ...prev, loading: true, error: null }));
