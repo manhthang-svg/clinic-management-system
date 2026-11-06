@@ -142,12 +142,18 @@ function DutyScheduleModalContent({
   staffList = [],
   roomList = [],
   existingSchedules = [],
+  shiftConfig = null,
 }) {
   const [formData, setFormData] = useState(() =>
     buildInitialFormData({ initialData, weekStartDate, staffList, roomList, existingSchedules })
   );
 
-  const isPast = Boolean(formData.workDate && isShiftPast(formData.workDate, formData.shift));
+  const isPast = Boolean(formData.workDate && isShiftPast(formData.workDate, formData.shift, shiftConfig));
+
+  const shiftTimeDisplay =
+    formData.shift === 'MORNING'
+      ? `${shiftConfig?.morningStartTime || '08:00'} - ${shiftConfig?.morningEndTime || '11:30'}`
+      : `${shiftConfig?.afternoonStartTime || '13:00'} - ${shiftConfig?.afternoonEndTime || '17:30'}`;
 
   const [errors, setErrors] = useState({});
 
@@ -267,7 +273,7 @@ function DutyScheduleModalContent({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
       <div
-        className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden transform transition-all"
+        className="w-full max-w-xl sm:max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden transform transition-all"
         role="dialog"
         aria-modal="true"
       >
@@ -329,7 +335,7 @@ function DutyScheduleModalContent({
                       {formData.shift === 'MORNING' ? 'Ca Sáng' : 'Ca Chiều'}
                     </span>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/90 border border-slate-200/80 text-slate-600">
-                      {formData.shift === 'MORNING' ? '08:00 - 11:30' : '13:00 - 17:30'}
+                      {shiftTimeDisplay}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1 font-medium">
@@ -446,7 +452,7 @@ function DutyScheduleModalContent({
                       {formData.shift === 'MORNING' ? 'Ca Sáng' : 'Ca Chiều'}
                     </span>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/90 border border-slate-200/80 text-slate-600">
-                      {formData.shift === 'MORNING' ? '08:00 - 11:30' : '13:00 - 17:30'}
+                      {shiftTimeDisplay}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1 font-medium">
@@ -609,8 +615,8 @@ function DutyScheduleModalContent({
 
             {/* Warning banner if in the past */}
             {isPast && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2 animate-in fade-in">
-                <span className="font-semibold">Lưu ý:</span>
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs sm:text-[12.5px] text-amber-800 flex items-start gap-2.5 animate-in fade-in leading-relaxed">
+                <span className="font-bold shrink-0 whitespace-nowrap">Lưu ý:</span>
                 <span>Ca trực này đã kết thúc hoặc thuộc thời gian trong quá khứ nên chỉ có thể xem thông tin, không thể chỉnh sửa hay phân công lại.</span>
               </div>
             )}

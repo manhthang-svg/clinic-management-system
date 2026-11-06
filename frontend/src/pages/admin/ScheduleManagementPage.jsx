@@ -9,12 +9,14 @@ import {
   ChevronDown,
   RotateCcw,
   Copy,
+  Clock,
   Eye,
   ShieldCheck,
 } from 'lucide-react';
 import {
   DutyWeeklyMatrix,
   DutyScheduleModal,
+  DutyShiftConfigModal,
 } from '../../components/schedules';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { departmentApi } from '../../apis/departmentApi';
@@ -61,6 +63,15 @@ export function ScheduleManagementPage({
 
   // Bộ lọc Ca làm việc: 'ALL' (Tất cả ca) | 'MORNING' (Ca Sáng) | 'AFTERNOON' (Ca Chiều)
   const [shiftFilter, setShiftFilter] = useState('ALL');
+
+  // Cấu hình khung giờ ca trực của tuần (Sáng 00:00 - 11:59, Chiều 12:00 - 23:59)
+  const [shiftConfig, setShiftConfig] = useState({
+    morningStartTime: '08:00',
+    morningEndTime: '11:30',
+    afternoonStartTime: '13:00',
+    afternoonEndTime: '17:30',
+  });
+  const [shiftConfigModalOpen, setShiftConfigModalOpen] = useState(false);
 
   // Schedules state
   const [scheduleItems, setScheduleItems] = useState([]);
@@ -188,6 +199,9 @@ export function ScheduleManagementPage({
       const res = await dutyScheduleApi.getWeeklySchedule(startDateStr, endDateStr);
       const items = res?.items || [];
       setScheduleItems(items);
+      if (res?.shiftConfig) {
+        setShiftConfig(res.shiftConfig);
+      }
     } catch (e) {
       console.error('Failed to load duty schedules:', e);
       toast.error(describeApiError(e, 'Không thể tải lịch trực tuần này'));
@@ -224,7 +238,7 @@ export function ScheduleManagementPage({
 
   // Open Add Duty Modal for a specific room and shift slot (Admin: phân công, Role khác: xem chi tiết)
   const handleOpenAddForSlot = (roomId, dateStr, shift) => {
-    if (isShiftPast(dateStr, shift)) {
+    if (isShiftPast(dateStr, shift, shiftConfig)) {
       toast.error('Ca trực trong quá khứ chưa phân công không thể thao tác');
       return;
     }
@@ -292,9 +306,6 @@ export function ScheduleManagementPage({
         (targetRoom?.name && sName && sName === targetRoom.name.trim().toLowerCase())
       );
     });
-    const freeStaffOfRoom = staffOfRoom.find((s) => !busyAccountIds.has(s.id));
-    const defaultStaff = freeStaffOfRoom || staffOfRoom[0] || null;
-
     setEditingItem({
       id: null,
       workDate: dateStr,
@@ -311,14 +322,9 @@ export function ScheduleManagementPage({
 
   // Open Edit / View Detail Duty Modal (Admin: sửa/gỡ ca trực, Role khác: chỉ xem chi tiết)
   const handleOpenEdit = (item) => {
-    let roomId = item.roomId;
-    if (!roomId && item.staffAccountId) {
-      const staff = staffList.find((s) => s.id === item.staffAccountId);
-      if (staff?.roomId) roomId = staff.roomId;
-    }
     setEditingItem({
       ...item,
-      roomId: roomId || '',
+      roomId: item.roomId || '',
     });
     setModalDefaultDate(item.workDate);
     setModalOpen(true);
@@ -327,7 +333,7 @@ export function ScheduleManagementPage({
   // Save Duty Handler (Admin only)
   const handleSaveDuty = async (formData) => {
     if (!isAdmin) return;
-    if (isShiftPast(formData.workDate, formData.shift)) {
+    if (isShiftPast(formData.workDate, formData.shift, shiftConfig)) {
       toast.error('Không thể phân công hoặc chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ');
       return;
     }
@@ -361,7 +367,7 @@ export function ScheduleManagementPage({
   // Delete Duty Handlers (Admin only)
   const handleConfirmDelete = (item) => {
     if (!isAdmin) return;
-    if (isShiftPast(item.workDate, item.shift)) {
+    if (isShiftPast(item.workDate, item.shift, shiftConfig)) {
       toast.error('Không thể xoá ca trực đã kết thúc hoặc trong quá khứ');
       return;
     }
@@ -372,7 +378,7 @@ export function ScheduleManagementPage({
 
   const executeDeleteDuty = async () => {
     if (!isAdmin || !itemToDelete) return;
-    if (isShiftPast(itemToDelete.workDate, itemToDelete.shift)) {
+    if (isShiftPast(itemToDelete.workDate, itemToDelete.shift, shiftConfig)) {
       toast.error('Không thể xoá ca trực đã kết thúc hoặc trong quá khứ');
       setDeleteConfirmOpen(false);
       setItemToDelete(null);
@@ -461,7 +467,7 @@ export function ScheduleManagementPage({
           };
         })
         .filter(item => {
-          if (isShiftPast(item.workDate, item.shift)) return false;
+          if (isShiftPast(item.workDate, item.shift, shiftConfig)) return false;
           const targetRoom = roomList.find((r) => r.id === item.roomId);
           const isTargetInactive =
             targetRoom?.status === 'INACTIVE' ||
@@ -492,6 +498,22 @@ export function ScheduleManagementPage({
     }
   };
 
+  // Handler cập nhật cấu hình khung giờ ca trực cho tuần
+  const handleSaveShiftConfig = async (newConfig) => {
+    try {
+      const updated = await dutyScheduleApi.updateShiftConfig(newConfig);
+      if (updated) {
+        setShiftConfig(updated);
+      }
+      toast.success('Đã cập nhật khung giờ ca trực cho tuần thành công');
+      void fetchSchedules(true);
+    } catch (e) {
+      console.error('Lỗi cập nhật khung giờ ca trực:', e);
+      toast.error(describeApiError(e, 'Không thể cập nhật khung giờ ca trực'));
+      throw e;
+    }
+  };
+
   const pageContent = (
     <div className="p-3.5 sm:p-5 max-w-full space-y-4">
       {/* Page Header (Chuẩn Image 2: Tiêu đề bên trái, Điều hướng tuần & Sao chép bên phải) */}
@@ -519,13 +541,13 @@ export function ScheduleManagementPage({
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {isAdmin
-                ? 'Quản lý, phân công và thiết lập lịch làm việc theo tuần (Ca Sáng: 08:00 - 11:30 & Ca Chiều: 13:00 - 17:30)'
+                ? `Quản lý, phân công và thiết lập lịch làm việc theo tuần (Ca Sáng: ${shiftConfig.morningStartTime} - ${shiftConfig.morningEndTime} & Ca Chiều: ${shiftConfig.afternoonStartTime} - ${shiftConfig.afternoonEndTime})`
                 : 'Xem lịch phân công làm việc theo tuần của các khoa phòng (Ca Sáng & Ca Chiều)'}
             </p>
           </div>
         </div>
 
-        {/* Nút điều hướng tuần & Nút sao chép tuần trước (Góc trên bên phải) */}
+        {/* Nút điều hướng tuần & Nút sao chép tuần trước & Nút chỉnh sửa ca trực (Góc trên bên phải) */}
         <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0 flex-wrap">
           <div className="flex items-center bg-white rounded-full p-1 border border-slate-200/90 shadow-2xs">
             <button
@@ -567,6 +589,18 @@ export function ScheduleManagementPage({
               <span>{copying ? 'Đang sao chép...' : 'Sao chép tuần trước'}</span>
             </button>
           )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShiftConfigModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-teal-300 bg-white hover:bg-teal-50 text-teal-700 text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+              title="Chỉnh sửa khung giờ ca trực (Ca Sáng & Ca Chiều) cho tuần này"
+            >
+              <Clock className="w-3.5 h-3.5 text-teal-600" />
+              <span>Chỉnh sửa ca trực</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -595,7 +629,7 @@ export function ScheduleManagementPage({
                   : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              Ca Sáng (08:00 - 11:30)
+              {`Ca Sáng (${shiftConfig.morningStartTime} - ${shiftConfig.morningEndTime})`}
             </button>
             <button
               type="button"
@@ -606,7 +640,7 @@ export function ScheduleManagementPage({
                   : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              Ca Chiều (13:00 - 17:30)
+              {`Ca Chiều (${shiftConfig.afternoonStartTime} - ${shiftConfig.afternoonEndTime})`}
             </button>
           </div>
         </div>
@@ -629,16 +663,17 @@ export function ScheduleManagementPage({
           </div>
         ) : (
           <DutyWeeklyMatrix
-          days={days}
-          roomList={roomList}
-          staffList={staffList}
-          scheduleItems={scheduleItems}
-          shiftFilter={shiftFilter}
-          canEdit={isAdmin}
-          onAddDutySlot={handleOpenAddForSlot}
-          onEditDuty={handleOpenEdit}
-          onDeleteDuty={handleConfirmDelete}
-        />
+            days={days}
+            roomList={roomList}
+            staffList={staffList}
+            scheduleItems={scheduleItems}
+            shiftFilter={shiftFilter}
+            shiftConfig={shiftConfig}
+            canEdit={isAdmin}
+            onAddDutySlot={handleOpenAddForSlot}
+            onEditDuty={handleOpenEdit}
+            onDeleteDuty={handleConfirmDelete}
+          />
         )}
       </div>
 
@@ -657,7 +692,20 @@ export function ScheduleManagementPage({
         staffList={staffList}
         roomList={roomList}
         existingSchedules={scheduleItems}
+        shiftConfig={shiftConfig}
       />
+
+      {/* Modal Chỉnh sửa khung giờ ca trực (Admin only) */}
+      {isAdmin && (
+        <DutyShiftConfigModal
+          isOpen={shiftConfigModalOpen}
+          onClose={() => setShiftConfigModalOpen(false)}
+          weekStartDate={startDateStr}
+          weekEndDate={endDateStr}
+          initialConfig={shiftConfig}
+          onSave={handleSaveShiftConfig}
+        />
+      )}
 
       {/* Modal Xác nhận Xoá (Admin only) */}
       {isAdmin && (

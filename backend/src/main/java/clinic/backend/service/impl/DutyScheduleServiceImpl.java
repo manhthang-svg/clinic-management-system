@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import clinic.backend.dto.request.DutyScheduleSaveRequest;
 import clinic.backend.dto.request.WeeklyBatchScheduleRequest;
 import clinic.backend.dto.response.DutyScheduleItemResponse;
+import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Room;
@@ -30,6 +31,7 @@ import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.service.DutyScheduleService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -45,6 +47,7 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     private final DutyScheduleRepository dutyScheduleRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final RoomRepository roomRepository;
+    private final DutyShiftConfigService dutyShiftConfigService;
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
 
@@ -65,10 +68,14 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
             return true;
         }
         if (workDate.isEqual(todayVN) && shift != null) {
-            if (shift == DutyShift.MORNING && currentTimeVN.isAfter(MORNING_SHIFT_END)) {
+            DutyShiftConfigResponse cfg = dutyShiftConfigService.getConfigForDate(workDate);
+            LocalTime morningEnd = LocalTime.parse(cfg.getMorningEndTime());
+            LocalTime afternoonEnd = LocalTime.parse(cfg.getAfternoonEndTime());
+
+            if (shift == DutyShift.MORNING && (currentTimeVN.isAfter(morningEnd) || currentTimeVN.isAfter(LocalTime.of(11, 59)))) {
                 return true;
             }
-            if (shift == DutyShift.AFTERNOON && currentTimeVN.isAfter(AFTERNOON_SHIFT_END)) {
+            if (shift == DutyShift.AFTERNOON && (currentTimeVN.isAfter(afternoonEnd) || currentTimeVN.isAfter(LocalTime.of(23, 59)))) {
                 return true;
             }
         }
@@ -309,6 +316,7 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return WeeklyScheduleResponse.builder()
                 .startDate(startDate)
                 .endDate(endDate)
+                .shiftConfig(dutyShiftConfigService.getConfigForDate(startDate))
                 .items(items)
                 .build();
     }

@@ -29,6 +29,7 @@ export function DutyWeeklyMatrix({
   staffList = [],
   scheduleItems = [],
   shiftFilter = 'ALL', // 'ALL' | 'MORNING' | 'AFTERNOON'
+  shiftConfig = null,
   canEdit = false,
   onAddDutySlot, // (roomId, dateStr, shift) => void
   onEditDuty, // (item) => void
@@ -52,30 +53,22 @@ export function DutyWeeklyMatrix({
     });
   };
 
-  // Tra cứu ca trực theo Map: `${roomId}_${workDate}_${shift}` => item
+  // Tra cứu ca trực theo Map: `${roomId}_${workDate}_${shift}` => item (dữ liệu thật từ DB, không fallback)
   const scheduleMap = useMemo(() => {
     const map = new Map();
     scheduleItems.forEach((item) => {
-      let rId = item.roomId;
-      if (!rId && item.staffAccountId) {
-        const staff = staffList.find((s) => s.id === item.staffAccountId);
-        if (staff?.roomId) rId = staff.roomId;
-      }
-      if (rId && item.workDate && item.shift) {
-        map.set(`${rId}_${item.workDate}_${item.shift}`, item);
+      if (item.roomId && item.workDate && item.shift) {
+        map.set(`${item.roomId}_${item.workDate}_${item.shift}`, item);
       }
     });
     return map;
-  }, [scheduleItems, staffList]);
+  }, [scheduleItems]);
 
-  // Gom nhóm phòng theo Khoa
+  // Gom nhóm phòng theo Khoa (lấy trực tiếp departmentName thực tế từ DB, không gán khoa giả lập)
   const groupedRooms = useMemo(() => {
     const groups = {};
     roomList.forEach((r) => {
-      let dept = r.departmentName;
-      if (!dept) {
-        dept = r.type === 'PARACLINICAL' ? 'Cận lâm sàng' : 'Khoa Khám Bệnh';
-      }
+      const dept = r.departmentName || 'Chưa phân khoa';
       if (!groups[dept]) groups[dept] = [];
       groups[dept].push(r);
     });
@@ -209,11 +202,14 @@ export function DutyWeeklyMatrix({
 
                             {/* 7 ô giao điểm theo từng ngày trong tuần */}
                             {days.map((day, dayIdx) => {
-                              const isMorningPast = isShiftPast(day.dateStr, 'MORNING');
+                              const isMorningPast = isShiftPast(day.dateStr, 'MORNING', shiftConfig);
                               const canEditMorning = canEdit && !isMorningPast && !isRoomInactive;
 
-                              const isAfternoonPast = isShiftPast(day.dateStr, 'AFTERNOON');
+                              const isAfternoonPast = isShiftPast(day.dateStr, 'AFTERNOON', shiftConfig);
                               const canEditAfternoon = canEdit && !isAfternoonPast && !isRoomInactive;
+
+                              const morningTimeLabel = `${shiftConfig?.morningStartTime || '08:00'} - ${shiftConfig?.morningEndTime || '11:30'}`;
+                              const afternoonTimeLabel = `${shiftConfig?.afternoonStartTime || '13:00'} - ${shiftConfig?.afternoonEndTime || '17:30'}`;
 
                               const morningItem = scheduleMap.get(
                                 `${room.id}_${day.dateStr}_MORNING`
@@ -246,7 +242,7 @@ export function DutyWeeklyMatrix({
                                           className={`bg-[#fffbeb] border border-amber-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs ${
                                             isRoomInactive ? 'opacity-70' : ''
                                           }`}
-                                          title={`Ca Sáng: ${morningItem.staffName} ${
+                                          title={`Ca Sáng (${morningTimeLabel}): ${morningItem.staffName} ${
                                             morningRole ? `(${morningRole})` : ''
                                           }${isMorningPast ? ' (Đã kết thúc)' : ''}${
                                             isRoomInactive ? ' - Phòng tạm ngừng' : ''
@@ -306,7 +302,7 @@ export function DutyWeeklyMatrix({
                                           className={`bg-[#f0f9ff] border border-sky-300 rounded-md p-1.5 text-xs flex items-center justify-between gap-1 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs ${
                                             isRoomInactive ? 'opacity-70' : ''
                                           }`}
-                                          title={`Ca Chiều: ${afternoonItem.staffName} ${
+                                          title={`Ca Chiều (${afternoonTimeLabel}): ${afternoonItem.staffName} ${
                                             afternoonRole ? `(${afternoonRole})` : ''
                                           }${isAfternoonPast ? ' (Đã kết thúc)' : ''}${
                                             isRoomInactive ? ' - Phòng tạm ngừng' : ''
@@ -370,7 +366,7 @@ export function DutyWeeklyMatrix({
                                           className={`bg-[#fffbeb] border border-amber-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-amber-100 hover:border-amber-400 hover:shadow-2xs ${
                                             isRoomInactive ? 'opacity-70' : ''
                                           }`}
-                                          title={`Ca Sáng: ${morningItem.staffName} ${
+                                          title={`Ca Sáng (${morningTimeLabel}): ${morningItem.staffName} ${
                                             morningRole ? `(${morningRole})` : ''
                                           }${isMorningPast ? ' (Đã kết thúc)' : ''}${
                                             isRoomInactive ? ' - Phòng tạm ngừng' : ''
@@ -434,7 +430,7 @@ export function DutyWeeklyMatrix({
                                           className={`bg-[#f0f9ff] border border-sky-300 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2 select-none transition-all truncate cursor-pointer hover:bg-sky-100 hover:border-sky-400 hover:shadow-2xs ${
                                             isRoomInactive ? 'opacity-70' : ''
                                           }`}
-                                          title={`Ca Chiều: ${afternoonItem.staffName} ${
+                                          title={`Ca Chiều (${afternoonTimeLabel}): ${afternoonItem.staffName} ${
                                             afternoonRole ? `(${afternoonRole})` : ''
                                           }${isAfternoonPast ? ' (Đã kết thúc)' : ''}${
                                             isRoomInactive ? ' - Phòng tạm ngừng' : ''

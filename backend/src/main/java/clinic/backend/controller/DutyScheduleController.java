@@ -4,12 +4,15 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import clinic.backend.dto.request.DutyScheduleSaveRequest;
+import clinic.backend.dto.request.DutyShiftConfigRequest;
 import clinic.backend.dto.request.WeeklyBatchScheduleRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DutyScheduleItemResponse;
+import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.DutyScheduleService;
+import clinic.backend.service.DutyShiftConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,6 +42,26 @@ import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
 public class DutyScheduleController {
 
     private final DutyScheduleService dutyScheduleService;
+    private final DutyShiftConfigService dutyShiftConfigService;
+
+    @Operation(summary = "Lấy cấu hình khung giờ ca trực theo tuần")
+    @GetMapping("/shift-config")
+    public ApiResponse<DutyShiftConfigResponse> getShiftConfig(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate
+    ) {
+        return ApiResponse.success(dutyShiftConfigService.getConfigForDate(startDate));
+    }
+
+    @Operation(summary = "Cập nhật cấu hình khung giờ ca trực theo tuần")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/shift-config")
+    public ApiResponse<DutyShiftConfigResponse> updateShiftConfig(
+            @Valid @RequestBody DutyShiftConfigRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID currentUserId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
+        return ApiResponse.success(dutyShiftConfigService.updateConfig(request, currentUserId));
+    }
 
     @Operation(summary = "Lấy lịch trực theo tuần")
     @GetMapping
