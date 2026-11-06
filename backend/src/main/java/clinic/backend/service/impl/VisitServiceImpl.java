@@ -474,6 +474,7 @@ public class VisitServiceImpl implements VisitService {
                 visit.getPriorityReason() == null ? null : visit.getPriorityReason().name(),
                 visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getLydovaovien(),
                 visit.getThoigianvaovien(), visit.getStatus(), visit.isSkipped(), visit.getSkippedAt(),
+                canAcceptSkippedVisit(visit),
                 transfer == null ? null : sourceRoomNames.get(transfer.getFromRoomId()),
                 transfer == null ? null : transfer.getTransferredAt(),
                 buildDoctorQueueNote(visit, transfer, sourceRoomNames));
