@@ -120,9 +120,7 @@ function checkLength(errors, key, value, label, min, max, required) {
 export function validateExamination(form, mode) {
     const errors = {};
     checkLength(errors, 'reason', form.reason, 'Lý do khám', 2, 1000, true);
-    checkLength(errors, 'progression', form.progression, 'Quá trình bệnh lý', 0, 4000, false);
     checkLength(errors, 'generalExam', form.generalExam, 'Toàn thân', 0, 4000, false);
-    checkLength(errors, 'treatment', form.treatment, 'Điều trị / chăm sóc', 0, 4000, false);
 
     const entered = Object.keys(VITAL_RULES).filter((key) => String(form[key] ?? '').trim() !== '');
     if (entered.length === 0) errors.vitals = MSG.VITALS_REQUIRED;
@@ -143,10 +141,7 @@ export function validateExamination(form, mode) {
     });
 
     if (mode === 'CONTINUE') {
-        const diagnosis = form.preliminaryDiagnosis.trim();
-        if (diagnosis.length < 2 || diagnosis.length > 1000) errors.preliminaryDiagnosis = MSG.DIAGNOSIS_REQUIRED;
-    } else {
-        checkLength(errors, 'preliminaryDiagnosis', form.preliminaryDiagnosis, 'Chẩn đoán ban đầu', 0, 1000, false);
+        if (!form.diagnoses?.length) errors.preliminaryDiagnosis = MSG.DIAGNOSIS_REQUIRED;
     }
     return errors;
 }

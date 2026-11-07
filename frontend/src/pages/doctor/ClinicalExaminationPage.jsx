@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import {
     Activity, ArrowRightLeft, CalendarDays, ClipboardPlus, FileCheck2, HeartPulse, Info as InfoIcon,
-    LoaderCircle, Pill, Save, Send, Stethoscope, UserRound,
+    LoaderCircle, Pill, Save, Send, Stethoscope, UserRound, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOrderPanel';
@@ -20,7 +20,7 @@ import {
 } from './clinicalExaminationRules';
 
 const EMPTY_FORM = {
-    reason: '', progression: '', generalExam: '', preliminaryDiagnosis: '', icd10: '', treatment: '',
+    reason: '', generalExam: '', diagnoses: [],
     pulse: '', temperature: '', systolic: '', diastolic: '', respiratoryRate: '',
     weight: '', height: '', spo2: '',
     ...Object.fromEntries(ORGAN_FIELDS.flatMap(([key]) => [[key, ''], [notesKey(key), '']])),
@@ -35,9 +35,9 @@ function formFromResponse(data) {
     findings.organExam = data?.organFinding ?? '';
     return {
         ...EMPTY_FORM,
-        reason: data?.reasonForVisit ?? '', progression: data?.presentIllness ?? '',
-        generalExam: data?.generalFinding ?? '', preliminaryDiagnosis: data?.preliminaryDiagnosis ?? '',
-        icd10: data?.preliminaryDiagnosisIcd10?.code ?? '', treatment: data?.treatmentCarePerformed ?? '',
+        reason: data?.reasonForVisit ?? '',
+        generalExam: data?.generalFinding ?? '', diagnoses: data?.preliminaryDiagnoses
+            ?? (data?.preliminaryDiagnosisIcd10 ? [data.preliminaryDiagnosisIcd10] : []),
         pulse: data?.vitalSigns?.pulse ?? '', temperature: data?.vitalSigns?.temperature ?? '',
         systolic: data?.vitalSigns?.systolicBloodPressure ?? '',
         diastolic: data?.vitalSigns?.diastolicBloodPressure ?? '',
@@ -48,7 +48,9 @@ function formFromResponse(data) {
 
 /** Compares values as the inputs show them, so a loaded number and its typed text are equal. */
 function sameForm(left, right) {
-    return Object.keys(EMPTY_FORM).every((key) => String(left[key] ?? '') === String(right[key] ?? ''));
+    return Object.keys(EMPTY_FORM).every((key) => (key === 'diagnoses'
+        ? JSON.stringify(left[key] ?? []) === JSON.stringify(right[key] ?? [])
+        : String(left[key] ?? '') === String(right[key] ?? '')));
 }
 
 function ageOf(dob) {
@@ -137,6 +139,7 @@ export default function ClinicalExaminationPage() {
     const [validationMode, setValidationMode] = useState(null);
     const [pendingLeave, setPendingLeave] = useState(null);
     const [icdOptions, setIcdOptions] = useState([]);
+    const [icdQuery, setIcdQuery] = useState('');
     const [medicalHistory, setMedicalHistory] = useState(null);
     const [activeSection, setActiveSection] = useState('clinical');
     const set = (key) => (value) => {
@@ -151,6 +154,12 @@ export default function ClinicalExaminationPage() {
                 : '');
             if (!Object.keys(errors).length) setValidationMode(null);
         }
+    };
+    const addDiagnosis = (option) => {
+        if (!option || form.diagnoses.some((item) => item.code === option.code)) return;
+        set('diagnoses')([...form.diagnoses, option]);
+        setIcdQuery('');
+        setIcdOptions([]);
     };
     const dirty = !sameForm(form, savedForm);
     const bmi = useMemo(() => {
@@ -206,7 +215,7 @@ export default function ClinicalExaminationPage() {
     }, [visitId]);
 
     useEffect(() => {
-        const keyword = form.icd10.trim();
+        const keyword = icdQuery.trim();
         if (keyword.length < 2) {
             return undefined;
         }
@@ -222,7 +231,7 @@ export default function ClinicalExaminationPage() {
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [form.icd10]);
+    }, [icdQuery]);
 
     const visit = clinicalData ? {
         ...navigationVisit,
@@ -242,7 +251,7 @@ export default function ClinicalExaminationPage() {
     const visitTypeLabel = visit?.doituongbnLoai === 'BHYT' ? 'Khám BHYT' : 'Khám dịch vụ';
 
     const payload = (mode, nextStep = null) => ({
-        mode, nextStep, reasonForVisit: form.reason, presentIllness: form.progression,
+        mode, nextStep, reasonForVisit: form.reason, presentIllness: clinicalData?.presentIllness ?? null,
         generalFinding: form.generalExam,
         vitalSigns: {
             pulse: optionalNumber(form.pulse), temperature: optionalNumber(form.temperature),
@@ -253,9 +262,10 @@ export default function ClinicalExaminationPage() {
             measuredAt: clinicalData?.vitalSigns?.measuredAt ?? new Date().toISOString(),
         },
         organFinding: form.organExam,
-        preliminaryDiagnosis: form.preliminaryDiagnosis,
-        preliminaryDiagnosisIcd10Code: form.icd10.trim() || null,
-        treatmentCarePerformed: form.treatment, version: clinicalData?.version ?? null,
+        preliminaryDiagnosis: form.diagnoses.map((item) => item.name).join('; ') || null,
+        preliminaryDiagnosisIcd10Code: form.diagnoses[0]?.code ?? null,
+        preliminaryDiagnosisIcd10Codes: form.diagnoses.map((item) => item.code),
+        treatmentCarePerformed: null, version: clinicalData?.version ?? null,
     });
 
     const save = async (mode, nextStep = null) => {
@@ -338,14 +348,13 @@ export default function ClinicalExaminationPage() {
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
         [Pill, 'Đơn thuốc', 'prescription', null],
-        [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', null],
+        [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', readOnly ? null : () => save('CONTINUE', 'CONCLUSION')],
     ];
 
     return (
         <main className="mx-auto max-w-[1600px] space-y-3 pb-8 text-slate-800">
-            <header className="flex items-center justify-between">
+            <header>
                 <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="flex items-center text-xs text-slate-400"><button type="button" onClick={returnToWaitingList} className="cursor-pointer font-semibold text-teal-700 hover:text-teal-900 hover:underline">Khám bệnh</button><span className="px-1">›</span><span>Khám lâm sàng</span></p></div></div>
-                {!readOnly && <button type="button" onClick={saveDraft} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-lg border border-teal-600 px-4 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}{saving ? 'Đang lưu…' : 'Lưu bản nháp'}</button>}
             </header>
 
             {readOnly && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
@@ -377,7 +386,7 @@ export default function ClinicalExaminationPage() {
             </section>
 
             <nav className="flex gap-2 overflow-x-auto" aria-label="Các bước khám bệnh">
-                {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || (id === 'paraclinical' && saving)} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${activeSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
+                {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || saving} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${activeSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
             </nav>
 
             {activeSection === 'transfer' ? (
@@ -386,28 +395,49 @@ export default function ClinicalExaminationPage() {
                 <ParaclinicalOrderList visitId={visit.id} />
             ) : activeSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
-                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.preliminaryDiagnosis} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
+                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <fieldset disabled={readOnly} className="min-w-0 space-y-3">
-                    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">II. Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>
+                    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>
+
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-bold">Lịch sử khám bệnh</h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[620px] text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500"><tr><th className="w-12 px-4 py-2.5 text-center font-semibold">STT</th><th className="w-32 px-4 py-2.5 font-semibold">Ngày khám</th><th className="px-4 py-2.5 font-semibold">Lý do vào viện</th><th className="px-4 py-2.5 font-semibold">Chẩn đoán</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100 text-slate-700">
+                                    {(clinicalData?.visitHistory ?? []).map((item, index) => <tr key={item.visitId}><td className="px-4 py-3 text-center text-slate-400">{index + 1}</td><td className="whitespace-nowrap px-4 py-3">{formatDate(item.visitedAt)}</td><td className="px-4 py-3">{item.reasonForVisit || '—'}</td><td className="px-4 py-3">{item.diagnosis || '—'}</td></tr>)}
+                                    {!clinicalData?.visitHistory?.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">Chưa có lịch sử khám trước đó.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
 
                     <MedicalHistoryPanel visitId={visit.id} onLoaded={setMedicalHistory} />
 
-                    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-sm font-bold">III. Hỏi bệnh</h2><Field label="Quá trình bệnh lý" value={form.progression} onChange={set('progression')} placeholder="Diễn tiến triệu chứng và tình trạng hiện tại..." maxLength={4000} rows={4} error={fieldErrors.progression} /></section>
-
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h2 className="mb-3 text-sm font-bold">IV. Khám bệnh</h2>
+                        <h2 className="mb-3 text-sm font-bold">Khám bệnh</h2>
                         <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-teal-800"><HeartPulse className="h-4 w-4" />Sinh hiệu <span className="font-normal text-slate-400">• Thời điểm đo: {formatTime(clinicalData?.vitalSigns?.measuredAt ?? new Date())}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(VITAL_RULES).map(([key, [label, unit]]) => <Vital key={key} label={label} value={form[key]} onChange={set(key)} unit={unit} error={fieldErrors[key]} />)}</div>{fieldErrors.vitals && <p className="mt-2 text-[11px] text-rose-600">{fieldErrors.vitals}</p>}<div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4 text-teal-600" />BMI: <strong className="text-slate-700">{bmi.value}</strong> kg/m²{bmi.category && <strong className="text-teal-700">({bmi.category})</strong>}</div></div>
                         <div className="mt-4"><Field label="1. Toàn thân" value={form.generalExam} onChange={set('generalExam')} placeholder="Mô tả tình trạng toàn thân..." maxLength={4000} rows={3} error={fieldErrors.generalExam} /></div>
                         <div className="mt-4"><Field label="2. Khám bộ phận" value={form.organExam} onChange={set('organExam')} placeholder="Nhập kết quả khám bộ phận..." maxLength={2000} rows={4} error={fieldErrors.organExam} /></div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-2"><div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3"><Field label="4. Chẩn đoán ban đầu" value={form.preliminaryDiagnosis} onChange={set('preliminaryDiagnosis')} placeholder="Bắt buộc khi chuyển bước..." maxLength={1000} error={fieldErrors.preliminaryDiagnosis} /><label className="block text-xs font-semibold text-slate-700">Mã ICD-10 (không bắt buộc)<input list="icd10-options" value={form.icd10} onChange={(event) => set('icd10')(event.target.value)} placeholder="Tìm mã hoặc tên bệnh" aria-invalid={fieldErrors.icd10 ? 'true' : undefined} className={`mt-1 h-11 w-full rounded-lg border bg-white px-3 text-xs font-normal outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 ${fieldErrors.icd10 ? 'border-rose-400' : 'border-slate-200'}`} /><datalist id="icd10-options">{form.icd10.trim().length >= 2 && icdOptions.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}</datalist>{fieldErrors.icd10 ? <FieldError>{fieldErrors.icd10}</FieldError> : <span className="mt-1 block text-[10px] font-normal leading-4 text-slate-500">Chọn một gợi ý để lưu đúng mã đang hoạt động.</span>}</label></div><Field label="5. Điều trị / chăm sóc đã thực hiện" value={form.treatment} onChange={set('treatment')} placeholder="Nhập thông tin đã xử lý, chăm sóc, hướng dẫn..." maxLength={4000} error={fieldErrors.treatment} /></div>
+                        <div className="mt-4"><label className="block text-xs font-semibold text-slate-700">Chẩn đoán ban đầu (ICD-10)<input value={icdQuery} onChange={(event) => setIcdQuery(event.target.value)} onKeyDown={(event) => {
+                            if (event.key === 'Enter' && icdOptions.length) {
+                                event.preventDefault();
+                                addDiagnosis(icdOptions[0]);
+                            }
+                        }} placeholder="Nhập mã hoặc tên bệnh để tìm..." aria-invalid={fieldErrors.preliminaryDiagnosis ? 'true' : undefined} className={`mt-1 h-11 w-full rounded-lg border bg-white px-3 text-xs font-normal outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 ${fieldErrors.preliminaryDiagnosis ? 'border-rose-400' : 'border-slate-200'}`} /></label>
+                            {icdQuery.trim().length >= 2 && icdOptions.length > 0 && <div className="mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">{icdOptions.map((option) => <button key={option.code} type="button" onClick={() => addDiagnosis(option)} disabled={form.diagnoses.some((item) => item.code === option.code)} className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-xs hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"><strong className="w-20 shrink-0 text-teal-700">{option.code}</strong><span>{option.name}</span></button>)}</div>}
+                            {fieldErrors.preliminaryDiagnosis && <FieldError>{fieldErrors.preliminaryDiagnosis}</FieldError>}
+                            <div className="mt-2 space-y-2">{form.diagnoses.map((item) => <div key={item.code} className="flex items-center gap-3 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2 text-xs"><strong className="w-20 shrink-0 text-teal-800">{item.code}</strong><span className="min-w-0 flex-1 text-slate-700">{item.name}</span><button type="button" onClick={() => set('diagnoses')(form.diagnoses.filter((diagnosis) => diagnosis.code !== item.code))} aria-label={`Xóa ${item.code}`} className="rounded p-1 text-slate-400 hover:bg-white hover:text-rose-600"><X className="h-4 w-4" /></button></div>)}</div>
+                            <p className="mt-1 text-[10px] font-normal text-slate-500">Có thể chọn nhiều mã ICD-10.</p>
+                        </div>
                     </section>
                 </fieldset>
 
                 <aside className="sticky top-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-bold"><CalendarDays className="h-4 w-4 text-teal-600" />Thông tin lượt khám</h2><dl className="mt-4 space-y-3 text-xs">{[['Mã lượt khám', visit.sovaovien], ['Ngày khám', formatDate(visit.thoigianvaovien)], ['Giờ đăng ký', formatTime(visit.thoigianvaovien)], ['Giờ bắt đầu khám', formatTime(visit.denkhambenhluc)], ['Số thứ tự', visit.queueNumber], ['Loại khám', visitTypeLabel], ['Phòng khám', queueInfo?.roomName], ['Bác sĩ khám', queueInfo?.doctorName]].map(([label, value]) => <div key={label} className="grid grid-cols-[88px_1fr] gap-2"><dt className="text-slate-400">{label}</dt><dd className="font-semibold text-slate-700">{value || '—'}</dd></div>)}</dl><div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />{statusLabel}</div></aside>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={returnToWaitingList} disabled={saving} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Quay lại danh sách</button>{!readOnly && <><button type="button" onClick={saveDraft} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-teal-700 px-5 py-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"><Save aria-hidden="true" className="h-4 w-4" />Lưu bản nháp</button><button type="button" onClick={() => save('CONTINUE', 'CONCLUSION')} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileCheck2 aria-hidden="true" className="h-4 w-4" />}Lưu và chuyển kết luận</button><button type="button" onClick={() => save('CONTINUE', 'PARACLINICAL')} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sky-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"><ClipboardPlus aria-hidden="true" className="h-4 w-4" />Lưu và chỉ định CLS</button></>}</div>
+            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={returnToWaitingList} disabled={saving} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Quay lại danh sách</button>{!readOnly && <button type="button" onClick={saveDraft} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}{saving ? 'Đang lưu…' : 'Lưu'}</button>}</div>
             </>}
 
             <ConfirmModal

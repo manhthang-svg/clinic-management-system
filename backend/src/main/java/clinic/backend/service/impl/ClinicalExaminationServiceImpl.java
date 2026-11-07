@@ -21,6 +21,7 @@ import clinic.backend.dto.response.Icd10OptionResponse;
 import clinic.backend.dto.response.MedicalHistoryItemResponse;
 import clinic.backend.dto.response.VitalSignResponse;
 import clinic.backend.entity.ClinicalExamination;
+import clinic.backend.entity.ClinicalExaminationDiagnosis;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Icd10;
 import clinic.backend.entity.MedicalHistory;
@@ -127,8 +128,18 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         }
         validateRequest(request);
         Instant now = clock.instant();
-        Icd10 icd10 = resolveIcd10(
-                request.preliminaryDiagnosisIcd10Code(), context.patient(), LocalDate.ofInstant(now, CLINIC_ZONE));
+        List<String> requestedCodes = request.preliminaryDiagnosisIcd10Codes() == null
+                ? List.of()
+                : request.preliminaryDiagnosisIcd10Codes();
+        if (requestedCodes.isEmpty() && request.preliminaryDiagnosisIcd10Code() != null) {
+            requestedCodes = List.of(request.preliminaryDiagnosisIcd10Code());
+        }
+        LocalDate examinationDay = LocalDate.ofInstant(now, CLINIC_ZONE);
+        List<Icd10> diagnoses = requestedCodes.stream()
+                .map(code -> resolveIcd10(code, context.patient(), examinationDay))
+                .distinct()
+                .toList();
+        Icd10 icd10 = diagnoses.isEmpty() ? null : diagnoses.getFirst();
         Map<String, Object> oldValues = auditValues(context.visit(), examination);
 
         context.visit().updateReasonForVisit(normalize(request.reasonForVisit()), now);
@@ -138,6 +149,15 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 normalize(request.preliminaryDiagnosis()), icd10 == null ? null : icd10.getMaicd(),
                 icd10 == null ? null : icd10.getTenicd(), normalize(request.treatmentCarePerformed()),
                 now);
+        // Delete previous rows before inserting the replacement list. Without this flush, Hibernate may insert a
+        // repeated ICD code before executing orphan deletes and violate the per-examination unique constraint.
+        examination.replaceDiagnoses(List.of());
+        examinationRepository.flush();
+        examination.replaceDiagnoses(java.util.stream.IntStream.range(0, diagnoses.size())
+                .mapToObj(index -> new ClinicalExaminationDiagnosis(
+                        ids.next(), now, examination, diagnoses.get(index).getMaicd(),
+                        diagnoses.get(index).getTenicd(), (short) (index + 1)))
+                .toList());
         replaceInitialVitalSign(record, principal.accountId(), request.vitalSigns(), now);
 
         visitRepository.save(context.visit());
@@ -352,8 +372,17 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 context.doctor().getId(), context.doctor().getFullName(), visit.getLydovaovien(),
                 examination.getQuatrinhbenhly(), examination.getKhambenhToanthan(), vitalResponse,
                 examination.getKhambenhBophan(),
-                examination.getChandoansobo(), mapper.toIcd10Option(icd10), examination.getTreatmentCarePerformed(),
+                examination.getChandoansobo(), mapper.toIcd10Option(icd10),
+                examination.getDiagnoses().stream()
+                        .sorted(java.util.Comparator.comparingInt(ClinicalExaminationDiagnosis::getThuTu))
+                        .map(item -> new Icd10OptionResponse(item.getMaicd(), item.getTenicd()))
+                        .toList(),
+                examination.getTreatmentCarePerformed(),
                 historyOf(patient),
+                visitRepository.findDoctorVisitHistory(patient.getId(), visit.getId()).stream()
+                        .map(item -> new ClinicalExaminationResponse.VisitHistoryItem(
+                                item.getVisitId(), item.getVisitedAt(), item.getReasonForVisit(), item.getDiagnosis()))
+                        .toList(),
                 List.of(ClinicalExaminationNextStep.PARACLINICAL, ClinicalExaminationNextStep.CONCLUSION),
                 examination.getUpdatedAt());
     }

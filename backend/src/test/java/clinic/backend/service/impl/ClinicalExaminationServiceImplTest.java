@@ -112,7 +112,7 @@ class ClinicalExaminationServiceImplTest {
         SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
                 ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest(null, null, null, null, null, null, null, null, NOW),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class,
@@ -127,7 +127,7 @@ class ClinicalExaminationServiceImplTest {
                 ClinicalExaminationSaveMode.CONTINUE, ClinicalExaminationNextStep.PARACLINICAL,
                 "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
-                null, " ", null, null, null);
+                null, " ", null, null, null, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class,
@@ -167,6 +167,24 @@ class ClinicalExaminationServiceImplTest {
     }
 
     @Test
+    void savesAndReturnsMultiplePreliminaryDiagnoses() {
+        stubEditableExamination();
+        when(icd10Repository.findById("J02")).thenReturn(Optional.of(icd10("J02", null, false, null)));
+        when(icd10Repository.findById("J03")).thenReturn(Optional.of(icd10("J03", null, false, null)));
+        when(examinationRepository.saveAndFlush(any(ClinicalExamination.class)))
+                .thenAnswer(call -> call.getArgument(0));
+
+        var response = service.save(principal(), VISIT_ID, new SaveClinicalExaminationRequest(
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau họng", null, null,
+                new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
+                null, "Bệnh J02; Bệnh J03", "J02", List.of("J02", "J03"), null, null));
+
+        assertThat(response.preliminaryDiagnoses())
+                .extracting(option -> option.code())
+                .containsExactly("J02", "J03");
+    }
+
+    @Test
     void searchesOnlyCodesUsableOnTheClinicDayWithoutAccents() {
         when(icd10Repository.findSearchable()).thenReturn(List.of(
                 Icd10SearchCacheTest.code("J00", "Viêm mũi họng cấp", LocalDate.of(2026, 7, 1), null),
@@ -190,7 +208,7 @@ class ClinicalExaminationServiceImplTest {
         return new SaveClinicalExaminationRequest(
                 ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
-                null, "Theo dõi", code, null, null);
+                null, "Theo dõi", code, List.of(code), null, null);
     }
 
     private static Icd10 icd10(String code, LocalDate effectiveFrom, boolean moreDetailed, Short sex) {
