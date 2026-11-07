@@ -1,4 +1,4 @@
-/** UC-49 Order Paraclinical Services: grouping, cost estimate and messages. */
+/** UC-49 Order Paraclinical Services: filtering, cost estimate and messages. */
 
 export const TYPE_LABEL = {
     LAB: 'Xét nghiệm',
@@ -18,30 +18,55 @@ export const MSG = {
 
 export const formatMoney = (value) => `${Number(value || 0).toLocaleString('vi-VN')} ₫`;
 
+/** Amount without the currency sign, for table cells whose header already names the unit. */
+export const formatAmount = (value) => Number(value || 0).toLocaleString('vi-VN');
+
 /** The API returns a list; older responses were a page. */
 export function toServiceList(response) {
     if (Array.isArray(response)) return response;
     return response?.content || [];
 }
 
-/** Step 2: active services matching the keyword, grouped by type in Lab → Imaging → Functional order. */
-export function groupServices(services, keyword = '') {
-    const term = keyword.trim().toLocaleLowerCase('vi');
-    const matches = services.filter((service) => !term
-        || service.name?.toLocaleLowerCase('vi').includes(term)
-        || service.code?.toLocaleLowerCase('vi').includes(term));
-    return Object.keys(TYPE_LABEL)
-        .map((type) => ({ type, label: TYPE_LABEL[type], services: matches.filter((s) => s.type === type) }))
-        .filter((group) => group.services.length > 0);
+const TYPE_ORDER = Object.keys(TYPE_LABEL);
+
+/** Service groups present in the catalogue, sorted by name, for the group filter. */
+export function groupOptions(services) {
+    const groups = new Map();
+    services.forEach((service) => {
+        if (service.serviceGroupId) groups.set(service.serviceGroupId, service.serviceGroupName || '—');
+    });
+    return [...groups].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
-/** Step 4: estimated cost of the selected services (self-paid visit: the clinic price). */
+/** Step 2: active services matching the keyword, type and group, in Lab → Imaging → Functional order. */
+export function filterServices(services, { keyword = '', type = '', groupId = '' } = {}) {
+    const term = keyword.trim().toLocaleLowerCase('vi');
+    return services
+        .filter((service) => !term
+            || service.name?.toLocaleLowerCase('vi').includes(term)
+            || service.code?.toLocaleLowerCase('vi').includes(term))
+        .filter((service) => !type || service.type === type)
+        .filter((service) => !groupId || service.serviceGroupId === groupId)
+        .sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type));
+}
+
+/**
+ * Step 4: the selected services with their catalogue prices. A self-paid visit pays the clinic price, so its
+ * amount is the clinic total. An insured visit only shows both prices: the insurance and patient amounts are
+ * settled at the final payment (ASSUMPTION, team decision 07/11/2026; the BHYT split is not implemented yet).
+ */
 export function estimate(services, selectedIds) {
     const lines = selectedIds
         .map((id) => services.find((service) => service.id === id))
-        .filter(Boolean);
-    const total = lines.reduce((sum, service) => sum + Number(service.clinicPrice || 0), 0);
-    return { lines, total };
+        .filter(Boolean)
+        .map((service) => ({
+            ...service,
+            clinicPrice: Number(service.clinicPrice || 0),
+            insurancePrice: service.insurancePrice == null ? null : Number(service.insurancePrice),
+        }));
+    const clinicTotal = lines.reduce((sum, line) => sum + line.clinicPrice, 0);
+    const insuranceTotal = lines.reduce((sum, line) => sum + (line.insurancePrice ?? 0), 0);
+    return { lines, clinicTotal, insuranceTotal, total: clinicTotal };
 }
 
 /** MSG67 after the order is confirmed. */
