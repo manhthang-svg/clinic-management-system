@@ -251,6 +251,25 @@ public class Visit extends VersionedEntity {
         touch(startedAt);
     }
 
+    /**
+     * UC-48 / V11: the Doctor sends the called-in patient to another examination room. The visit is reused and
+     * waits there with the new room's queue number; the next Doctor who calls it takes it over.
+     */
+    public void transferTo(UUID destinationRoomId, int destinationQueueNumber, Instant transferredAt) {
+        if (this.status != VisitStatus.IN_EXAMINATION || this.isSkipped) {
+            throw new IllegalStateException("Only a visit in examination can be transferred");
+        }
+        if (this.roomId.equals(destinationRoomId)) {
+            throw new IllegalArgumentException("The destination room must differ from the current room");
+        }
+        this.roomId = destinationRoomId;
+        this.queueNumber = destinationQueueNumber;
+        this.status = VisitStatus.WAITING;
+        this.doctorAccountId = null;
+        this.denkhambenhluc = null;
+        touch(transferredAt);
+    }
+
     public void continueConclusion(UUID doctorAccountId, Instant continuedAt) {
         if (this.status != VisitStatus.WAITING_CONCLUSION) {
             throw new IllegalStateException("Visit is not waiting for conclusion");

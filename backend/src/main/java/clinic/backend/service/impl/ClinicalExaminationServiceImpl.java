@@ -61,9 +61,11 @@ import clinic.backend.service.ClinicalExaminationService;
 import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ClinicalExaminationServiceImpl implements ClinicalExaminationService {
@@ -93,6 +95,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     @Override
     @Transactional
     public ClinicalExaminationResponse open(StaffPrincipal principal, UUID visitId) {
+        log.debug("Opening clinical examination [visitId={}, accountId={}]", visitId, principal.accountId());
         AccessContext context = requireEditableVisit(principal, visitId);
         Instant now = clock.instant();
         MedicalRecord record = medicalRecordRepository.findByVisitId(visitId)
