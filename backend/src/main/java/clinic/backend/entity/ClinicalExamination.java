@@ -71,8 +71,21 @@ public class ClinicalExamination extends VersionedEntity {
     @OneToMany(mappedBy = "examination", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExaminationFinding> findings = new ArrayList<>();
 
+    @Getter(AccessLevel.NONE)
+    @OneToMany(mappedBy = "examination", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ClinicalExaminationDiagnosis> diagnoses = new ArrayList<>();
+
     public List<ExaminationFinding> getFindings() {
         return Collections.unmodifiableList(findings);
+    }
+
+    public List<ClinicalExaminationDiagnosis> getDiagnoses() {
+        return Collections.unmodifiableList(diagnoses);
+    }
+
+    public void replaceDiagnoses(List<ClinicalExaminationDiagnosis> values) {
+        diagnoses.clear();
+        diagnoses.addAll(values);
     }
 
     public ClinicalExamination(
