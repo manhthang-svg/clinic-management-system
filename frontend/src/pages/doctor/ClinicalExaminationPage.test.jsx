@@ -30,7 +30,9 @@ const clinicalData = {
     doctorAccountId: 'doctor-1', doctorName: 'BSCKII Trần Văn An',
     reasonForVisit: visit.lydovaovien, presentIllness: '', generalFinding: '', vitalSigns: null,
     organFinding: '', preliminaryDiagnosis: '', preliminaryDiagnosisIcd10: null,
-    treatmentCarePerformed: '', medicalHistory: [], availableNextSteps: ['PARACLINICAL', 'CONCLUSION'],
+    treatmentCarePerformed: '', medicalHistory: [], visitHistory: [
+        { visitId: 'old-visit', visitedAt: '2026-10-20T08:00:00Z', reasonForVisit: 'Đau họng', diagnosis: 'Viêm họng cấp' },
+    ], availableNextSteps: ['PARACLINICAL', 'CONCLUSION'],
 };
 
 function renderPage(state = { visitId: visit.id, visit, queueInfo: { roomName: 'Phòng khám Nội tổng quát', doctorName: 'BSCKII Trần Văn An' } }) {
@@ -72,8 +74,10 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByText('Nguyễn Văn Nam')).toBeInTheDocument();
         expect(screen.getAllByText('Phòng khám Nội tổng quát').length).toBeGreaterThan(0);
         expect(screen.getByDisplayValue('Đau đầu, chóng mặt')).toBeInTheDocument();
-        expect(screen.getByText('III. Hỏi bệnh')).toBeInTheDocument();
-        expect(screen.getByText('IV. Khám bệnh')).toBeInTheDocument();
+        expect(screen.queryByText('Hỏi bệnh')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Khám bệnh' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Lịch sử khám bệnh' })).toBeInTheDocument();
+        expect(screen.getByText('Viêm họng cấp')).toBeInTheDocument();
     });
 
     it('calculates BMI from weight and height', async () => {
@@ -119,7 +123,7 @@ describe('ClinicalExaminationPage', () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
 
-        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
         expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng kiểm tra các trường được đánh dấu.');
 
         fireEvent.click(screen.getByRole('button', { name: 'Chuyển phòng' }));
@@ -132,11 +136,30 @@ describe('ClinicalExaminationPage', () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
         fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
-        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
         expect(visitApi.saveClinicalExamination).toHaveBeenCalledWith(
             visit.id,
             expect.objectContaining({ mode: 'DRAFT', vitalSigns: expect.objectContaining({ pulse: 72 }) }),
         );
+    });
+
+    it('sends every selected preliminary ICD-10 diagnosis', async () => {
+        visitApi.openClinicalExamination.mockResolvedValue({
+            ...clinicalData,
+            preliminaryDiagnoses: [
+                { code: 'J02', name: 'Viêm họng cấp' },
+                { code: 'J03', name: 'Viêm amidan cấp' },
+            ],
+        });
+        renderPage();
+        await screen.findByText('Viêm amidan cấp');
+        fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+
+        expect(visitApi.saveClinicalExamination).toHaveBeenCalledWith(visit.id, expect.objectContaining({
+            preliminaryDiagnosisIcd10Codes: ['J02', 'J03'],
+            preliminaryDiagnosis: 'Viêm họng cấp; Viêm amidan cấp',
+        }));
     });
 
     it('shows patient and visit details from the record (step 4)', async () => {
@@ -155,13 +178,13 @@ describe('ClinicalExaminationPage', () => {
     it('asks before leaving with unsaved changes and stays on request (AF-06, MSG38)', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
-        fireEvent.change(screen.getByLabelText(/Quá trình bệnh lý/), { target: { value: 'Sốt 2 ngày' } });
+        fireEvent.change(screen.getByLabelText(/1\. Toàn thân/), { target: { value: 'Tỉnh, tiếp xúc tốt' } });
         fireEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách' }));
 
         expect(screen.getByRole('dialog')).toHaveTextContent('Bạn có thay đổi chưa lưu');
         fireEvent.click(screen.getByRole('button', { name: 'Ở lại' }));
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        expect(screen.getByDisplayValue('Sốt 2 ngày')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('Tỉnh, tiếp xúc tốt')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách' }));
         fireEvent.click(screen.getByRole('button', { name: 'Rời đi' }));
@@ -178,7 +201,7 @@ describe('ClinicalExaminationPage', () => {
     it('shows field errors and does not call the API when no vital sign is entered (EF-02)', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
-        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
         expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng kiểm tra các trường được đánh dấu.');
         expect(screen.getByText('Cần nhập ít nhất một chỉ số sinh hiệu hợp lệ.')).toBeInTheDocument();
 
@@ -192,7 +215,7 @@ describe('ClinicalExaminationPage', () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
         fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Lưu và chỉ định CLS' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chỉ định cận lâm sàng' }));
         expect(screen.getByLabelText(/Chẩn đoán ban đầu/)).toHaveAttribute('aria-invalid', 'true');
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
     });
@@ -204,7 +227,7 @@ describe('ClinicalExaminationPage', () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
         fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
-        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
         expect(await screen.findByRole('alert')).toHaveTextContent('ngoài ca trực');
         expect(screen.queryByText('Doctor is not on duty.')).not.toBeInTheDocument();
     });
@@ -215,7 +238,7 @@ describe('ClinicalExaminationPage', () => {
         }));
         renderPage();
         expect(await screen.findByRole('alert')).toHaveTextContent('Hồ sơ bệnh án đã đóng');
-        expect(screen.queryByText('IV. Khám bệnh')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Khám bệnh' })).not.toBeInTheDocument();
     });
 
     it('sends the combined organ examination from one field', async () => {
@@ -223,7 +246,7 @@ describe('ClinicalExaminationPage', () => {
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
         fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
         fireEvent.change(screen.getByLabelText(/^2\. Khám bộ phận/), { target: { value: 'Tim đều, phổi thông khí tốt' } });
-        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
         expect(visitApi.saveClinicalExamination).toHaveBeenCalledWith(visit.id, expect.objectContaining({
             organFinding: 'Tim đều, phổi thông khí tốt',
         }));

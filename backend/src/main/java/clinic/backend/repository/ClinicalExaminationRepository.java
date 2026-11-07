@@ -9,6 +9,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ClinicalExaminationRepository extends JpaRepository<ClinicalExamination, UUID> {
 
-    @EntityGraph(attributePaths = "findings")
+    @EntityGraph(attributePaths = "diagnoses")
     Optional<ClinicalExamination> findByMedicalRecordId(UUID medicalRecordId);
 }

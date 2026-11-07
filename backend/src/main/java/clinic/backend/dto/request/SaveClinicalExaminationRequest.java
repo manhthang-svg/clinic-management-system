@@ -4,6 +4,7 @@ import clinic.backend.enums.ClinicalExaminationNextStep;
 import clinic.backend.enums.ClinicalExaminationSaveMode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 public record SaveClinicalExaminationRequest(
         @NotNull ClinicalExaminationSaveMode mode,
@@ -15,6 +16,7 @@ public record SaveClinicalExaminationRequest(
         @Size(max = 2000) String organFinding,
         @Size(max = 1000) String preliminaryDiagnosis,
         @Size(max = 10) String preliminaryDiagnosisIcd10Code,
+        @Size(max = 20) List<@Size(max = 10) String> preliminaryDiagnosisIcd10Codes,
         @Size(max = 4000) String treatmentCarePerformed,
         Long version) {
 }

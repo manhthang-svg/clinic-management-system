@@ -167,6 +167,31 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
             """)
     List<PatientVisitHistory> findPatientHistory(@Param("patientId") UUID patientId);
 
+    /** Previous visits shown to a Doctor while examining the patient (BR-35). */
+    @Query("""
+            select v.id as visitId, v.thoigianvaovien as visitedAt, v.lydovaovien as reasonForVisit,
+                   coalesce(conclusion.chandoan, examination.chandoansobo) as diagnosis
+            from Visit v
+            left join MedicalRecord record on record.visitId = v.id
+            left join ClinicalExamination examination on examination.medicalRecordId = record.id
+            left join Conclusion conclusion on conclusion.medicalRecordId = record.id
+            where v.patientId = :patientId and v.id <> :currentVisitId
+            order by v.thoigianvaovien desc
+            """)
+    List<DoctorVisitHistory> findDoctorVisitHistory(
+            @Param("patientId") UUID patientId,
+            @Param("currentVisitId") UUID currentVisitId);
+
+    interface DoctorVisitHistory {
+        UUID getVisitId();
+
+        Instant getVisitedAt();
+
+        String getReasonForVisit();
+
+        String getDiagnosis();
+    }
+
     interface PatientVisitHistory {
         UUID getVisitId();
 

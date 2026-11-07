@@ -41,8 +41,17 @@ public record ClinicalExaminationResponse(
         String organFinding,
         String preliminaryDiagnosis,
         Icd10OptionResponse preliminaryDiagnosisIcd10,
+        List<Icd10OptionResponse> preliminaryDiagnoses,
         String treatmentCarePerformed,
         List<MedicalHistoryItemResponse> medicalHistory,
+        List<VisitHistoryItem> visitHistory,
         List<ClinicalExaminationNextStep> availableNextSteps,
         Instant updatedAt) {
+
+    public record VisitHistoryItem(
+            UUID visitId,
+            Instant visitedAt,
+            String reasonForVisit,
+            String diagnosis) {
+    }
 }
