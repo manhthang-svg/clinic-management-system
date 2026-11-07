@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-import clinic.backend.dto.request.ExaminationFindingRequest;
 import clinic.backend.dto.request.MedicalHistoryItemRequest;
 import clinic.backend.dto.request.SaveClinicalExaminationRequest;
 import clinic.backend.dto.request.VitalSignRequest;
@@ -22,7 +21,6 @@ import clinic.backend.dto.response.MedicalHistoryItemResponse;
 import clinic.backend.dto.response.VitalSignResponse;
 import clinic.backend.entity.ClinicalExamination;
 import clinic.backend.entity.DutySchedule;
-import clinic.backend.entity.ExaminationFinding;
 import clinic.backend.entity.Icd10;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicalRecord;
@@ -130,12 +128,12 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         Map<String, Object> oldValues = auditValues(context.visit(), examination);
 
         context.visit().updateReasonForVisit(normalize(request.reasonForVisit()), now);
-        List<ExaminationFinding> findings = buildFindings(examination, request.organFindings(), now);
         examination.updateClinicalData(
                 principal.accountId(), normalize(request.presentIllness()), normalize(request.generalFinding()),
+                normalize(request.organFinding()),
                 normalize(request.preliminaryDiagnosis()), icd10 == null ? null : icd10.getMaicd(),
                 icd10 == null ? null : icd10.getTenicd(), normalize(request.treatmentCarePerformed()),
-                findings, now);
+                now);
         replaceInitialVitalSign(record, principal.accountId(), request.vitalSigns(), now);
 
         visitRepository.save(context.visit());
@@ -263,11 +261,6 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
             throw new AppException(ErrorCode.CLINICAL_EXAMINATION_INVALID);
         }
         validateVitalSigns(request.vitalSigns());
-        List<ExaminationFindingRequest> findings = request.organFindings() == null
-                ? List.of() : request.organFindings();
-        if (findings.stream().anyMatch(item -> item.finding() == null || item.finding().isBlank())) {
-            throw new AppException(ErrorCode.CLINICAL_EXAMINATION_INVALID);
-        }
         if (request.mode() == ClinicalExaminationSaveMode.CONTINUE) {
             String diagnosis = normalize(request.preliminaryDiagnosis());
             if (request.nextStep() == null || diagnosis == null || diagnosis.length() < 2) {
@@ -311,14 +304,6 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         return icd10;
     }
 
-    private List<ExaminationFinding> buildFindings(
-            ClinicalExamination examination, List<ExaminationFindingRequest> requested, Instant now) {
-        if (requested == null) return List.of();
-        return requested.stream().map(item -> new ExaminationFinding(
-                ids.next(), now, examination, item.organSystem().name(), item.finding().strip(),
-                normalize(item.notes()))).toList();
-    }
-
     private void replaceInitialVitalSign(
             MedicalRecord record, UUID doctorId, VitalSignRequest value, Instant now) {
         vitalSignRepository.findByMedicalRecordIdAndIsInitialTrue(record.getId())
@@ -350,7 +335,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 patient.getDantoc(), patient.getDiachi(), room.getId(), room.getRoomCode(), room.getRoomName(),
                 context.doctor().getId(), context.doctor().getFullName(), visit.getLydovaovien(),
                 examination.getQuatrinhbenhly(), examination.getKhambenhToanthan(), vitalResponse,
-                examination.getFindings().stream().map(mapper::toFindingResponse).toList(),
+                examination.getKhambenhBophan(),
                 examination.getChandoansobo(), mapper.toIcd10Option(icd10), examination.getTreatmentCarePerformed(),
                 historyOf(patient),
                 List.of(ClinicalExaminationNextStep.PARACLINICAL, ClinicalExaminationNextStep.CONCLUSION),
@@ -362,10 +347,10 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         values.put("reasonForVisit", visit.getLydovaovien());
         values.put("presentIllness", examination.getQuatrinhbenhly());
         values.put("generalFinding", examination.getKhambenhToanthan());
+        values.put("organFinding", examination.getKhambenhBophan());
         values.put("preliminaryDiagnosis", examination.getChandoansobo());
         values.put("preliminaryDiagnosisIcd10Code", examination.getKhambenhChandoanvaovienmaicd());
         values.put("treatmentCarePerformed", examination.getTreatmentCarePerformed());
-        values.put("organFindingCount", examination.getFindings().size());
         return values;
     }
 

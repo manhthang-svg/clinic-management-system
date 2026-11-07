@@ -29,13 +29,7 @@ function optionalNumber(value) {
 
 function formFromResponse(data) {
     const findings = Object.fromEntries(ORGAN_FIELDS.flatMap(([key]) => [[key, ''], [notesKey(key), '']]));
-    data?.organFindings?.forEach((item) => {
-        const field = ORGAN_FIELDS.find(([, , organSystem]) => organSystem === item.organSystem);
-        if (field) {
-            findings[field[0]] = item.finding ?? '';
-            findings[notesKey(field[0])] = item.notes ?? '';
-        }
-    });
+    findings.organExam = data?.organFinding ?? '';
     return {
         ...EMPTY_FORM,
         reason: data?.reasonForVisit ?? '', progression: data?.presentIllness ?? '',
@@ -203,17 +197,36 @@ export default function ClinicalExaminationPage() {
     const [saving, setSaving] = useState(false);
     const [pageError, setPageError] = useState('');
     const [fieldErrors, setFieldErrors] = useState({});
+    const [validationMode, setValidationMode] = useState(null);
     const [pendingLeave, setPendingLeave] = useState(null);
     const [icdOptions, setIcdOptions] = useState([]);
     const [orderOpen, setOrderOpen] = useState(false);
     const [medicalHistory, setMedicalHistory] = useState(null);
     const [activeSection, setActiveSection] = useState('clinical');
-    const set = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
+    const set = (key) => (value) => {
+        const next = { ...form, [key]: value };
+        setForm(next);
+        if (validationMode) {
+            const errors = validateExamination(next, validationMode);
+            setFieldErrors(errors);
+            setPageError(Object.keys(errors).length
+                ? (errors.preliminaryDiagnosis && Object.keys(errors).length === 1
+                    ? MSG.DIAGNOSIS_REQUIRED : MSG.CHECK_FIELDS)
+                : '');
+            if (!Object.keys(errors).length) setValidationMode(null);
+        }
+    };
     const dirty = !sameForm(form, savedForm);
     const bmi = useMemo(() => {
         const weight = Number(form.weight);
         const heightM = Number(form.height) / 100;
-        return weight > 0 && heightM > 0 ? (weight / (heightM * heightM)).toFixed(1) : '—';
+        if (!(weight > 0 && heightM > 0)) return { value: '—', category: '' };
+        const value = weight / (heightM * heightM);
+        let category = 'Béo phì';
+        if (value < 18.5) category = 'Người gầy (thiếu cân)';
+        else if (value < 25) category = 'Người bình thường';
+        else if (value < 30) category = 'Thừa cân';
+        return { value: value.toFixed(1), category };
     }, [form.height, form.weight]);
 
     const goToWaitingList = () => navigate(ROUTES.DOCTOR.WAITING_LIST, {
@@ -291,10 +304,6 @@ export default function ClinicalExaminationPage() {
     const statusLabel = VISIT_STATUS_LABELS[visit?.status] ?? '—';
     const visitTypeLabel = visit?.doituongbnLoai === 'BHYT' ? 'Khám BHYT' : 'Khám dịch vụ';
 
-    const sentOrganKeys = ORGAN_FIELDS
-        .filter(([key]) => form[key].trim() || form[notesKey(key)].trim())
-        .map(([key]) => key);
-
     const payload = (mode, nextStep = null) => ({
         mode, nextStep, reasonForVisit: form.reason, presentIllness: form.progression,
         generalFinding: form.generalExam,
@@ -306,10 +315,7 @@ export default function ClinicalExaminationPage() {
             height: optionalNumber(form.height), spo2: optionalNumber(form.spo2),
             measuredAt: clinicalData?.vitalSigns?.measuredAt ?? new Date().toISOString(),
         },
-        organFindings: sentOrganKeys.map((key) => ({
-            organSystem: ORGAN_FIELDS.find(([fieldKey]) => fieldKey === key)[2],
-            finding: form[key].trim(), notes: form[notesKey(key)].trim() || null,
-        })),
+        organFinding: form.organExam,
         preliminaryDiagnosis: form.preliminaryDiagnosis,
         preliminaryDiagnosisIcd10Code: form.icd10.trim() || null,
         treatmentCarePerformed: form.treatment, version: clinicalData?.version ?? null,
@@ -319,10 +325,12 @@ export default function ClinicalExaminationPage() {
         const errors = validateExamination(form, mode);
         setFieldErrors(errors);
         if (Object.keys(errors).length) {
+            setValidationMode(mode);
             setPageError(errors.preliminaryDiagnosis && Object.keys(errors).length === 1
                 ? MSG.DIAGNOSIS_REQUIRED : MSG.CHECK_FIELDS);
             return;
         }
+        setValidationMode(null);
         setSaving(true);
         setPageError('');
         try {
@@ -335,7 +343,7 @@ export default function ClinicalExaminationPage() {
             if (nextStep === 'PARACLINICAL') setOrderOpen(true);
             if (nextStep === 'CONCLUSION') toast.info('Hồ sơ đã sẵn sàng để thực hiện kết luận khám (UC-56).');
         } catch (error) {
-            setFieldErrors(fieldErrorsFromApi(error, sentOrganKeys));
+            setFieldErrors(fieldErrorsFromApi(error));
             setPageError(examinationErrorMessage(error));
         } finally {
             setSaving(false);
@@ -343,6 +351,13 @@ export default function ClinicalExaminationPage() {
     };
 
     const saveDraft = () => save('DRAFT');
+
+    const openTransfer = () => {
+        setPageError('');
+        setFieldErrors({});
+        setValidationMode(null);
+        setActiveSection('transfer');
+    };
 
     if (loading) {
         return <div role="status" className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-600"><LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" />Đang mở hồ sơ khám lâm sàng…</div>;
@@ -373,7 +388,7 @@ export default function ClinicalExaminationPage() {
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
         [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => save('CONTINUE', 'PARACLINICAL')],
-        [ArrowRightLeft, 'Chuyển phòng', 'transfer', () => setActiveSection('transfer')],
+        [ArrowRightLeft, 'Chuyển phòng', 'transfer', openTransfer],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
         [Pill, 'Đơn thuốc', 'prescription', null],
         [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', null],
@@ -428,8 +443,9 @@ export default function ClinicalExaminationPage() {
 
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <h2 className="mb-3 text-sm font-bold">IV. Khám bệnh</h2>
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(520px,1.2fr)]"><Field label="1. Toàn thân" value={form.generalExam} onChange={set('generalExam')} placeholder="Mô tả tình trạng toàn thân..." maxLength={4000} rows={3} error={fieldErrors.generalExam} /><div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-teal-800"><HeartPulse className="h-4 w-4" />Sinh hiệu <span className="font-normal text-slate-400">• Thời điểm đo: {formatTime(clinicalData?.vitalSigns?.measuredAt ?? new Date())}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(VITAL_RULES).map(([key, [label, unit]]) => <Vital key={key} label={label} value={form[key]} onChange={set(key)} unit={unit} error={fieldErrors[key]} />)}</div>{fieldErrors.vitals && <p className="mt-2 text-[11px] text-rose-600">{fieldErrors.vitals}</p>}<div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4 text-teal-600" />BMI: <strong className="text-slate-700">{bmi}</strong> kg/m²</div></div></div>
-                        <h3 className="mb-2 mt-4 text-xs font-bold">2. Các bộ phận</h3><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{ORGAN_FIELDS.map(([key, label]) => <div key={key} className="space-y-2"><Field label={label} value={form[key]} onChange={set(key)} placeholder="Nhập kết quả khám..." maxLength={2000} error={fieldErrors[key]} /><Field label={`Ghi chú ${label.toLocaleLowerCase('vi')}`} value={form[notesKey(key)]} onChange={set(notesKey(key))} placeholder="Ghi chú (nếu có)..." maxLength={500} rows={1} error={fieldErrors[notesKey(key)]} /></div>)}</div>
+                        <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-teal-800"><HeartPulse className="h-4 w-4" />Sinh hiệu <span className="font-normal text-slate-400">• Thời điểm đo: {formatTime(clinicalData?.vitalSigns?.measuredAt ?? new Date())}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(VITAL_RULES).map(([key, [label, unit]]) => <Vital key={key} label={label} value={form[key]} onChange={set(key)} unit={unit} error={fieldErrors[key]} />)}</div>{fieldErrors.vitals && <p className="mt-2 text-[11px] text-rose-600">{fieldErrors.vitals}</p>}<div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4 text-teal-600" />BMI: <strong className="text-slate-700">{bmi.value}</strong> kg/m²{bmi.category && <strong className="text-teal-700">({bmi.category})</strong>}</div></div>
+                        <div className="mt-4"><Field label="1. Toàn thân" value={form.generalExam} onChange={set('generalExam')} placeholder="Mô tả tình trạng toàn thân..." maxLength={4000} rows={3} error={fieldErrors.generalExam} /></div>
+                        <div className="mt-4"><Field label="2. Khám bộ phận" value={form.organExam} onChange={set('organExam')} placeholder="Nhập kết quả khám bộ phận..." maxLength={2000} rows={4} error={fieldErrors.organExam} /></div>
                         <div className="mt-4 grid gap-3 md:grid-cols-2"><div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3"><Field label="4. Chẩn đoán ban đầu" value={form.preliminaryDiagnosis} onChange={set('preliminaryDiagnosis')} placeholder="Bắt buộc khi chuyển bước..." maxLength={1000} error={fieldErrors.preliminaryDiagnosis} /><label className="block text-xs font-semibold text-slate-700">Mã ICD-10 (không bắt buộc)<input list="icd10-options" value={form.icd10} onChange={(event) => set('icd10')(event.target.value)} placeholder="Tìm mã hoặc tên bệnh" aria-invalid={fieldErrors.icd10 ? 'true' : undefined} className={`mt-1 h-11 w-full rounded-lg border bg-white px-3 text-xs font-normal outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 ${fieldErrors.icd10 ? 'border-rose-400' : 'border-slate-200'}`} /><datalist id="icd10-options">{form.icd10.trim().length >= 2 && icdOptions.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}</datalist>{fieldErrors.icd10 ? <FieldError>{fieldErrors.icd10}</FieldError> : <span className="mt-1 block text-[10px] font-normal leading-4 text-slate-500">Chọn một gợi ý để lưu đúng mã đang hoạt động.</span>}</label></div><Field label="5. Điều trị / chăm sóc đã thực hiện" value={form.treatment} onChange={set('treatment')} placeholder="Nhập thông tin đã xử lý, chăm sóc, hướng dẫn..." maxLength={4000} error={fieldErrors.treatment} /></div>
                     </section>
                 </div>

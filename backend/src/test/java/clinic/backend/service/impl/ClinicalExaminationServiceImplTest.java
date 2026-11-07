@@ -112,7 +112,7 @@ class ClinicalExaminationServiceImplTest {
         SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
                 ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest(null, null, null, null, null, null, null, null, NOW),
-                List.of(), null, null, null, null);
+                null, null, null, null, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class,
@@ -127,7 +127,7 @@ class ClinicalExaminationServiceImplTest {
                 ClinicalExaminationSaveMode.CONTINUE, ClinicalExaminationNextStep.PARACLINICAL,
                 "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
-                List.of(), " ", null, null, null);
+                null, " ", null, null, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class,
@@ -190,7 +190,7 @@ class ClinicalExaminationServiceImplTest {
         return new SaveClinicalExaminationRequest(
                 ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
-                List.of(), "Theo dõi", code, null, null);
+                null, "Theo dõi", code, null, null);
     }
 
     private static Icd10 icd10(String code, LocalDate effectiveFrom, boolean moreDetailed, Short sex) {

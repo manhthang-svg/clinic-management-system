@@ -28,9 +28,9 @@ describe('validateExamination', () => {
         expect(validateExamination({ ...blank, reason: '  ' }, 'DRAFT').reason).toBe(MSG.required('Lý do khám'));
     });
 
-    it('requires a finding when organ notes are entered', () => {
-        expect(validateExamination({ ...blank, [notesKey('respiratory')]: 'Theo dõi' }, 'DRAFT').respiratory)
-            .toBe(MSG.required('Kết quả khám hô hấp'));
+    it('validates the combined organ examination when entered', () => {
+        expect(validateExamination({ ...blank, organExam: 'A' }, 'DRAFT').organExam)
+            .toBe(MSG.lengthBetween('Kết quả khám bộ phận', 2, 2000));
     });
 
     it('requires a preliminary diagnosis before continuing (MSG98)', () => {
@@ -68,11 +68,11 @@ describe('fieldErrorsFromApi', () => {
         const error = {
             errorResponse: {
                 code: 'REQUEST_VALIDATION_FAILED',
-                details: { reasonForVisit: 'size', 'organFindings[1].notes': 'size', 'vitalSigns.pulse': 'x' },
+                details: { reasonForVisit: 'size', organFinding: 'size', 'vitalSigns.pulse': 'x' },
             },
         };
-        expect(fieldErrorsFromApi(error, ['circulatory', 'ent'])).toEqual({
-            reason: MSG.INVALID_DATA, [notesKey('ent')]: MSG.INVALID_DATA, vitals: MSG.CHECK_FIELDS,
+        expect(fieldErrorsFromApi(error)).toEqual({
+            reason: MSG.INVALID_DATA, organExam: MSG.INVALID_DATA, vitals: MSG.CHECK_FIELDS,
         });
     });
 
