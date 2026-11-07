@@ -122,6 +122,17 @@ export const visitApi = {
         });
     },
 
+    getTransferRooms(visitId, signal) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/transfer-rooms`, { signal });
+    },
+
+    transferVisit(visitId, payload) {
+        return apiClient.request(`/visits/${encodeURIComponent(visitId)}/transfer`, {
+            method: 'POST',
+            body: payload,
+        });
+    },
+
     openClinicalExamination(visitId, signal) {
         return apiClient.request(`/clinical-examinations/visits/${encodeURIComponent(visitId)}/open`, {
             method: 'POST',

@@ -90,16 +90,25 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByRole('button', { name: 'Về danh sách chờ' })).toBeInTheDocument();
     });
 
-    it('opens the transfer-room tab and loads active examination rooms', async () => {
-        vi.spyOn(visitApi, 'getActiveExaminationRooms').mockResolvedValue([
-            { id: 'room-2', code: 'P.201', name: 'Tai Mũi Họng' },
+    it('opens the UC-48 transfer tab with the rooms that can receive the patient', async () => {
+        vi.spyOn(visitApi, 'getTransferRooms').mockResolvedValue([
+            { roomId: 'room-2', roomCode: 'P.201', roomName: 'Tai Mũi Họng', doctorName: 'BS Lê Thị Bình' },
         ]);
         renderPage();
 
         fireEvent.click(await screen.findByRole('button', { name: 'Chuyển phòng' }));
-        expect(await screen.findByText('1. Thông tin chuyển phòng')).toBeInTheDocument();
-        expect(screen.getByRole('option', { name: 'P.201 - Tai Mũi Họng' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Chuyển phòng khám' })).toBeInTheDocument();
+        expect(await screen.findByRole('option', { name: 'P.201 - Tai Mũi Họng' })).toBeInTheDocument();
+        expect(visitApi.getTransferRooms).toHaveBeenCalledWith(visit.id, expect.anything());
+    });
+
+    it('does not offer a transfer once the examination has been saved (OQ-05)', async () => {
+        visitApi.openClinicalExamination.mockResolvedValue({ ...clinicalData, version: 1 });
+        renderPage();
+
+        // Wait until the saved examination is shown, so the tab state reflects the loaded version.
+        expect(await screen.findByDisplayValue(clinicalData.reasonForVisit)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Chuyển phòng' })).toBeDisabled();
     });
 
     it('persists a valid draft through the UC-47 API', async () => {
