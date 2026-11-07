@@ -51,27 +51,41 @@ export function filterServices(services, { keyword = '', type = '', groupId = ''
 }
 
 /**
- * Step 4: the selected services with their catalogue prices. A self-paid visit pays the clinic price, so its
- * amount is the clinic total. An insured visit only shows both prices: the insurance and patient amounts are
- * settled at the final payment (ASSUMPTION, team decision 07/11/2026; the BHYT split is not implemented yet).
+ * Step 4 (BR-27): each line is charged at the clinic price. With the coverage rate of a valid insurance card, a
+ * service with an insurance price is covered for min(insurance price, clinic price) × rate and the patient pays
+ * the rest; other services, and every service of a self-paid visit (no rate), are paid in full by the patient.
+ * The backend computes the receipt; this is the estimate shown before confirming.
  */
-export function estimate(services, selectedIds) {
+export function estimate(services, selectedIds, coverageRate = null) {
     const lines = selectedIds
         .map((id) => services.find((service) => service.id === id))
         .filter(Boolean)
-        .map((service) => ({
-            ...service,
-            clinicPrice: Number(service.clinicPrice || 0),
-            insurancePrice: service.insurancePrice == null ? null : Number(service.insurancePrice),
-        }));
-    const clinicTotal = lines.reduce((sum, line) => sum + line.clinicPrice, 0);
-    const insuranceTotal = lines.reduce((sum, line) => sum + (line.insurancePrice ?? 0), 0);
-    return { lines, clinicTotal, insuranceTotal, total: clinicTotal };
+        .map((service) => {
+            const clinicPrice = Number(service.clinicPrice || 0);
+            const insurancePrice = service.insurancePrice == null ? null : Number(service.insurancePrice);
+            const insuranceAmount = coverageRate && insurancePrice != null
+                ? Math.round((Math.min(insurancePrice, clinicPrice) * coverageRate) / 100)
+                : 0;
+            return { ...service, clinicPrice, insurancePrice, insuranceAmount, patientAmount: clinicPrice - insuranceAmount };
+        });
+    const sum = (key) => lines.reduce((total, line) => total + line[key], 0);
+    return {
+        lines,
+        clinicTotal: sum('clinicPrice'),
+        insuranceTotal: lines.reduce((total, line) => total + (line.insurancePrice ?? 0), 0),
+        insuranceAmount: sum('insuranceAmount'),
+        patientAmount: sum('patientAmount'),
+        total: sum('clinicPrice'),
+    };
 }
 
-/** MSG67 after the order is confirmed. */
-export function createdMessage(order) {
-    return `Đã tạo chỉ định cận lâm sàng. Phiếu thu ${order?.paymentCode} – bệnh nhân trả: ${formatMoney(order?.tongcong)}.`;
+/** MSG67 after the order is confirmed; an insured visit's orders already went to the paraclinical rooms (BR-26). */
+export function createdMessage(order, insured = false) {
+    const patientAmount = formatMoney(order?.patientAmount ?? order?.tongcong);
+    const message = `Đã tạo chỉ định cận lâm sàng. Phiếu thu ${order?.paymentCode} – bệnh nhân trả: ${patientAmount}.`;
+    return insured
+        ? `${message} Chỉ định đã được chuyển tới phòng cận lâm sàng; bệnh nhân thanh toán sau khi có kết luận.`
+        : message;
 }
 
 /** MSG42 / MSG12 / MSG99; never the raw backend message. */

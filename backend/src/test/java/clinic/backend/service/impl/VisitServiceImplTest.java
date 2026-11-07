@@ -184,7 +184,8 @@ class VisitServiceImplTest {
         Visit priority = queuedVisit(10, true);
         when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
                 BUSY_ROOM_ID, QUEUE_DATE, List.of(
-                        VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
+                        VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL,
+                        VisitStatus.WAITING_CONCLUSION)))
                 .thenReturn(List.of(regular, transferred, priority));
 
         Patient regularPatient = patient(regular.getPatientId(), "Thường");
@@ -224,18 +225,21 @@ class VisitServiceImplTest {
     }
 
     @Test
-    void patientListMergesWaitingAndInExaminationWithTheExaminedPatientFirst() {
+    void patientListMergesWaitingInExaminationAndWaitingParaclinicalWithTheExaminedPatientFirst() {
         stubDoctorOnDuty();
         Visit waiting = queuedVisit(10, false);
         Visit inExamination = queuedVisit(20, false, VisitStatus.IN_EXAMINATION);
+        Visit waitingParaclinical = queuedVisit(3, false, VisitStatus.WAITING_PARACLINICAL);
         Visit waitingConclusion = queuedVisit(5, false, VisitStatus.WAITING_CONCLUSION);
         Visit skipped = skippedVisit(1, VisitStatus.WAITING, clock.instant().minusSeconds(60));
         when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
                 BUSY_ROOM_ID, QUEUE_DATE,
-                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
-                .thenReturn(List.of(waiting, waitingConclusion, skipped, inExamination));
+                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL,
+                        VisitStatus.WAITING_CONCLUSION)))
+                .thenReturn(List.of(waiting, waitingConclusion, waitingParaclinical, skipped, inExamination));
         List<Patient> patients = List.of(
                 patient(waiting.getPatientId(), "Đang chờ"),
+                patient(waitingParaclinical.getPatientId(), "Chờ CLS"),
                 patient(inExamination.getPatientId(), "Đang khám"),
                 patient(waitingConclusion.getPatientId(), "Chờ kết luận"),
                 patient(skipped.getPatientId(), "Vắng mặt"));
@@ -247,11 +251,12 @@ class VisitServiceImplTest {
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
                 DoctorQueueTab.PATIENT_LIST, null, null, null, null, 0, 20);
 
-        assertThat(queue.visits().page().totalElements()).isEqualTo(2);
+        assertThat(queue.visits().page().totalElements()).isEqualTo(3);
         assertThat(queue.visits().content()).extracting("patientName")
-                .containsExactly("Đang khám", "Đang chờ");
+                .containsExactly("Đang khám", "Đang chờ", "Chờ CLS");
         assertThat(queue.waitingCount()).isEqualTo(1);
         assertThat(queue.inExaminationCount()).isEqualTo(1);
+        assertThat(queue.waitingParaclinicalCount()).isEqualTo(1);
     }
 
     @Test
@@ -313,7 +318,8 @@ class VisitServiceImplTest {
         Patient examinedPatient = patient(examinedConclusion.getPatientId(), "Đã khám");
         when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
                 BUSY_ROOM_ID, QUEUE_DATE,
-                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
+                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL,
+                        VisitStatus.WAITING_CONCLUSION)))
                 .thenReturn(List.of(waitingConclusion, examinedConclusion, waiting));
         when(patientRepository.findAllById(any()))
                 .thenReturn(List.of(conclusionPatient, examinedPatient, waitingPatient));

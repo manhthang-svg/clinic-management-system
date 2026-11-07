@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOrderPanel';
+import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrderList';
 import { createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
@@ -237,7 +238,8 @@ export default function ClinicalExaminationPage() {
         id: clinicalData.visitId, sovaovien: clinicalData.visitCode, queueNumber: clinicalData.queueNumber,
         status: clinicalData.visitStatus, thoigianvaovien: clinicalData.registeredAt,
         denkhambenhluc: clinicalData.examinationStartedAt, doituongbnLoai: clinicalData.visitType,
-        mabhyt: clinicalData.insuranceCardNumber, patientName: clinicalData.patientName,
+        mabhyt: clinicalData.insuranceCardNumber, insuranceCoverageRate: clinicalData.insuranceCoverageRate,
+        patientName: clinicalData.patientName,
         patientCode: clinicalData.patientCode, patientDob: clinicalData.patientDateOfBirth,
         patientGender: clinicalData.patientGender, lydovaovien: clinicalData.reasonForVisit,
         occupation: clinicalData.occupation, ethnicity: clinicalData.ethnicity, address: clinicalData.address,
@@ -330,16 +332,23 @@ export default function ClinicalExaminationPage() {
         );
     }
 
-    const transferable = clinicalData?.version === 0 && !loadError;
+    // While waiting for paraclinical services the Doctor can only review the examination and the orders.
+    const readOnly = visit.status === 'WAITING_PARACLINICAL';
+    const transferable = clinicalData?.version === 0 && !loadError && !readOnly;
+    const openParaclinical = () => {
+        if (activeSection === 'paraclinical') return;
+        if (readOnly) setActiveSection('paraclinical');
+        // AF-04: the examination is saved (diagnosis required) before the order screen opens.
+        else save('CONTINUE', 'PARACLINICAL');
+    };
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
-        // AF-04: the examination is saved (diagnosis required) before the order screen opens.
-        [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => { if (activeSection !== 'paraclinical') save('CONTINUE', 'PARACLINICAL'); }],
+        [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', openParaclinical],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
         [Pill, 'Đơn thuốc', 'prescription', null],
-        [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', () => save('CONTINUE', 'CONCLUSION')],
+        [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', readOnly ? null : () => save('CONTINUE', 'CONCLUSION')],
     ];
 
     return (
@@ -347,6 +356,8 @@ export default function ClinicalExaminationPage() {
             <header>
                 <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="flex items-center text-xs text-slate-400"><button type="button" onClick={returnToWaitingList} className="cursor-pointer font-semibold text-teal-700 hover:text-teal-900 hover:underline">Khám bệnh</button><span className="px-1">›</span><span>Khám lâm sàng</span></p></div></div>
             </header>
+
+            {readOnly && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
 
             {pageError && <div role="alert" tabIndex={-1} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{pageError}</div>}
 
@@ -380,11 +391,13 @@ export default function ClinicalExaminationPage() {
 
             {activeSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
+            ) : activeSection === 'paraclinical' && readOnly ? (
+                <ParaclinicalOrderList visitId={visit.id} />
             ) : activeSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
-                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order)); goToWaitingList(); }} />
+                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
-                <div className="space-y-3">
+                <fieldset disabled={readOnly} className="min-w-0 space-y-3">
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>
 
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -419,12 +432,12 @@ export default function ClinicalExaminationPage() {
                             <p className="mt-1 text-[10px] font-normal text-slate-500">Có thể chọn nhiều mã ICD-10.</p>
                         </div>
                     </section>
-                </div>
+                </fieldset>
 
                 <aside className="sticky top-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-bold"><CalendarDays className="h-4 w-4 text-teal-600" />Thông tin lượt khám</h2><dl className="mt-4 space-y-3 text-xs">{[['Mã lượt khám', visit.sovaovien], ['Ngày khám', formatDate(visit.thoigianvaovien)], ['Giờ đăng ký', formatTime(visit.thoigianvaovien)], ['Giờ bắt đầu khám', formatTime(visit.denkhambenhluc)], ['Số thứ tự', visit.queueNumber], ['Loại khám', visitTypeLabel], ['Phòng khám', queueInfo?.roomName], ['Bác sĩ khám', queueInfo?.doctorName]].map(([label, value]) => <div key={label} className="grid grid-cols-[88px_1fr] gap-2"><dt className="text-slate-400">{label}</dt><dd className="font-semibold text-slate-700">{value || '—'}</dd></div>)}</dl><div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />{statusLabel}</div></aside>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={returnToWaitingList} disabled={saving} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Quay lại danh sách</button><button type="button" onClick={saveDraft} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}{saving ? 'Đang lưu…' : 'Lưu'}</button></div>
+            <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={returnToWaitingList} disabled={saving} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Quay lại danh sách</button>{!readOnly && <button type="button" onClick={saveDraft} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}{saving ? 'Đang lưu…' : 'Lưu'}</button>}</div>
             </>}
 
             <ConfirmModal

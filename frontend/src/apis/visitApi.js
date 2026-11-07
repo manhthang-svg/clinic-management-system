@@ -23,6 +23,11 @@ export const visitApi = {
         });
     },
 
+    // Paraclinical orders already made for a visit (Doctor of that visit only).
+    getParaclinicalOrders(visitId, signal) {
+        return apiClient.request(`/paraclinical-orders?visitId=${encodeURIComponent(visitId)}`, { signal });
+    },
+
     getParaclinicalServices(signal) {
         return apiClient.request('/paraclinical-orders/services', { signal });
     },

@@ -139,6 +139,48 @@ class PaymentCompletionServiceTest {
         assertThat(audit.getValue().get("paymentMethod")).isEqualTo("BANK_TRANSFER");
     }
 
+    @Test
+    void leavesOrdersReleasedAtOrderTimeInTheirRoomWhenTheInsuranceVisitPays() {
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        ParaclinicalOrderDetail detail = detail(order);
+        order.addDetail(detail);
+        UUID roomId = UUID.randomUUID();
+        detail.releaseTo(roomId, 3, NOW);
+        order.release();
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_CONCLUSION)));
+        when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getRoomId()).isEqualTo(roomId);
+        assertThat(detail.getQueueNumber()).isEqualTo(3);
+        verify(queueCounterRepository, never()).takeNext(any(), any());
+    }
+
+    @Test
+    void releasesAnOrderWithoutPaymentForUc49() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        ParaclinicalOrderDetail detail = detail(order);
+        order.addDetail(detail);
+        Room room = room(groupId, "CLS01");
+        MedicalService medicalService = mock(MedicalService.class);
+        when(medicalService.getServiceGroupId()).thenReturn(groupId);
+        when(medicalServiceRepository.findById(SERVICE_ID)).thenReturn(Optional.of(medicalService));
+        when(roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(groupId, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(room));
+        when(queueCounterRepository.takeNext(room.getId(), LocalDate.of(2026, 10, 28))).thenReturn(1);
+
+        List<String> unrouted = service.releaseOrder(order);
+
+        assertThat(unrouted).isEmpty();
+        assertThat(order.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
+        assertThat(detail.getRoomId()).isEqualTo(room.getId());
+    }
+
     private void stubParaclinical(Payment payment, ParaclinicalOrder order, UUID groupId, List<Room> rooms) {
         MedicalService medicalService = mock(MedicalService.class);
         when(medicalService.getServiceGroupId()).thenReturn(groupId);

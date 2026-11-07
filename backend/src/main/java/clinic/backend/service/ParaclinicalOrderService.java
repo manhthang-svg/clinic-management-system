@@ -13,5 +13,8 @@ public interface ParaclinicalOrderService {
 
     ParaclinicalOrderResponse createOrder(UUID doctorAccountId, CreateParaclinicalOrderRequest request);
 
+    /** Orders of one visit, oldest first; only the Doctor of that visit may read them. */
+    List<ParaclinicalOrderResponse> listOrdersByVisit(UUID doctorAccountId, UUID visitId);
+
     ParaclinicalOrderResponse getOrderById(UUID orderId);
 }

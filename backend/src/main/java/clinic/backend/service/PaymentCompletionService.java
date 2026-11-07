@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.entity.MedicalService;
+import clinic.backend.entity.ParaclinicalOrder;
 import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.Room;
@@ -36,7 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * UC-71 steps 7–8 after a receipt becomes Paid, shared by the counter confirmation and PayOS: the examination
  * fee puts the visit in its room's waiting list (BR-15); the paraclinical fee releases the orders of UC-49 to the
- * Active room with the fewest waiting orders (BR-26, BR-28). Both write the audit entry (BR-37).
+ * Active room with the fewest waiting orders (BR-26, BR-28). Both write the audit entry (BR-37). UC-49 uses the
+ * same routing to release orders that do not wait for payment.
  */
 @Service
 @RequiredArgsConstructor
@@ -69,16 +71,9 @@ public class PaymentCompletionService {
                 visitRepository.save(visit);
             }
         } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
+            // An insurance visit's orders were already released at order time (BR-26); only pending ones move.
             paraclinicalOrderRepository.findByPaymentId(payment.getId())
-                    .ifPresent(order -> {
-                        order.release();
-                        paraclinicalOrderRepository.save(order);
-                        for (ParaclinicalOrderDetail detail : order.getDetails()) {
-                            if (!routeToLeastBusyRoom(detail, today, now)) {
-                                unroutedServices.add(detail.getTenchidinh());
-                            }
-                        }
-                    });
+                    .ifPresent(order -> unroutedServices.addAll(release(order, today, now)));
         }
 
         Map<String, Object> audit = new LinkedHashMap<>();
@@ -98,6 +93,29 @@ public class PaymentCompletionService {
                     actorAccountId, AuditLogAction.UPDATE, "payments", payment.getId(), visit.getSovaovien(), audit,
                     now);
         }
+    }
+
+    /**
+     * UC-49: releases an order without waiting for payment, for an insurance visit or a receipt the patient pays
+     * nothing for (BR-26, UC-49 AF-01). Runs in the caller's transaction. Returns the services no Active room
+     * performs.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<String> releaseOrder(ParaclinicalOrder order) {
+        return release(order, LocalDate.now(clock), clock.instant());
+    }
+
+    private List<String> release(ParaclinicalOrder order, LocalDate today, Instant now) {
+        order.release();
+        paraclinicalOrderRepository.save(order);
+        List<String> unrouted = new ArrayList<>();
+        for (ParaclinicalOrderDetail detail : order.getDetails()) {
+            if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_PAYMENT
+                    && !routeToLeastBusyRoom(detail, today, now)) {
+                unrouted.add(detail.getTenchidinh());
+            }
+        }
+        return unrouted;
     }
 
     /**

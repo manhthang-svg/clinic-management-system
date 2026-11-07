@@ -90,6 +90,7 @@ public class VisitServiceImpl implements VisitService {
     private static final List<VisitStatus> DOCTOR_QUEUE_STATUSES = List.of(
             VisitStatus.WAITING,
             VisitStatus.IN_EXAMINATION,
+            VisitStatus.WAITING_PARACLINICAL,
             VisitStatus.WAITING_CONCLUSION);
 
     private final MedicalServiceRepository medicalServiceRepository;
@@ -395,6 +396,7 @@ public class VisitServiceImpl implements VisitService {
                 now,
                 countTab(allItems, DoctorQueueTab.WAITING),
                 countTab(allItems, DoctorQueueTab.IN_EXAMINATION),
+                countWaitingParaclinical(allItems),
                 countTab(allItems, DoctorQueueTab.WAITING_CONCLUSION),
                 countTab(allItems, DoctorQueueTab.SKIPPED),
                 pageResponse);
@@ -404,10 +406,19 @@ public class VisitServiceImpl implements VisitService {
         return items.stream().filter(item -> matchesTab(item, tab)).count();
     }
 
+    private static long countWaitingParaclinical(List<DoctorQueueItemResponse> items) {
+        return items.stream()
+                .filter(item -> !item.isSkipped() && item.status() == VisitStatus.WAITING_PARACLINICAL)
+                .count();
+    }
+
+    // Waiting for Paraclinical stays in the patient list so the Doctor can review the examination and orders.
     private static boolean matchesTab(DoctorQueueItemResponse item, DoctorQueueTab tab) {
         return switch (tab) {
             case PATIENT_LIST -> !item.isSkipped()
-                    && (item.status() == VisitStatus.WAITING || item.status() == VisitStatus.IN_EXAMINATION);
+                    && (item.status() == VisitStatus.WAITING
+                        || item.status() == VisitStatus.IN_EXAMINATION
+                        || item.status() == VisitStatus.WAITING_PARACLINICAL);
             case WAITING -> !item.isSkipped() && item.status() == VisitStatus.WAITING;
             case IN_EXAMINATION -> !item.isSkipped() && item.status() == VisitStatus.IN_EXAMINATION;
             case WAITING_CONCLUSION -> !item.isSkipped() && item.status() == VisitStatus.WAITING_CONCLUSION;
@@ -533,14 +544,16 @@ public class VisitServiceImpl implements VisitService {
 
     private static int queueCategory(DoctorQueueItemResponse item) {
         if (item.isSkipped()) {
-            return 3;
+            return 4;
         }
-        // The patient being examined leads the merged patient list, ahead of those still waiting.
+        // The patient being examined leads the merged patient list, ahead of those still waiting,
+        // and patients away for paraclinical services follow the waiting ones.
         return switch (item.status()) {
             case IN_EXAMINATION -> 0;
             case WAITING -> 1;
-            case WAITING_CONCLUSION -> 2;
-            default -> 4;
+            case WAITING_PARACLINICAL -> 2;
+            case WAITING_CONCLUSION -> 3;
+            default -> 5;
         };
     }
 

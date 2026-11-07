@@ -47,20 +47,23 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(onCreated).toHaveBeenCalledWith(order);
     });
 
-    it('shows both prices for an insured visit and leaves the amounts to the final payment', async () => {
+    it('splits the insurance and patient amounts for an insured visit (step 4, BR-27)', async () => {
         const user = userEvent.setup();
         renderPanel(
             { getParaclinicalServices: vi.fn().mockResolvedValue(services), orderParaclinical: vi.fn() },
-            { forVisit: { ...visit, doituongbnLoai: 'BHYT' } },
+            { forVisit: { ...visit, doituongbnLoai: 'BHYT', insuranceCoverageRate: 80 } },
         );
 
         await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
-        const selected = screen.getByRole('region', { name: 'Dịch vụ đã chọn (1)' });
+        await user.click(screen.getByRole('checkbox', { name: 'Chọn Điện tim' }));
+        const selected = screen.getByRole('region', { name: 'Dịch vụ đã chọn (2)' });
 
-        expect(within(selected).getByRole('columnheader', { name: 'Giá BHYT' })).toBeInTheDocument();
+        expect(within(selected).getByRole('columnheader', { name: 'BHYT trả' })).toBeInTheDocument();
         expect(within(selected).queryByRole('columnheader', { name: 'Thành tiền' })).not.toBeInTheDocument();
-        expect(within(selected).getAllByText('43.900')).toHaveLength(2);
-        expect(within(selected).getByText(/sẽ được tính khi thanh toán cuối/)).toBeInTheDocument();
+        // 43 900 × 80% = 35 120 covered; the uncovered ECG is paid in full.
+        expect(screen.getByTestId('cls-insurance-total')).toHaveTextContent('35.120');
+        expect(screen.getByTestId('cls-total')).toHaveTextContent('214.880');
+        expect(within(selected).getByText(/mức hưởng 80%/)).toBeInTheDocument();
     });
 
     it('removes a selected service from the selection table', async () => {
@@ -140,11 +143,20 @@ describe('paraclinicalOrder helpers', () => {
         expect(cost.clinicTotal).toBe(250000);
         expect(cost.insuranceTotal).toBe(43900);
         expect(cost.total).toBe(250000);
+        expect(cost.patientAmount).toBe(250000);
+    });
+
+    it('covers min(insurance price, clinic price) × rate with a coverage rate (BR-27)', () => {
+        const cheaper = [{ id: 'x', clinicPrice: 80000, insurancePrice: 90000 }];
+        expect(estimate(cheaper, ['x'], 95)).toMatchObject({ insuranceAmount: 76000, patientAmount: 4000 });
+        expect(estimate(services, ['s3'], 100)).toMatchObject({ insuranceAmount: 0, patientAmount: 50000 });
     });
 
     it('builds MSG67 and maps the visit state error', () => {
         expect(createdMessage({ paymentCode: 'HD1', tongcong: 200000 }))
             .toBe('Đã tạo chỉ định cận lâm sàng. Phiếu thu HD1 – bệnh nhân trả: 200.000 ₫.');
+        expect(createdMessage({ paymentCode: 'HD2', tongcong: 200000, patientAmount: 40000 }, true))
+            .toMatch(/bệnh nhân trả: 40.000 ₫\. Chỉ định đã được chuyển tới phòng cận lâm sàng/);
         expect(orderErrorMessage(new ApiError('raw', { status: 409, errorResponse: { code: 'VISIT_NOT_IN_EXAMINATION' } })))
             .toBe(MSG.NOT_IN_EXAMINATION);
     });

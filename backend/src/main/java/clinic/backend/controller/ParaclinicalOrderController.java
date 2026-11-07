@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -40,6 +41,17 @@ public class ParaclinicalOrderController {
     ) {
         return ApiResponse.success(
                 paraclinicalOrderService.createOrder(StaffPrincipal.from(jwt).accountId(), request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "Danh sách chỉ định cận lâm sàng của một lượt khám")
+    public ApiResponse<List<ParaclinicalOrderResponse>> listOrdersByVisit(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam UUID visitId
+    ) {
+        return ApiResponse.success(
+                paraclinicalOrderService.listOrdersByVisit(StaffPrincipal.from(jwt).accountId(), visitId));
     }
 
     @GetMapping("/{orderId}")
