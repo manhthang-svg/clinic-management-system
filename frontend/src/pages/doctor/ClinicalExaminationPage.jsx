@@ -5,7 +5,8 @@ import {
     LoaderCircle, Pill, Save, Send, Stethoscope, UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import ParaclinicalOrderDialog from '../../components/paraclinical/ParaclinicalOrderDialog';
+import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOrderPanel';
+import { createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
@@ -135,7 +136,6 @@ export default function ClinicalExaminationPage() {
     const [validationMode, setValidationMode] = useState(null);
     const [pendingLeave, setPendingLeave] = useState(null);
     const [icdOptions, setIcdOptions] = useState([]);
-    const [orderOpen, setOrderOpen] = useState(false);
     const [medicalHistory, setMedicalHistory] = useState(null);
     const [activeSection, setActiveSection] = useState('clinical');
     const set = (key) => (value) => {
@@ -275,7 +275,7 @@ export default function ClinicalExaminationPage() {
             setForm(savedValues);
             setSavedForm(savedValues);
             toast.success('Cập nhật hồ sơ khám lâm sàng thành công.'); // MSG03
-            if (nextStep === 'PARACLINICAL') setOrderOpen(true);
+            if (nextStep === 'PARACLINICAL') setActiveSection('paraclinical');
             if (nextStep === 'CONCLUSION') toast.info('Hồ sơ đã sẵn sàng để thực hiện kết luận khám (UC-56).');
         } catch (error) {
             setFieldErrors(fieldErrorsFromApi(error));
@@ -323,7 +323,8 @@ export default function ClinicalExaminationPage() {
     const transferable = clinicalData?.version === 0 && !loadError;
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
-        [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => save('CONTINUE', 'PARACLINICAL')],
+        // AF-04: the examination is saved (diagnosis required) before the order screen opens.
+        [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => { if (activeSection !== 'paraclinical') save('CONTINUE', 'PARACLINICAL'); }],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
@@ -370,6 +371,9 @@ export default function ClinicalExaminationPage() {
 
             {activeSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
+            ) : activeSection === 'paraclinical' ? (
+                // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
+                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.preliminaryDiagnosis} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order)); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="space-y-3">
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">II. Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>
@@ -403,8 +407,6 @@ export default function ClinicalExaminationPage() {
                 onConfirm={() => { const leave = pendingLeave; setPendingLeave(null); leave?.(); }}
                 onClose={() => setPendingLeave(null)}
             />
-
-            {orderOpen && <ParaclinicalOrderDialog visit={visit} onClose={() => setOrderOpen(false)} onCreated={() => { setOrderOpen(false); toast.success('Đã tạo chỉ định cận lâm sàng.'); }} />}
         </main>
     );
 }
