@@ -4,7 +4,7 @@ import {
 } from './clinicalExaminationRules';
 
 const blank = {
-    reason: 'Đau đầu', progression: '', generalExam: '', preliminaryDiagnosis: '', icd10: '', treatment: '',
+    reason: 'Đau đầu', generalExam: '', diagnoses: [],
     pulse: '72', temperature: '', systolic: '', diastolic: '', respiratoryRate: '', weight: '', height: '', spo2: '',
     ...Object.fromEntries(ORGAN_FIELDS.flatMap(([key]) => [[key, ''], [notesKey(key), '']])),
 };
@@ -35,7 +35,7 @@ describe('validateExamination', () => {
 
     it('requires a preliminary diagnosis before continuing (MSG98)', () => {
         expect(validateExamination(blank, 'CONTINUE')).toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED });
-        expect(validateExamination({ ...blank, preliminaryDiagnosis: 'Viêm họng' }, 'CONTINUE')).toEqual({});
+        expect(validateExamination({ ...blank, diagnoses: [{ code: 'J02', name: 'Viêm họng cấp' }] }, 'CONTINUE')).toEqual({});
     });
 });
 
