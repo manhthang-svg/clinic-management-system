@@ -4,7 +4,7 @@
 | --- | --- |
 | Phiên bản | v1 — bản nháp, chờ nhóm duyệt |
 | Ngày | 13/10/2026 |
-| Nguồn | `bo-tai-lieu-quy-trinh-nghiep-vu-v7.xlsx` (BR-29 và các sheet F01–F06), `usecases_v3.xlsx` (UC-01 → UC-67), quyết định nhóm ngày 13/10/2026 về Q-24, quyết định ngày 06/11/2026 về Q-31 (theo BR-22), đề xuất cho Q-18 và Q-25 |
+| Nguồn | `bo-tai-lieu-quy-trinh-nghiep-vu-v7.xlsx` (BR-29 và các sheet F01–F06), `usecases_v3.xlsx` (UC-01 → UC-67), quyết định nhóm ngày 13/10/2026 về Q-24, quyết định ngày 06/11/2026 về Q-31 (theo BR-22) và Q-33 (UC-48), đề xuất cho Q-18 và Q-25 |
 | Phạm vi | Lượt khám, Chỉ định CLS, Hóa đơn, Hồ sơ bệnh án, Tài khoản, Dịch vụ, Phòng khám |
 
 BR-29 trong bộ tài liệu v7 vẫn ở trạng thái "Đề xuất — cần nhóm duyệt", nên toàn bộ tài liệu này là bản nháp. Tài liệu bổ sung vào BR-29 các trạng thái **Đã bỏ qua** (Q-18) và **Đã hủy** (Q-25, lượt bỏ về trước khi trả phí). Trạng thái kết thúc **Đã chuyển phòng** bị bỏ theo quyết định Q-24.
@@ -113,7 +113,7 @@ stateDiagram-v2
 | V08 | `DA_BO_QUA` | Bác sĩ bấm "Bỏ khám" | Đã gọi lại ít nhất 1 lần mà vẫn vắng (`so_lan_vang ≥ 2`) | `BO_KHAM` | Bác sĩ | UC-40 | F02-03; BR-10 | Đề xuất (Q-18) |
 | V09 | `DA_BO_QUA` | Tác vụ cuối ngày | Còn ở `DA_BO_QUA` lúc chạy tác vụ | `BO_KHAM` | Hệ thống | — | Mục 8; BR-10 | Đề xuất (Q-18) |
 | V10 | `CHO_KHAM` | Lễ tân phân lại phòng do bác sĩ vắng đột xuất | Phòng mới đang hoạt động; ghi `lich_su_phong` | `CHO_KHAM` (phòng mới) | Lễ tân | UC-37 | F02-15; BR-12, BR-21 | Nguồn |
-| V11 | `DANG_KHAM` | Bác sĩ chuyển bệnh nhân sang chuyên khoa khác | Lượt khám chưa có chỉ định CLS; giữ nguyên hóa đơn phí khám; ghi `lich_su_phong` | `CHO_KHAM` (phòng mới) | Bác sĩ | UC-42 | F02-05; BR-32 | Quyết định (Q-24) |
+| V11 | `DANG_KHAM` | Bác sĩ chuyển bệnh nhân sang phòng khám khác (UC-48) | Bác sĩ đang trong ca trực của phòng; phiếu khám chưa được lưu lần nào (OQ-05); phòng đến khác phòng hiện tại, đang hoạt động và có bác sĩ trực theo BR-96; lý do 5–500 ký tự (BR-97). Cấp số thứ tự mới ở phòng đến; bỏ bác sĩ đang phụ trách; giữ nguyên hóa đơn phí khám; ghi `lich_su_phong` kèm lý do, ghi chú | `CHO_KHAM` (phòng mới) | Bác sĩ | UC-48 | F02-05; BR-24, BR-32 | Quyết định (Q-24, Q-33) |
 | V12 | `DANG_KHAM` | Bác sĩ tạo chỉ định CLS; hệ thống tạo hóa đơn CLS | Có ít nhất 1 chỉ định | `CHO_CLS` | Bác sĩ, Hệ thống | UC-43 | F02-10, F02-11, F03-01; BR-27 | Nguồn |
 | V13 | `DANG_KHAM` | Bác sĩ chuyển sang kết luận | Không cần CLS, hoặc bệnh nhân từ chối CLS trước khi tạo chỉ định (bác sĩ ghi lý do vào kết quả khám) | `CHO_KET_LUAN` | Bác sĩ | UC-41, UC-48 | F02-12 | Nguồn; nhánh từ chối: Đề xuất (Q-25) |
 | V14 | `CHO_CLS` | Chỉ định cuối cùng của lượt kết thúc (S5) | Mọi chỉ định ở `HOAN_THANH` hoặc `DA_HUY` với lý do `BN_TU_CHOI` | `CHO_KET_LUAN` | Hệ thống | — | F03-15; BR-27 | Nguồn; phần `DA_HUY`: Đề xuất (Q-25) |
@@ -130,7 +130,9 @@ stateDiagram-v2
 
 **Gọi lại.** Lượt được gọi lại (V07, V17) được xử lý ngay sau ca đang khám, không xếp lại theo khóa sắp xếp. Con số "khoảng 10 lượt" của AS-IS (BR-20) chỉ là gợi ý hiển thị trên danh sách bỏ qua, không phải điều kiện chuyển trạng thái. *Đề xuất (Q-18).*
 
-**Chuyển phòng.** Chỉ cho phép ở `DANG_KHAM` khi lượt chưa có chỉ định CLS, vì theo F02-04 quyết định chuyển chuyên khoa xảy ra trước khi mở hồ sơ khám. Không tạo hóa đơn phí khám mới, kể cả khi phí khám của chuyên khoa mới khác phí cũ. *Quyết định (Q-24).*
+**Chuyển phòng.** Chỉ cho phép ở `DANG_KHAM` khi phiếu khám chưa được lưu lần nào, vì theo F02-04 quyết định chuyển chuyên khoa xảy ra sau khi bác sĩ gặp bệnh nhân nhưng trước khi ghi hồ sơ khám. Lượt có chỉ định CLS đã ở `CHO_CLS` nên không chuyển được. Không tạo hóa đơn phí khám mới, kể cả khi phí khám của chuyên khoa mới khác phí cũ. *Quyết định (Q-24).*
+
+UC-48 trong Report 3 còn cho chuyển lượt đang **Chờ khám** ngay từ danh sách chờ, và xếp lượt chuyển đến sau bệnh nhân ưu tiên nhưng trước bệnh nhân thường. Cả hai không áp dụng: bác sĩ chỉ chuyển sau khi đã gọi bệnh nhân vào, để báo trực tiếp cho bệnh nhân; lượt chuyển đến được xếp theo khóa chung `(uu_tien, thoi_diem_dang_ky)` như Q-24. *Quyết định (Q-33, 06/11/2026).*
 
 **Trạng thái "Đã chuyển phòng" bị bỏ.** Theo Q-24, lượt khám được dùng lại, nên chuyển phòng là một transition (V11) chứ không còn là điểm kết thúc. Lượt khám chỉ còn 3 trạng thái kết thúc: Hoàn thành, Bỏ khám, Đã hủy.
 
@@ -310,6 +312,8 @@ Danh sách này dùng để kiểm thử: mọi thao tác dưới đây phải b
 | --- | --- | --- |
 | Lượt khám | `CHO_TT_PK` → `DANG_KHAM` | Chưa thu phí khám (BR-24, BR-26) |
 | Lượt khám | `CHO_CLS` → `CHO_KHAM` (chuyển phòng khi đã có chỉ định) | Q-24: chỉ chuyển phòng trước khi chỉ định |
+| Lượt khám | `CHO_KHAM` → `CHO_KHAM` do bác sĩ chuyển phòng từ danh sách chờ | Q-33: bác sĩ chỉ chuyển sau khi đã gọi bệnh nhân vào; phân lại phòng khi bác sĩ vắng là V10 của lễ tân |
+| Lượt khám | `DANG_KHAM` → `CHO_KHAM` (chuyển phòng) sau khi đã lưu phiếu khám | OQ-05, Q-33 |
 | Lượt khám | `CHO_CLS` → `HOAN_THANH` | Chưa đủ kết quả CLS (BR-27) |
 | Lượt khám | `HOAN_THANH`, `BO_KHAM`, `DA_HUY` → bất kỳ | Trạng thái kết thúc; hồ sơ đã khóa (BR-28) |
 | Chỉ định CLS | `CHO_TT` → `DANG_TH` | Chưa thanh toán (BR-09, UC-57) |
@@ -346,6 +350,7 @@ Khi nhóm duyệt tài liệu này, các vị trí sau cần cập nhật để 
 | Q-10 | Bệnh nhân đã trả tiền rồi bỏ khám hoặc từ chối CLS: có hoàn tiền không? | Đã quyết định 06/11/2026: không hoàn tiền; hóa đơn đã thanh toán không bị hủy (I07) | Hóa đơn, Chỉ định CLS; O12, I07 |
 | Q-18 | Bỏ qua là trạng thái hay cờ; khi nào chuyển Bỏ khám? | Trạng thái riêng; gọi lại 1 lần; tác vụ cuối ngày làm lưới an toàn | V06–V09, O06–O09 |
 | Q-24 | Chuyển phòng | Đã quyết định: dùng lại lượt cũ, xếp theo thời gian đến, không thu thêm phí | V11 |
+| Q-33 | Chuyển phòng theo UC-48 | Đã quyết định 06/11/2026: chỉ chuyển từ `DANG_KHAM`, khi phiếu khám chưa lưu lần nào; không chuyển từ danh sách chờ; không ưu tiên lượt chuyển đến hơn khóa chung | V11 |
 | Q-25 | Bệnh nhân từ chối CLS | Trước chỉ định: ghi chú rồi kết luận; sau chỉ định: hủy hóa đơn, hủy chỉ định, về Chờ kết luận | V13, V14, O04, S4 |
 | Q-28 *(mới)* | Bệnh nhân vắng khi được gọi vào nghe kết luận xử lý thế nào? | Dùng chung cơ chế bỏ qua, quay về `Chờ kết luận` | V16, V17 |
 | Q-29 *(mới)* | Hủy hóa đơn sai thì tạo lại hóa đơn thế nào? | Hệ thống tự tạo hóa đơn thay thế khi lý do là `SAI_THONG_TIN` | I04, I06 |
