@@ -22,12 +22,23 @@ import { ROUTES } from '../../routes/routes';
 const REFRESH_MS = 10_000;
 const PAGE_SIZES = [10, 20, 50];
 
+// "Danh sách bệnh nhân" merges the waiting and in-examination visits; a visit leaves it once examined.
 const TABS = [
-    { id: 'waiting', apiValue: 'WAITING', countKey: 'waitingCount', label: 'Chờ khám' },
-    { id: 'in-examination', apiValue: 'IN_EXAMINATION', countKey: 'inExaminationCount', label: 'Đang khám' },
-    { id: 'conclusion', apiValue: 'WAITING_CONCLUSION', countKey: 'waitingConclusionCount', label: 'Chờ kết luận' },
-    { id: 'skipped', apiValue: 'SKIPPED', countKey: 'skippedCount', label: 'Vắng mặt' },
+    { id: 'patients', apiValue: 'PATIENT_LIST', countKeys: ['waitingCount', 'inExaminationCount'], label: 'Danh sách bệnh nhân' },
+    { id: 'conclusion', apiValue: 'WAITING_CONCLUSION', countKeys: ['waitingConclusionCount'], label: 'Chờ kết luận' },
+    { id: 'skipped', apiValue: 'SKIPPED', countKeys: ['skippedCount'], label: 'Vắng mặt' },
 ];
+const TAB_HEADINGS = {
+    patients: 'Danh sách bệnh nhân',
+    conclusion: 'Danh sách chờ kết luận',
+    skipped: 'Danh sách bệnh nhân vắng mặt',
+};
+
+// Older navigation state may still name the former "Chờ khám" / "Đang khám" tabs.
+function resolveTab(tabId) {
+    if (tabId === 'waiting' || tabId === 'in-examination') return 'patients';
+    return TABS.some(({ id }) => id === tabId) ? tabId : 'patients';
+}
 
 // System messages of UC-43, word for word from the SRS message list.
 const MSG01 = 'Không tìm thấy kết quả.';
@@ -42,8 +53,7 @@ const MSG96 = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạ
 
 // AF-01 shows MSG92 with this hint per tab; AF-03 (search or filter matches nothing) shows MSG01 with FILTER_HINT.
 const EMPTY_HINT = {
-    waiting: 'Danh sách hiển thị lượt khám BHYT và lượt khám dịch vụ đã thanh toán.',
-    'in-examination': 'Bệnh nhân đã được gọi vào khám sẽ hiển thị tại đây.',
+    patients: 'Danh sách hiển thị lượt khám BHYT và lượt khám dịch vụ đã thanh toán.',
     conclusion: 'Bệnh nhân hoàn tất cận lâm sàng sẽ xuất hiện tại đây.',
     skipped: 'Bệnh nhân vắng mặt khi được gọi sẽ xuất hiện tại đây.',
 };
@@ -150,7 +160,7 @@ function SelectFilter({ id, label, value, onChange, options }) {
 export default function DoctorWaitingListPage({
     visitApi = defaultVisitApi,
     loadProfile = defaultProfileLoader,
-    initialTab = 'waiting',
+    initialTab = 'patients',
 }) {
     const location = useLocation();
     const navigate = useNavigate();
@@ -162,7 +172,7 @@ export default function DoctorWaitingListPage({
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
-    const [activeTab, setActiveTab] = useState(location.state?.activeTab ?? initialTab);
+    const [activeTab, setActiveTab] = useState(() => resolveTab(location.state?.activeTab ?? initialTab));
     const [search, setSearch] = useState('');
     const [priority, setPriority] = useState('ALL');
     const [visitType, setVisitType] = useState('ALL');
@@ -221,11 +231,15 @@ export default function DoctorWaitingListPage({
         };
     }, [fetchQueue]);
 
-    const counts = Object.fromEntries(TABS.map((tab) => [tab.id, queueInfo?.[tab.countKey] ?? 0]));
+    const counts = Object.fromEntries(TABS.map((tab) => [
+        tab.id,
+        tab.countKeys.reduce((sum, key) => sum + (queueInfo?.[key] ?? 0), 0),
+    ]));
+    const waitingCount = queueInfo?.waitingCount ?? 0;
     const pageCount = Math.max(1, totalPages);
     const currentPage = Math.min(page, pageCount);
     const rows = visits;
-    const nextPatient = activeTab === 'waiting' || activeTab === 'conclusion'
+    const nextPatient = activeTab === 'patients' || activeTab === 'conclusion'
         ? visits.find((visit) => ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status) && !visit.isSkipped) ?? null
         : null;
     const resetFilters = () => {
@@ -296,7 +310,7 @@ export default function DoctorWaitingListPage({
     }, [activeTab, calling, fetchQueue, navigate, queueInfo, visitApi]);
 
     const openClinicalExamination = useCallback((visit) => {
-        if (!visit || activeTab !== 'in-examination') return;
+        if (!visit || visit.status !== 'IN_EXAMINATION') return;
         navigate(ROUTES.DOCTOR.CLINICAL_EXAMINATION, {
             state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab },
         });
@@ -344,7 +358,7 @@ export default function DoctorWaitingListPage({
                         </div>
                         <div className="min-w-0 border-b border-slate-100 p-4 sm:border-b-0 sm:border-r xl:border-r">
                             <p className="text-xs text-slate-500">Tổng số bệnh nhân chờ</p>
-                            <p className="mt-1 text-3xl font-extrabold text-teal-600">{counts.waiting}</p>
+                            <p className="mt-1 text-3xl font-extrabold text-teal-600">{waitingCount}</p>
                         </div>
                         <div className="flex min-w-0 flex-col justify-center gap-1 p-4 text-xs">
                             <button type="button" onClick={() => void fetchQueue()} className="flex w-full cursor-pointer items-center gap-2 text-left text-slate-600 hover:text-teal-700" title="Tải lại ngay">
@@ -364,7 +378,7 @@ export default function DoctorWaitingListPage({
                     </div>
 
                     <div>
-                        <h2 className="text-base font-bold text-[#142534]">{TABS.find((tab) => tab.id === activeTab)?.label === 'Vắng mặt' ? 'Danh sách bệnh nhân vắng mặt' : `Danh sách ${TABS.find((tab) => tab.id === activeTab)?.label.toLowerCase()}`}</h2>
+                        <h2 className="text-base font-bold text-[#142534]">{TAB_HEADINGS[activeTab]}</h2>
                         <p className="mt-1 text-xs text-slate-500">Hiển thị bệnh nhân và thao tác tương ứng với trạng thái này.</p>
                     </div>
 
@@ -416,21 +430,22 @@ export default function DoctorWaitingListPage({
                                 <tbody>
                                     {rows.map((visit) => {
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
-                                        const isFirstPatient = activeTab === 'waiting' && visit.id === nextPatient?.id;
+                                        const isFirstPatient = activeTab === 'patients' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status);
+                                        const opensExamination = visit.status === 'IN_EXAMINATION' && !visit.isSkipped;
                                         return (
                                             <tr
                                                 key={visit.id}
-                                                tabIndex={activeTab === 'in-examination' ? 0 : undefined}
-                                                title={activeTab === 'in-examination' ? `Mở hồ sơ khám của ${visit.patientName}` : undefined}
-                                                onClick={activeTab === 'in-examination' ? () => openClinicalExamination(visit) : undefined}
-                                                onKeyDown={activeTab === 'in-examination' ? (event) => {
+                                                tabIndex={opensExamination ? 0 : undefined}
+                                                title={opensExamination ? `Mở hồ sơ khám của ${visit.patientName}` : undefined}
+                                                onClick={opensExamination ? () => openClinicalExamination(visit) : undefined}
+                                                onKeyDown={opensExamination ? (event) => {
                                                     if (event.key === 'Enter' || event.key === ' ') {
                                                         event.preventDefault();
                                                         openClinicalExamination(visit);
                                                     }
                                                 } : undefined}
-                                                className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'} ${activeTab === 'in-examination' ? 'cursor-pointer outline-none focus-visible:bg-teal-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500' : ''}`}
+                                                className={`border-b border-slate-100 ${isFirstPatient ? 'bg-teal-50/70' : 'hover:bg-slate-50'} ${opensExamination ? 'cursor-pointer outline-none focus-visible:bg-teal-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500' : ''}`}
                                             >
                                                 <td className={`px-3 py-3 font-bold ${visit.isPriority ? 'text-rose-600' : 'text-slate-700'}`}>{String(visit.queueNumber ?? '—').padStart(2, '0')}</td>
                                                 <td className="truncate px-3 py-3 font-semibold text-slate-800">{visit.patientName}</td>

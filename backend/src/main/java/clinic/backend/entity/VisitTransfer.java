@@ -42,4 +42,21 @@ public class VisitTransfer extends UuidEntity {
 
     @Column(name = "transferred_at", nullable = false)
     private Instant transferredAt;
+
+    @Column(name = "notes", length = 500)
+    private String notes;
+
+    public VisitTransfer(UUID id, UUID visitId, UUID fromRoomId, UUID toRoomId, String reason, String notes,
+                         int oldQueueNumber, int newQueueNumber, UUID transferredByAccountId, Instant transferredAt) {
+        super(id);
+        this.visitId = visitId;
+        this.fromRoomId = fromRoomId;
+        this.toRoomId = toRoomId;
+        this.reason = reason;
+        this.notes = notes;
+        this.oldQueueNumber = oldQueueNumber;
+        this.newQueueNumber = newQueueNumber;
+        this.transferredByAccountId = transferredByAccountId;
+        this.transferredAt = transferredAt;
+    }
 }

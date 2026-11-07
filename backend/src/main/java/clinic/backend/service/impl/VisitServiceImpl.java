@@ -406,6 +406,8 @@ public class VisitServiceImpl implements VisitService {
 
     private static boolean matchesTab(DoctorQueueItemResponse item, DoctorQueueTab tab) {
         return switch (tab) {
+            case PATIENT_LIST -> !item.isSkipped()
+                    && (item.status() == VisitStatus.WAITING || item.status() == VisitStatus.IN_EXAMINATION);
             case WAITING -> !item.isSkipped() && item.status() == VisitStatus.WAITING;
             case IN_EXAMINATION -> !item.isSkipped() && item.status() == VisitStatus.IN_EXAMINATION;
             case WAITING_CONCLUSION -> !item.isSkipped() && item.status() == VisitStatus.WAITING_CONCLUSION;
@@ -533,9 +535,10 @@ public class VisitServiceImpl implements VisitService {
         if (item.isSkipped()) {
             return 3;
         }
+        // The patient being examined leads the merged patient list, ahead of those still waiting.
         return switch (item.status()) {
-            case WAITING -> 0;
-            case IN_EXAMINATION -> 1;
+            case IN_EXAMINATION -> 0;
+            case WAITING -> 1;
             case WAITING_CONCLUSION -> 2;
             default -> 4;
         };

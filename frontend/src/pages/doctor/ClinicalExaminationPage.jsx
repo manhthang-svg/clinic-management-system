@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner';
 import ParaclinicalOrderDialog from '../../components/paraclinical/ParaclinicalOrderDialog';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
+import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import { ROUTES } from '../../routes/routes';
@@ -118,72 +119,6 @@ function Vital({ label, value, unit, onChange, error, type = 'number' }) {
 
 function Info({ label, children }) {
     return <div className="min-w-0"><p className="text-[10px] text-slate-400">{label}</p><p className="mt-1 truncate text-xs font-semibold text-slate-700">{children || '—'}</p></div>;
-}
-
-function TransferRoomPanel({ visit, queueInfo, onCancel }) {
-    const [rooms, setRooms] = useState([]);
-    const [targetRoomId, setTargetRoomId] = useState('');
-    const [reason, setReason] = useState('');
-    const [note, setNote] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [includeExam, setIncludeExam] = useState(true);
-    const [includeOrders, setIncludeOrders] = useState(true);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        visitApi.getActiveExaminationRooms(controller.signal)
-            .then((items) => setRooms((Array.isArray(items) ? items : []).filter((room) => room.id !== queueInfo?.roomId)))
-            .catch((error) => {
-                if (error?.name !== 'AbortError') {
-                    toast.error('Không thể tải danh sách phòng khám đang hoạt động.');
-                }
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [queueInfo?.roomId]);
-
-    const target = rooms.find((room) => room.id === targetRoomId);
-    const submit = () => {
-        if (!targetRoomId || !reason.trim()) {
-            toast.error('Vui lòng chọn phòng chuyển đến và nhập lý do chuyển.');
-            return;
-        }
-        localStorage.setItem(`room-transfer:${visit.id}`, JSON.stringify({
-            visitId: visit.id, targetRoomId, reason: reason.trim(), note: note.trim(), includeExam, includeOrders,
-        }));
-        toast.info('Đã lưu yêu cầu chuyển phòng tạm thời. Backend UC48 chưa hỗ trợ xác nhận chuyển phòng.');
-    };
-
-    return (
-        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-base font-bold">1. Thông tin chuyển phòng</h2>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <label className="text-xs font-semibold text-slate-700">Phòng khám chuyển đến <span className="text-rose-500">*</span><select value={targetRoomId} onChange={(event) => setTargetRoomId(event.target.value)} disabled={loading} className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"><option value="">{loading ? 'Đang tải phòng khám...' : 'Chọn phòng khám'}</option>{rooms.map((room) => <option key={room.id} value={room.id}>{room.code} - {room.name}</option>)}</select></label>
-                    <label className="text-xs font-semibold text-slate-700">Bác sĩ phụ trách (nếu biết)<input readOnly value={target ? 'Bác sĩ trực tại phòng' : ''} placeholder="Chọn phòng để xem bác sĩ" className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500" /></label>
-                </div>
-                <div className="mt-4"><Field label="Lý do chuyển *" value={reason} onChange={setReason} placeholder="Nhập lý do chuyển phòng..." maxLength={500} rows={3} /></div>
-
-                <h2 className="mb-3 mt-6 text-base font-bold">2. Thông tin bổ sung</h2>
-                <div className="grid gap-3 text-xs text-slate-600 md:grid-cols-2">
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={includeExam} onChange={(event) => setIncludeExam(event.target.checked)} className="h-4 w-4 accent-teal-600" />Chuyển kèm kết quả khám đã ghi nhận</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={includeOrders} onChange={(event) => setIncludeOrders(event.target.checked)} className="h-4 w-4 accent-teal-600" />Chuyển kèm chỉ định cận lâm sàng</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-teal-600" />Chuyển kèm đơn thuốc hiện tại</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-teal-600" />Ghi chú cho bác sĩ nhận</label>
-                </div>
-                <div className="mt-4"><Field label="Ghi chú (nếu có)" value={note} onChange={setNote} placeholder="Nhập ghi chú..." maxLength={200} rows={3} /></div>
-
-                <h2 className="mb-3 mt-6 text-base font-bold">3. Hướng xử lý sau khi chuyển</h2>
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs leading-6 text-sky-900"><p className="flex items-center gap-2 font-bold"><InfoIcon className="h-4 w-4 text-sky-600" />Sau khi xác nhận chuyển phòng</p><ul className="ml-6 list-disc"><li>Bệnh nhân sẽ được đưa vào danh sách chờ khám của phòng được chọn.</li><li>Trạng thái lượt khám trở về “Chờ khám” và nhận số thứ tự mới.</li><li>Thông tin khám hiện tại được giữ lại cho bác sĩ phòng nhận.</li></ul></div>
-
-                <div className="mt-5 flex justify-between border-t border-slate-100 pt-4"><button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-semibold text-slate-600">Hủy</button><button type="button" onClick={submit} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-xs font-semibold text-white hover:bg-teal-800"><Send className="h-4 w-4" />Xác nhận chuyển phòng</button></div>
-            </section>
-
-            <aside className="space-y-3"><section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="text-sm font-bold">Tóm tắt quá trình khám</h2><div className="mt-4 space-y-4 border-l-2 border-teal-200 pl-4 text-xs"><div><strong>Đăng ký khám</strong><p className="text-slate-400">{formatTime(visit.thoigianvaovien)} · {queueInfo?.roomName}</p></div><div><strong>Khám lâm sàng</strong><p className="text-slate-400">{queueInfo?.doctorName}</p></div><div className="text-sky-700"><strong>Chuyển phòng khám</strong><p>{target ? `${target.code} - ${target.name}` : 'Chưa chọn phòng'}</p></div></div></section><section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="text-sm font-bold">Thông tin khám đã ghi nhận</h2><dl className="mt-3 space-y-2 text-xs"><div className="flex justify-between gap-3"><dt className="text-slate-400">Lý do khám</dt><dd className="text-right font-semibold">{visit.lydovaovien || '—'}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-400">Phòng hiện tại</dt><dd className="text-right font-semibold">{queueInfo?.roomName || '—'}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-400">Bác sĩ</dt><dd className="text-right font-semibold">{queueInfo?.doctorName || '—'}</dd></div></dl></section></aside>
-        </div>
-    );
 }
 
 /** UC-47 Perform Clinical Examination. */
@@ -370,10 +305,12 @@ export default function ClinicalExaminationPage() {
         );
     }
 
+    const transferable = clinicalData?.version === 0 && !loadError;
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
         [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => save('CONTINUE', 'PARACLINICAL')],
-        [ArrowRightLeft, 'Chuyển phòng', 'transfer', () => setActiveSection('transfer')],
+        // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
+        [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? () => setActiveSection('transfer') : null],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
         [Pill, 'Đơn thuốc', 'prescription', null],
         [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', null],
@@ -417,7 +354,7 @@ export default function ClinicalExaminationPage() {
             </nav>
 
             {activeSection === 'transfer' ? (
-                <TransferRoomPanel visit={visit} queueInfo={queueInfo} onCancel={() => setActiveSection('clinical')} />
+                <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="space-y-3">
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">II. Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>

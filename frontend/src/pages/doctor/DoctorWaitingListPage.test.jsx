@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import DoctorWaitingListPage from './DoctorWaitingListPage';
@@ -51,7 +51,7 @@ describe('DoctorWaitingListPage backend integration', () => {
         });
 
         await waitFor(() => expect(visitApi.getDoctorQueue).toHaveBeenCalledWith({
-            tab: 'WAITING',
+            tab: 'PATIENT_LIST',
             keyword: '',
             priority: undefined,
             visitType: undefined,
@@ -62,7 +62,10 @@ describe('DoctorWaitingListPage backend integration', () => {
 
         expect(screen.getAllByText('Phòng khám Nội 1')).toHaveLength(2);
         expect(screen.getByText('BS. Nguyễn Văn An')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Chờ khám (3)' })).toBeInTheDocument();
+        // The patient list merges the 3 waiting and 1 in-examination visits.
+        expect(screen.getByRole('tab', { name: 'Danh sách bệnh nhân (4)' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.queryByRole('tab', { name: /^Chờ khám/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Đang khám/ })).not.toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Chờ kết luận (2)' })).toBeInTheDocument();
         expect(screen.getByText('Hiển thị 1 - 3 / 3')).toBeInTheDocument();
     });
@@ -236,6 +239,35 @@ describe('DoctorWaitingListPage backend integration', () => {
         ));
     });
 
+    it('lists waiting and in-examination patients together with their own status and action', async () => {
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                waitingCount: 1,
+                inExaminationCount: 1,
+                visits: {
+                    content: [
+                        { id: 'visit-exam', patientName: 'Phạm Văn Khám', queueNumber: 2, status: 'IN_EXAMINATION', isSkipped: false },
+                        { id: 'visit-wait', patientName: 'Lê Thị Chờ', queueNumber: 3, status: 'WAITING', isSkipped: false },
+                    ],
+                    page: { number: 0, size: 10, totalElements: 2, totalPages: 1 },
+                },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
+        };
+
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
+
+        const examRow = (await screen.findByText('Phạm Văn Khám')).closest('tr');
+        const waitRow = screen.getByText('Lê Thị Chờ').closest('tr');
+        expect(within(examRow).getByText('Đang khám')).toBeInTheDocument();
+        expect(within(examRow).queryByRole('button', { name: 'Bắt đầu' })).not.toBeInTheDocument();
+        expect(within(waitRow).getByText('Đang chờ')).toBeInTheDocument();
+        expect(within(waitRow).getByRole('button', { name: 'Bắt đầu' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Danh sách bệnh nhân' })).toBeInTheDocument();
+    });
+
     it('opens the selected patient clinical examination from the in-examination row', async () => {
         const visit = {
             id: 'visit-in-examination',
@@ -258,7 +290,7 @@ describe('DoctorWaitingListPage backend integration', () => {
         render(
             <MemoryRouter initialEntries={['/doctor/appointments']}>
                 <Routes>
-                    <Route path="/doctor/appointments" element={<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} initialTab="in-examination" />} />
+                    <Route path="/doctor/appointments" element={<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} />} />
                     <Route path="/doctor/clinical-examination" element={<LocationProbe />} />
                 </Routes>
             </MemoryRouter>,

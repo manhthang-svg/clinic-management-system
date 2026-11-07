@@ -6,8 +6,11 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CreateVisitRequest;
+import clinic.backend.dto.request.TransferVisitRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
+import clinic.backend.dto.response.TransferRoomOptionResponse;
+import clinic.backend.dto.response.VisitTransferResponse;
 import clinic.backend.dto.response.DoctorQueueResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
@@ -17,6 +20,7 @@ import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.VisitService;
+import clinic.backend.service.VisitTransferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,6 +50,7 @@ import java.net.URI;
 public class VisitController {
 
     private final VisitService visitService;
+    private final VisitTransferService visitTransferService;
 
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @PostMapping
@@ -132,6 +137,25 @@ public class VisitController {
         return ApiResponse.success(visitService.acceptSkippedVisit(StaffPrincipal.from(jwt), visitId));
     }
 
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @GetMapping("/{visitId}/transfer-rooms")
+    @Operation(summary = "UC-48 Danh sách phòng khám có thể nhận bệnh nhân chuyển đến")
+    public ApiResponse<List<TransferRoomOptionResponse>> getTransferRooms(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID visitId) {
+        return ApiResponse.success(visitTransferService.getTransferRooms(StaffPrincipal.from(jwt), visitId));
+    }
+
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @PostMapping("/{visitId}/transfer")
+    @Operation(summary = "UC-48 Chuyển bệnh nhân sang phòng khám khác")
+    public ApiResponse<VisitTransferResponse> transfer(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID visitId,
+            @Valid @RequestBody TransferVisitRequest request) {
+        return ApiResponse.success(visitTransferService.transfer(StaffPrincipal.from(jwt), visitId, request));
+    }
+
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @GetMapping("/queue-status")
     @Operation(summary = "UC-42 Xem tình trạng hàng đợi theo phòng khám")
@@ -141,16 +165,16 @@ public class VisitController {
         return ApiResponse.success(visitService.getRoomQueueStatus(date));
     }
 
-    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
     @GetMapping("/{visitId}/ticket")
     @Operation(summary = "UC-41 Lấy dữ liệu phiếu khám")
     public ApiResponse<VisitTicketResponse> getTicket(@PathVariable UUID visitId) {
         return ApiResponse.success(visitService.getTicket(visitId));
     }
 
-    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
     @PostMapping("/{visitId}/commands/prepare-ticket-print")
-    @Operation(summary = "UC-41 Chuẩn bị in hoặc in lại phiếu khám và ghi audit")
+    @Operation(summary = "UC-41 Chuẩn bị in hoặc in lại phiếu khám và ghi audit (bác sĩ: UC-48 AF-02)")
     public ApiResponse<VisitTicketResponse> prepareTicketPrint(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID visitId) {

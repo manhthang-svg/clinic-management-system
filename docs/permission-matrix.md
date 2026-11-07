@@ -68,7 +68,8 @@ Status values:
 | Doctor | Visit | Call patient | UC-44 | Assigned room only (BR-19, BR-20). | Source |
 | Doctor | Skipped list | View, recall | UC-45, UC-46 | Assigned room only (BR-19). Technician use is unclear (OQ-03). | TBD |
 | Doctor | Visit | Record vital signs, symptoms, findings | UC-47 | Visit assigned to the doctor; not after closure (BR-32). | Source |
-| Doctor | Visit | Transfer to another room | UC-48 | Own room; before a new record is opened; reason required (BR-24; OQ-05). | Source |
+| Doctor | Visit | Transfer to another room | UC-48 | Own room, on duty; visit In Examination and its examination not yet saved (BR-24; OQ-05 decided); reason required (BR-97). | Decided |
+| Doctor | Visit | Reprint examination ticket after a transfer | UC-48 AF-02, UC-41 | Visit the Doctor has just transferred; the ticket shows the destination room and new queue number. | Source |
 | Doctor | Paraclinical order | Create and print | UC-49, UC-50 | Active services only (BR-10); cannot cancel after confirmation (BR-25). | Source |
 | Doctor | Medical record | List, view detail, export | UC-51 → UC-53 | All patients (BR-35). | Source |
 | Doctor | Paraclinical result | View | UC-55 | Current visit. | Source |
