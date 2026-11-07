@@ -324,9 +324,8 @@ export default function ClinicalExaminationPage() {
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
         [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', () => save('CONTINUE', 'PARACLINICAL')],
-        [ArrowRightLeft, 'Chuyển phòng', 'transfer', openTransfer],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
-        [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? () => setActiveSection('transfer') : null],
+        [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
         [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
         [Pill, 'Đơn thuốc', 'prescription', null],
         [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', null],

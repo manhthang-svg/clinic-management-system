@@ -113,8 +113,8 @@ describe('ClinicalExaminationPage', () => {
     });
 
     it('clears clinical validation errors when opening the transfer-room tab', async () => {
-        vi.spyOn(visitApi, 'getActiveExaminationRooms').mockResolvedValue([
-            { id: 'room-2', code: 'P.201', name: 'Tai Mũi Họng' },
+        vi.spyOn(visitApi, 'getTransferRooms').mockResolvedValue([
+            { roomId: 'room-2', roomCode: 'P.201', roomName: 'Tai Mũi Họng', doctorName: 'BS Lê Thị Bình' },
         ]);
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
@@ -123,7 +123,7 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng kiểm tra các trường được đánh dấu.');
 
         fireEvent.click(screen.getByRole('button', { name: 'Chuyển phòng' }));
-        expect(await screen.findByText('1. Thông tin chuyển phòng')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Chuyển phòng khám' })).toBeInTheDocument();
         expect(screen.queryByText('Vui lòng kiểm tra các trường được đánh dấu.')).not.toBeInTheDocument();
         expect(screen.queryByText('Cần nhập ít nhất một chỉ số sinh hiệu hợp lệ.')).not.toBeInTheDocument();
     });
