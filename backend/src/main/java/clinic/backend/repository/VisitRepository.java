@@ -3,7 +3,9 @@ package clinic.backend.repository;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +17,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface VisitRepository extends JpaRepository<Visit, UUID> {
+
+    /** Locks the visit row so two transfers (or a transfer and another Doctor action) cannot interleave. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select v from Visit v where v.id = :id")
+    Optional<Visit> findByIdForUpdate(@Param("id") UUID id);
 
     List<VisitStatus> FINISHED_STATUSES = List.of(
             VisitStatus.COMPLETED, VisitStatus.CANCELLED, VisitStatus.ABANDONED);

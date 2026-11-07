@@ -224,6 +224,37 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void patientListMergesWaitingAndInExaminationWithTheExaminedPatientFirst() {
+        stubDoctorOnDuty();
+        Visit waiting = queuedVisit(10, false);
+        Visit inExamination = queuedVisit(20, false, VisitStatus.IN_EXAMINATION);
+        Visit waitingConclusion = queuedVisit(5, false, VisitStatus.WAITING_CONCLUSION);
+        Visit skipped = skippedVisit(1, VisitStatus.WAITING, clock.instant().minusSeconds(60));
+        when(visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
+                BUSY_ROOM_ID, QUEUE_DATE,
+                List.of(VisitStatus.WAITING, VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION)))
+                .thenReturn(List.of(waiting, waitingConclusion, skipped, inExamination));
+        List<Patient> patients = List.of(
+                patient(waiting.getPatientId(), "Đang chờ"),
+                patient(inExamination.getPatientId(), "Đang khám"),
+                patient(waitingConclusion.getPatientId(), "Chờ kết luận"),
+                patient(skipped.getPatientId(), "Vắng mặt"));
+        when(patientRepository.findAllById(any())).thenReturn(patients);
+        when(visitTransferRepository.findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(
+                any(), org.mockito.ArgumentMatchers.eq(BUSY_ROOM_ID))).thenReturn(List.of());
+
+        var queue = service.getDoctorQueue(
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),
+                DoctorQueueTab.PATIENT_LIST, null, null, null, null, 0, 20);
+
+        assertThat(queue.visits().page().totalElements()).isEqualTo(2);
+        assertThat(queue.visits().content()).extracting("patientName")
+                .containsExactly("Đang khám", "Đang chờ");
+        assertThat(queue.waitingCount()).isEqualTo(1);
+        assertThat(queue.inExaminationCount()).isEqualTo(1);
+    }
+
+    @Test
     void doctorWithoutActiveExaminationRoomCannotReadAnotherQueue() {
         StaffAccount doctor = StaffAccount.builder()
                 .id(DOCTOR_ID).fullName("Nguyễn Văn An")
@@ -699,6 +730,10 @@ class VisitServiceImplTest {
     }
 
     private static Visit queuedVisit(int queueNumber, boolean priority) {
+        return queuedVisit(queueNumber, priority, VisitStatus.WAITING);
+    }
+
+    private static Visit queuedVisit(int queueNumber, boolean priority, VisitStatus status) {
         Visit visit = mock(Visit.class);
         when(visit.getId()).thenReturn(UUID.randomUUID());
         when(visit.getPatientId()).thenReturn(UUID.randomUUID());
@@ -708,7 +743,7 @@ class VisitServiceImplTest {
         when(visit.getDoituongbnLoai()).thenReturn(VisitDoituongbnLoai.DV);
         when(visit.getLydovaovien()).thenReturn("Đau đầu");
         when(visit.getThoigianvaovien()).thenReturn(Instant.parse("2026-10-30T01:00:00Z"));
-        when(visit.getStatus()).thenReturn(VisitStatus.WAITING);
+        when(visit.getStatus()).thenReturn(status);
         return visit;
     }
 
