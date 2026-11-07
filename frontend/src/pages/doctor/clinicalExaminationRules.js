@@ -1,11 +1,7 @@
 /** UC-47 Perform Clinical Examination: client-side checks and messages (feedback only; the backend decides). */
 
 export const ORGAN_FIELDS = [
-    ['circulatory', 'Tuần hoàn', 'CARDIOVASCULAR'], ['respiratory', 'Hô hấp', 'RESPIRATORY'],
-    ['digestive', 'Tiêu hóa', 'GASTROINTESTINAL'], ['ent', 'Tai mũi họng', 'EAR_NOSE_THROAT'],
-    ['urinary', 'Thận - tiết niệu', 'RENAL_URINARY'], ['neurological', 'Thần kinh', 'NEUROLOGICAL'],
-    ['musculoskeletal', 'Cơ xương khớp', 'MUSCULOSKELETAL'],
-    ['other', 'Nội tiết / Dinh dưỡng / Khác', 'ENDOCRINE_NUTRITIONAL_OTHER'],
+    ['organExam', 'Bộ phận'],
 ];
 
 export const notesKey = (key) => `${key}Notes`;
@@ -92,7 +88,7 @@ const API_FIELDS = {
 };
 
 /** Field errors the backend reported, mapped to form keys; `sentOrgans` is the payload's organ-key order. */
-export function fieldErrorsFromApi(error, sentOrgans = []) {
+export function fieldErrorsFromApi(error) {
     const code = error?.errorResponse?.code;
     if (code === 'PRELIMINARY_DIAGNOSIS_REQUIRED') return { preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED };
     if (code === 'ICD10_INVALID' || code === 'ICD10_NOT_DETAILED' || code === 'ICD10_SEX_MISMATCH') {
@@ -103,13 +99,8 @@ export function fieldErrorsFromApi(error, sentOrgans = []) {
     if (code !== 'REQUEST_VALIDATION_FAILED' || !details || typeof details !== 'object') return {};
     const errors = {};
     Object.keys(details).forEach((path) => {
-        const organ = /^organFindings\[(\d+)]\.(finding|notes)$/.exec(path);
-        if (organ) {
-            const key = sentOrgans[Number(organ[1])];
-            if (key) errors[organ[2] === 'notes' ? notesKey(key) : key] = MSG.INVALID_DATA;
-            return;
-        }
         if (path.startsWith('vitalSigns')) errors.vitals = MSG.CHECK_FIELDS;
+        else if (path === 'organFinding') errors.organExam = MSG.INVALID_DATA;
         else if (API_FIELDS[path]) errors[API_FIELDS[path]] = MSG.INVALID_DATA;
     });
     return errors;

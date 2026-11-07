@@ -38,7 +38,7 @@ public record ClinicalExaminationResponse(
         String presentIllness,
         String generalFinding,
         VitalSignResponse vitalSigns,
-        List<ExaminationFindingResponse> organFindings,
+        String organFinding,
         String preliminaryDiagnosis,
         Icd10OptionResponse preliminaryDiagnosisIcd10,
         String treatmentCarePerformed,

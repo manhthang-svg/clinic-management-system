@@ -29,7 +29,7 @@ const clinicalData = {
     roomId: 'room-1', roomCode: 'P.101', roomName: 'Phòng khám Nội tổng quát',
     doctorAccountId: 'doctor-1', doctorName: 'BSCKII Trần Văn An',
     reasonForVisit: visit.lydovaovien, presentIllness: '', generalFinding: '', vitalSigns: null,
-    organFindings: [], preliminaryDiagnosis: '', preliminaryDiagnosisIcd10: null,
+    organFinding: '', preliminaryDiagnosis: '', preliminaryDiagnosisIcd10: null,
     treatmentCarePerformed: '', medicalHistory: [], availableNextSteps: ['PARACLINICAL', 'CONCLUSION'],
 };
 
@@ -82,6 +82,7 @@ describe('ClinicalExaminationPage', () => {
         fireEvent.change(screen.getByLabelText(/Cân nặng/), { target: { value: '68' } });
         fireEvent.change(screen.getByLabelText(/Chiều cao/), { target: { value: '170' } });
         expect(screen.getByText('23.5')).toBeInTheDocument();
+        expect(screen.getByText('(Người bình thường)')).toBeInTheDocument();
     });
 
     it('shows a safe empty state when opened without a selected visit', () => {
@@ -109,6 +110,22 @@ describe('ClinicalExaminationPage', () => {
         // Wait until the saved examination is shown, so the tab state reflects the loaded version.
         expect(await screen.findByDisplayValue(clinicalData.reasonForVisit)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Chuyển phòng' })).toBeDisabled();
+    });
+
+    it('clears clinical validation errors when opening the transfer-room tab', async () => {
+        vi.spyOn(visitApi, 'getActiveExaminationRooms').mockResolvedValue([
+            { id: 'room-2', code: 'P.201', name: 'Tai Mũi Họng' },
+        ]);
+        renderPage();
+        await screen.findByRole('heading', { name: 'Khám lâm sàng' });
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
+        expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng kiểm tra các trường được đánh dấu.');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chuyển phòng' }));
+        expect(await screen.findByText('1. Thông tin chuyển phòng')).toBeInTheDocument();
+        expect(screen.queryByText('Vui lòng kiểm tra các trường được đánh dấu.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Cần nhập ít nhất một chỉ số sinh hiệu hợp lệ.')).not.toBeInTheDocument();
     });
 
     it('persists a valid draft through the UC-47 API', async () => {
@@ -164,6 +181,10 @@ describe('ClinicalExaminationPage', () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
         expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng kiểm tra các trường được đánh dấu.');
         expect(screen.getByText('Cần nhập ít nhất một chỉ số sinh hiệu hợp lệ.')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '70' } });
+        expect(screen.queryByText('Vui lòng kiểm tra các trường được đánh dấu.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Cần nhập ít nhất một chỉ số sinh hiệu hợp lệ.')).not.toBeInTheDocument();
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
     });
 
@@ -197,15 +218,14 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.queryByText('IV. Khám bệnh')).not.toBeInTheDocument();
     });
 
-    it('sends organ-finding notes', async () => {
+    it('sends the combined organ examination from one field', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });
         fireEvent.change(screen.getByLabelText(/Mạch/), { target: { value: '72' } });
-        fireEvent.change(screen.getByLabelText(/^Hô hấp/), { target: { value: 'Phổi thông khí đều' } });
-        fireEvent.change(screen.getByLabelText(/Ghi chú hô hấp/), { target: { value: 'Theo dõi ho' } });
+        fireEvent.change(screen.getByLabelText(/^2\. Khám bộ phận/), { target: { value: 'Tim đều, phổi thông khí tốt' } });
         fireEvent.click(screen.getAllByRole('button', { name: 'Lưu bản nháp' })[0]);
         expect(visitApi.saveClinicalExamination).toHaveBeenCalledWith(visit.id, expect.objectContaining({
-            organFindings: [{ organSystem: 'RESPIRATORY', finding: 'Phổi thông khí đều', notes: 'Theo dõi ho' }],
+            organFinding: 'Tim đều, phổi thông khí tốt',
         }));
     });
 });

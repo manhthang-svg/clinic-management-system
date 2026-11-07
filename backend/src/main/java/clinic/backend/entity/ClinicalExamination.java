@@ -49,6 +49,9 @@ public class ClinicalExamination extends VersionedEntity {
     @Column(name = "khambenh_toanthan")
     private String khambenhToanthan;
 
+    @Column(name = "khambenh_bophan")
+    private String khambenhBophan;
+
     /** CV 365 II.8. */
     @Column(name = "chandoansobo")
     private String chandoansobo;
@@ -88,21 +91,21 @@ public class ClinicalExamination extends VersionedEntity {
             UUID doctorAccountId,
             String presentIllness,
             String generalFinding,
+            String organFinding,
             String preliminaryDiagnosis,
             String icd10Code,
             String icd10Name,
             String treatmentCare,
-            List<ExaminationFinding> newFindings,
             java.time.Instant now) {
         this.examinedByAccountId = doctorAccountId;
         this.quatrinhbenhly = presentIllness;
         this.khambenhToanthan = generalFinding;
+        this.khambenhBophan = organFinding;
         this.chandoansobo = preliminaryDiagnosis;
         this.khambenhChandoanvaovienmaicd = icd10Code;
         this.chandoanvaovien = icd10Name;
         this.treatmentCarePerformed = treatmentCare;
         this.findings.clear();
-        this.findings.addAll(newFindings);
         touch(now);
     }
 }
