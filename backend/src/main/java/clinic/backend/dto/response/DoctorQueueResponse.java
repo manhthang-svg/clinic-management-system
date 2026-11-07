@@ -13,6 +13,7 @@ public record DoctorQueueResponse(
         Instant refreshedAt,
         long waitingCount,
         long inExaminationCount,
+        long waitingParaclinicalCount,
         long waitingConclusionCount,
         long skippedCount,
         PageResponse<DoctorQueueItemResponse> visits) {

@@ -26,6 +26,7 @@ import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
+import clinic.backend.enums.PriceType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
@@ -38,6 +39,7 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +73,7 @@ class ParaclinicalOrderServiceImplTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private ParaclinicalOrderRepository paraclinicalOrderRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private PaymentCompletionService paymentCompletionService;
 
     private ParaclinicalOrderServiceImpl service;
 
@@ -79,7 +82,7 @@ class ParaclinicalOrderServiceImplTest {
         Clock clock = Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh"));
         service = new ParaclinicalOrderServiceImpl(
                 visitRepository, medicalRecordRepository, medicalServiceRepository, serviceGroupRepository,
-                roomRepository, paymentRepository, paraclinicalOrderRepository, auditLogService,
+                roomRepository, paymentRepository, paraclinicalOrderRepository, auditLogService, paymentCompletionService,
                 new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 
@@ -108,9 +111,92 @@ class ParaclinicalOrderServiceImplTest {
         assertThat(payment.getValue().getType()).isEqualTo(PaymentType.PARACLINICAL_FEE);
         assertThat(payment.getValue().getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(payment.getValue().getItems()).hasSize(2);
+        verify(paymentCompletionService, never()).releaseOrder(any());
         verify(auditLogService).recordBusinessChange(
                 eq(DOCTOR_ID), eq(AuditLogAction.CREATE), eq("paraclinical_orders"), any(),
                 eq(visit.getSovaovien()), any(), eq(NOW));
+    }
+
+    @Test
+    void splitsInsuranceAndPatientAmountsAndReleasesAnInsuranceVisitAtOnce() {
+        Visit visit = insuredVisit((short) 80);
+        // Insurance price below the clinic price: the patient also pays the difference (BR-27).
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 150000L);
+        // Insurance price above the clinic price: insurance pays on the clinic price.
+        MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 80000, 90000L);
+        stubOrder(visit, List.of(ultrasound, blood));
+        when(paymentCompletionService.releaseOrder(any(ParaclinicalOrder.class))).thenReturn(List.of());
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId(), blood.getId()));
+
+        // 150 000 × 80% = 120 000; min(80 000, 90 000) × 80% = 64 000
+        assertThat(response.tongcong()).isEqualByComparingTo("280000");
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("184000");
+        assertThat(response.patientAmount()).isEqualByComparingTo("96000");
+        assertThat(response.details())
+                .extracting(d -> d.bhytChitra().longValue(), d -> d.benhnhanphaitra().longValue())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(120000L, 80000L),
+                        org.assertj.core.groups.Tuple.tuple(64000L, 16000L));
+
+        ArgumentCaptor<Payment> payment = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).saveAndFlush(payment.capture());
+        assertThat(payment.getValue().getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getValue().getItems())
+                .extracting(item -> item.getPriceType(), item -> item.getCoverageRate())
+                .containsOnly(org.assertj.core.groups.Tuple.tuple(PriceType.INSURANCE, (short) 80));
+        // BR-26: released to the paraclinical rooms now; the patient amount is collected after the conclusion.
+        verify(paymentCompletionService).releaseOrder(any(ParaclinicalOrder.class));
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.WAITING_PARACLINICAL);
+    }
+
+    @Test
+    void chargesAServiceOutsideInsuranceCoverageAtTheClinicPrice() {
+        Visit visit = insuredVisit((short) 100);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        stubOrder(visit, List.of(ultrasound));
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("0");
+        assertThat(response.patientAmount()).isEqualByComparingTo("200000");
+        ArgumentCaptor<Payment> payment = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).saveAndFlush(payment.capture());
+        assertThat(payment.getValue().getItems())
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getPriceType()).isEqualTo(PriceType.CLINIC);
+                    assertThat(item.getBenhnhanphaitra()).isEqualByComparingTo("200000");
+                });
+        verify(paymentCompletionService).releaseOrder(any(ParaclinicalOrder.class));
+    }
+
+    @Test
+    void releasesAtOnceWhenThePatientPaysNothing() {
+        Visit visit = insuredVisit((short) 100);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 200000L);
+        stubOrder(visit, List.of(ultrasound));
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        assertThat(response.patientAmount()).isEqualByComparingTo("0");
+        ArgumentCaptor<Payment> payment = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).saveAndFlush(payment.capture());
+        assertThat(payment.getValue().getStatus()).isEqualTo(PaymentStatus.FEE_EXEMPT);
+        verify(paymentCompletionService).releaseOrder(any(ParaclinicalOrder.class));
+    }
+
+    @Test
+    void billsASelfPaidVisitAtTheClinicPriceEvenForAnInsuredService() {
+        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 150000L);
+        stubOrder(visit, List.of(ultrasound));
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("0");
+        assertThat(response.patientAmount()).isEqualByComparingTo("200000");
+        verify(paymentCompletionService, never()).releaseOrder(any());
     }
 
     @Test
@@ -231,9 +317,14 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     private static MedicalService service(String code, String name, MedicalServiceType type, long price) {
+        return service(code, name, type, price, null);
+    }
+
+    private static MedicalService service(
+            String code, String name, MedicalServiceType type, long price, Long insurancePrice) {
         MedicalService service = MedicalService.create(
                 UUID.randomUUID(), NOW, code, name, type, UUID.randomUUID(), UUID.randomUUID(),
-                BigDecimal.valueOf(price), null, null);
+                BigDecimal.valueOf(price), insurancePrice == null ? null : BigDecimal.valueOf(insurancePrice), null);
         service.changeStatus(ActivationStatus.ACTIVE, NOW);
         return service;
     }
@@ -249,6 +340,17 @@ class ParaclinicalOrderServiceImplTest {
                 forceStatus(visit, status);
             }
         }
+        return visit;
+    }
+
+    /** An insurance visit with a valid card, being examined by the doctor. */
+    private static Visit insuredVisit(short coverageRate) {
+        Visit visit = new Visit(VISIT_ID, NOW, "DK0000000001", UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), NOW, VisitDoituongbnLoai.BHYT, "DN4797000000001", "7000000001",
+                LocalDate.of(2026, 1, 1), LocalDate.of(2030, 12, 31), "79014", "Bệnh viện Đa khoa Sài Gòn",
+                null, coverageRate, null, null, "Đau bụng", false, null, LocalDate.of(2026, 11, 3), 1,
+                VisitStatus.WAITING, VisitInsuranceVerifyStatus.VALID);
+        visit.startExamination(DOCTOR_ID, NOW);
         return visit;
     }
 

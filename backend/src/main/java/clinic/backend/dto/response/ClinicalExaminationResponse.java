@@ -21,6 +21,7 @@ public record ClinicalExaminationResponse(
         Instant examinationStartedAt,
         VisitDoituongbnLoai visitType,
         String insuranceCardNumber,
+        Short insuranceCoverageRate,
         UUID patientId,
         String patientCode,
         String patientName,

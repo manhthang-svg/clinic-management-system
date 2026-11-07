@@ -182,4 +182,52 @@ public class PaymentItem extends CreatedOnlyEntity {
 
         return item;
     }
+
+    /**
+     * UC-49 line of an insurance visit for a service with an insurance price (BR-27): the line is charged at the
+     * clinic price; insurance pays min(insurance price, clinic price) × coverage rate and the patient pays the rest
+     * (co-payment plus the difference between the clinic price and the insurance price).
+     */
+    public static PaymentItem createParaclinicalInsuranceItem(
+            UUID id,
+            Instant createdAt,
+            Payment payment,
+            MedicalService service,
+            short coverageRate,
+            UUID orderDetailId
+    ) {
+        if (id == null || createdAt == null || payment == null || service == null
+                || coverageRate < 1 || coverageRate > 100 || service.getInsurancePrice() == null) {
+            throw new IllegalArgumentException("Thông tin chi tiết BHYT không hợp lệ");
+        }
+        BigDecimal clinicPrice = service.getClinicPrice();
+        if (clinicPrice == null || clinicPrice.signum() < 0) {
+            throw new IllegalArgumentException("Giá dịch vụ phòng khám không hợp lệ");
+        }
+
+        BigDecimal insuranceAmount = insuranceShare(clinicPrice, service.getInsurancePrice(), coverageRate);
+
+        PaymentItem item = new PaymentItem(id, createdAt);
+        item.payment = payment;
+        item.serviceId = service.getId();
+        item.orderDetailId = orderDetailId;
+        item.serviceCodeSnapshot = service.getCode();
+        item.tenchidinh = service.getTenchidinh();
+        item.soluong = BigDecimal.ONE;
+        item.priceType = PriceType.INSURANCE;
+        item.dongia = clinicPrice;
+        item.coverageRate = coverageRate;
+        item.thanhtien = clinicPrice;
+        item.bhytChitra = insuranceAmount;
+        item.benhnhanphaitra = clinicPrice.subtract(insuranceAmount);
+        item.isCancelled = false;
+        return item;
+    }
+
+    /** BR-27: the insurance-covered amount of one service, rounded to the dong. */
+    public static BigDecimal insuranceShare(BigDecimal clinicPrice, BigDecimal insurancePrice, short coverageRate) {
+        return clinicPrice.min(insurancePrice)
+                .multiply(BigDecimal.valueOf(coverageRate))
+                .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP);
+    }
 }

@@ -66,8 +66,9 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
         () => filterServices(services, { keyword, type, groupId: group }),
         [services, keyword, type, group],
     );
-    const cost = useMemo(() => estimate(services, selectedIds), [services, selectedIds]);
     const insured = visit.doituongbnLoai === 'BHYT';
+    const coverageRate = insured ? visit.insuranceCoverageRate ?? null : null;
+    const cost = useMemo(() => estimate(services, selectedIds, coverageRate), [services, selectedIds, coverageRate]);
 
     const toggle = (id) => setSelectedIds((current) => (
         current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -194,13 +195,18 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                                     <th scope="col" className={thClass}>Dịch vụ</th>
                                     <th scope="col" className={moneyThClass}>Giá viện phí</th>
                                     <th scope="col" className={moneyThClass}>Giá BHYT</th>
-                                    {!insured && <th scope="col" className={moneyThClass}>Thành tiền</th>}
+                                    {insured ? (
+                                        <>
+                                            <th scope="col" className={moneyThClass}>BHYT trả</th>
+                                            <th scope="col" className={moneyThClass}>Bệnh nhân trả</th>
+                                        </>
+                                    ) : <th scope="col" className={moneyThClass}>Thành tiền</th>}
                                     <th scope="col" className={`${thClass} w-12`}><span className="sr-only">Thao tác</span></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {cost.lines.length === 0 && (
-                                    <tr><td colSpan={insured ? 4 : 5} className="p-6 text-center text-slate-500">Chưa chọn dịch vụ nào.</td></tr>
+                                    <tr><td colSpan={insured ? 6 : 5} className="p-6 text-center text-slate-500">Chưa chọn dịch vụ nào.</td></tr>
                                 )}
                                 {cost.lines.map((line) => (
                                     <tr key={line.id}>
@@ -211,7 +217,12 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                                                 ? <span className="text-slate-400">Không thuộc BHYT</span>
                                                 : formatAmount(line.insurancePrice)}
                                         </td>
-                                        {!insured && <td className={moneyTdClass}>{formatAmount(line.clinicPrice)}</td>}
+                                        {insured ? (
+                                            <>
+                                                <td className={moneyTdClass}>{formatAmount(line.insuranceAmount)}</td>
+                                                <td className={moneyTdClass}>{formatAmount(line.patientAmount)}</td>
+                                            </>
+                                        ) : <td className={moneyTdClass}>{formatAmount(line.clinicPrice)}</td>}
                                         <td className={`${tdClass} text-center`}>
                                             <button
                                                 type="button"
@@ -230,7 +241,12 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                                     <th scope="row" className={`${tdClass} text-left`}>Tổng cộng</th>
                                     <td className={moneyTdClass}>{formatAmount(cost.clinicTotal)}</td>
                                     <td className={moneyTdClass}>{formatAmount(cost.insuranceTotal)}</td>
-                                    {!insured && <td className={`${moneyTdClass} text-teal-800`} data-testid="cls-total">{formatAmount(cost.total)}</td>}
+                                    {insured ? (
+                                        <>
+                                            <td className={moneyTdClass} data-testid="cls-insurance-total">{formatAmount(cost.insuranceAmount)}</td>
+                                            <td className={`${moneyTdClass} text-teal-800`} data-testid="cls-total">{formatAmount(cost.patientAmount)}</td>
+                                        </>
+                                    ) : <td className={`${moneyTdClass} text-teal-800`} data-testid="cls-total">{formatAmount(cost.total)}</td>}
                                     <td />
                                 </tr>
                             </tfoot>
@@ -241,7 +257,7 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                         <InfoIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                         <span>
                             {insured
-                                ? 'Lượt khám BHYT: số tiền BHYT chi trả và bệnh nhân trả sẽ được tính khi thanh toán cuối.'
+                                ? `Lượt khám BHYT${coverageRate ? ` (mức hưởng ${coverageRate}%)` : ''}: dịch vụ không thuộc BHYT bệnh nhân trả theo giá viện phí. Chỉ định được chuyển tới phòng cận lâm sàng ngay; bệnh nhân thanh toán phần của mình sau khi có kết luận.`
                                 : 'Khám dịch vụ: bệnh nhân trả theo giá viện phí tại thời điểm chỉ định, thanh toán tại quầy thu ngân.'}
                         </span>
                     </p>

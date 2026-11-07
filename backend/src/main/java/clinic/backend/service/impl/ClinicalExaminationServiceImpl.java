@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.dto.request.MedicalHistoryItemRequest;
@@ -94,7 +95,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     @Transactional
     public ClinicalExaminationResponse open(StaffPrincipal principal, UUID visitId) {
         log.debug("Opening clinical examination [visitId={}, accountId={}]", visitId, principal.accountId());
-        AccessContext context = requireEditableVisit(principal, visitId);
+        AccessContext context = requireViewableVisit(principal, visitId);
         Instant now = clock.instant();
         MedicalRecord record = medicalRecordRepository.findByVisitId(visitId)
                 .orElseGet(() -> medicalRecordRepository.save(new MedicalRecord(
@@ -217,7 +218,19 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         return values;
     }
 
+    /** Editing is allowed only while the patient is in the examination room. */
     private AccessContext requireEditableVisit(StaffPrincipal principal, UUID visitId) {
+        return requireVisitInStatus(principal, visitId, Set.of(VisitStatus.IN_EXAMINATION));
+    }
+
+    /** While the patient is away for paraclinical services the Doctor may still read the examination. */
+    private AccessContext requireViewableVisit(StaffPrincipal principal, UUID visitId) {
+        return requireVisitInStatus(
+                principal, visitId, Set.of(VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL));
+    }
+
+    private AccessContext requireVisitInStatus(
+            StaffPrincipal principal, UUID visitId, Set<VisitStatus> allowedStatuses) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
         LocalTime time = LocalTime.ofInstant(now, CLINIC_ZONE);
@@ -239,7 +252,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         if (!room.getId().equals(visit.getRoomId()) || !doctor.getId().equals(visit.getDoctorAccountId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
-        if (visit.isSkipped() || visit.getStatus() != VisitStatus.IN_EXAMINATION) {
+        if (visit.isSkipped() || !allowedStatuses.contains(visit.getStatus())) {
             throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION);
         }
         Patient patient = patientRepository.findById(visit.getPatientId())
@@ -333,7 +346,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         return new ClinicalExaminationResponse(
                 visit.getId(), record.getId(), examination.getId(), examination.getVersion(), visit.getSovaovien(),
                 visit.getQueueNumber(), visit.getStatus(), visit.getThoigianvaovien(), visit.getDenkhambenhluc(),
-                visit.getDoituongbnLoai(), visit.getMabhyt(), patient.getId(), patient.getMabenhnhan(),
+                visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getInsuranceCoverageRate(), patient.getId(), patient.getMabenhnhan(),
                 patient.getHoten(), patient.getNgaysinh(), patientGender(patient), patient.getNghenghiep(),
                 patient.getDantoc(), patient.getDiachi(), room.getId(), room.getRoomCode(), room.getRoomName(),
                 context.doctor().getId(), context.doctor().getFullName(), visit.getLydovaovien(),

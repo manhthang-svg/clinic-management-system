@@ -76,6 +76,27 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByText('IV. Khám bệnh')).toBeInTheDocument();
     });
 
+    it('shows the examination read-only with the ordered services while waiting for paraclinical', async () => {
+        visitApi.openClinicalExamination.mockResolvedValue({ ...clinicalData, visitStatus: 'WAITING_PARACLINICAL' });
+        vi.spyOn(visitApi, 'getParaclinicalOrders').mockResolvedValue([{
+            id: 'order-1', sophieu: 'CLS0001', chandoansobo: 'Viêm họng', tongcong: 150000,
+            createdAt: '2026-10-30T03:00:00Z',
+            details: [{ id: 'detail-1', machidinh: 'XN01', tenchidinh: 'Tổng phân tích tế bào máu', thanhtien: 150000, status: 'WAITING' }],
+        }]);
+        renderPage();
+
+        expect(await screen.findByText('Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('Đau đầu, chóng mặt')).toBeDisabled();
+        expect(screen.queryByRole('button', { name: /Lưu bản nháp/ })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chỉ định cận lâm sàng' }));
+
+        expect(await screen.findByText('Tổng phân tích tế bào máu')).toBeInTheDocument();
+        expect(screen.getByText('Chờ thực hiện')).toBeInTheDocument();
+        expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
+        expect(visitApi.getParaclinicalOrders).toHaveBeenCalledWith(visit.id, expect.any(AbortSignal));
+    });
+
     it('calculates BMI from weight and height', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });

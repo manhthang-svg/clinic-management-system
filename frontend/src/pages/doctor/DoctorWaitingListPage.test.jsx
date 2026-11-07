@@ -304,6 +304,44 @@ describe('DoctorWaitingListPage backend integration', () => {
         );
         expect(visitApi.startExamination).not.toHaveBeenCalled();
     });
+
+    it('keeps a waiting-for-paraclinical patient in the list and opens their examination', async () => {
+        const visit = {
+            id: 'visit-paraclinical',
+            patientName: 'Trần Văn CLS',
+            patientCode: 'BN044',
+            queueNumber: 4,
+            status: 'WAITING_PARACLINICAL',
+            isSkipped: false,
+        };
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                waitingParaclinicalCount: 1,
+                visits: { content: [visit], page: { number: 0, size: 10, totalElements: 1, totalPages: 1 } },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
+        };
+
+        render(
+            <MemoryRouter initialEntries={['/doctor/appointments']}>
+                <Routes>
+                    <Route path="/doctor/appointments" element={<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} />} />
+                    <Route path="/doctor/clinical-examination" element={<LocationProbe />} />
+                </Routes>
+            </MemoryRouter>,
+        );
+
+        const row = (await screen.findByText('Trần Văn CLS')).closest('tr');
+        expect(within(row).getByText('Chờ CLS')).toBeInTheDocument();
+        expect(within(row).queryByRole('button', { name: 'Bắt đầu' })).not.toBeInTheDocument();
+        fireEvent.click(row);
+
+        expect(await screen.findByTestId('location')).toHaveTextContent(
+            '/doctor/clinical-examination|visit-paraclinical|Trần Văn CLS',
+        );
+    });
 });
 
 describe('DoctorWaitingListPage messages', () => {

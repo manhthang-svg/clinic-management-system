@@ -22,9 +22,10 @@ import { ROUTES } from '../../routes/routes';
 const REFRESH_MS = 10_000;
 const PAGE_SIZES = [10, 20, 50];
 
-// "Danh sách bệnh nhân" merges the waiting and in-examination visits; a visit leaves it once examined.
+// "Danh sách bệnh nhân" merges the waiting, in-examination and waiting-for-paraclinical visits;
+// a visit leaves it once it is waiting for the conclusion.
 const TABS = [
-    { id: 'patients', apiValue: 'PATIENT_LIST', countKeys: ['waitingCount', 'inExaminationCount'], label: 'Danh sách bệnh nhân' },
+    { id: 'patients', apiValue: 'PATIENT_LIST', countKeys: ['waitingCount', 'inExaminationCount', 'waitingParaclinicalCount'], label: 'Danh sách bệnh nhân' },
     { id: 'conclusion', apiValue: 'WAITING_CONCLUSION', countKeys: ['waitingConclusionCount'], label: 'Chờ kết luận' },
     { id: 'skipped', apiValue: 'SKIPPED', countKeys: ['skippedCount'], label: 'Vắng mặt' },
 ];
@@ -38,6 +39,13 @@ const TAB_HEADINGS = {
 function resolveTab(tabId) {
     if (tabId === 'waiting' || tabId === 'in-examination') return 'patients';
     return TABS.some(({ id }) => id === tabId) ? tabId : 'patients';
+}
+
+// The examination opens for editing while in the room, and read-only while the patient is away for paraclinical services.
+const OPENABLE_STATUSES = ['IN_EXAMINATION', 'WAITING_PARACLINICAL'];
+
+function canOpenExamination(visit) {
+    return Boolean(visit) && !visit.isSkipped && OPENABLE_STATUSES.includes(visit.status);
 }
 
 // System messages of UC-43, word for word from the SRS message list.
@@ -310,7 +318,7 @@ export default function DoctorWaitingListPage({
     }, [activeTab, calling, fetchQueue, navigate, queueInfo, visitApi]);
 
     const openClinicalExamination = useCallback((visit) => {
-        if (!visit || visit.status !== 'IN_EXAMINATION') return;
+        if (!canOpenExamination(visit)) return;
         navigate(ROUTES.DOCTOR.CLINICAL_EXAMINATION, {
             state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab },
         });
@@ -432,7 +440,7 @@ export default function DoctorWaitingListPage({
                                         const [time, date] = formatDateTime(visit.thoigianvaovien);
                                         const isFirstPatient = activeTab === 'patients' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status);
-                                        const opensExamination = visit.status === 'IN_EXAMINATION' && !visit.isSkipped;
+                                        const opensExamination = canOpenExamination(visit);
                                         return (
                                             <tr
                                                 key={visit.id}

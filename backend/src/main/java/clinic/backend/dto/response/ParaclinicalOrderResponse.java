@@ -15,6 +15,8 @@ public record ParaclinicalOrderResponse(
         String paymentCode,
         String chandoansobo,
         BigDecimal tongcong,
+        BigDecimal insuranceAmount,
+        BigDecimal patientAmount,
         ParaclinicalOrderStatus status,
         Instant createdAt,
         List<ParaclinicalOrderDetailResponse> details
@@ -27,6 +29,8 @@ public record ParaclinicalOrderResponse(
             BigDecimal soluong,
             BigDecimal dongia,
             BigDecimal thanhtien,
+            BigDecimal bhytChitra,
+            BigDecimal benhnhanphaitra,
             UUID roomId,
             String status
     ) {

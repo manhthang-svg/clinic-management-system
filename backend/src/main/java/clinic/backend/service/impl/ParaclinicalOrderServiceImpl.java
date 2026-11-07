@@ -19,7 +19,9 @@ import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
+import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.MedicalRecordRepository;
@@ -31,6 +33,7 @@ import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ParaclinicalOrderService;
+import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +43,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,6 +68,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
     private final PaymentRepository paymentRepository;
     private final ParaclinicalOrderRepository paraclinicalOrderRepository;
     private final AuditLogService auditLogService;
+    private final PaymentCompletionService paymentCompletionService;
     private final UuidV7Generator uuidV7Generator;
     private final Clock clock;
 
@@ -114,14 +119,22 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
             throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
         }
 
-        // 4. Bước 8: một phiếu thu phí CLS (Chờ thanh toán) với giá dịch vụ tại thời điểm chỉ định (BR-09, BR-26).
-        // TBD: lượt BHYT (tách BHYT chi trả – BR-27, thanh toán cuối) do phần BHYT làm; hiện tính như lượt dịch vụ.
-        BigDecimal total = services.stream()
-                .map(MedicalService::getClinicPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 4. Bước 4, 8: một phiếu thu phí CLS với giá tại thời điểm chỉ định (BR-09). Lượt BHYT có thẻ hợp lệ:
+        // dịch vụ có giá BHYT được tách phần BHYT chi trả; dịch vụ không thuộc BHYT bệnh nhân trả đủ (BR-27, AF-03).
+        Short coverageRate = insuranceCoverageRate(visit);
+        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal insuranceTotal = BigDecimal.ZERO;
+        for (MedicalService service : services) {
+            total = total.add(service.getClinicPrice());
+            if (coverageRate != null && service.getInsurancePrice() != null) {
+                insuranceTotal = insuranceTotal.add(PaymentItem.insuranceShare(
+                        service.getClinicPrice(), service.getInsurancePrice(), coverageRate));
+            }
+        }
         String paymentCode = "HD%010d".formatted(visitRepository.nextPaymentCode());
         Payment payment = Payment.createParaclinicalFee(
-                uuidV7Generator.next(), now, paymentCode, visit.getId(), total, BigDecimal.ZERO, total);
+                uuidV7Generator.next(), now, paymentCode, visit.getId(), total, insuranceTotal,
+                total.subtract(insuranceTotal));
 
         Room room = roomRepository.findById(visit.getRoomId()).orElse(null);
         String sophieu = "CD" + paymentCode.substring(2);
@@ -134,18 +147,23 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 total,
                 ParaclinicalOrderStatus.PENDING_PAYMENT);
 
-        // 5. Mỗi dịch vụ là một chỉ định chờ thanh toán; phòng thực hiện được chia khi thu ngân xác nhận (UC-71, BR-28)
+        // 5. Mỗi dịch vụ là một chỉ định chờ thanh toán, cùng số tiền với dòng phiếu thu của nó
         List<PaymentItem> paymentItems = new ArrayList<>();
         for (int i = 0; i < services.size(); i++) {
             MedicalService service = services.get(i);
+            UUID detailId = uuidV7Generator.next();
+            PaymentItem item = coverageRate != null && service.getInsurancePrice() != null
+                    ? PaymentItem.createParaclinicalInsuranceItem(
+                            uuidV7Generator.next(), now, payment, service, coverageRate, detailId)
+                    : PaymentItem.createParaclinicalItem(
+                            uuidV7Generator.next(), now, payment, service, BigDecimal.ONE, detailId);
             ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
-                    uuidV7Generator.next(), now, order, service.getId(),
+                    detailId, now, order, service.getId(),
                     "%s-%02d".formatted(sophieu, i + 1), now, service.getTenchidinh(), null, null,
-                    BigDecimal.ONE, service.getClinicPrice(), service.getClinicPrice(), BigDecimal.ZERO,
-                    service.getClinicPrice(), null, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+                    BigDecimal.ONE, item.getDongia(), item.getThanhtien(), item.getBhytChitra(),
+                    item.getBenhnhanphaitra(), null, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
             order.addDetail(detail);
-            paymentItems.add(PaymentItem.createParaclinicalItem(
-                    uuidV7Generator.next(), now, payment, service, BigDecimal.ONE, detail.getId()));
+            paymentItems.add(item);
         }
 
         // 6. Lưu theo thứ tự khóa ngoại: phiếu thu → chỉ định (và chi tiết) → dòng phiếu thu trỏ tới chi tiết
@@ -154,7 +172,15 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         paymentItems.forEach(payment::addItem);
         paymentRepository.save(payment);
 
-        // 7. Bước 9: lượt khám chờ CLS (cả khi chỉ định thêm từ chờ kết luận) và ghi audit
+        // 7. BR-26: lượt BHYT chuyển chỉ định tới phòng CLS ngay, phần bệnh nhân trả thu sau khi kết luận;
+        // phiếu bệnh nhân trả 0đ cũng chuyển ngay (AF-01). Lượt dịch vụ chờ thu ngân xác nhận (UC-71, BR-28).
+        boolean releaseNow = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
+                || payment.getStatus() == PaymentStatus.FEE_EXEMPT;
+        List<String> unroutedServices = releaseNow
+                ? paymentCompletionService.releaseOrder(savedOrder)
+                : List.of();
+
+        // 8. Bước 9: lượt khám chờ CLS (cả khi chỉ định thêm từ chờ kết luận) và ghi audit
         visit.markAsWaitingParaclinical();
         visitRepository.save(visit);
 
@@ -163,11 +189,24 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         audit.put("paymentCode", paymentCode);
         audit.put("services", services.stream().map(MedicalService::getTenchidinh).toList());
         audit.put("total", total);
+        audit.put("insuranceAmount", insuranceTotal);
+        audit.put("patientAmount", payment.getPatientTotalAmount());
+        audit.put("released", releaseNow);
+        if (!unroutedServices.isEmpty()) {
+            audit.put("unroutedServices", unroutedServices);
+        }
         auditLogService.recordBusinessChange(
                 doctorAccountId, AuditLogAction.CREATE, "paraclinical_orders", savedOrder.getId(),
                 visit.getSovaovien(), audit, now);
 
         return toResponse(savedOrder, payment);
+    }
+
+    /** Coverage rate of a valid insurance card, or {@code null} when the visit is billed at the clinic price. */
+    private static Short insuranceCoverageRate(Visit visit) {
+        boolean insured = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
+                && visit.getInsuranceVerifyStatus() == VisitInsuranceVerifyStatus.VALID;
+        return insured ? visit.getInsuranceCoverageRate() : null;
     }
 
     private List<MedicalService> requireOrderableServices(List<UUID> serviceIds) {
@@ -193,6 +232,29 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ParaclinicalOrderResponse> listOrdersByVisit(UUID doctorAccountId, UUID visitId) {
+        Visit visit = visitRepository.findById(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        if (!doctorAccountId.equals(visit.getDoctorAccountId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+
+        MedicalRecord medicalRecord = medicalRecordRepository.findByVisitId(visitId).orElse(null);
+        if (medicalRecord == null) {
+            return List.of();
+        }
+
+        List<ParaclinicalOrderResponse> orders = new ArrayList<>();
+        for (ParaclinicalOrder order : paraclinicalOrderRepository.findAllByMedicalRecordId(medicalRecord.getId())) {
+            Payment payment = paymentRepository.findById(order.getPaymentId()).orElse(null);
+            orders.add(toResponse(order, payment));
+        }
+        orders.sort(Comparator.comparing(ParaclinicalOrderResponse::createdAt));
+        return orders;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ParaclinicalOrderResponse getOrderById(UUID orderId) {
         ParaclinicalOrder order = paraclinicalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
@@ -214,6 +276,8 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                         detail.getSoluong(),
                         detail.getDongia(),
                         detail.getThanhtien(),
+                        detail.getBhytChitra(),
+                        detail.getBenhnhanphaitra(),
                         detail.getRoomId(),
                         detail.getStatus().name()
                 ));
@@ -228,6 +292,8 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 payment != null ? payment.getPaymentCode() : null,
                 order.getChandoansobo(),
                 order.getTongcong(),
+                payment != null ? payment.getInsuranceTotalAmount() : null,
+                payment != null ? payment.getPatientTotalAmount() : null,
                 order.getStatus(),
                 order.getCreatedAt(),
                 detailResponses
