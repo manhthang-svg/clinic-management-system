@@ -51,26 +51,46 @@ export function filterServices(services, { keyword = '', type = '', groupId = ''
 }
 
 /**
- * Step 4 (BR-27): each line is charged at the clinic price. With the coverage rate of a valid insurance card, a
- * service with an insurance price is covered for min(insurance price, clinic price) × rate and the patient pays
- * the rest; other services, and every service of a self-paid visit (no rate), are paid in full by the patient.
- * The backend computes the receipt; this is the estimate shown before confirming.
+ * BR-27 applied coverage rate: 100% while the visit's total cost within insurance scope stays below the
+ * co-payment exemption threshold (15% of the base salary), otherwise the card's rate.
  */
-export function estimate(services, selectedIds, coverageRate = null) {
-    const lines = selectedIds
+export function appliedCoverageRate(scopeTotal, { cardRate, threshold }) {
+    return threshold != null && scopeTotal < threshold ? 100 : cardRate;
+}
+
+/**
+ * Step 4 (BR-27): each line is charged at the clinic price. For a valid-card insurance visit (`coverage` =
+ * { cardRate, scopeTotal, threshold }), a service with an insurance price is covered for
+ * min(insurance price, clinic price) × the applied rate of the whole visit once these services are added, and the
+ * patient pays the rest; other services, and every service of a self-paid visit (no coverage), are paid in full.
+ * The backend computes the receipts; this is the estimate shown before confirming.
+ */
+export function estimate(services, selectedIds, coverage = null) {
+    const selected = selectedIds
         .map((id) => services.find((service) => service.id === id))
         .filter(Boolean)
         .map((service) => {
             const clinicPrice = Number(service.clinicPrice || 0);
             const insurancePrice = service.insurancePrice == null ? null : Number(service.insurancePrice);
-            const insuranceAmount = coverageRate && insurancePrice != null
-                ? Math.round((Math.min(insurancePrice, clinicPrice) * coverageRate) / 100)
-                : 0;
-            return { ...service, clinicPrice, insurancePrice, insuranceAmount, patientAmount: clinicPrice - insuranceAmount };
+            const scope = insurancePrice == null ? 0 : Math.min(insurancePrice, clinicPrice);
+            return { ...service, clinicPrice, insurancePrice, scope };
         });
+    const newScope = selected.reduce((total, line) => total + line.scope, 0);
+    const visitScope = Number(coverage?.scopeTotal || 0) + newScope;
+    const appliedRate = coverage?.cardRate ? appliedCoverageRate(visitScope, coverage) : null;
+    const lines = selected.map((line) => {
+        const insuranceAmount = appliedRate && line.insurancePrice != null
+            ? Math.round((line.scope * appliedRate) / 100)
+            : 0;
+        return { ...line, insuranceAmount, patientAmount: line.clinicPrice - insuranceAmount };
+    });
     const sum = (key) => lines.reduce((total, line) => total + line[key], 0);
     return {
         lines,
+        appliedRate,
+        // The earlier receipts of the visit are repriced when the applied rate changes (BR-27).
+        rateChanges: appliedRate != null && coverage?.cardRate
+            && appliedRate !== appliedCoverageRate(Number(coverage.scopeTotal || 0), coverage),
         clinicTotal: sum('clinicPrice'),
         insuranceTotal: lines.reduce((total, line) => total + (line.insurancePrice ?? 0), 0),
         insuranceAmount: sum('insuranceAmount'),
@@ -86,6 +106,24 @@ export function createdMessage(order, insured = false) {
     return insured
         ? `${message} Chỉ định đã được chuyển tới phòng cận lâm sàng; bệnh nhân thanh toán sau khi có kết luận.`
         : message;
+}
+
+/** MSG70 after a refused service is cancelled; BR-41 when no service is left to perform. */
+export function cancelledMessage(result) {
+    const message = `Đã hủy dịch vụ ${result?.serviceName}. Khoản thu đã được tính lại.`;
+    return result?.visitStatus === 'WAITING_CONCLUSION'
+        ? `${message} Không còn dịch vụ cận lâm sàng nào phải làm, lượt khám chuyển sang chờ kết luận.`
+        : message;
+}
+
+/** BR-25 rejections and MSG12 / MSG99; never the raw backend message. */
+export function cancelErrorMessage(error) {
+    const code = error?.errorResponse?.code;
+    if (code === 'PARACLINICAL_SERVICE_NOT_CANCELLABLE') {
+        return 'Dịch vụ đã được thanh toán hoặc kỹ thuật viên đã tiếp nhận, không thể hủy.';
+    }
+    if (code === 'REQUEST_VALIDATION_FAILED') return 'Lý do hủy từ 5 đến 500 ký tự.';
+    return orderErrorMessage(error);
 }
 
 /** MSG42 / MSG12 / MSG99; never the raw backend message. */

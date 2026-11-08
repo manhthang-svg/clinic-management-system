@@ -1,6 +1,8 @@
 package clinic.backend.service;
 
+import clinic.backend.dto.request.CancelParaclinicalServiceRequest;
 import clinic.backend.dto.request.CreateParaclinicalOrderRequest;
+import clinic.backend.dto.response.ParaclinicalCancellationResponse;
 import clinic.backend.dto.response.ParaclinicalOrderResponse;
 import clinic.backend.dto.response.ParaclinicalServiceOptionResponse;
 
@@ -17,4 +19,11 @@ public interface ParaclinicalOrderService {
     List<ParaclinicalOrderResponse> listOrdersByVisit(UUID doctorAccountId, UUID visitId);
 
     ParaclinicalOrderResponse getOrderById(UUID orderId);
+
+    /**
+     * BR-25, BR-41: the Doctor of the visit cancels one service the patient refused. Allowed while no Technician
+     * accepted it and its receipt is not paid; the receipt is recalculated.
+     */
+    ParaclinicalCancellationResponse cancelService(
+            UUID doctorAccountId, UUID orderDetailId, CancelParaclinicalServiceRequest request);
 }

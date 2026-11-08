@@ -15,7 +15,9 @@ import {
 import paymentApi from '../../apis/paymentApi';
 import PaymentReceipt from '../../components/payments/PaymentReceipt';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
-import { PRINT_MSG, confirmErrorMessage, confirmedNoticeText, printErrorMessage } from '../../components/payments/paymentConfirm';
+import {
+    AWAITING_CONCLUSION_LABEL, MSG, PRINT_MSG, confirmErrorMessage, confirmedNoticeText, printErrorMessage,
+} from '../../components/payments/paymentConfirm';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -155,7 +157,9 @@ export default function PaymentDetailPage() {
             const data = res?.data || res;
             setQrData(data);
         } catch (err) {
-            alert(err?.message || 'Không thể tạo mã QR PayOS');
+            alert(err?.errorResponse?.code === 'PAYMENT_AWAITS_CONCLUSION'
+                ? MSG.AWAITS_CONCLUSION
+                : err?.message || 'Không thể tạo mã QR PayOS');
             setQrModalOpen(false);
         } finally {
             setLoadingQr(false);
@@ -416,7 +420,11 @@ export default function PaymentDetailPage() {
                             <span className="text-xs text-slate-500">{PRINT_MSG.NOT_PAID}</span>
                         )}
 
-                        {payment.status === 'PENDING' && (
+                        {payment.status === 'PENDING' && payment.awaitingConclusion && (
+                            <span className="text-sm font-medium text-amber-800">{MSG.AWAITS_CONCLUSION}</span>
+                        )}
+
+                        {payment.status === 'PENDING' && !payment.awaitingConclusion && (
                             <>
                                 <button
                                     onClick={() => setCashModalOpen(true)}

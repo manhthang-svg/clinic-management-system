@@ -16,7 +16,9 @@ import {
     FileText,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
-import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
+import {
+    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText,
+} from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 
 function formatMoney(amount) {
@@ -179,7 +181,9 @@ export default function CashierOverviewPage() {
             const qrData = res?.data || res;
             setQrModal({ payment, qrData });
         } catch (err) {
-            alert(err?.message || 'Không thể tạo mã QR PayOS');
+            alert(err?.errorResponse?.code === 'PAYMENT_AWAITS_CONCLUSION'
+                ? MSG.AWAITS_CONCLUSION
+                : err?.message || 'Không thể tạo mã QR PayOS');
             setQrModal(null);
         } finally {
             setLoadingQr(false);
@@ -509,6 +513,10 @@ export default function CashierOverviewPage() {
                                                 {/* Thao tác tạo đơn & thu tiền */}
                                                 <td className="px-5 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
+                                                        {payment.awaitingConclusion ? (
+                                                            <span className="inline-flex items-center rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800" title={MSG.AWAITS_CONCLUSION}>{AWAITING_CONCLUSION_LABEL}</span>
+                                                        ) : (
+                                                        <>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleOpenCashModal(payment)}
@@ -528,6 +536,8 @@ export default function CashierOverviewPage() {
                                                             <QrCode className="h-4 w-4" />
                                                             PayOS QR
                                                         </button>
+                                                        </>
+                                                        )}
 
                                                         <Link
                                                             to={`payments/${payment.id}`}

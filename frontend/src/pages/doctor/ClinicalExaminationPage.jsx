@@ -7,7 +7,7 @@ import {
 import { toast } from 'sonner';
 import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOrderPanel';
 import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrderList';
-import { createdMessage } from '../../components/paraclinical/paraclinicalOrder';
+import { cancelledMessage, createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
@@ -239,6 +239,8 @@ export default function ClinicalExaminationPage() {
         status: clinicalData.visitStatus, thoigianvaovien: clinicalData.registeredAt,
         denkhambenhluc: clinicalData.examinationStartedAt, doituongbnLoai: clinicalData.visitType,
         mabhyt: clinicalData.insuranceCardNumber, insuranceCoverageRate: clinicalData.insuranceCoverageRate,
+        insuranceScopeTotal: clinicalData.insuranceScopeTotal,
+        coPaymentExemptionThreshold: clinicalData.coPaymentExemptionThreshold,
         patientName: clinicalData.patientName,
         patientCode: clinicalData.patientCode, patientDob: clinicalData.patientDateOfBirth,
         patientGender: clinicalData.patientGender, lydovaovien: clinicalData.reasonForVisit,
@@ -392,7 +394,16 @@ export default function ClinicalExaminationPage() {
             {activeSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
             ) : activeSection === 'paraclinical' && readOnly ? (
-                <ParaclinicalOrderList visitId={visit.id} />
+                <ParaclinicalOrderList
+                    visitId={visit.id}
+                    onCancelled={(result) => {
+                        // BR-41: no service left to perform, so the visit now waits for the conclusion.
+                        if (result?.visitStatus === 'WAITING_CONCLUSION') {
+                            toast.success(cancelledMessage(result));
+                            goToWaitingList();
+                        }
+                    }}
+                />
             ) : activeSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
                 <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />

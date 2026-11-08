@@ -1,6 +1,8 @@
 package clinic.backend.service.impl;
 
+import clinic.backend.dto.request.CancelParaclinicalServiceRequest;
 import clinic.backend.dto.request.CreateParaclinicalOrderRequest;
+import clinic.backend.dto.response.ParaclinicalCancellationResponse;
 import clinic.backend.dto.response.ParaclinicalOrderResponse;
 import clinic.backend.dto.response.ParaclinicalServiceOptionResponse;
 import clinic.backend.entity.MedicalRecord;
@@ -21,18 +23,20 @@ import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
-import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
+import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.InsuranceCoverageService;
 import clinic.backend.service.ParaclinicalOrderService;
+import clinic.backend.service.ParaclinicalProgressService;
 import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -67,8 +71,11 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
     private final RoomRepository roomRepository;
     private final PaymentRepository paymentRepository;
     private final ParaclinicalOrderRepository paraclinicalOrderRepository;
+    private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     private final AuditLogService auditLogService;
     private final PaymentCompletionService paymentCompletionService;
+    private final InsuranceCoverageService insuranceCoverageService;
+    private final ParaclinicalProgressService paraclinicalProgressService;
     private final UuidV7Generator uuidV7Generator;
     private final Clock clock;
 
@@ -120,15 +127,16 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         }
 
         // 4. Bước 4, 8: một phiếu thu phí CLS với giá tại thời điểm chỉ định (BR-09). Lượt BHYT có thẻ hợp lệ:
-        // dịch vụ có giá BHYT được tách phần BHYT chi trả; dịch vụ không thuộc BHYT bệnh nhân trả đủ (BR-27, AF-03).
-        Short coverageRate = insuranceCoverageRate(visit);
+        // dịch vụ có giá BHYT được tách phần BHYT chi trả theo mức hưởng áp dụng của cả lượt, tính trên tổng chi
+        // phí trong phạm vi BHYT kể cả các dịch vụ mới; dịch vụ không thuộc BHYT bệnh nhân trả đủ (BR-27, AF-03).
+        Short coverageRate = appliedCoverageRate(visit, services);
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal insuranceTotal = BigDecimal.ZERO;
         for (MedicalService service : services) {
             total = total.add(service.getClinicPrice());
             if (coverageRate != null && service.getInsurancePrice() != null) {
-                insuranceTotal = insuranceTotal.add(PaymentItem.insuranceShare(
-                        service.getClinicPrice(), service.getInsurancePrice(), coverageRate));
+                insuranceTotal = insuranceTotal.add(
+                        PaymentItem.insuranceAmount(PaymentItem.insuranceScope(service), coverageRate));
             }
         }
         String paymentCode = "HD%010d".formatted(visitRepository.nextPaymentCode());
@@ -172,6 +180,9 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         paymentItems.forEach(payment::addItem);
         paymentRepository.save(payment);
 
+        // BR-27: mức hưởng áp dụng có thể đổi (vượt ngưỡng 15% lương cơ sở) nên tính lại các phiếu chưa thu của lượt
+        insuranceCoverageService.recalculate(visit);
+
         // 7. BR-26: lượt BHYT chuyển chỉ định tới phòng CLS ngay, phần bệnh nhân trả thu sau khi kết luận;
         // phiếu bệnh nhân trả 0đ cũng chuyển ngay (AF-01). Lượt dịch vụ chờ thu ngân xác nhận (UC-71, BR-28).
         boolean releaseNow = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
@@ -199,14 +210,21 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 doctorAccountId, AuditLogAction.CREATE, "paraclinical_orders", savedOrder.getId(),
                 visit.getSovaovien(), audit, now);
 
-        return toResponse(savedOrder, payment);
+        return toResponse(savedOrder, payment, visit.getStatus() == VisitStatus.WAITING_PARACLINICAL);
     }
 
-    /** Coverage rate of a valid insurance card, or {@code null} when the visit is billed at the clinic price. */
-    private static Short insuranceCoverageRate(Visit visit) {
-        boolean insured = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
-                && visit.getInsuranceVerifyStatus() == VisitInsuranceVerifyStatus.VALID;
-        return insured ? visit.getInsuranceCoverageRate() : null;
+    /**
+     * BR-27 applied coverage rate once the new services are added, or {@code null} when the visit is billed at the
+     * clinic price (self-paid visit).
+     */
+    private Short appliedCoverageRate(Visit visit, List<MedicalService> services) {
+        if (!visit.isInsuranceCovered()) {
+            return null;
+        }
+        BigDecimal scopeTotal = services.stream()
+                .map(PaymentItem::insuranceScope)
+                .reduce(insuranceCoverageService.scopeTotal(visit.getId()), BigDecimal::add);
+        return insuranceCoverageService.appliedCoverageRate(scopeTotal, visit.getInsuranceCoverageRate());
     }
 
     private List<MedicalService> requireOrderableServices(List<UUID> serviceIds) {
@@ -247,7 +265,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         List<ParaclinicalOrderResponse> orders = new ArrayList<>();
         for (ParaclinicalOrder order : paraclinicalOrderRepository.findAllByMedicalRecordId(medicalRecord.getId())) {
             Payment payment = paymentRepository.findById(order.getPaymentId()).orElse(null);
-            orders.add(toResponse(order, payment));
+            orders.add(toResponse(order, payment, visit.getStatus() == VisitStatus.WAITING_PARACLINICAL));
         }
         orders.sort(Comparator.comparing(ParaclinicalOrderResponse::createdAt));
         return orders;
@@ -260,10 +278,87 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
         Payment payment = paymentRepository.findById(order.getPaymentId()).orElse(null);
-        return toResponse(order, payment);
+        return toResponse(order, payment, false);
     }
 
-    private ParaclinicalOrderResponse toResponse(ParaclinicalOrder order, Payment payment) {
+    @Override
+    @Transactional
+    public ParaclinicalCancellationResponse cancelService(
+            UUID doctorAccountId, UUID orderDetailId, CancelParaclinicalServiceRequest request) {
+        Instant now = clock.instant();
+
+        // 1. Dịch vụ thuộc lượt khám đang chờ CLS của chính bác sĩ này, hồ sơ còn mở
+        ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(orderDetailId)
+                .orElseThrow(() -> new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_FOUND));
+        ParaclinicalOrder order = detail.getOrder();
+        MedicalRecord medicalRecord = medicalRecordRepository.findById(order.getMedicalRecordId())
+                .orElseThrow(() -> new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_FOUND));
+        Visit visit = visitRepository.findById(medicalRecord.getVisitId())
+                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        if (!doctorAccountId.equals(visit.getDoctorAccountId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        if (medicalRecord.getStatus() != MedicalRecordStatus.OPEN) {
+            throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
+        }
+        if (visit.getStatus() != VisitStatus.WAITING_PARACLINICAL) {
+            throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION, Map.of("status", visit.getStatus().name()));
+        }
+
+        // 2. BR-25: chưa thu tiền (lượt dịch vụ) và KTV chưa tiếp nhận (lượt BHYT)
+        Payment payment = paymentRepository.findById(order.getPaymentId())
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+        if (!isCancellable(detail, payment)) {
+            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_CANCELLABLE, Map.of(
+                    "serviceName", detail.getTenchidinh(),
+                    "status", detail.getStatus().name(),
+                    "paymentStatus", payment.getStatus().name()));
+        }
+
+        // 3. Hủy dịch vụ (lý do bắt buộc), bỏ dòng khỏi phiếu thu; hủy hết thì phiếu và phiếu chỉ định cũng hủy
+        detail.cancelByDoctor(doctorAccountId, request.reason(), now);
+        payment.cancelLine(detail.getId(), now);
+        order.cancelIfAllServicesCancelled(now);
+        paraclinicalOrderRepository.save(order);
+        paymentRepository.save(payment);
+
+        // 4. BR-27: lượt BHYT tính lại mức hưởng (có thể về 100% khi tổng xuống dưới ngưỡng) cho mọi phiếu chưa thu
+        insuranceCoverageService.recalculate(visit);
+
+        // 5. UC-49 AF-01: phiếu lượt dịch vụ còn lại 0đ thì chuyển các dịch vụ còn lại tới phòng CLS ngay
+        if (payment.getStatus() == PaymentStatus.FEE_EXEMPT
+                && order.getStatus() == ParaclinicalOrderStatus.PENDING_PAYMENT) {
+            paymentCompletionService.releaseOrder(order);
+        }
+
+        // 6. BR-41: không còn dịch vụ nào phải làm thì lượt khám chuyển sang chờ kết luận
+        paraclinicalProgressService.moveToConclusionIfDone(visit);
+
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("sophieu", order.getSophieu());
+        audit.put("service", detail.getTenchidinh());
+        audit.put("reason", detail.getCancelReason());
+        audit.put("paymentCode", payment.getPaymentCode());
+        audit.put("paymentStatus", payment.getStatus().name());
+        audit.put("patientAmount", payment.getPatientTotalAmount());
+        auditLogService.recordBusinessChange(
+                doctorAccountId, AuditLogAction.CANCEL, "paraclinical_order_details", detail.getId(),
+                visit.getSovaovien(), audit, now);
+
+        return new ParaclinicalCancellationResponse(
+                detail.getTenchidinh(), payment.getPaymentCode(), payment.getStatus(),
+                payment.getPatientTotalAmount(), visit.getStatus());
+    }
+
+    /**
+     * BR-25: no Technician has accepted the service, and its receipt is not paid (nor handed to PayOS). An insurance
+     * visit's receipt is never paid before the conclusion, so only acceptance matters there.
+     */
+    private static boolean isCancellable(ParaclinicalOrderDetail detail, Payment payment) {
+        return payment != null && detail.isCancellableBeforeAcceptance() && payment.isRepriceable();
+    }
+
+    private ParaclinicalOrderResponse toResponse(ParaclinicalOrder order, Payment payment, boolean visitOpen) {
         List<ParaclinicalOrderResponse.ParaclinicalOrderDetailResponse> detailResponses = new ArrayList<>();
 
         if (order.getDetails() != null) {
@@ -279,7 +374,9 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                         detail.getBhytChitra(),
                         detail.getBenhnhanphaitra(),
                         detail.getRoomId(),
-                        detail.getStatus().name()
+                        detail.getStatus().name(),
+                        visitOpen && isCancellable(detail, payment),
+                        detail.getStatus() == ParaclinicalOrderDetailStatus.CANCELLED ? detail.getCancelReason() : null
                 ));
             }
         }

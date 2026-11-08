@@ -51,6 +51,7 @@ import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.InsuranceCoverageService;
 import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +91,7 @@ class ClinicalExaminationServiceImplTest {
     @Mock private MedicalHistoryRepository historyRepository;
     @Mock private Icd10Repository icd10Repository;
     @Mock private AuditLogService auditLogService;
+    @Mock private InsuranceCoverageService insuranceCoverageService;
 
     private ClinicalExaminationServiceImpl service;
 
@@ -103,7 +105,8 @@ class ClinicalExaminationServiceImplTest {
                 historyRepository, icd10Repository,
                 new Icd10SearchCache(icd10Repository, clock, Duration.ofHours(1), false), auditLogService, mapper,
                 new UuidV7Generator(clock, new SecureRandom()),
-                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()), clock);
+                new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
+                insuranceCoverageService, clock);
     }
 
     @Test

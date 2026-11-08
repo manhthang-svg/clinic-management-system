@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -49,16 +50,21 @@ public class PaymentItem extends CreatedOnlyEntity {
     @Column(name = "dongia", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal dongia;
 
-    @Column(name = "coverage_rate", updatable = false)
+    /** Applied coverage rate of an insurance line; changes with the visit's total in scope until paid (BR-27). */
+    @Column(name = "coverage_rate")
     private Short coverageRate;
 
     @Column(name = "thanhtien", nullable = false, precision = 15, scale = 0, updatable = false)
     private BigDecimal thanhtien;
 
-    @Column(name = "bhyt_chitra", nullable = false, precision = 15, scale = 0, updatable = false)
+    /** BR-27: min(insurance price, clinic price) at creation time (BR-09); 0 for a clinic-price line. */
+    @Column(name = "insurance_scope_amount", nullable = false, precision = 15, scale = 0, updatable = false)
+    private BigDecimal insuranceScopeAmount;
+
+    @Column(name = "bhyt_chitra", nullable = false, precision = 15, scale = 0)
     private BigDecimal bhytChitra;
 
-    @Column(name = "benhnhanphaitra", nullable = false, precision = 15, scale = 0, updatable = false)
+    @Column(name = "benhnhanphaitra", nullable = false, precision = 15, scale = 0)
     private BigDecimal benhnhanphaitra;
 
     @Column(name = "is_cancelled", nullable = false)
@@ -101,6 +107,7 @@ public class PaymentItem extends CreatedOnlyEntity {
         item.dongia = unitPrice;
         item.coverageRate = null;
         item.thanhtien = unitPrice.multiply(quantity);
+        item.insuranceScopeAmount = BigDecimal.ZERO;
         item.bhytChitra = BigDecimal.ZERO;
         item.benhnhanphaitra = item.thanhtien;
         item.isCancelled = false;
@@ -108,6 +115,7 @@ public class PaymentItem extends CreatedOnlyEntity {
         return item;
     }
 
+    /** UC-40 examination fee of a valid-card insurance visit, priced under BR-27 at the given coverage rate. */
     public static PaymentItem createInsuranceItem(
             UUID id,
             Instant createdAt,
@@ -115,30 +123,7 @@ public class PaymentItem extends CreatedOnlyEntity {
             MedicalService service,
             short coverageRate
     ) {
-        if (id == null || createdAt == null || payment == null || service == null
-                || coverageRate < 1 || coverageRate > 100 || service.getInsurancePrice() == null) {
-            throw new IllegalArgumentException("Thông tin chi tiết BHYT không hợp lệ");
-        }
-
-        BigDecimal appliedPrice = service.getInsurancePrice();
-        BigDecimal insuranceAmount = appliedPrice
-                .multiply(BigDecimal.valueOf(coverageRate))
-                .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP);
-
-        PaymentItem item = new PaymentItem(id, createdAt);
-        item.payment = payment;
-        item.serviceId = service.getId();
-        item.serviceCodeSnapshot = service.getCode();
-        item.tenchidinh = service.getTenchidinh();
-        item.soluong = BigDecimal.ONE;
-        item.priceType = PriceType.INSURANCE;
-        item.dongia = appliedPrice;
-        item.coverageRate = coverageRate;
-        item.thanhtien = appliedPrice;
-        item.bhytChitra = insuranceAmount;
-        item.benhnhanphaitra = appliedPrice.subtract(insuranceAmount);
-        item.isCancelled = false;
-        return item;
+        return insuranceLine(id, createdAt, payment, service, coverageRate, null);
     }
 
     public static PaymentItem createParaclinicalItem(
@@ -176,6 +161,7 @@ public class PaymentItem extends CreatedOnlyEntity {
         item.dongia = unitPrice;
         item.coverageRate = null;
         item.thanhtien = unitPrice.multiply(quantity);
+        item.insuranceScopeAmount = BigDecimal.ZERO;
         item.bhytChitra = BigDecimal.ZERO;
         item.benhnhanphaitra = item.thanhtien;
         item.isCancelled = false;
@@ -183,11 +169,7 @@ public class PaymentItem extends CreatedOnlyEntity {
         return item;
     }
 
-    /**
-     * UC-49 line of an insurance visit for a service with an insurance price (BR-27): the line is charged at the
-     * clinic price; insurance pays min(insurance price, clinic price) × coverage rate and the patient pays the rest
-     * (co-payment plus the difference between the clinic price and the insurance price).
-     */
+    /** UC-49 line of a valid-card insurance visit for a service with an insurance price (BR-27). */
     public static PaymentItem createParaclinicalInsuranceItem(
             UUID id,
             Instant createdAt,
@@ -196,16 +178,25 @@ public class PaymentItem extends CreatedOnlyEntity {
             short coverageRate,
             UUID orderDetailId
     ) {
+        return insuranceLine(id, createdAt, payment, service, coverageRate, orderDetailId);
+    }
+
+    /**
+     * BR-27: the line is charged at the clinic price; insurance pays the cost within scope,
+     * min(insurance price, clinic price), times the applied coverage rate, and the patient pays the rest
+     * (co-payment plus the difference between the clinic price and the insurance price).
+     */
+    private static PaymentItem insuranceLine(
+            UUID id, Instant createdAt, Payment payment, MedicalService service, short coverageRate,
+            UUID orderDetailId) {
         if (id == null || createdAt == null || payment == null || service == null
-                || coverageRate < 1 || coverageRate > 100 || service.getInsurancePrice() == null) {
+                || !isValidRate(coverageRate) || service.getInsurancePrice() == null) {
             throw new IllegalArgumentException("Thông tin chi tiết BHYT không hợp lệ");
         }
         BigDecimal clinicPrice = service.getClinicPrice();
         if (clinicPrice == null || clinicPrice.signum() < 0) {
             throw new IllegalArgumentException("Giá dịch vụ phòng khám không hợp lệ");
         }
-
-        BigDecimal insuranceAmount = insuranceShare(clinicPrice, service.getInsurancePrice(), coverageRate);
 
         PaymentItem item = new PaymentItem(id, createdAt);
         item.payment = payment;
@@ -216,18 +207,53 @@ public class PaymentItem extends CreatedOnlyEntity {
         item.soluong = BigDecimal.ONE;
         item.priceType = PriceType.INSURANCE;
         item.dongia = clinicPrice;
-        item.coverageRate = coverageRate;
         item.thanhtien = clinicPrice;
-        item.bhytChitra = insuranceAmount;
-        item.benhnhanphaitra = clinicPrice.subtract(insuranceAmount);
+        item.insuranceScopeAmount = insuranceScope(service);
         item.isCancelled = false;
+        item.applyCoverage(coverageRate);
         return item;
     }
 
-    /** BR-27: the insurance-covered amount of one service, rounded to the dong. */
-    public static BigDecimal insuranceShare(BigDecimal clinicPrice, BigDecimal insurancePrice, short coverageRate) {
-        return clinicPrice.min(insurancePrice)
-                .multiply(BigDecimal.valueOf(coverageRate))
-                .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP);
+    /** BR-27: cost of a service within insurance scope, or 0 when it has no insurance price. */
+    public static BigDecimal insuranceScope(MedicalService service) {
+        if (service.getInsurancePrice() == null) {
+            return BigDecimal.ZERO;
+        }
+        return service.getInsurancePrice().min(service.getClinicPrice());
+    }
+
+    /** BR-27: insurance-covered amount of a cost within scope, rounded half up to whole VND. */
+    public static BigDecimal insuranceAmount(BigDecimal scopeAmount, short coverageRate) {
+        return scopeAmount.multiply(BigDecimal.valueOf(coverageRate))
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * BR-27: reprices an insurance line at the visit's new applied coverage rate. Only the owning receipt calls
+     * this, while it is unpaid; a clinic-price line never changes.
+     */
+    void reprice(short appliedCoverageRate) {
+        if (priceType != PriceType.INSURANCE) {
+            return;
+        }
+        if (!isValidRate(appliedCoverageRate)) {
+            throw new IllegalArgumentException("Mức hưởng BHYT không hợp lệ");
+        }
+        applyCoverage(appliedCoverageRate);
+    }
+
+    /** BR-25: the line of a cancelled service no longer counts in the receipt. Only the owning receipt calls this. */
+    void cancel() {
+        this.isCancelled = true;
+    }
+
+    private void applyCoverage(short rate) {
+        this.coverageRate = rate;
+        this.bhytChitra = insuranceAmount(insuranceScopeAmount, rate);
+        this.benhnhanphaitra = thanhtien.subtract(bhytChitra);
+    }
+
+    private static boolean isValidRate(short rate) {
+        return rate >= 1 && rate <= 100;
     }
 }

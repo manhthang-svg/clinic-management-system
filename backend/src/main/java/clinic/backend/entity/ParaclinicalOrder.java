@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -117,6 +118,17 @@ public class ParaclinicalOrder extends VersionedEntity {
         }
         status = ParaclinicalOrderStatus.CANCELLED;
         touch(now);
+    }
+
+    /** BR-41: an order whose services were all cancelled by the Doctor is cancelled too. */
+    public void cancelIfAllServicesCancelled(Instant now) {
+        boolean allCancelled = !details.isEmpty() && details.stream()
+                .allMatch(detail -> detail.getStatus() == ParaclinicalOrderDetailStatus.CANCELLED);
+        if (allCancelled && (status == ParaclinicalOrderStatus.PENDING_PAYMENT
+                || status == ParaclinicalOrderStatus.RELEASED)) {
+            status = ParaclinicalOrderStatus.CANCELLED;
+            touch(now);
+        }
     }
 
     public void release() {

@@ -40,6 +40,11 @@ describe('confirmErrorMessage (UC-71 EF-02, EF-03)', () => {
         expect(confirmErrorMessage(error)).toBe('Phiếu thu PT1 đã được thanh toán.');
     });
 
+    it('explains that an insurance visit pays after the conclusion', () => {
+        const error = new ApiError('raw', { status: 409, errorResponse: { code: 'PAYMENT_AWAITS_CONCLUSION' } });
+        expect(confirmErrorMessage(error)).toBe(MSG.AWAITS_CONCLUSION);
+    });
+
     it('never shows the raw backend message', () => {
         expect(confirmErrorMessage(new ApiError('raw', { status: 401 }))).toBe(MSG.SESSION_EXPIRED);
         expect(confirmErrorMessage(new ApiError('raw', { status: 500 }))).toBe(MSG.SYSTEM_ERROR);

@@ -15,7 +15,9 @@ import {
     X,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
-import { confirmErrorMessage, confirmedNoticeText } from '../../components/payments/paymentConfirm';
+import {
+    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText,
+} from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
 
@@ -159,7 +161,9 @@ export default function PaymentManagementPage() {
             const data = res?.data || res;
             setQrData(data);
         } catch (err) {
-            alert(err?.message || 'Không thể tạo mã QR PayOS');
+            alert(err?.errorResponse?.code === 'PAYMENT_AWAITS_CONCLUSION'
+                ? MSG.AWAITS_CONCLUSION
+                : err?.message || 'Không thể tạo mã QR PayOS');
             setQrModalPayment(null);
         } finally {
             setLoadingQr(false);
@@ -396,7 +400,9 @@ export default function PaymentManagementPage() {
                                             </td>
                                             <td className="px-5 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    {p.status === 'PENDING' ? (
+                                                    {p.status === 'PENDING' && p.awaitingConclusion ? (
+                                                        <span className="inline-flex items-center rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800" title={MSG.AWAITS_CONCLUSION}>{AWAITING_CONCLUSION_LABEL}</span>
+                                                    ) : p.status === 'PENDING' ? (
                                                         <>
                                                             <button
                                                                 onClick={() => setCashModalPayment(p)}

@@ -48,6 +48,7 @@ import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.config.properties.InsuranceBillingProperties;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.security.user.StaffPrincipal;
@@ -153,6 +154,9 @@ class VisitServiceImplTest {
                 uuidV7Generator,
                 examinationRoomDuty,
                 new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
+                new InsuranceCoverageServiceImpl(
+                        new InsuranceBillingProperties(BigDecimal.valueOf(2_340_000), BigDecimal.valueOf(15)),
+                        paymentRepository, null, auditLogService, clock),
                 clock);
     }
 
@@ -537,18 +541,33 @@ class VisitServiceImplTest {
     }
 
     @Test
-    void insuredVisitWithPatientShareJoinsWaitingListAndPaysAfterConclusion() {
+    void insuredVisitBelowTheExemptionThresholdIsCoveredInFullButPaysThePriceDifference() {
+        // BR-27: 100 000 within scope is below 15% of 2 340 000, so the 80% card is applied at 100%; the patient
+        // still pays the difference between the clinic price and the insurance price.
         var result = registerInsuredVisit((short) 80);
 
         // BR-15: the insured patient waits for the examination now; the receipt stays pending until the end.
         assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING);
-        assertThat(result.payment().getPatientTotalAmount()).isEqualByComparingTo("20000");
+        assertThat(result.payment().getTotalAmount()).isEqualByComparingTo("150000");
+        assertThat(result.payment().getInsuranceTotalAmount()).isEqualByComparingTo("100000");
+        assertThat(result.payment().getPatientTotalAmount()).isEqualByComparingTo("50000");
         assertThat(result.payment().getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(result.payment().getItems()).singleElement()
+                .satisfies(item -> assertThat(item.getCoverageRate()).isEqualTo((short) 100));
+    }
+
+    @Test
+    void insuredVisitFromTheExemptionThresholdUsesTheCardRate() {
+        // 380 000 within scope is not below the 351 000 threshold: 80% of it is covered.
+        var result = registerInsuredVisit((short) 80, "400000", "380000");
+
+        assertThat(result.payment().getInsuranceTotalAmount()).isEqualByComparingTo("304000");
+        assertThat(result.payment().getPatientTotalAmount()).isEqualByComparingTo("96000");
     }
 
     @Test
     void fullyCoveredInsuredVisitGoesDirectlyToWaitingRoom() {
-        var result = registerInsuredVisit((short) 100);
+        var result = registerInsuredVisit((short) 100, "150000", "150000");
 
         assertThat(result.response().status()).isEqualTo(VisitStatus.WAITING);
         assertThat(result.payment().getPatientTotalAmount()).isZero();
@@ -764,6 +783,10 @@ class VisitServiceImplTest {
     }
 
     private RegistrationResult registerInsuredVisit(short coverageRate) {
+        return registerInsuredVisit(coverageRate, "150000", "100000");
+    }
+
+    private RegistrationResult registerInsuredVisit(short coverageRate, String clinicPrice, String insurancePrice) {
         UUID patientId = UUID.randomUUID();
         UUID receptionistId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
@@ -772,7 +795,7 @@ class VisitServiceImplTest {
                 "PK01", "Phòng khám 01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
         MedicalService examination = MedicalService.create(
                 UUID.randomUUID(), clock.instant(), "KB", "Khám bệnh", MedicalServiceType.EXAMINATION,
-                null, null, new BigDecimal("150000"), new BigDecimal("100000"), null);
+                null, null, new BigDecimal(clinicPrice), new BigDecimal(insurancePrice), null);
         when(patient.getId()).thenReturn(patientId);
         when(patient.getHoten()).thenReturn("Nguyễn Văn A");
         when(patient.getMabenhnhan()).thenReturn("BN00000001");

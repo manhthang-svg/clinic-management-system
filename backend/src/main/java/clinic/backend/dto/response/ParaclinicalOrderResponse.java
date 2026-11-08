@@ -32,7 +32,10 @@ public record ParaclinicalOrderResponse(
             BigDecimal bhytChitra,
             BigDecimal benhnhanphaitra,
             UUID roomId,
-            String status
+            String status,
+            /** BR-25: the Doctor of the visit can cancel this service now. */
+            boolean cancellable,
+            String cancelReason
     ) {
     }
 }

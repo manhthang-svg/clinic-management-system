@@ -28,6 +28,14 @@ export const visitApi = {
         return apiClient.request(`/paraclinical-orders?visitId=${encodeURIComponent(visitId)}`, { signal });
     },
 
+    // BR-25, BR-41: the Doctor cancels a service the patient refused, with a mandatory reason.
+    cancelParaclinicalService(orderDetailId, reason) {
+        return apiClient.request(`/paraclinical-orders/details/${encodeURIComponent(orderDetailId)}/commands/cancel`, {
+            method: 'POST',
+            body: { reason },
+        });
+    },
+
     getParaclinicalServices(signal) {
         return apiClient.request('/paraclinical-orders/services', { signal });
     },

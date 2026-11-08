@@ -67,8 +67,15 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
         [services, keyword, type, group],
     );
     const insured = visit.doituongbnLoai === 'BHYT';
-    const coverageRate = insured ? visit.insuranceCoverageRate ?? null : null;
-    const cost = useMemo(() => estimate(services, selectedIds, coverageRate), [services, selectedIds, coverageRate]);
+    const coverage = useMemo(() => (insured && visit.insuranceCoverageRate ? {
+        cardRate: visit.insuranceCoverageRate,
+        scopeTotal: visit.insuranceScopeTotal ?? 0,
+        threshold: visit.coPaymentExemptionThreshold ?? null,
+    } : null), [insured, visit.insuranceCoverageRate, visit.insuranceScopeTotal, visit.coPaymentExemptionThreshold]);
+    const cost = useMemo(() => estimate(services, selectedIds, coverage), [services, selectedIds, coverage]);
+    const coverageNote = coverage
+        ? ` (mức hưởng áp dụng ${cost.appliedRate}%, thẻ ${coverage.cardRate}%)`
+        : '';
 
     const toggle = (id) => setSelectedIds((current) => (
         current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -257,7 +264,7 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                         <InfoIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                         <span>
                             {insured
-                                ? `Lượt khám BHYT${coverageRate ? ` (mức hưởng ${coverageRate}%)` : ''}: dịch vụ không thuộc BHYT bệnh nhân trả theo giá viện phí. Chỉ định được chuyển tới phòng cận lâm sàng ngay; bệnh nhân thanh toán phần của mình sau khi có kết luận.`
+                                ? `Lượt khám BHYT${coverageNote}: hưởng 100% khi tổng chi phí trong phạm vi BHYT của lượt khám dưới 15% mức lương cơ sở; dịch vụ không thuộc BHYT bệnh nhân trả theo giá viện phí.${cost.rateChanges ? ' Mức hưởng thay đổi nên phí khám và các phiếu trước của lượt khám cũng được tính lại.' : ''} Chỉ định được chuyển tới phòng cận lâm sàng ngay; bệnh nhân thanh toán sau khi có kết luận.`
                                 : 'Khám dịch vụ: bệnh nhân trả theo giá viện phí tại thời điểm chỉ định, thanh toán tại quầy thu ngân.'}
                         </span>
                     </p>

@@ -11,7 +11,11 @@ export const MSG = {
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
     NOT_FOUND: 'Không tìm thấy phiếu thu.',
+    AWAITS_CONCLUSION: 'Lượt khám BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận.',
 };
+
+/** Short label in place of the collect buttons for an insurance receipt waiting for the conclusion (BR-15, BR-26). */
+export const AWAITING_CONCLUSION_LABEL = 'Chờ kết luận (BHYT)';
 
 /** MSG64 when the receipt is no longer Pending (EF-02), MSG12 / MSG99 otherwise (EF-03). */
 export function confirmErrorMessage(error) {
@@ -22,6 +26,7 @@ export function confirmErrorMessage(error) {
         return `Phiếu thu ${details.receiptNumber} đã được ${status}.`;
     }
     if (code === 'PAYMENT_NOT_FOUND') return MSG.NOT_FOUND;
+    if (code === 'PAYMENT_AWAITS_CONCLUSION') return MSG.AWAITS_CONCLUSION;
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
     if (error?.status === 403) return MSG.FORBIDDEN;
     return MSG.SYSTEM_ERROR;

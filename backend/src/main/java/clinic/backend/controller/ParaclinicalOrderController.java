@@ -3,8 +3,10 @@ package clinic.backend.controller;
 import java.util.List;
 import java.util.UUID;
 
+import clinic.backend.dto.request.CancelParaclinicalServiceRequest;
 import clinic.backend.dto.request.CreateParaclinicalOrderRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.ParaclinicalCancellationResponse;
 import clinic.backend.dto.response.ParaclinicalOrderResponse;
 import clinic.backend.dto.response.ParaclinicalServiceOptionResponse;
 import clinic.backend.security.user.StaffPrincipal;
@@ -61,6 +63,18 @@ public class ParaclinicalOrderController {
             @PathVariable UUID orderId
     ) {
         return ApiResponse.success(paraclinicalOrderService.getOrderById(orderId));
+    }
+
+    @PostMapping("/details/{orderDetailId}/commands/cancel")
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "BR-25, BR-41 Hủy dịch vụ cận lâm sàng bệnh nhân từ chối")
+    public ApiResponse<ParaclinicalCancellationResponse> cancelService(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID orderDetailId,
+            @Valid @RequestBody CancelParaclinicalServiceRequest request
+    ) {
+        return ApiResponse.success(paraclinicalOrderService.cancelService(
+                StaffPrincipal.from(jwt).accountId(), orderDetailId, request));
     }
 
     @GetMapping("/services")

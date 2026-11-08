@@ -250,6 +250,27 @@ class PaymentServiceImplTest {
         verify(paymentCompletionService, never()).completePaidReceipt(any(), any());
     }
 
+    @Test
+    void refusesToCollectAnInsuranceVisitBeforeTheConclusion() {
+        Payment payment = examinationFee("P-005");
+        when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(insuranceVisit(VisitStatus.WAITING_CONCLUSION)));
+
+        assertThatThrownBy(() -> service.confirmPayment(
+                UUID.randomUUID(), payment.getId(), new ConfirmPaymentRequest(PaymentMethod.CASH, null)))
+                .isInstanceOfSatisfying(AppException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PAYMENT_AWAITS_CONCLUSION));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        verify(paymentCompletionService, never()).completePaidReceipt(any(), any());
+    }
+
+    private static Visit insuranceVisit(VisitStatus status) {
+        return new Visit(VISIT_ID, NOW, "DK0000000002", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                NOW, VisitDoituongbnLoai.BHYT, "DN4797000000001", "7000000001", LocalDate.of(2026, 1, 1),
+                LocalDate.of(2030, 12, 31), "79014", "Bệnh viện Đa khoa Sài Gòn", null, (short) 80, null, null,
+                "Khám bệnh", false, null, LocalDate.of(2026, 10, 28), 6, status, VisitInsuranceVerifyStatus.VALID);
+    }
+
     private static Visit visit() {
         return new Visit(VISIT_ID, NOW, "DK0000000001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 NOW, VisitDoituongbnLoai.DV, null, null, null, "Khám bệnh", false, null,

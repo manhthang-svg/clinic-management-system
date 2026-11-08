@@ -237,6 +237,32 @@ public class Visit extends VersionedEntity {
         this.status = VisitStatus.WAITING;
     }
 
+    /** A valid-card insurance visit: billed with the BR-27 split. */
+    public boolean isInsuranceCovered() {
+        return doituongbnLoai == VisitDoituongbnLoai.BHYT
+                && insuranceVerifyStatus == VisitInsuranceVerifyStatus.VALID
+                && insuranceCoverageRate != null;
+    }
+
+    /**
+     * BR-27: the applied coverage rate is recalculated while the visit is open and fixed once the doctor confirms
+     * the conclusion (Completed), or when the visit ends otherwise.
+     */
+    public boolean isCoverageOpen() {
+        return isInsuranceCovered()
+                && status != VisitStatus.COMPLETED
+                && status != VisitStatus.CANCELLED
+                && status != VisitStatus.ABANDONED;
+    }
+
+    /**
+     * BR-15, BR-26: an insurance visit pays its examination and paraclinical fees only after the conclusion, when
+     * the applied coverage rate is fixed (decision I1-D43).
+     */
+    public boolean awaitsConclusionBeforePayment() {
+        return doituongbnLoai == VisitDoituongbnLoai.BHYT && status != VisitStatus.COMPLETED;
+    }
+
     public void markAsWaitingParaclinical() {
         this.status = VisitStatus.WAITING_PARACLINICAL;
     }
@@ -268,6 +294,18 @@ public class Visit extends VersionedEntity {
         this.doctorAccountId = null;
         this.denkhambenhluc = null;
         touch(transferredAt);
+    }
+
+    /**
+     * UC-67, BR-41 (V14, S5): the last paraclinical service of the visit has finished, so the visit joins the
+     * conclusion waiting list of its room.
+     */
+    public void markAsWaitingConclusion(Instant now) {
+        if (this.status != VisitStatus.WAITING_PARACLINICAL) {
+            throw new IllegalStateException("Visit is not waiting for paraclinical services");
+        }
+        this.status = VisitStatus.WAITING_CONCLUSION;
+        touch(now);
     }
 
     public void continueConclusion(UUID doctorAccountId, Instant continuedAt) {

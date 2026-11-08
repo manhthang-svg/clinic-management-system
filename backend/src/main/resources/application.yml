@@ -39,6 +39,10 @@ management:
 clinic:
   insurance-simulator:
     response-delay: ${INSURANCE_SIMULATOR_RESPONSE_DELAY:0ms}
+  insurance-billing:
+    # BR-27: mức lương cơ sở (VND). A visit below 15% of it is covered at 100%.
+    base-salary: ${INSURANCE_BASE_SALARY:2340000}
+    co-payment-exemption-percent: 15
   security:
     frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
     jwt:

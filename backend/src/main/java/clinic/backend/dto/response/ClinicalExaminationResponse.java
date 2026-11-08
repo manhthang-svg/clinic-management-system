@@ -1,5 +1,6 @@
 package clinic.backend.dto.response;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,6 +23,10 @@ public record ClinicalExaminationResponse(
         VisitDoituongbnLoai visitType,
         String insuranceCardNumber,
         Short insuranceCoverageRate,
+        /** BR-27: the visit's current total within insurance scope; null for a self-paid visit. */
+        BigDecimal insuranceScopeTotal,
+        /** BR-27: below this total the visit is covered at 100%; null for a self-paid visit. */
+        BigDecimal coPaymentExemptionThreshold,
         UUID patientId,
         String patientCode,
         String patientName,
