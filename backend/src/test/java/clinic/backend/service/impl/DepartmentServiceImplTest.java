@@ -54,6 +54,9 @@ class DepartmentServiceImplTest {
     private StaffAccountRepository staffAccountRepository;
 
     @Mock
+    private clinic.backend.repository.MedicalServiceRepository medicalServiceRepository;
+
+    @Mock
     private UuidV7Generator uuidV7Generator;
 
     private Clock clock;
@@ -69,6 +72,7 @@ class DepartmentServiceImplTest {
                 serviceGroupRepository,
                 staffRoomAssignmentRepository,
                 staffAccountRepository,
+                medicalServiceRepository,
                 clock,
                 uuidV7Generator
         );

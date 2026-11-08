@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '../ui/button';
 import {
   Building2,
@@ -6,9 +6,6 @@ import {
   X,
   Stethoscope,
   Info,
-  Search,
-  ChevronDown,
-  Trash2,
 } from 'lucide-react';
 import { useDepartmentServices } from '../../hooks';
 import { describeApiError } from '../../utils/describeApiError';
@@ -112,80 +109,38 @@ function DepartmentFormModalContent({
     return () => { isMounted = false; };
   }, []);
 
+  // Nhóm dịch vụ kỹ thuật của phòng cận lâm sàng
+  const effectiveServiceGroupId = useMemo(() => {
+    if (formData.serviceGroupId) return formData.serviceGroupId;
+    if (initialData?.serviceGroupId) return initialData.serviceGroupId;
+    return '';
+  }, [formData.serviceGroupId, initialData]);
+
   // Lấy dịch vụ thật từ backend theo đúng loại phòng và nhóm dịch vụ (không dùng mock)
   const { services: deptServices, loading: deptServicesLoading, error: deptServicesError } =
     useDepartmentServices(
       isRoom
         ? {
             departmentId: formData.departmentId || null,
-            serviceGroupId: formData.serviceGroupId || null,
+            serviceGroupId: effectiveServiceGroupId || null,
             roomType: formData.type || 'EXAMINATION',
           }
         : null
     );
 
-  // Danh sách dịch vụ tùy chỉnh do người dùng thao tác (thêm/xóa)
-  const [customServices, setCustomServices] = useState(null);
-
-  // Danh sách dịch vụ được gán cho phòng:
-  // 1. Nếu người dùng đã tự sửa (thêm/bớt) -> dùng customServices
-  // 2. Nếu có sẵn trong initialData -> dùng initialData.assignedServices
-  // 3. Mặc định là [] (chưa chọn dịch vụ nào)
+  // Danh sách dịch vụ được gán cho phòng theo quy tắc nghiệp vụ BR-28:
+  // - Phòng khám lâm sàng: Dịch vụ khám chung (EXAMINATION)
+  // - Phòng cận lâm sàng: Toàn bộ dịch vụ thuộc nhóm kỹ thuật (serviceGroupId) của phòng
   const assignedServices = useMemo(() => {
     if (!isRoom) return [];
-    if (customServices !== null) return customServices;
+    if (Array.isArray(deptServices) && deptServices.length > 0) {
+      return deptServices;
+    }
     if (isEdit && Array.isArray(initialData?.assignedServices) && initialData.assignedServices.length > 0) {
       return initialData.assignedServices;
     }
     return [];
-  }, [isRoom, customServices, isEdit, initialData?.assignedServices]);
-
-  const _unusedAssignedServices = useMemo(() => {
-    if (!isRoom) return [];
-    if (customServices !== null) return customServices;
-    if (Array.isArray(initialData?.assignedServices)) {
-      return initialData.assignedServices;
-    }
-    return [];
-  }, [isRoom, customServices, initialData?.assignedServices]);
-
-  // Nhóm dịch vụ kỹ thuật của phòng cận lâm sàng
-  const effectiveServiceGroupId = useMemo(() => {
-    if (formData.serviceGroupId) return formData.serviceGroupId;
-    if (initialData?.serviceGroupId) return initialData.serviceGroupId;
-    if (isEdit && isRoom && formData.type === 'PARACLINICAL') {
-      const fromServices = assignedServices[0]?.serviceGroupId;
-      if (fromServices) return fromServices;
-    }
-    return '';
-  }, [formData.serviceGroupId, initialData, isEdit, isRoom, formData.type, assignedServices]);
-
-  // State các mã dịch vụ được tick tạm thời trong dropdown
-  const [customSelectedCodes, setCustomSelectedCodes] = useState(null);
-  const selectedCodes = useMemo(() => {
-    if (!isRoom) return new Set();
-    if (customSelectedCodes !== null) return customSelectedCodes;
-    return new Set(assignedServices.map((s) => s.code));
-  }, [isRoom, customSelectedCodes, assignedServices]);
-
-  // State tìm kiếm dịch vụ
-  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
-  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  // Đóng dropdown khi click ra ngoài ô chọn
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setServiceDropdownOpen(false);
-        setCustomSelectedCodes(null);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  }, [isRoom, deptServices, isEdit, initialData?.assignedServices]);
 
   // Khoa hiện tại mà phòng trực thuộc
   const currentDeptObj = useMemo(() => {
@@ -222,17 +177,6 @@ function DepartmentFormModalContent({
     return serviceGroups.find((g) => g.id === effectiveServiceGroupId) || null;
   }, [serviceGroups, effectiveServiceGroupId]);
 
-  // Danh sách dịch vụ lọc theo từ khóa tìm kiếm
-  const filteredDeptServices = useMemo(() => {
-    const term = serviceSearchQuery.trim().toLowerCase();
-    if (!term) return deptServices;
-    return deptServices.filter(
-      (s) =>
-        s.code?.toLowerCase().includes(term) ||
-        s.name?.toLowerCase().includes(term)
-    );
-  }, [deptServices, serviceSearchQuery]);
-
   // Xử lý đổi chuyên khoa trực thuộc -> tự động cập nhật loại phòng theo chuyên khoa đã chọn
   const handleDepartmentChange = (deptId) => {
     if (isEdit) return; // Không được sửa chuyên khoa khi edit
@@ -243,8 +187,6 @@ function DepartmentFormModalContent({
         type: '',
         serviceGroupId: '',
       }));
-      setCustomServices(null);
-      setCustomSelectedCodes(new Set());
       return;
     }
 
@@ -266,8 +208,6 @@ function DepartmentFormModalContent({
         serviceGroupId: '',
       }));
     }
-    setCustomServices(null);
-    setCustomSelectedCodes(new Set());
     if (errors.departmentId || errors.type || errors.serviceGroupId) {
       setErrors((prev) => ({ ...prev, departmentId: null, type: null, serviceGroupId: null }));
     }
@@ -283,8 +223,6 @@ function DepartmentFormModalContent({
         type: '',
         serviceGroupId: '',
       }));
-      setCustomServices(null);
-      setCustomSelectedCodes(new Set());
       return;
     }
 
@@ -305,8 +243,6 @@ function DepartmentFormModalContent({
       departmentId: targetDeptId,
       serviceGroupId: newType === 'PARACLINICAL' ? prev.serviceGroupId : '',
     }));
-    setCustomServices(null);
-    setCustomSelectedCodes(new Set());
     if (errors.type) {
       setErrors((prev) => ({ ...prev, type: null }));
     }
@@ -323,77 +259,6 @@ function DepartmentFormModalContent({
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
-    // Nếu đổi nhóm kỹ thuật -> reset danh sách dịch vụ đã chọn
-    if (field === 'serviceGroupId') {
-      setCustomServices(null);
-      setCustomSelectedCodes(new Set());
-    }
-  };
-
-  const handleOpenDropdown = () => {
-    setCustomSelectedCodes(new Set(assignedServices.map((s) => s.code)));
-    setServiceDropdownOpen(true);
-  };
-
-  const handleToggleService = (serviceCode) => {
-    setCustomSelectedCodes((prev) => {
-      const base = prev !== null ? prev : new Set(assignedServices.map((s) => s.code));
-      const next = new Set(base);
-      if (next.has(serviceCode)) {
-        next.delete(serviceCode);
-      } else {
-        next.add(serviceCode);
-      }
-      return next;
-    });
-  };
-
-  const handleToggleAll = () => {
-    const displayedCodes = filteredDeptServices.map((s) => s.code);
-    const base =
-      customSelectedCodes !== null
-        ? customSelectedCodes
-        : new Set(assignedServices.map((s) => s.code));
-    const allChecked = displayedCodes.every((c) => base.has(c));
-
-    setCustomSelectedCodes(() => {
-      const next = new Set(base);
-      if (allChecked) {
-        displayedCodes.forEach((c) => next.delete(c));
-      } else {
-        displayedCodes.forEach((c) => next.add(c));
-      }
-      return next;
-    });
-  };
-
-  const handleSaveSelectedServices = () => {
-    const currentCodes = selectedCodes;
-    const existingMap = new Map(assignedServices.map((s) => [s.code, s]));
-    const deptMap = new Map((deptServices || []).map((s) => [s.code, s]));
-
-    const newAssigned = [];
-    currentCodes.forEach((code) => {
-      const srv = deptMap.get(code) || existingMap.get(code);
-      if (srv) newAssigned.push(srv);
-    });
-
-    setCustomServices(newAssigned);
-    setCustomSelectedCodes(null);
-    setServiceDropdownOpen(false);
-    setServiceSearchQuery('');
-  };
-
-  const handleCancelSelection = () => {
-    setCustomSelectedCodes(null);
-    setServiceDropdownOpen(false);
-    setServiceSearchQuery('');
-  };
-
-  const handleRemoveService = (serviceCode) => {
-    const next = assignedServices.filter((s) => s.code !== serviceCode);
-    setCustomServices(next);
-    setCustomSelectedCodes(null);
   };
 
   const validate = () => {
@@ -477,7 +342,6 @@ function DepartmentFormModalContent({
               ? (effectiveServiceGroupId || null)
               : null,
           assignedServices: isRoom ? assignedServices : [],
-          serviceIds: isRoom ? assignedServices.map((s) => s.id || s.code) : [],
           unitType: targetType,
         },
         targetType,
@@ -775,276 +639,124 @@ function DepartmentFormModalContent({
 
           {/* Section 2 (Chỉ cho ROOM): Dịch vụ y tế phòng tiếp nhận phục vụ */}
           {isRoom && (
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200/90 space-y-3">
+            <div className="p-4 bg-white rounded-xl border border-slate-200/90 space-y-3">
               {!formData.type ? (
                 <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex items-center justify-center gap-2">
                   <Info className="w-4 h-4 text-slate-400 shrink-0" />
                   <span>
-                    Vui lòng chọn <strong>Loại phòng</strong> ở trên để cấu hình danh mục dịch vụ tiếp nhận.
+                    Vui lòng chọn <strong>Loại phòng</strong> ở trên để nạp danh mục dịch vụ tiếp nhận.
                   </span>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
-                      <Stethoscope className="w-4 h-4 text-[#0d9488]" />
-                      <span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-teal-50 text-[#0d9488] flex items-center justify-center font-bold">
+                        <Stethoscope className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-slate-800 text-xs">
                         {formData.type === 'EXAMINATION'
                           ? `Dịch vụ khám bệnh tiếp nhận (${assignedServices.length})`
                           : `Dịch vụ kỹ thuật phòng thực hiện (${assignedServices.length})`}
                       </span>
+                      {formData.type === 'PARACLINICAL' && currentGroupObj && (
+                        <span className="text-[10.5px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-100">
+                          Nhóm: {currentGroupObj.name}
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10.5px] text-slate-400">Đơn vị: VNĐ</span>
                   </div>
 
-                  {formData.type === 'PARACLINICAL' && !effectiveServiceGroupId && assignedServices.length === 0 ? (
-                    <div className="p-3.5 text-center text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2">
+                  {formData.type === 'PARACLINICAL' && (
+                    <div className="p-2.5 px-3 text-[11.5px] text-teal-900 bg-teal-50/70 rounded-xl border border-teal-100 flex items-start gap-2">
+                      <Info className="w-4 h-4 text-[#0d9488] shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        Danh mục dịch vụ kỹ thuật được đồng bộ tự động theo <strong>Nhóm dịch vụ kỹ thuật</strong> của phòng (Quy tắc BR-28). Để thêm mới hoặc ngừng cung cấp một dịch vụ kỹ thuật, vui lòng điều chỉnh tại <strong>Danh mục dịch vụ y tế</strong>.
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.type === 'PARACLINICAL' && !effectiveServiceGroupId ? (
+                    <div className="p-4 text-center text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2">
                       <Info className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>
-                        Vui lòng chọn <strong>Nhóm dịch vụ kỹ thuật</strong> ở trên để tải danh mục dịch vụ phù hợp cho phòng.
+                        Vui lòng chọn <strong>Nhóm dịch vụ kỹ thuật</strong> ở trên để nạp danh mục dịch vụ phòng sẽ tiếp nhận thực hiện.
                       </span>
                     </div>
-                  ) : (
-                  /* Thanh tìm kiếm & chọn dịch vụ (Search & Select Dropdown) */
-                  <div ref={dropdownRef} className="relative">
-                    <div className="relative flex items-center">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={serviceSearchQuery}
-                        onChange={(e) => {
-                          setServiceSearchQuery(e.target.value);
-                          if (!serviceDropdownOpen) handleOpenDropdown();
-                        }}
-                        onFocus={handleOpenDropdown}
-                        placeholder="Tìm và gán dịch vụ y tế (chọn một hoặc nhiều)..."
-                        className="w-full pl-9 pr-14 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-teal-500/10 placeholder:text-slate-400"
-                      />
-                      <div className="absolute right-2.5 flex items-center gap-1">
-                        {serviceSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setServiceSearchQuery('');
-                            }}
-                            className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
-                            title="Xóa tìm kiếm"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (serviceDropdownOpen) {
-                              handleCancelSelection();
-                            } else {
-                              handleOpenDropdown();
-                            }
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                          title={serviceDropdownOpen ? 'Đóng danh sách' : 'Mở danh sách'}
-                        >
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                              serviceDropdownOpen ? 'rotate-180' : ''
-                            }`}
-                          />
-                        </button>
-                      </div>
+                  ) : deptServicesLoading ? (
+                    <div className="p-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                      <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                      <span>Đang tải danh mục dịch vụ từ máy chủ...</span>
                     </div>
-
-                    {/* Dropdown danh sách gợi ý kèm checkbox bên trái và nút Lưu ở góc dưới bên phải */}
-                    {serviceDropdownOpen && (
-                      <div
-                        className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white rounded-xl border border-slate-200 shadow-xl max-h-72 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
-                      >
-                        {/* Dropdown Header */}
-                        <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center justify-between shrink-0">
-                          <span>
-                            {formData.type === 'EXAMINATION'
-                              ? `Danh mục khám lâm sàng (${filteredDeptServices.length})`
-                              : `Dịch vụ nhóm ${currentGroupObj ? currentGroupObj.name : ''} (${filteredDeptServices.length})`}
-                          </span>
-                          <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
-                            Đã tick: {selectedCodes.size}
-                          </span>
-                        </div>
-
-                        {/* Danh sách các dịch vụ kèm ô checkbox bên trái */}
-                        <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
-                          {deptServicesLoading ? (
-                            <div className="p-4 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-                              <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                              <span>Đang tải danh mục dịch vụ từ máy chủ...</span>
-                            </div>
-                          ) : deptServicesError ? (
-                            <div className="p-4 text-center text-rose-500 text-xs">
-                              {describeApiError(deptServicesError, 'Lỗi tải dịch vụ')}
-                            </div>
-                          ) : filteredDeptServices.length === 0 ? (
-                            <div className="p-4 text-center text-slate-400 text-xs">
-                              {formData.type === 'EXAMINATION'
-                                ? 'Không tìm thấy dịch vụ khám bệnh nào phù hợp.'
-                                : 'Không tìm thấy dịch vụ nào thuộc nhóm kỹ thuật này.'}
-                            </div>
+                  ) : deptServicesError ? (
+                    <div className="p-4 text-center text-rose-500 text-xs">
+                      {describeApiError(deptServicesError, 'Lỗi tải danh mục dịch vụ')}
+                    </div>
+                  ) : (
+                    /* Bảng danh sách dịch vụ kỹ thuật phòng thực hiện */
+                    <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white">
+                      <table className="w-full text-left border-collapse text-[11px]">
+                        <thead>
+                          <tr className="bg-[#f6f8f9] text-[10.5px] font-bold text-[#1b2533] border-b border-slate-200/80">
+                            <th className="px-3 py-2.5">Mã DV</th>
+                            <th className="px-3 py-2.5">Tên dịch vụ y tế</th>
+                            <th className="px-3 py-2.5 text-right">Viện phí</th>
+                            <th className="px-3 py-2.5 text-right">BHYT chi trả</th>
+                            <th className="px-3 py-2.5 text-center">Trạng thái</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {assignedServices.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="p-6 text-center text-slate-400 italic">
+                                {formData.type === 'EXAMINATION'
+                                  ? 'Chưa có dịch vụ khám bệnh nào.'
+                                  : 'Không tìm thấy dịch vụ kỹ thuật nào thuộc nhóm này trong danh mục y tế.'}
+                              </td>
+                            </tr>
                           ) : (
-                          filteredDeptServices.map((srv) => {
-                            const isChecked = selectedCodes.has(srv.code);
-                            return (
-                              <div
-                                key={srv.code}
-                                onClick={() => handleToggleService(srv.code)}
-                                className={`px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors group ${
-                                  isChecked ? 'bg-teal-50/50' : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 pr-3">
-                                  {/* Ô checkbox nằm bên trái */}
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleService(srv.code)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-4 h-4 rounded border-slate-300 text-[#0d9488] focus:ring-teal-500 cursor-pointer accent-[#0d9488] shrink-0"
-                                  />
-                                  <span className="font-mono font-bold text-[10.5px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 shrink-0">
-                                    {srv.code}
+                            assignedServices.map((service) => (
+                              <tr key={service.code || service.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-3 py-2.5 font-mono font-semibold text-teal-800 whitespace-nowrap">
+                                  {service.code}
+                                </td>
+                                <td className="px-3 py-2.5 font-medium text-slate-800">
+                                  <div>{service.name || service.tenchidinh}</div>
+                                  {service.estimatedMinutes && (
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Thời gian chuẩn: ~{service.estimatedMinutes} phút
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-bold text-slate-800 whitespace-nowrap">
+                                  {formatPrice(service.clinicPrice)} đ
+                                </td>
+                                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                  {service.insurancePrice ? (
+                                    <span className="font-semibold text-emerald-700">
+                                      {formatPrice(service.insurancePrice)} đ
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Không hỗ trợ</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Hoạt động
                                   </span>
-                                  <span
-                                    className={`text-xs line-clamp-1 ${
-                                      isChecked
-                                        ? 'font-bold text-teal-900'
-                                        : 'font-semibold text-slate-800'
-                                    }`}
-                                  >
-                                    {srv.name}
-                                  </span>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <div className="font-bold text-slate-800 text-[11px]">
-                                    {formatPrice(srv.clinicPrice)} đ
-                                  </div>
-                                  <div className="text-[10px] text-emerald-700 font-medium">
-                                    {srv.insurancePrice
-                                      ? `BHYT: ${formatPrice(srv.insurancePrice)} đ`
-                                      : 'Tự túc'}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-
-                      {/* Dropdown Footer: Nút Lưu ở phía dưới bên phải */}
-                      <div className="p-2.5 px-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-                        <div className="flex items-center gap-2 text-[11px] text-slate-600">
-                          {filteredDeptServices.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handleToggleAll}
-                              className="text-[11px] text-teal-700 hover:text-teal-900 font-medium cursor-pointer underline"
-                            >
-                              {filteredDeptServices.every((s) => selectedCodes.has(s.code))
-                                ? 'Bỏ tick tất cả'
-                                : 'Tick chọn tất cả'}
-                            </button>
+                                </td>
+                              </tr>
+                            ))
                           )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleCancelSelection}
-                            className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
-                          >
-                            Hủy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleSaveSelectedServices}
-                            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-[#0d9488] text-white hover:bg-[#0b7c72] shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>Lưu</span>
-                            {selectedCodes.size > 0 && (
-                              <span className="bg-white/20 px-1.5 py-0.2 rounded-full text-[10px]">
-                                {selectedCodes.size}
-                              </span>
-                            )}
-                          </button>
-                        </div>
-                      </div>
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
               )}
-
-                {/* Bảng danh sách dịch vụ đã chọn */}
-                <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white">
-                  <table className="w-full text-left border-collapse text-[11px]">
-                    <thead>
-                      <tr className="bg-[#f6f8f9] text-[10.5px] font-bold text-[#1b2533] border-b border-slate-200/80">
-                        <th className="px-3 py-2.5">Mã DV</th>
-                        <th className="px-3 py-2.5">Tên dịch vụ</th>
-                        <th className="px-3 py-2.5 text-right">Viện phí</th>
-                        <th className="px-3 py-2.5 text-right">BHYT</th>
-                        <th className="px-3 py-2.5 text-center w-16">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {assignedServices.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="p-6 text-center text-slate-400 italic">
-                            Chưa có dịch vụ nào được gán cho phòng này
-                          </td>
-                        </tr>
-                      ) : (
-                        assignedServices.map((service) => (
-                          <tr key={service.code} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="px-3 py-2.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
-                              {service.code}
-                            </td>
-                            <td className="px-3 py-2.5 font-medium text-slate-800">
-                              <div>{service.name}</div>
-                              {service.estimatedMinutes && (
-                                <div className="text-[10px] text-slate-400 mt-0.5">
-                                  Thời gian chuẩn: ~{service.estimatedMinutes} phút
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-bold text-slate-800 whitespace-nowrap">
-                              {formatPrice(service.clinicPrice)} đ
-                            </td>
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                              {service.insurancePrice ? (
-                                <span className="font-semibold text-emerald-700">
-                                  {formatPrice(service.insurancePrice)} đ
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic">Không hỗ trợ</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <button
-                                type="button"
-                                title="Gỡ dịch vụ"
-                                onClick={() => handleRemoveService(service.code)}
-                                className="w-6 h-6 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
 
 

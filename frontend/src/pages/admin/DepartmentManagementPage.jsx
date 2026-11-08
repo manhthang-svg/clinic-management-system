@@ -77,9 +77,16 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           const itemsWithServices = fetchedItems.map((item) => {
             if (item.unitType === 'ROOM') {
               const isExamRoom = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
-              const resolvedServices = isExamRoom
-                ? catalogServices.filter((s) => s.type === 'EXAMINATION')
-                : (Array.isArray(item.assignedServices) ? item.assignedServices : []);
+              let resolvedServices = Array.isArray(item.assignedServices) && item.assignedServices.length > 0
+                ? item.assignedServices
+                : [];
+              if (resolvedServices.length === 0) {
+                if (isExamRoom) {
+                  resolvedServices = catalogServices.filter((s) => s.type === 'EXAMINATION');
+                } else if (item.serviceGroupId) {
+                  resolvedServices = catalogServices.filter((s) => s.serviceGroupId === item.serviceGroupId);
+                }
+              }
 
               return {
                 ...item,
@@ -462,7 +469,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             phongkham: formData.name,
             departmentId: formData.departmentId,
             serviceGroupId: formData.serviceGroupId || null,
-            serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -483,8 +489,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     location: formData.location,
                     headPerson: formData.headPerson,
                     status: formData.status,
-                    assignedServices: formData.assignedServices || [],
-                    serviceIds: formData.serviceIds || [],
+                    assignedServices: (Array.isArray(res?.assignedServices) && res.assignedServices.length > 0)
+                      ? res.assignedServices
+                      : (formData.assignedServices || []),
                   }
                 : i
             )
@@ -499,7 +506,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             phongkham: formData.name,
             departmentId: formData.departmentId,
             serviceGroupId: formData.serviceGroupId || null,
-            serviceIds: formData.serviceIds || [],
             type: formData.type,
             location: formData.location,
             headPerson: formData.headPerson,
@@ -519,8 +525,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             location: res?.location || formData.location,
             headPerson: res?.headPerson || formData.headPerson || 'Chưa phân công',
             status: res?.status || formData.status,
-            assignedServices: formData.assignedServices || [],
-            serviceIds: formData.serviceIds || [],
+            assignedServices: (Array.isArray(res?.assignedServices) && res.assignedServices.length > 0)
+              ? res.assignedServices
+              : (formData.assignedServices || []),
           };
           setItems((prev) => [newRoom, ...prev]);
           departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});

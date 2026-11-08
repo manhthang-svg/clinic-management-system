@@ -6,3 +6,4 @@ export * from './accountApi';
 export * from './patientApi';
 export * from './paymentApi';
 export * from './visitApi';
+export * from './technicianApi';

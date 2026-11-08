@@ -15,14 +15,18 @@ import clinic.backend.dto.request.DepartmentRequest;
 import clinic.backend.dto.request.RoomRequest;
 import clinic.backend.dto.response.DepartmentRoomItemResponse;
 import clinic.backend.dto.response.DepartmentStatsResponse;
+import clinic.backend.dto.response.RoomServiceItemResponse;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
@@ -43,6 +47,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final ServiceGroupRepository serviceGroupRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final StaffAccountRepository staffAccountRepository;
+    private final MedicalServiceRepository medicalServiceRepository;
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
 
@@ -72,6 +77,42 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Map<UUID, Long> roomCountByDept = rooms.stream()
                 .collect(Collectors.groupingBy(Room::getDepartmentId, Collectors.counting()));
+
+        List<MedicalService> activeServices = medicalServiceRepository.findAll().stream()
+                .filter(s -> s.getStatus() == ActivationStatus.ACTIVE)
+                .toList();
+
+        Map<UUID, List<RoomServiceItemResponse>> servicesByGroup = activeServices.stream()
+                .filter(s -> s.getServiceGroupId() != null)
+                .map(s -> new RoomServiceItemResponse(
+                        s.getId(),
+                        s.getCode(),
+                        s.getTenchidinh(),
+                        s.getType().name(),
+                        s.getServiceGroupId(),
+                        serviceGroupMap.get(s.getServiceGroupId()),
+                        s.getDepartmentId(),
+                        s.getClinicPrice(),
+                        s.getInsurancePrice(),
+                        s.getStatus().name()
+                ))
+                .collect(Collectors.groupingBy(RoomServiceItemResponse::serviceGroupId));
+
+        List<RoomServiceItemResponse> examServices = activeServices.stream()
+                .filter(s -> s.getType() == MedicalServiceType.EXAMINATION)
+                .map(s -> new RoomServiceItemResponse(
+                        s.getId(),
+                        s.getCode(),
+                        s.getTenchidinh(),
+                        s.getType().name(),
+                        null,
+                        null,
+                        null,
+                        s.getClinicPrice(),
+                        s.getInsurancePrice(),
+                        s.getStatus().name()
+                ))
+                .toList();
 
         List<DepartmentRoomItemResponse> items = new ArrayList<>();
 
@@ -107,6 +148,15 @@ public class DepartmentServiceImpl implements DepartmentService {
                     ? serviceGroupMap.get(room.getServiceGroupId())
                     : null;
 
+            List<RoomServiceItemResponse> roomServices;
+            if (room.getType() == RoomType.EXAMINATION) {
+                roomServices = examServices;
+            } else if (room.getServiceGroupId() != null) {
+                roomServices = servicesByGroup.getOrDefault(room.getServiceGroupId(), List.of());
+            } else {
+                roomServices = List.of();
+            }
+
             items.add(DepartmentRoomItemResponse.builder()
                     .id(room.getId())
                     .unitType("ROOM")
@@ -120,6 +170,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .location(room.getLocation())
                     .headPerson(staffName)
                     .status(room.getStatus() != null ? room.getStatus().name() : "ACTIVE")
+                    .assignedServices(roomServices)
                     .createdAt(room.getCreatedAt())
                     .updatedAt(room.getUpdatedAt())
                     .build());
@@ -409,6 +460,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         ? request.getHeadPerson()
                         : "Chưa phân công")
                 .status(saved.getStatus().name())
+                .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
@@ -493,6 +545,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .location(saved.getLocation())
                 .headPerson(staffName)
                 .status(saved.getStatus().name())
+                .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
@@ -538,8 +591,46 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .location(saved.getLocation())
                 .headPerson(staffName)
                 .status(saved.getStatus().name())
+                .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
+    }
+
+    private List<RoomServiceItemResponse> resolveSingleRoomServices(Room room, String serviceGroupName) {
+        if (room.getType() == RoomType.EXAMINATION) {
+            return medicalServiceRepository.findAll().stream()
+                    .filter(s -> s.getType() == MedicalServiceType.EXAMINATION && s.getStatus() == ActivationStatus.ACTIVE)
+                    .map(s -> new RoomServiceItemResponse(
+                            s.getId(),
+                            s.getCode(),
+                            s.getTenchidinh(),
+                            s.getType().name(),
+                            null,
+                            null,
+                            null,
+                            s.getClinicPrice(),
+                            s.getInsurancePrice(),
+                            s.getStatus().name()
+                    ))
+                    .toList();
+        } else if (room.getServiceGroupId() != null) {
+            return medicalServiceRepository.findAll().stream()
+                    .filter(s -> room.getServiceGroupId().equals(s.getServiceGroupId()) && s.getStatus() == ActivationStatus.ACTIVE)
+                    .map(s -> new RoomServiceItemResponse(
+                            s.getId(),
+                            s.getCode(),
+                            s.getTenchidinh(),
+                            s.getType().name(),
+                            s.getServiceGroupId(),
+                            serviceGroupName,
+                            s.getDepartmentId(),
+                            s.getClinicPrice(),
+                            s.getInsurancePrice(),
+                            s.getStatus().name()
+                    ))
+                    .toList();
+        }
+        return List.of();
     }
 }
