@@ -13,6 +13,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { useDepartmentServices } from '../../hooks';
 import {
   SERVICE_TYPE_MAP,
   SERVICE_GROUP_LABELS,
@@ -95,14 +96,29 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
     });
   }, [isDept, item, rooms]);
 
+  // Tự động tải dịch vụ thực tế từ backend nếu item chưa có sẵn assignedServices
+  const needsFetchServices = !isDept && (!item.assignedServices || item.assignedServices.length === 0);
+  const { services: fetchedServices } = useDepartmentServices(
+    needsFetchServices
+      ? {
+          departmentId: item.departmentId,
+          serviceGroupId: item.serviceGroupId,
+          roomType: item.type,
+        }
+      : null
+  );
+
   // Danh sách dịch vụ y tế được gán cho phòng khám
   const roomServices = useMemo(() => {
     if (isDept) return [];
-    if (Array.isArray(item.assignedServices)) {
+    if (Array.isArray(item.assignedServices) && item.assignedServices.length > 0) {
       return item.assignedServices;
     }
+    if (Array.isArray(fetchedServices) && fetchedServices.length > 0) {
+      return fetchedServices;
+    }
     return [];
-  }, [isDept, item.assignedServices]);
+  }, [isDept, item.assignedServices, fetchedServices]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">

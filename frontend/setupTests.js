@@ -3,6 +3,8 @@ import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 // Vitest globals are disabled, so Testing Library cannot register its automatic cleanup.
-afterEach(() => {
-    cleanup();
-});
+if (typeof afterEach !== 'undefined') {
+    afterEach(() => {
+        cleanup();
+    });
+}

@@ -1,6 +1,7 @@
 package clinic.backend.dto.response;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,4 +32,5 @@ public class DepartmentRoomItemResponse {
     private Integer roomCount;
     private Instant createdAt;
     private Instant updatedAt;
+    private List<RoomServiceItemResponse> assignedServices;
 }
