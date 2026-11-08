@@ -207,6 +207,34 @@ public class GlobalException {
         );
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+            IllegalArgumentException exception,
+            HttpServletRequest request) {
+
+        log.warn(
+                "Illegal argument rejected [method={}, path={}, message={}, requestId={}]",
+                request.getMethod(),
+                request.getRequestURI(),
+                exception.getMessage(),
+                getRequestId(request)
+        );
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(HttpStatus.BAD_REQUEST.name())
+                .message(
+                        exception.getMessage() != null
+                                ? exception.getMessage()
+                                : HttpStatus.BAD_REQUEST.getReasonPhrase()
+                )
+                .path(request.getRequestURI())
+                .requestId(getRequestId(request))
+                .timestamp(Instant.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(
             ResponseStatusException exception,

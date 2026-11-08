@@ -76,7 +76,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             : [];
           const itemsWithServices = fetchedItems.map((item) => {
             if (item.unitType === 'ROOM') {
-              const isExamRoom = item.type === 'EXAMINATION' || item.code?.startsWith('PK-');
+              const isExamRoom = item.type === 'EXAMINATION';
               let resolvedServices = Array.isArray(item.assignedServices) && item.assignedServices.length > 0
                 ? item.assignedServices
                 : [];
@@ -128,19 +128,12 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   // Tính toán số liệu thống kê động
   const currentStats = useMemo(() => {
     const totalDepts = departmentsList.length;
-    const clinicalDepts = departmentsList.filter(
-      (dept) =>
-        dept.type === 'CLINICAL' ||
-        dept.name?.toLowerCase().includes('nội') ||
-        dept.name?.toLowerCase().includes('ngoại')
-    ).length;
-    const paraclinicalDepts = totalDepts - clinicalDepts;
+    const clinicalDepts = departmentsList.filter((dept) => dept.type === 'CLINICAL').length;
+    const paraclinicalDepts = departmentsList.filter((dept) => dept.type === 'PARACLINICAL').length;
 
     const totalRooms = allRoomsList.length;
-    const clinicalRooms = allRoomsList.filter(
-      (i) => i.type === 'EXAMINATION' || i.code?.startsWith('PK-')
-    ).length;
-    const paraclinicalRooms = totalRooms - clinicalRooms;
+    const clinicalRooms = allRoomsList.filter((i) => i.type === 'EXAMINATION').length;
+    const paraclinicalRooms = allRoomsList.filter((i) => i.type === 'PARACLINICAL').length;
     const activeRooms = allRoomsList.filter((i) => i.status === 'ACTIVE').length;
     const maintenanceRooms = totalRooms - activeRooms;
     const activeRate = totalRooms > 0 ? Number(((activeRooms / totalRooms) * 100).toFixed(1)) : 0;
@@ -210,7 +203,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         !query ||
         dept.code?.toLowerCase().includes(query) ||
         dept.name?.toLowerCase().includes(query) ||
-        dept.location?.toLowerCase().includes(query);
+        dept.description?.toLowerCase().includes(query);
 
       // Lọc theo Trạng thái
       const matchStatus = deptStatusFilter === 'ALL' || dept.status === deptStatusFilter;
@@ -403,7 +396,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     name: formData.name,
                     type: editingItem?.type || i.type,
                     description: formData.description,
-                    location: formData.location || i.location,
+                    location: null,
                     status: formData.status,
                   }
                 : i
@@ -430,7 +423,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             departmentId: res?.id,
             departmentName: res?.name || formData.name,
             type: res?.type || formData.type,
-            location: 'Khu trung tâm',
+            location: null,
             headPerson: res?.headPerson || formData.headPerson || 'Chưa bổ nhiệm',
             status: res?.status || formData.status,
             description: formData.description,

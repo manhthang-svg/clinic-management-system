@@ -23,6 +23,7 @@ import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.RoomType;
 import clinic.backend.repository.DepartmentRepository;
@@ -63,14 +64,18 @@ public class DepartmentServiceImpl implements DepartmentService {
         Map<UUID, StaffAccount> staffMap = staffAccountRepository.findAll().stream()
                 .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
 
-        Map<UUID, String> roomStaffMap = new HashMap<>();
+        Map<UUID, List<String>> roomStaffNamesMap = new HashMap<>();
         for (StaffRoomAssignment assignment : activeAssignments) {
             StaffAccount staff = staffMap.get(assignment.getStaffAccountId());
             if (staff != null) {
                 String title = staff.getAcademicTitle() != null ? staff.getAcademicTitle() + " " : "";
-                roomStaffMap.put(assignment.getRoomId(), title + staff.getFullName());
+                roomStaffNamesMap.computeIfAbsent(assignment.getRoomId(), k -> new ArrayList<>())
+                        .add(title + staff.getFullName());
             }
         }
+
+        Map<UUID, String> roomStaffMap = new HashMap<>();
+        roomStaffNamesMap.forEach((roomId, names) -> roomStaffMap.put(roomId, String.join(", ", names)));
 
         Map<UUID, Department> departmentMap = departments.stream()
                 .collect(Collectors.toMap(Department::getId, d -> d, (d1, d2) -> d1));
@@ -126,7 +131,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .departmentId(dept.getId())
                     .departmentName(dept.getDepartmentName())
                     .type(dept.getType() != null ? dept.getType().name() : null)
-                    .location("Khu trung tâm")
+                    .location(null)
                     .headPerson(null)
                     .status(dept.isActive() ? "ACTIVE" : "INACTIVE")
                     .description(dept.getDescription())
@@ -186,10 +191,16 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public DepartmentStatsResponse getStats() {
-        long totalDepartments = departmentRepository.count();
-        long totalRooms = roomRepository.count();
+        List<Department> departments = departmentRepository.findAll();
+        long totalDepartments = departments.size();
+        long clinicalDepartments = departments.stream().filter(d -> d.getType() == DepartmentType.CLINICAL).count();
+        long paraclinicalDepartments = departments.stream().filter(d -> d.getType() == DepartmentType.PARACLINICAL).count();
 
         List<Room> rooms = roomRepository.findAll();
+        long totalRooms = rooms.size();
+        long clinicalRooms = rooms.stream().filter(r -> r.getType() == RoomType.EXAMINATION).count();
+        long paraclinicalRooms = rooms.stream().filter(r -> r.getType() == RoomType.PARACLINICAL).count();
+
         long activeRooms = rooms.stream().filter(r -> r.getStatus() == ActivationStatus.ACTIVE).count();
         long maintenanceRooms = totalRooms - activeRooms;
 
@@ -203,7 +214,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         return DepartmentStatsResponse.builder()
                 .totalDepartments(totalDepartments)
+                .clinicalDepartments(clinicalDepartments)
+                .paraclinicalDepartments(paraclinicalDepartments)
                 .totalRooms(totalRooms)
+                .clinicalRooms(clinicalRooms)
+                .paraclinicalRooms(paraclinicalRooms)
                 .activeRooms(activeRooms)
                 .maintenanceRooms(maintenanceRooms)
                 .activeRate(activeRate)
@@ -281,7 +296,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentId(saved.getId())
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
-                .location("Khu trung tâm")
+                .location(null)
                 .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
@@ -334,7 +349,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentId(saved.getId())
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
-                .location("Khu trung tâm")
+                .location(null)
                 .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
@@ -362,7 +377,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .departmentId(saved.getId())
                 .departmentName(saved.getDepartmentName())
                 .type(saved.getType().name())
-                .location("Khu trung tâm")
+                .location(null)
                 .headPerson(null)
                 .status(saved.isActive() ? "ACTIVE" : "INACTIVE")
                 .description(saved.getDescription())
@@ -422,6 +437,9 @@ public class DepartmentServiceImpl implements DepartmentService {
             }
             serviceGroupId = requestedGroupId;
         } else {
+            if (request.getServiceGroupId() != null) {
+                throw new IllegalArgumentException("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
+            }
             serviceGroupId = null;
         }
 
@@ -475,8 +493,16 @@ public class DepartmentServiceImpl implements DepartmentService {
         Room room = roomRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với mã ID: " + id));
 
-        Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
+        if (request.getDepartmentId() != null && !request.getDepartmentId().equals(room.getDepartmentId())) {
+            throw new IllegalArgumentException("Không thể thay đổi chuyên khoa trực thuộc của phòng khám");
+        }
+
+        if (request.getType() != null && request.getType() != room.getType()) {
+            throw new IllegalArgumentException("Không thể thay đổi loại phòng của phòng khám");
+        }
+
+        Department department = departmentRepository.findById(room.getDepartmentId())
+                .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + room.getDepartmentId()));
 
         if (request.getRoomName() == null || request.getRoomName().isBlank()) {
             throw new IllegalArgumentException("Vui lòng nhập tên phòng khám");
@@ -507,6 +533,9 @@ public class DepartmentServiceImpl implements DepartmentService {
             }
             serviceGroupId = requestedGroupId;
         } else {
+            if (request.getServiceGroupId() != null) {
+                throw new IllegalArgumentException("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
+            }
             serviceGroupId = null;
         }
 
@@ -514,11 +543,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : room.getStatus();
 
         room.update(
-                request.getDepartmentId(),
+                room.getDepartmentId(),
                 serviceGroupId,
                 roomName,
                 location,
-                request.getType(),
+                room.getType(),
                 status,
                 now
         );
@@ -531,10 +560,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
-        String staffName = staffRoomAssignmentRepository.findByRoomIdAndRemovedAtIsNull(saved.getId())
-                .flatMap(assignment -> staffAccountRepository.findById(assignment.getStaffAccountId()))
-                .map(s -> (s.getAcademicTitle() != null ? s.getAcademicTitle() + " " : "") + s.getFullName())
-                .orElse(request.getHeadPerson() != null && !request.getHeadPerson().isBlank() ? request.getHeadPerson() : "Chưa phân công");
+        String staffName = resolveStaffNamesForRoom(saved.getId(), request.getHeadPerson());
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -577,10 +603,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
-        String staffName = staffRoomAssignmentRepository.findByRoomIdAndRemovedAtIsNull(saved.getId())
-                .flatMap(assignment -> staffAccountRepository.findById(assignment.getStaffAccountId()))
-                .map(s -> (s.getAcademicTitle() != null ? s.getAcademicTitle() + " " : "") + s.getFullName())
-                .orElse("Chưa phân công");
+        String staffName = resolveStaffNamesForRoom(saved.getId(), null);
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -599,6 +622,22 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
+    }
+
+    private String resolveStaffNamesForRoom(UUID roomId, String fallbackHeadPerson) {
+        List<StaffRoomAssignment> assignments = staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId);
+        if (assignments.isEmpty()) {
+            return fallbackHeadPerson != null && !fallbackHeadPerson.isBlank() ? fallbackHeadPerson : "Chưa phân công";
+        }
+        List<String> names = assignments.stream()
+                .map(a -> staffAccountRepository.findById(a.getStaffAccountId()).orElse(null))
+                .filter(Objects::nonNull)
+                .map(s -> (s.getAcademicTitle() != null ? s.getAcademicTitle() + " " : "") + s.getFullName())
+                .toList();
+        if (names.isEmpty()) {
+            return fallbackHeadPerson != null && !fallbackHeadPerson.isBlank() ? fallbackHeadPerson : "Chưa phân công";
+        }
+        return String.join(", ", names);
     }
 
     private List<RoomServiceItemResponse> resolveSingleRoomServices(Room room, String serviceGroupName) {

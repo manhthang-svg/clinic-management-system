@@ -55,10 +55,7 @@ export function DepartmentTable({
             ) : (
               items.map((dept) => {
                 const isActive = dept.status === 'ACTIVE';
-                const isClinical =
-                  dept.type === 'CLINICAL' ||
-                  dept.name?.toLowerCase().includes('nội') ||
-                  dept.name?.toLowerCase().includes('ngoại');
+                const isClinical = dept.type === 'CLINICAL';
 
                 return (
                   <tr
