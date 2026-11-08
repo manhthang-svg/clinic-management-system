@@ -29,6 +29,12 @@ public interface MedicalServiceRepository
             Collection<MedicalServiceType> types
     );
 
+    List<MedicalService> findAllByStatus(ActivationStatus status);
+
+    List<MedicalService> findAllByTypeAndStatus(MedicalServiceType type, ActivationStatus status);
+
+    List<MedicalService> findAllByServiceGroupIdAndStatus(UUID serviceGroupId, ActivationStatus status);
+
     boolean existsByTypeAndStatus(
             MedicalServiceType type,
             ActivationStatus status

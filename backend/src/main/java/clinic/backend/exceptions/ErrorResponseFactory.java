@@ -22,11 +22,16 @@ public final class ErrorResponseFactory {
 
     public static ErrorResponse create(
             ErrorCode errorCode, Map<String, String> details, HttpServletRequest request) {
+        return create(errorCode, errorCode.getMessage(), details, request);
+    }
+
+    public static ErrorResponse create(
+            ErrorCode errorCode, String message, Map<String, String> details, HttpServletRequest request) {
 
         Object requestId = request.getAttribute(RequestCorrelationFilter.ATTRIBUTE_NAME);
         return ErrorResponse.builder()
                 .code(errorCode.getCode())
-                .message(errorCode.getMessage())
+                .message(message != null ? message : errorCode.getMessage())
                 .details(details.isEmpty() ? null : Map.copyOf(details))
                 .path(request.getRequestURI())
                 .requestId(requestId == null ? null : requestId.toString())

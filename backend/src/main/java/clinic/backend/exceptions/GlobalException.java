@@ -49,10 +49,19 @@ public class GlobalException {
                 getRequestId(request)
         );
 
-        return response(
-                exception.getErrorCode(),
-                exception.getDetails(),
-                request
+        String message = exception.getMessage() != null
+                ? exception.getMessage()
+                : exception.getErrorCode().getMessage();
+
+        ResponseEntity.BodyBuilder builder =
+                ResponseEntity.status(exception.getErrorCode().getHttpStatus());
+
+        if (exception.getErrorCode().getHttpStatus() == HttpStatus.UNAUTHORIZED) {
+            builder.header(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+        }
+
+        return builder.body(
+                ErrorResponseFactory.create(exception.getErrorCode(), message, exception.getDetails(), request)
         );
     }
 

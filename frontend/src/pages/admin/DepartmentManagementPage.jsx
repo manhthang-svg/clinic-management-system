@@ -14,12 +14,8 @@ import {
   DepartmentDetailModal,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
-import { apiClient } from '../../services/session';
-import { createServiceApi } from '../../apis/serviceApi';
 import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
-
-const serviceApi = createServiceApi(apiClient);
 
 const { ADMIN } = ROUTES;
 
@@ -31,7 +27,6 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(null);
 
   // Filter & Search states cho TAB 1: PHÒNG CHỨC NĂNG
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
@@ -64,41 +59,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     (async () => {
       try {
         setLoading(true);
-        const [fetchedItems, fetchedStats, activeServicesPage] = await Promise.all([
-          departmentApi.getItems(),
-          departmentApi.getStats(),
-          serviceApi.list({ status: 'ACTIVE', size: 50 }).catch(() => ({ content: [] })),
-        ]);
+        const fetchedItems = await departmentApi.getItems();
         if (cancelled) return;
         if (Array.isArray(fetchedItems)) {
-          const catalogServices = Array.isArray(activeServicesPage?.content)
-            ? activeServicesPage.content
-            : [];
-          const itemsWithServices = fetchedItems.map((item) => {
-            if (item.unitType === 'ROOM') {
-              const isExamRoom = item.type === 'EXAMINATION';
-              let resolvedServices = Array.isArray(item.assignedServices) && item.assignedServices.length > 0
-                ? item.assignedServices
-                : [];
-              if (resolvedServices.length === 0) {
-                if (isExamRoom) {
-                  resolvedServices = catalogServices.filter((s) => s.type === 'EXAMINATION');
-                } else if (item.serviceGroupId) {
-                  resolvedServices = catalogServices.filter((s) => s.serviceGroupId === item.serviceGroupId);
-                }
-              }
-
-              return {
-                ...item,
-                assignedServices: resolvedServices,
-              };
-            }
-            return item;
-          });
-          setItems(itemsWithServices);
-        }
-        if (fetchedStats) {
-          setStats(fetchedStats);
+          setItems(fetchedItems);
         }
       } catch (err) {
         if (cancelled) return;
@@ -386,18 +350,14 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             type: editingItem?.type || formData.type,
             description: formData.description,
             active: formData.status === 'ACTIVE',
+            version: formData.version,
           });
           setItems((prev) =>
             prev.map((i) =>
               i.id === editingItem.id && i.unitType === 'DEPARTMENT'
                 ? {
                     ...i,
-                    ...(res || {}),
-                    name: formData.name,
-                    type: editingItem?.type || i.type,
-                    description: formData.description,
-                    location: null,
-                    status: formData.status,
+                    ...res,
                   }
                 : i
             )
@@ -411,31 +371,13 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             tenkhoa: formData.name,
             type: formData.type,
             description: formData.description,
-            headPerson: formData.headPerson,
             active: formData.status === 'ACTIVE',
           });
-          const newDept = {
-            ...(res || {}),
-            id: res?.id,
-            unitType: 'DEPARTMENT',
-            code: res?.code || formData.code,
-            name: res?.name || formData.name,
-            departmentId: res?.id,
-            departmentName: res?.name || formData.name,
-            type: res?.type || formData.type,
-            location: null,
-            headPerson: res?.headPerson || formData.headPerson || 'Chưa bổ nhiệm',
-            status: res?.status || formData.status,
-            description: formData.description,
-            roomCount: 0,
-          };
-          setItems((prev) => [newDept, ...prev]);
-          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
+          setItems((prev) => [res, ...prev]);
           toast.success(`Đã thêm mới chuyên khoa "${formData.name}" thành công!`);
         }
       } else {
         // Handle ROOM
-        const targetDept = departmentsList.find((d) => d.id === formData.departmentId);
         if (isEdit) {
           const res = await departmentApi.updateRoom(editingItem.id, {
             roomName: formData.name,
@@ -444,32 +386,19 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             serviceGroupId: formData.serviceGroupId || null,
             type: formData.type,
             location: formData.location,
-            headPerson: formData.headPerson,
             status: formData.status,
+            version: formData.version,
           });
           setItems((prev) =>
             prev.map((i) =>
               i.id === editingItem.id && i.unitType === 'ROOM'
                 ? {
                     ...i,
-                    ...(res || {}),
-                    name: formData.name,
-                    departmentId: formData.departmentId,
-                    departmentName: targetDept?.name || i.departmentName,
-                    serviceGroupId: formData.serviceGroupId || res?.serviceGroupId || null,
-                    serviceGroupName: res?.serviceGroupName || i.serviceGroupName || null,
-                    type: formData.type,
-                    location: formData.location,
-                    headPerson: formData.headPerson,
-                    status: formData.status,
-                    assignedServices: (Array.isArray(res?.assignedServices) && res.assignedServices.length > 0)
-                      ? res.assignedServices
-                      : (formData.assignedServices || []),
+                    ...res,
                   }
                 : i
             )
           );
-          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
           toast.success(`Đã cập nhật phòng "${formData.name}" thành công!`);
         } else {
           const res = await departmentApi.createRoom({
@@ -481,29 +410,16 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             serviceGroupId: formData.serviceGroupId || null,
             type: formData.type,
             location: formData.location,
-            headPerson: formData.headPerson,
             status: formData.status,
           });
-          const newRoom = {
-            ...(res || {}),
-            id: res?.id,
-            unitType: 'ROOM',
-            code: res?.code || formData.code,
-            name: res?.name || formData.name,
-            departmentId: res?.departmentId || formData.departmentId,
-            departmentName: res?.departmentName || targetDept?.name || 'Chưa phân khoa',
-            serviceGroupId: res?.serviceGroupId || formData.serviceGroupId || null,
-            serviceGroupName: res?.serviceGroupName || null,
-            type: res?.type || formData.type,
-            location: res?.location || formData.location,
-            headPerson: res?.headPerson || formData.headPerson || 'Chưa phân công',
-            status: res?.status || formData.status,
-            assignedServices: (Array.isArray(res?.assignedServices) && res.assignedServices.length > 0)
-              ? res.assignedServices
-              : (formData.assignedServices || []),
-          };
-          setItems((prev) => [newRoom, ...prev]);
-          departmentApi.getStats().then((s) => s && setStats(s)).catch(() => {});
+          setItems((prev) => [
+            res,
+            ...prev.map((i) =>
+              i.id === res.departmentId && i.unitType === 'DEPARTMENT'
+                ? { ...i, roomCount: (i.roomCount || 0) + 1 }
+                : i
+            ),
+          ]);
           toast.success(`Đã thêm mới phòng "${formData.name}" thành công!`);
         }
       }
