@@ -32,5 +32,6 @@ public class DepartmentRoomItemResponse {
     private Integer roomCount;
     private Instant createdAt;
     private Instant updatedAt;
+    private Long version;
     private List<RoomServiceItemResponse> assignedServices;
 }

@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -24,8 +25,10 @@ import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.RoomType;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.RoomRepository;
@@ -61,8 +64,13 @@ public class DepartmentServiceImpl implements DepartmentService {
         Map<UUID, String> serviceGroupMap = serviceGroups.stream()
                 .collect(Collectors.toMap(ServiceGroup::getId, ServiceGroup::getServiceGroupName, (s1, s2) -> s1));
         List<StaffRoomAssignment> activeAssignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
-        Map<UUID, StaffAccount> staffMap = staffAccountRepository.findAll().stream()
-                .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
+        Set<UUID> staffIds = activeAssignments.stream()
+                .map(StaffRoomAssignment::getStaffAccountId)
+                .collect(Collectors.toSet());
+        Map<UUID, StaffAccount> staffMap = staffIds.isEmpty()
+                ? Map.of()
+                : staffAccountRepository.findAllById(staffIds).stream()
+                        .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
 
         Map<UUID, List<String>> roomStaffNamesMap = new HashMap<>();
         for (StaffRoomAssignment assignment : activeAssignments) {
@@ -83,9 +91,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Map<UUID, Long> roomCountByDept = rooms.stream()
                 .collect(Collectors.groupingBy(Room::getDepartmentId, Collectors.counting()));
 
-        List<MedicalService> activeServices = medicalServiceRepository.findAll().stream()
-                .filter(s -> s.getStatus() == ActivationStatus.ACTIVE)
-                .toList();
+        List<MedicalService> activeServices = medicalServiceRepository.findAllByStatus(ActivationStatus.ACTIVE);
 
         Map<UUID, List<RoomServiceItemResponse>> servicesByGroup = activeServices.stream()
                 .filter(s -> s.getServiceGroupId() != null)
@@ -138,6 +144,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .roomCount(roomCountByDept.getOrDefault(dept.getId(), 0L).intValue())
                     .createdAt(dept.getCreatedAt())
                     .updatedAt(dept.getUpdatedAt())
+                    .version(dept.getVersion())
                     .build());
         }
 
@@ -178,6 +185,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .assignedServices(roomServices)
                     .createdAt(room.getCreatedAt())
                     .updatedAt(room.getUpdatedAt())
+                    .version(room.getVersion())
                     .build());
         }
 
@@ -246,30 +254,38 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     public DepartmentRoomItemResponse createDepartment(DepartmentRequest request) {
         if (request.getDepartmentCode() == null || request.getDepartmentCode().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập mã chuyên khoa");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập mã chuyên khoa",
+                    Map.of("departmentCode", "Vui lòng nhập mã chuyên khoa"));
         }
         String code = request.getDepartmentCode().trim().toUpperCase();
         if (code.length() < 2 || code.length() > 50 || !code.matches("^[A-Z0-9-]+$")) {
-            throw new IllegalArgumentException("Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    "Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)",
+                    Map.of("departmentCode", "Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)"));
         }
 
         if (request.getDepartmentName() == null || request.getDepartmentName().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập tên chuyên khoa");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập tên chuyên khoa",
+                    Map.of("departmentName", "Vui lòng nhập tên chuyên khoa"));
         }
         String name = request.getDepartmentName().trim();
         if (name.length() < 2 || name.length() > 100) {
-            throw new IllegalArgumentException("Tên khoa phải từ 2 đến 100 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Tên khoa phải từ 2 đến 100 ký tự",
+                    Map.of("departmentName", "Tên khoa phải từ 2 đến 100 ký tự"));
         }
 
         if (departmentRepository.existsByDepartmentCode(code)) {
-            throw new IllegalArgumentException("Mã khoa đã tồn tại: " + code);
+            throw new AppException(ErrorCode.DEPARTMENT_CODE_ALREADY_EXISTS, "Mã khoa đã tồn tại: " + code,
+                    Map.of("departmentCode", "Mã khoa đã tồn tại: " + code));
         }
         if (departmentRepository.existsByDepartmentNameIgnoreCase(name)) {
-            throw new IllegalArgumentException("Tên khoa đã tồn tại: " + name);
+            throw new AppException(ErrorCode.DEPARTMENT_NAME_ALREADY_EXISTS, "Tên khoa đã tồn tại: " + name,
+                    Map.of("departmentName", "Tên khoa đã tồn tại: " + name));
         }
 
         if (request.getDescription() != null && request.getDescription().trim().length() > 500) {
-            throw new IllegalArgumentException("Mô tả chuyên khoa tối đa 500 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Mô tả chuyên khoa tối đa 500 ký tự",
+                    Map.of("description", "Mô tả chuyên khoa tối đa 500 ký tự"));
         }
 
         Instant now = clock.instant();
@@ -303,28 +319,39 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .roomCount(0)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
     @Override
     public DepartmentRoomItemResponse updateDepartment(UUID id, DepartmentRequest request) {
         Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khoa với mã ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND,
+                        "Không tìm thấy khoa với mã ID: " + id,
+                        Map.of("departmentId", "Không tìm thấy khoa với mã ID: " + id)));
+
+        if (request.getVersion() != null && !Objects.equals(department.getVersion(), request.getVersion())) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
 
         if (request.getDepartmentName() == null || request.getDepartmentName().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập tên chuyên khoa");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập tên chuyên khoa",
+                    Map.of("departmentName", "Vui lòng nhập tên chuyên khoa"));
         }
         String name = request.getDepartmentName().trim();
         if (name.length() < 2 || name.length() > 100) {
-            throw new IllegalArgumentException("Tên khoa phải từ 2 đến 100 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Tên khoa phải từ 2 đến 100 ký tự",
+                    Map.of("departmentName", "Tên khoa phải từ 2 đến 100 ký tự"));
         }
         if (departmentRepository.existsByDepartmentNameIgnoreCase(name)
                 && !name.equalsIgnoreCase(department.getDepartmentName())) {
-            throw new IllegalArgumentException("Tên khoa đã tồn tại: " + name);
+            throw new AppException(ErrorCode.DEPARTMENT_NAME_ALREADY_EXISTS, "Tên khoa đã tồn tại: " + name,
+                    Map.of("departmentName", "Tên khoa đã tồn tại: " + name));
         }
 
         if (request.getDescription() != null && request.getDescription().trim().length() > 500) {
-            throw new IllegalArgumentException("Mô tả chuyên khoa tối đa 500 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Mô tả chuyên khoa tối đa 500 ký tự",
+                    Map.of("description", "Mô tả chuyên khoa tối đa 500 ký tự"));
         }
 
         Instant now = clock.instant();
@@ -356,13 +383,16 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .roomCount(roomCount)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
     @Override
     public DepartmentRoomItemResponse toggleDepartmentStatus(UUID id) {
         Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khoa với mã ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND,
+                        "Không tìm thấy khoa với mã ID: " + id,
+                        Map.of("departmentId", "Không tìm thấy khoa với mã ID: " + id)));
 
         Instant now = clock.instant();
         department.setActive(!department.isActive(), now);
@@ -384,61 +414,82 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .roomCount(roomCount)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
     @Override
     public DepartmentRoomItemResponse createRoom(RoomRequest request) {
         if (request.getRoomCode() == null || request.getRoomCode().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập mã phòng khám");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập mã phòng khám",
+                    Map.of("roomCode", "Vui lòng nhập mã phòng khám"));
         }
         String roomCode = request.getRoomCode().trim().toUpperCase();
         if (roomCode.length() < 2 || roomCode.length() > 20 || !roomCode.matches("^[A-Z0-9-]+$")) {
-            throw new IllegalArgumentException("Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    "Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)",
+                    Map.of("roomCode", "Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)"));
         }
 
         if (request.getRoomName() == null || request.getRoomName().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập tên phòng khám");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập tên phòng khám",
+                    Map.of("roomName", "Vui lòng nhập tên phòng khám"));
         }
         String roomName = request.getRoomName().trim();
         if (roomName.length() < 2 || roomName.length() > 100) {
-            throw new IllegalArgumentException("Tên phòng phải từ 2 đến 100 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Tên phòng phải từ 2 đến 100 ký tự",
+                    Map.of("roomName", "Tên phòng phải từ 2 đến 100 ký tự"));
         }
 
         if (request.getLocation() == null || request.getLocation().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập vị trí buồng");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập vị trí buồng",
+                    Map.of("location", "Vui lòng nhập vị trí buồng"));
         }
         String location = request.getLocation().trim();
         if (location.length() < 2 || location.length() > 255) {
-            throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vị trí buồng phải từ 2 đến 255 ký tự",
+                    Map.of("location", "Vị trí buồng phải từ 2 đến 255 ký tự"));
         }
 
         if (roomRepository.existsByRoomCode(roomCode)) {
-            throw new IllegalArgumentException("Mã phòng đã tồn tại: " + roomCode);
+            throw new AppException(ErrorCode.ROOM_CODE_ALREADY_EXISTS, "Mã phòng đã tồn tại: " + roomCode,
+                    Map.of("roomCode", "Mã phòng đã tồn tại: " + roomCode));
         }
 
         Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND,
+                        "Khoa trực thuộc không tồn tại: " + request.getDepartmentId(),
+                        Map.of("departmentId", "Khoa trực thuộc không tồn tại: " + request.getDepartmentId())));
 
         if (!department.isActive()) {
-            throw new IllegalArgumentException("Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động");
+            throw new AppException(ErrorCode.DEPARTMENT_INACTIVE,
+                    "Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động",
+                    Map.of("departmentId", "Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động"));
         }
 
         final UUID serviceGroupId;
         if (request.getType() == RoomType.PARACLINICAL) {
             UUID requestedGroupId = request.getServiceGroupId();
             if (requestedGroupId == null) {
-                throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
+                throw new AppException(ErrorCode.PARACLINICAL_ROOM_REQUIRES_SERVICE_GROUP,
+                        "Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật",
+                        Map.of("serviceGroupId", "Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật"));
             }
             ServiceGroup group = serviceGroupRepository.findById(requestedGroupId)
-                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId));
+                    .orElseThrow(() -> new AppException(ErrorCode.SERVICE_GROUP_NOT_FOUND,
+                            "Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId,
+                            Map.of("serviceGroupId", "Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId)));
             if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
-                throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
+                throw new AppException(ErrorCode.SERVICE_GROUP_DEPARTMENT_MISMATCH,
+                        "Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn",
+                        Map.of("serviceGroupId", "Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn"));
             }
             serviceGroupId = requestedGroupId;
         } else {
             if (request.getServiceGroupId() != null) {
-                throw new IllegalArgumentException("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
+                throw new AppException(ErrorCode.EXAMINATION_ROOM_CANNOT_HAVE_SERVICE_GROUP,
+                        "Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật",
+                        Map.of("serviceGroupId", "Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật"));
             }
             serviceGroupId = null;
         }
@@ -478,63 +529,86 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .serviceGroupName(serviceGroupName)
                 .type(saved.getType().name())
                 .location(saved.getLocation())
-                .headPerson(request.getHeadPerson() != null && !request.getHeadPerson().isBlank()
-                        ? request.getHeadPerson()
-                        : "Chưa phân công")
+                .headPerson(resolveStaffNamesForRoom(saved.getId()))
                 .status(saved.getStatus().name())
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
     @Override
     public DepartmentRoomItemResponse updateRoom(UUID id, RoomRequest request) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với mã ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND,
+                        "Không tìm thấy phòng với mã ID: " + id,
+                        Map.of("roomId", "Không tìm thấy phòng với mã ID: " + id)));
+
+        if (request.getVersion() != null && !Objects.equals(room.getVersion(), request.getVersion())) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
 
         if (request.getDepartmentId() != null && !request.getDepartmentId().equals(room.getDepartmentId())) {
-            throw new IllegalArgumentException("Không thể thay đổi chuyên khoa trực thuộc của phòng khám");
+            throw new AppException(ErrorCode.ROOM_IMMUTABLE_FIELD_CHANGE,
+                    "Không thể thay đổi chuyên khoa trực thuộc của phòng khám",
+                    Map.of("departmentId", "Không thể thay đổi chuyên khoa trực thuộc của phòng khám"));
         }
 
         if (request.getType() != null && request.getType() != room.getType()) {
-            throw new IllegalArgumentException("Không thể thay đổi loại phòng của phòng khám");
+            throw new AppException(ErrorCode.ROOM_IMMUTABLE_FIELD_CHANGE,
+                    "Không thể thay đổi loại phòng của phòng khám",
+                    Map.of("type", "Không thể thay đổi loại phòng của phòng khám"));
         }
 
         Department department = departmentRepository.findById(room.getDepartmentId())
-                .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + room.getDepartmentId()));
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND,
+                        "Khoa trực thuộc không tồn tại: " + room.getDepartmentId(),
+                        Map.of("departmentId", "Khoa trực thuộc không tồn tại: " + room.getDepartmentId())));
 
         if (request.getRoomName() == null || request.getRoomName().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập tên phòng khám");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập tên phòng khám",
+                    Map.of("roomName", "Vui lòng nhập tên phòng khám"));
         }
         String roomName = request.getRoomName().trim();
         if (roomName.length() < 2 || roomName.length() > 100) {
-            throw new IllegalArgumentException("Tên phòng phải từ 2 đến 100 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Tên phòng phải từ 2 đến 100 ký tự",
+                    Map.of("roomName", "Tên phòng phải từ 2 đến 100 ký tự"));
         }
 
         if (request.getLocation() == null || request.getLocation().isBlank()) {
-            throw new IllegalArgumentException("Vui lòng nhập vị trí buồng");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vui lòng nhập vị trí buồng",
+                    Map.of("location", "Vui lòng nhập vị trí buồng"));
         }
         String location = request.getLocation().trim();
         if (location.length() < 2 || location.length() > 255) {
-            throw new IllegalArgumentException("Vị trí buồng phải từ 2 đến 255 ký tự");
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Vị trí buồng phải từ 2 đến 255 ký tự",
+                    Map.of("location", "Vị trí buồng phải từ 2 đến 255 ký tự"));
         }
 
         final UUID serviceGroupId;
         if (request.getType() == RoomType.PARACLINICAL) {
             UUID requestedGroupId = request.getServiceGroupId();
             if (requestedGroupId == null) {
-                throw new IllegalArgumentException("Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật");
+                throw new AppException(ErrorCode.PARACLINICAL_ROOM_REQUIRES_SERVICE_GROUP,
+                        "Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật",
+                        Map.of("serviceGroupId", "Phòng khám cận lâm sàng phải chọn nhóm dịch vụ kỹ thuật"));
             }
             ServiceGroup group = serviceGroupRepository.findById(requestedGroupId)
-                    .orElseThrow(() -> new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId));
+                    .orElseThrow(() -> new AppException(ErrorCode.SERVICE_GROUP_NOT_FOUND,
+                            "Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId,
+                            Map.of("serviceGroupId", "Nhóm dịch vụ kỹ thuật không tồn tại: " + requestedGroupId)));
             if (group.getDepartmentId() != null && !group.getDepartmentId().equals(department.getId())) {
-                throw new IllegalArgumentException("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
+                throw new AppException(ErrorCode.SERVICE_GROUP_DEPARTMENT_MISMATCH,
+                        "Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn",
+                        Map.of("serviceGroupId", "Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn"));
             }
             serviceGroupId = requestedGroupId;
         } else {
             if (request.getServiceGroupId() != null) {
-                throw new IllegalArgumentException("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
+                throw new AppException(ErrorCode.EXAMINATION_ROOM_CANNOT_HAVE_SERVICE_GROUP,
+                        "Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật",
+                        Map.of("serviceGroupId", "Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật"));
             }
             serviceGroupId = null;
         }
@@ -560,7 +634,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
-        String staffName = resolveStaffNamesForRoom(saved.getId(), request.getHeadPerson());
+        String staffName = resolveStaffNamesForRoom(saved.getId());
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -578,13 +652,14 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
     @Override
     public DepartmentRoomItemResponse toggleRoomStatus(UUID id) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với mã ID: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND, Map.of("roomId", "Không tìm thấy phòng với mã ID: " + id)));
 
         Department department = departmentRepository.findById(room.getDepartmentId())
                 .orElse(null);
@@ -603,7 +678,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
-        String staffName = resolveStaffNamesForRoom(saved.getId(), null);
+        String staffName = resolveStaffNamesForRoom(saved.getId());
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -621,29 +696,37 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
+                .version(saved.getVersion())
                 .build();
     }
 
-    private String resolveStaffNamesForRoom(UUID roomId, String fallbackHeadPerson) {
+    private String resolveStaffNamesForRoom(UUID roomId) {
         List<StaffRoomAssignment> assignments = staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId);
         if (assignments.isEmpty()) {
-            return fallbackHeadPerson != null && !fallbackHeadPerson.isBlank() ? fallbackHeadPerson : "Chưa phân công";
+            return "Chưa phân công";
         }
+        Set<UUID> staffIds = assignments.stream()
+                .map(StaffRoomAssignment::getStaffAccountId)
+                .collect(Collectors.toSet());
+        Map<UUID, StaffAccount> staffMap = staffIds.isEmpty()
+                ? Map.of()
+                : staffAccountRepository.findAllById(staffIds).stream()
+                        .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
+
         List<String> names = assignments.stream()
-                .map(a -> staffAccountRepository.findById(a.getStaffAccountId()).orElse(null))
+                .map(a -> staffMap.get(a.getStaffAccountId()))
                 .filter(Objects::nonNull)
                 .map(s -> (s.getAcademicTitle() != null ? s.getAcademicTitle() + " " : "") + s.getFullName())
                 .toList();
         if (names.isEmpty()) {
-            return fallbackHeadPerson != null && !fallbackHeadPerson.isBlank() ? fallbackHeadPerson : "Chưa phân công";
+            return "Chưa phân công";
         }
         return String.join(", ", names);
     }
 
     private List<RoomServiceItemResponse> resolveSingleRoomServices(Room room, String serviceGroupName) {
         if (room.getType() == RoomType.EXAMINATION) {
-            return medicalServiceRepository.findAll().stream()
-                    .filter(s -> s.getType() == MedicalServiceType.EXAMINATION && s.getStatus() == ActivationStatus.ACTIVE)
+            return medicalServiceRepository.findAllByTypeAndStatus(MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE).stream()
                     .map(s -> new RoomServiceItemResponse(
                             s.getId(),
                             s.getCode(),
@@ -658,8 +741,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                     ))
                     .toList();
         } else if (room.getServiceGroupId() != null) {
-            return medicalServiceRepository.findAll().stream()
-                    .filter(s -> room.getServiceGroupId().equals(s.getServiceGroupId()) && s.getStatus() == ActivationStatus.ACTIVE)
+            return medicalServiceRepository.findAllByServiceGroupIdAndStatus(room.getServiceGroupId(), ActivationStatus.ACTIVE).stream()
                     .map(s -> new RoomServiceItemResponse(
                             s.getId(),
                             s.getCode(),

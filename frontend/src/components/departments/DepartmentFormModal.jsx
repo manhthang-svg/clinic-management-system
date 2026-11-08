@@ -41,9 +41,9 @@ function buildInitialForm({ initialData, departments, isRoom }) {
       serviceGroupId: initialData.serviceGroupId || '',
       type: initialData.type || (isRoom ? '' : 'CLINICAL'),
       location: initialData.location || '',
-      headPerson: initialData.headPerson || '',
       description: initialData.description || '',
       status: initialData.status || 'ACTIVE',
+      version: initialData.version ?? null,
     };
   }
 
@@ -55,9 +55,9 @@ function buildInitialForm({ initialData, departments, isRoom }) {
     serviceGroupId: '',
     type: isRoom ? '' : 'CLINICAL',
     location: '',
-    headPerson: '',
     description: '',
     status: 'ACTIVE',
+    version: null,
   };
 }
 
@@ -359,8 +359,23 @@ function DepartmentFormModalContent({
         isEdit
       );
       onClose();
-    } catch {
-      // Handled by parent
+    } catch (err) {
+      if (err?.errorResponse?.details && typeof err.errorResponse.details === 'object') {
+        const details = err.errorResponse.details;
+        const mappedErrors = {};
+        if (details.roomCode || details.departmentCode) {
+          mappedErrors.code = details.roomCode || details.departmentCode;
+        }
+        if (details.roomName || details.departmentName) {
+          mappedErrors.name = details.roomName || details.departmentName;
+        }
+        if (details.departmentId) mappedErrors.departmentId = details.departmentId;
+        if (details.serviceGroupId) mappedErrors.serviceGroupId = details.serviceGroupId;
+        if (details.location) mappedErrors.location = details.location;
+        if (details.description) mappedErrors.description = details.description;
+        if (details.type) mappedErrors.type = details.type;
+        setErrors((prev) => ({ ...prev, ...mappedErrors }));
+      }
     } finally {
       setSubmitting(false);
     }

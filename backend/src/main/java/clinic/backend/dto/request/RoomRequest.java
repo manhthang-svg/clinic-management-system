@@ -49,6 +49,8 @@ public class RoomRequest {
     @Builder.Default
     private ActivationStatus status = ActivationStatus.ACTIVE;
 
+    private Long version;
+
     public String getRoomCode() {
         if (roomCode != null && !roomCode.isBlank()) {
             return roomCode;

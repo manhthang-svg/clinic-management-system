@@ -42,6 +42,8 @@ public class DepartmentRequest {
     @Builder.Default
     private Boolean active = true;
 
+    private Long version;
+
     public String getDepartmentCode() {
         if (departmentCode != null && !departmentCode.isBlank()) {
             return departmentCode;

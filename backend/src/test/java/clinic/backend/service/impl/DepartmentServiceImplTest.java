@@ -17,7 +17,9 @@ import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.RoomType;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
@@ -131,7 +133,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã phòng đã tồn tại");
     }
 
@@ -252,7 +254,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Nhóm dịch vụ kỹ thuật không thuộc chuyên khoa đã chọn");
     }
 
@@ -274,7 +276,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
     }
 
@@ -333,7 +335,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createDepartment(shortCode))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã khoa phải từ 2 đến 50 ký tự");
 
         DepartmentRequest specialCharCode = DepartmentRequest.builder()
@@ -343,7 +345,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createDepartment(specialCharCode))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã khoa phải từ 2 đến 50 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
     }
 
@@ -357,7 +359,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createDepartment(shortName))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Tên khoa phải từ 2 đến 100 ký tự");
 
         DepartmentRequest longName = DepartmentRequest.builder()
@@ -367,7 +369,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createDepartment(longName))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Tên khoa phải từ 2 đến 100 ký tự");
     }
 
@@ -382,7 +384,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createDepartment(longDesc))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mô tả chuyên khoa tối đa 500 ký tự");
     }
 
@@ -398,7 +400,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(shortCode))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự");
 
         RoomRequest longCode = RoomRequest.builder()
@@ -410,7 +412,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(longCode))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự");
 
         RoomRequest specialCharCode = RoomRequest.builder()
@@ -422,7 +424,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(specialCharCode))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Mã phòng phải từ 2 đến 20 ký tự, gồm chữ in hoa, chữ số hoặc gạch ngang (-)");
     }
 
@@ -438,7 +440,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(shortName))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Tên phòng phải từ 2 đến 100 ký tự");
     }
 
@@ -454,7 +456,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(shortLocation))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Vị trí buồng phải từ 2 đến 255 ký tự");
     }
 
@@ -476,7 +478,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.createRoom(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động");
     }
 
@@ -510,7 +512,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Không thể thay đổi chuyên khoa trực thuộc của phòng khám");
     }
 
@@ -543,7 +545,7 @@ class DepartmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Không thể thay đổi loại phòng của phòng khám");
     }
 
@@ -635,8 +637,8 @@ class DepartmentServiceImplTest {
         when(departmentRepository.findAll()).thenReturn(List.of(dept));
         when(roomRepository.findAll()).thenReturn(List.of(room));
         when(serviceGroupRepository.findAll()).thenReturn(List.of());
-        when(medicalServiceRepository.findAll()).thenReturn(List.of());
-        when(staffAccountRepository.findAll()).thenReturn(List.of(doctor, technician));
+        when(medicalServiceRepository.findAllByStatus(ActivationStatus.ACTIVE)).thenReturn(List.of());
+        when(staffAccountRepository.findAllById(any())).thenReturn(List.of(doctor, technician));
         when(staffRoomAssignmentRepository.findByRemovedAtIsNull()).thenReturn(List.of(assign1, assign2));
 
         var allItems = departmentService.getAllItems();
@@ -650,8 +652,7 @@ class DepartmentServiceImplTest {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of(assign1, assign2));
-        when(staffAccountRepository.findById(staffId1)).thenReturn(Optional.of(doctor));
-        when(staffAccountRepository.findById(staffId2)).thenReturn(Optional.of(technician));
+        when(staffAccountRepository.findAllById(any())).thenReturn(List.of(doctor, technician));
 
         RoomRequest updateReq = RoomRequest.builder()
                 .departmentId(deptId)
@@ -663,5 +664,48 @@ class DepartmentServiceImplTest {
 
         var updateRes = departmentService.updateRoom(roomId, updateReq);
         assertThat(updateRes.getHeadPerson()).isEqualTo("BS. Nguyễn Văn A, KTV. Trần Thị B");
+    }
+
+    @Test
+    @DisplayName("Ném AppException(CONCURRENT_MODIFICATION) khi version chuyên khoa không khớp")
+    void updateDepartment_VersionMismatch_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        org.springframework.test.util.ReflectionTestUtils.setField(dept, "version", 2L);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        DepartmentRequest request = DepartmentRequest.builder()
+                .departmentName("Khoa Nội đổi tên")
+                .type(DepartmentType.CLINICAL)
+                .version(1L)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, request))
+                .isInstanceOf(clinic.backend.exceptions.AppException.class)
+                .satisfies(e -> assertThat(((clinic.backend.exceptions.AppException) e).getErrorCode())
+                        .isEqualTo(clinic.backend.enums.ErrorCode.CONCURRENT_MODIFICATION));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(CONCURRENT_MODIFICATION) khi version phòng không khớp")
+    void updateRoom_VersionMismatch_ThrowsException() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        org.springframework.test.util.ReflectionTestUtils.setField(room, "version", 2L);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng 1 đổi tên")
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .version(1L)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(clinic.backend.exceptions.AppException.class)
+                .satisfies(e -> assertThat(((clinic.backend.exceptions.AppException) e).getErrorCode())
+                        .isEqualTo(clinic.backend.enums.ErrorCode.CONCURRENT_MODIFICATION));
     }
 }
