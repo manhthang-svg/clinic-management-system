@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.enums.ActivationStatus;
@@ -77,11 +78,15 @@ public class Room extends VersionedEntity {
             RoomType type,
             ActivationStatus status,
             Instant now) {
-        this.departmentId = departmentId;
+        if (departmentId != null && !Objects.equals(this.departmentId, departmentId)) {
+            throw new IllegalArgumentException("Không thể thay đổi chuyên khoa trực thuộc của phòng");
+        }
+        if (type != null && this.type != type) {
+            throw new IllegalArgumentException("Không thể thay đổi loại phòng của phòng");
+        }
         this.serviceGroupId = serviceGroupId;
         this.roomName = roomName;
         this.location = location;
-        this.type = type;
         this.status = status;
         touch(now);
     }

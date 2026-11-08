@@ -13,6 +13,8 @@ import clinic.backend.dto.response.DepartmentRoomItemResponse;
 import clinic.backend.dto.response.DepartmentStatsResponse;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.RoomType;
@@ -255,23 +257,51 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    @DisplayName("Ném ngoại lệ khi phòng khám lâm sàng gửi kèm nhóm dịch vụ kỹ thuật")
+    void createRoom_Examination_WithServiceGroup_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        RoomRequest request = RoomRequest.builder()
+                .roomCode("PK-NOI-01")
+                .roomName("Phòng khám Nội 1")
+                .departmentId(deptId)
+                .serviceGroupId(UUID.randomUUID())
+                .location("Tòa A - P.101")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Phòng khám lâm sàng không được liên kết với nhóm dịch vụ kỹ thuật");
+    }
+
+    @Test
     @DisplayName("Tính toán stats phòng và khoa chuẩn xác")
     void getStats_CalculatesCorrectly() {
-        when(departmentRepository.count()).thenReturn(3L);
-        when(roomRepository.count()).thenReturn(4L);
+        UUID deptId1 = UUID.randomUUID();
+        UUID deptId2 = UUID.randomUUID();
+        Department d1 = new Department(deptId1, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, null, true, now);
+        Department d2 = new Department(deptId2, "K-XN", "Khoa Xét nghiệm", DepartmentType.PARACLINICAL, null, true, now);
+        when(departmentRepository.findAll()).thenReturn(List.of(d1, d2));
 
-        UUID deptId = UUID.randomUUID();
-        Room r1 = new Room(UUID.randomUUID(), now, deptId, null, "R1", "Room 1", "L1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
-        Room r2 = new Room(UUID.randomUUID(), now, deptId, null, "R2", "Room 2", "L2", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
-        Room r3 = new Room(UUID.randomUUID(), now, deptId, null, "R3", "Room 3", "L3", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
-        Room r4 = new Room(UUID.randomUUID(), now, deptId, null, "R4", "Room 4", "L4", RoomType.EXAMINATION, ActivationStatus.INACTIVE);
+        Room r1 = new Room(UUID.randomUUID(), now, deptId1, null, "R1", "Room 1", "L1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        Room r2 = new Room(UUID.randomUUID(), now, deptId1, null, "R2", "Room 2", "L2", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        Room r3 = new Room(UUID.randomUUID(), now, deptId2, null, "R3", "Room 3", "L3", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        Room r4 = new Room(UUID.randomUUID(), now, deptId2, null, "R4", "Room 4", "L4", RoomType.PARACLINICAL, ActivationStatus.INACTIVE);
 
         when(roomRepository.findAll()).thenReturn(List.of(r1, r2, r3, r4));
 
         DepartmentStatsResponse stats = departmentService.getStats();
 
-        assertThat(stats.getTotalDepartments()).isEqualTo(3L);
+        assertThat(stats.getTotalDepartments()).isEqualTo(2L);
+        assertThat(stats.getClinicalDepartments()).isEqualTo(1L);
+        assertThat(stats.getParaclinicalDepartments()).isEqualTo(1L);
         assertThat(stats.getTotalRooms()).isEqualTo(4L);
+        assertThat(stats.getClinicalRooms()).isEqualTo(2L);
+        assertThat(stats.getParaclinicalRooms()).isEqualTo(2L);
         assertThat(stats.getActiveRooms()).isEqualTo(3L);
         assertThat(stats.getMaintenanceRooms()).isEqualTo(1L);
         assertThat(stats.getActiveRate()).isEqualTo(75.0);
@@ -448,5 +478,190 @@ class DepartmentServiceImplTest {
         assertThatThrownBy(() -> departmentService.createRoom(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động");
+    }
+
+    @Test
+    @DisplayName("updateRoom: Ném ngoại lệ khi cố tình thay đổi chuyên khoa trực thuộc của phòng")
+    void updateRoom_ChangeDepartment_ThrowsException() {
+        UUID roomId = UUID.randomUUID();
+        UUID originDeptId = UUID.randomUUID();
+        UUID differentDeptId = UUID.randomUUID();
+
+        Room existingRoom = new Room(
+                roomId,
+                now,
+                originDeptId,
+                null,
+                "PK-NOI-01",
+                "Phòng khám Nội 1",
+                "Tầng 1",
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        );
+
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(differentDeptId)
+                .roomName("Phòng khám Nội 1 mới")
+                .location("Tầng 2")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Không thể thay đổi chuyên khoa trực thuộc của phòng khám");
+    }
+
+    @Test
+    @DisplayName("updateRoom: Ném ngoại lệ khi cố tình thay đổi loại phòng của phòng đã tạo")
+    void updateRoom_ChangeType_ThrowsException() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+
+        Room existingRoom = new Room(
+                roomId,
+                now,
+                deptId,
+                null,
+                "PK-NOI-01",
+                "Phòng khám Nội 1",
+                "Tầng 1",
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        );
+
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng khám Nội 1")
+                .location("Tầng 1")
+                .type(RoomType.PARACLINICAL)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Không thể thay đổi loại phòng của phòng khám");
+    }
+
+    @Test
+    @DisplayName("updateRoom: Cập nhật thành công tên phòng, vị trí buồng và trạng thái")
+    void updateRoom_Success() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+
+        Room existingRoom = new Room(
+                roomId,
+                now,
+                deptId,
+                null,
+                "PK-NOI-01",
+                "Phòng khám Nội 1",
+                "Tầng 1",
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        );
+
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of());
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng khám Nội tổng hợp 1")
+                .location("Tầng 2 - P.201")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.INACTIVE)
+                .build();
+
+        var response = departmentService.updateRoom(roomId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getName()).isEqualTo("Phòng khám Nội tổng hợp 1");
+        assertThat(response.getLocation()).isEqualTo("Tầng 2 - P.201");
+        assertThat(response.getStatus()).isEqualTo("INACTIVE");
+        assertThat(response.getDepartmentId()).isEqualTo(deptId);
+        assertThat(response.getType()).isEqualTo("EXAMINATION");
+    }
+
+    @Test
+    @DisplayName("getAllItems & updateRoom: Phòng có nhiều nhân sự thì nối tất cả tên bằng dấu phẩy không bị ghi đè")
+    void roomWithMultipleStaff_DoesNotOverwriteAndJoinsNames() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        UUID staffId1 = UUID.randomUUID();
+        UUID staffId2 = UUID.randomUUID();
+
+        Room room = new Room(
+                roomId,
+                now,
+                deptId,
+                null,
+                "PK-NOI-01",
+                "Phòng khám Nội 1",
+                "Tầng 1",
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        );
+
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+
+        StaffAccount doctor = StaffAccount.builder()
+                .id(staffId1)
+                .fullName("Nguyễn Văn A")
+                .academicTitle("BS.")
+                .build();
+
+        StaffAccount technician = StaffAccount.builder()
+                .id(staffId2)
+                .fullName("Trần Thị B")
+                .academicTitle("KTV.")
+                .build();
+
+        StaffRoomAssignment assign1 = new StaffRoomAssignment(
+                UUID.randomUUID(), staffId1, roomId, now, null, null, null, 0L
+        );
+        StaffRoomAssignment assign2 = new StaffRoomAssignment(
+                UUID.randomUUID(), staffId2, roomId, now, null, null, null, 0L
+        );
+
+        // Test getAllItems()
+        when(departmentRepository.findAll()).thenReturn(List.of(dept));
+        when(roomRepository.findAll()).thenReturn(List.of(room));
+        when(serviceGroupRepository.findAll()).thenReturn(List.of());
+        when(medicalServiceRepository.findAll()).thenReturn(List.of());
+        when(staffAccountRepository.findAll()).thenReturn(List.of(doctor, technician));
+        when(staffRoomAssignmentRepository.findByRemovedAtIsNull()).thenReturn(List.of(assign1, assign2));
+
+        var allItems = departmentService.getAllItems();
+        var roomItem = allItems.stream().filter(i -> "ROOM".equals(i.getUnitType())).findFirst().orElseThrow();
+        assertThat(roomItem.getHeadPerson()).contains("BS. Nguyễn Văn A");
+        assertThat(roomItem.getHeadPerson()).contains("KTV. Trần Thị B");
+        assertThat(roomItem.getHeadPerson()).isEqualTo("BS. Nguyễn Văn A, KTV. Trần Thị B");
+
+        // Test updateRoom() with multiple staff (không bị crash NonUniqueResultException)
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of(assign1, assign2));
+        when(staffAccountRepository.findById(staffId1)).thenReturn(Optional.of(doctor));
+        when(staffAccountRepository.findById(staffId2)).thenReturn(Optional.of(technician));
+
+        RoomRequest updateReq = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng khám Nội 1 đổi tên")
+                .location("Tầng 2")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        var updateRes = departmentService.updateRoom(roomId, updateReq);
+        assertThat(updateRes.getHeadPerson()).isEqualTo("BS. Nguyễn Văn A, KTV. Trần Thị B");
     }
 }

@@ -184,11 +184,7 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
               <div>
                 <span className="text-[11px] font-medium text-slate-400 block mb-0.5">Phân loại</span>
                 <span className="font-semibold text-slate-800">
-                  {item.type === 'CLINICAL' ||
-                  item.name?.toLowerCase().includes('nội') ||
-                  item.name?.toLowerCase().includes('ngoại')
-                    ? 'Lâm sàng'
-                    : 'Cận lâm sàng'}
+                  {item.type === 'CLINICAL' ? 'Lâm sàng' : 'Cận lâm sàng'}
                 </span>
               </div>
               <div>
@@ -209,7 +205,7 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                       : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
                   }`}
                 >
-                  {isActive ? 'Đang hoạt động' : 'Tạm ngưng / Bảo trì'}
+                  {isActive ? 'Đang hoạt động' : 'Tạm ngưng'}
                 </span>
               </div>
               <div>
