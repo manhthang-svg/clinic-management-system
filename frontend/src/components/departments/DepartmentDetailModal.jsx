@@ -296,16 +296,10 @@ function DepartmentDetailModalContent({ item, rooms = [], onEdit, onClose }) {
                                   className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
                                     isRoomActive
                                       ? 'bg-[#e3f6ec] text-[#1f9d68] border-[#c6ebd8]'
-                                      : room.status === 'MAINTENANCE'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
                                       : 'bg-[#fde9eb] text-[#d93b4a] border-[#f9cfd4]'
                                   }`}
                                 >
-                                  {isRoomActive
-                                    ? 'Đang hoạt động'
-                                    : room.status === 'MAINTENANCE'
-                                    ? 'Đang bảo trì'
-                                    : 'Tạm ngưng'}
+                                  {isRoomActive ? 'Đang hoạt động' : 'Tạm ngưng'}
                                 </span>
                               </td>
                             </tr>

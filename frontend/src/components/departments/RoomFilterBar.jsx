@@ -83,7 +83,6 @@ export function RoomFilterBar({
             <option value="ALL">Tất cả trạng thái</option>
             <option value="ACTIVE">Đang hoạt động</option>
             <option value="INACTIVE">Tạm ngưng</option>
-            <option value="MAINTENANCE">Đang bảo trì</option>
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
