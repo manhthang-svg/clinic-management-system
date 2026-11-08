@@ -67,13 +67,6 @@ export function RoomTable({
         </span>
       );
     }
-    if (status === 'MAINTENANCE') {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-          Đang bảo trì
-        </span>
-      );
-    }
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#fde9eb] text-[#d93b4a] border border-[#f9cfd4]">
         Tạm ngưng

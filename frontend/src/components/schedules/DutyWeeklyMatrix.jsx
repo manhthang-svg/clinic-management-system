@@ -171,8 +171,7 @@ export function DutyWeeklyMatrix({
                         const isRoomInactive =
                           room.status === 'INACTIVE' ||
                           room.status === 'inactive' ||
-                          room.isActive === false ||
-                          room.status === 'MAINTENANCE';
+                          room.isActive === false;
 
                         return (
                           <tr

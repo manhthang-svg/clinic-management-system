@@ -427,4 +427,26 @@ class DepartmentServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Vị trí buồng phải từ 2 đến 255 ký tự");
     }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tạo phòng thuộc chuyên khoa đang tạm ngưng hoạt động")
+    void createRoom_InactiveDepartment_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department inactiveDept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", false, now);
+
+        when(roomRepository.existsByRoomCode("PK-NOI-01")).thenReturn(false);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(inactiveDept));
+
+        RoomRequest request = RoomRequest.builder()
+                .roomCode("PK-NOI-01")
+                .roomName("Phòng khám Nội 1")
+                .departmentId(deptId)
+                .location("Tầng 2 - Nhà A")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động");
+    }
 }

@@ -247,8 +247,7 @@ export function ScheduleManagementPage({
     const isTargetRoomInactive =
       targetRoom?.status === 'INACTIVE' ||
       targetRoom?.status === 'inactive' ||
-      targetRoom?.isActive === false ||
-      targetRoom?.status === 'MAINTENANCE';
+      targetRoom?.isActive === false;
 
     if (isTargetRoomInactive) {
       toast.error('Phòng khám đang tạm ngừng hoạt động, không thể phân công ca trực');
@@ -472,8 +471,7 @@ export function ScheduleManagementPage({
           const isTargetInactive =
             targetRoom?.status === 'INACTIVE' ||
             targetRoom?.status === 'inactive' ||
-            targetRoom?.isActive === false ||
-            targetRoom?.status === 'MAINTENANCE';
+            targetRoom?.isActive === false;
           return !isTargetInactive;
         });
 

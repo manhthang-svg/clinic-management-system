@@ -198,7 +198,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 : 0.0;
 
         String maintenanceNote = maintenanceRooms > 0
-                ? maintenanceRooms + " phòng đang kiểm tra thiết bị"
+                ? maintenanceRooms + " phòng đang tạm ngưng hoạt động"
                 : "Tất cả phòng hoạt động bình thường";
 
         return DepartmentStatsResponse.builder()
@@ -404,6 +404,10 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new IllegalArgumentException("Khoa trực thuộc không tồn tại: " + request.getDepartmentId()));
+
+        if (!department.isActive()) {
+            throw new IllegalArgumentException("Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động");
+        }
 
         final UUID serviceGroupId;
         if (request.getType() == RoomType.PARACLINICAL) {

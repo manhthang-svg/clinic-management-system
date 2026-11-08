@@ -145,7 +145,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     const maintenanceRooms = totalRooms - activeRooms;
     const activeRate = totalRooms > 0 ? Number(((activeRooms / totalRooms) * 100).toFixed(1)) : 0;
     const maintenanceNote = maintenanceRooms > 0
-      ? `${maintenanceRooms} phòng đang kiểm tra thiết bị`
+      ? `${maintenanceRooms} phòng đang tạm ngưng`
       : 'Tất cả phòng hoạt động bình thường';
 
     return {
@@ -290,35 +290,25 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       const activeDeptRoomsCount = deptRooms.filter((r) => r.status === 'ACTIVE').length;
 
       if (isDeactivating) {
-        // Cảnh báo bắt buộc khi ngưng hoạt động khoa
+        // Cảnh báo khi ngưng hoạt động khoa
         setConfirmDialog({
           title: 'Khóa chuyên khoa',
-          description: `Khoa này đang có ${activeDeptRoomsCount} phòng hoạt động. Việc ngưng hoạt động khoa sẽ tạm ngưng toàn bộ các phòng trực thuộc. Bạn có chắc chắn muốn tiếp tục?`,
+          description: `Khoa này đang có ${activeDeptRoomsCount} phòng hoạt động. Khi tạm ngưng chuyên khoa, bạn sẽ không thể tạo thêm phòng mới thuộc khoa này. Bạn có chắc chắn muốn tiếp tục?`,
           confirmText: 'Khóa chuyên khoa',
           variant: 'destructive',
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-              // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang INACTIVE
+              // Chỉ chuyển chuyên khoa sang INACTIVE, không khóa các phòng liên quan
               setItems((prev) =>
-                prev.map((i) => {
-                  if (i.id === item.id && i.unitType === 'DEPARTMENT') {
-                    return { ...i, status: 'INACTIVE' };
-                  }
-                  if (
-                    i.unitType === 'ROOM' &&
-                    (i.departmentId === item.id ||
-                      i.departmentId === item.departmentId ||
-                      i.departmentName === item.name ||
-                      (item.code && i.departmentCode === item.code))
-                  ) {
-                    return { ...i, status: 'INACTIVE' };
-                  }
-                  return i;
-                })
+                prev.map((i) =>
+                  i.id === item.id && i.unitType === 'DEPARTMENT'
+                    ? { ...i, status: 'INACTIVE' }
+                    : i
+                )
               );
               toast.success(
-                `Đã tạm ngưng chuyên khoa "${item.name}" và toàn bộ các phòng trực thuộc!`
+                `Đã tạm ngưng chuyên khoa "${item.name}"!`
               );
               setConfirmDialog(null);
             } catch (err) {
@@ -329,35 +319,25 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         });
         return;
       } else {
-        // Mở khóa chuyên khoa: kích hoạt lại chuyên khoa và toàn bộ phòng trực thuộc
+        // Mở khóa chuyên khoa
         setConfirmDialog({
           title: 'Mở khóa chuyên khoa',
-          description: `Kích hoạt lại chuyên khoa "${item.name}"? Toàn bộ các phòng chức năng trực thuộc sẽ được kích hoạt hoạt động trở lại.`,
+          description: `Kích hoạt lại chuyên khoa "${item.name}"? Bạn sẽ có thể tạo thêm phòng mới thuộc chuyên khoa này.`,
           confirmText: 'Kích hoạt lại',
           variant: 'mint',
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-              // Chuyển chuyên khoa và toàn bộ phòng trực thuộc sang ACTIVE
+              // Chỉ chuyển chuyên khoa sang ACTIVE, không thay đổi các phòng liên quan
               setItems((prev) =>
-                prev.map((i) => {
-                  if (i.id === item.id && i.unitType === 'DEPARTMENT') {
-                    return { ...i, status: 'ACTIVE' };
-                  }
-                  if (
-                    i.unitType === 'ROOM' &&
-                    (i.departmentId === item.id ||
-                      i.departmentId === item.departmentId ||
-                      i.departmentName === item.name ||
-                      (item.code && i.departmentCode === item.code))
-                  ) {
-                    return { ...i, status: 'ACTIVE' };
-                  }
-                  return i;
-                })
+                prev.map((i) =>
+                  i.id === item.id && i.unitType === 'DEPARTMENT'
+                    ? { ...i, status: 'ACTIVE' }
+                    : i
+                )
               );
               toast.success(
-                `Đã kích hoạt lại chuyên khoa "${item.name}" và toàn bộ phòng trực thuộc!`
+                `Đã kích hoạt lại chuyên khoa "${item.name}"!`
               );
               setConfirmDialog(null);
             } catch (err) {

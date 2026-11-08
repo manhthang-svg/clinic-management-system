@@ -22,11 +22,11 @@ export function DepartmentStatCards({ stats }) {
       ? Number(((activeRooms / totalRooms) * 100).toFixed(1))
       : 0;
 
-  // Chú thích cảnh báo bảo trì
+  // Chú thích trạng thái tạm ngưng
   const displayMaintenanceNote =
     maintenanceNote ||
     (maintenanceRooms > 0
-      ? `${maintenanceRooms} phòng đang kiểm tra thiết bị`
+      ? `${maintenanceRooms} phòng đang tạm ngưng`
       : 'Tất cả phòng hoạt động bình thường');
 
   const cards = [
@@ -78,18 +78,18 @@ export function DepartmentStatCards({ stats }) {
     },
     {
       id: 'maintenance',
-      title: 'Tạm ngưng / Bảo trì',
+      title: 'Tạm ngưng hoạt động',
       value: maintenanceRooms,
-      badge: maintenanceRooms > 0 ? 'Cần kiểm tra' : 'Bình thường',
+      badge: maintenanceRooms > 0 ? 'Tạm ngưng' : 'Bình thường',
       badgeClass:
         maintenanceRooms > 0
-          ? 'bg-amber-50 text-amber-700 border border-amber-100/80'
+          ? 'bg-rose-50 text-rose-700 border border-rose-100/80'
           : 'bg-slate-50 text-slate-500 border border-slate-200/60',
       note: displayMaintenanceNote,
       icon: AlertTriangle,
       iconClass:
         maintenanceRooms > 0
-          ? 'bg-amber-50 text-amber-600'
+          ? 'bg-rose-50 text-rose-600'
           : 'bg-slate-100 text-slate-500',
     },
   ];

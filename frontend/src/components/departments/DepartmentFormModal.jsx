@@ -147,14 +147,20 @@ function DepartmentFormModalContent({
     return departments.find((d) => d.id === formData.departmentId) || null;
   }, [departments, formData.departmentId]);
 
-  // Hiển thị đầy đủ cả Khoa lâm sàng và Khoa cận lâm sàng trong danh sách chọn
+  // Hiển thị đầy đủ cả Khoa lâm sàng và Khoa cận lâm sàng trong danh sách chọn.
+  // Khi tạo phòng mới (!isEdit), chỉ hiển thị các chuyên khoa đang hoạt động (ACTIVE)
+  // để không cho phép tạo phòng trong chuyên khoa đang tạm ngưng.
   const clinicalDepartments = useMemo(() => {
-    return departments.filter((d) => getDepartmentCategory(d) === 'CLINICAL');
-  }, [departments]);
+    return departments.filter(
+      (d) => getDepartmentCategory(d) === 'CLINICAL' && (isEdit || d.status === 'ACTIVE' || d.active === true)
+    );
+  }, [departments, isEdit]);
 
   const paraclinicalDepartments = useMemo(() => {
-    return departments.filter((d) => getDepartmentCategory(d) === 'PARACLINICAL');
-  }, [departments]);
+    return departments.filter(
+      (d) => getDepartmentCategory(d) === 'PARACLINICAL' && (isEdit || d.status === 'ACTIVE' || d.active === true)
+    );
+  }, [departments, isEdit]);
 
   // Lọc nhóm dịch vụ kỹ thuật tương ứng chính xác với Chuyên khoa cận lâm sàng đang chọn
   const filteredServiceGroups = useMemo(() => {
@@ -295,6 +301,11 @@ function DepartmentFormModalContent({
     if (isRoom) {
       if (!formData.departmentId) {
         newErrors.departmentId = 'Vui lòng chọn chuyên khoa trực thuộc';
+      } else if (!isEdit) {
+        const dept = departments.find((d) => d.id === formData.departmentId);
+        if (dept && (dept.status === 'INACTIVE' || dept.active === false)) {
+          newErrors.departmentId = 'Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động';
+        }
       }
       if (!formData.type) {
         newErrors.type = 'Vui lòng chọn loại phòng';
@@ -588,7 +599,6 @@ function DepartmentFormModalContent({
                     >
                       <option value="ACTIVE">Đang hoạt động</option>
                       <option value="INACTIVE">Tạm ngưng</option>
-                      <option value="MAINTENANCE">Đang bảo trì thiết bị</option>
                     </select>
                   </div>
                 </div>
@@ -672,7 +682,7 @@ function DepartmentFormModalContent({
                     <div className="p-2.5 px-3 text-[11.5px] text-teal-900 bg-teal-50/70 rounded-xl border border-teal-100 flex items-start gap-2">
                       <Info className="w-4 h-4 text-[#0d9488] shrink-0 mt-0.5" />
                       <div className="leading-relaxed">
-                        Danh mục dịch vụ kỹ thuật được đồng bộ tự động theo <strong>Nhóm dịch vụ kỹ thuật</strong> của phòng (Quy tắc BR-28). Để thêm mới hoặc ngừng cung cấp một dịch vụ kỹ thuật, vui lòng điều chỉnh tại <strong>Danh mục dịch vụ y tế</strong>.
+                        Danh mục dịch vụ kỹ thuật được đồng bộ tự động theo <strong>Nhóm dịch vụ kỹ thuật</strong> của phòng. Để thêm mới hoặc ngừng cung cấp một dịch vụ kỹ thuật, vui lòng điều chỉnh tại <strong>Danh mục dịch vụ y tế</strong>.
                       </div>
                     </div>
                   )}
