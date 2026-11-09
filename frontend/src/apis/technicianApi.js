@@ -48,6 +48,14 @@ export const technicianApi = {
     });
   },
 
+  /** UC-66 AF-02: back to the waiting list at its original place, with a reason. */
+  async returnToWaiting(detailId, reason) {
+    return apiClient.request(`/technician/queue/${detailId}/return-to-waiting`, {
+      method: 'POST',
+      body: { reason },
+    });
+  },
+
   async rejectOrder(detailId, reason) {
     return apiClient.request(`/technician/queue/${detailId}/reject`, {
       method: 'POST',

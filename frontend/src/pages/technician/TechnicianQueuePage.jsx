@@ -20,6 +20,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
 
 import { MetricCard } from '../../components/shared/MetricCard';
 import technicianApi from '../../apis/technicianApi';
@@ -27,7 +28,9 @@ import technicianApi from '../../apis/technicianApi';
 import {
   PatientClinicalDrawer,
   RejectOrderModal,
+  ReturnToWaitingDialog,
 } from '../../components/technician';
+import { PERFORM_MESSAGES, performErrorMessage } from '../../components/technician/performOrder';
 
 /**
  * Âm thanh chuông báo gọi số bệnh nhân (Web Audio API Synthesizer)
@@ -93,6 +96,8 @@ export function TechnicianQueuePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [orderToReject, setOrderToReject] = useState(null);
+  const [orderToReturn, setOrderToReturn] = useState(null);
+  const navigate = useNavigate();
 
   // Debounce tìm kiếm (300ms)
   useEffect(() => {
@@ -337,19 +342,47 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Thao tác: Hoàn thành kỹ thuật thực hiện
-  const handleCompleteOrder = async (order) => {
+  // UC-66: xác nhận đã thực hiện; openResult = true là AF-01 (nhập kết quả ngay, ví dụ điện tim).
+  const openResult = (order) => navigate(`/technician/results/${order.id}`);
+  const handleCompleteOrder = async (order, { openResultNow = false } = {}) => {
     try {
       setActionLoadingId(order.id);
       await technicianApi.completeOrder(order.id);
-      toast.success(`Đã hoàn tất kỹ thuật cho BN ${order.patientName}!`);
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
       }
+      if (openResultNow) {
+        openResult(order);
+        return;
+      }
+      toast.success(PERFORM_MESSAGES.performed, {
+        description: `BN ${order.patientName} • ${order.serviceName}`,
+        action: { label: 'Nhập kết quả', onClick: () => openResult(order) },
+      });
       await loadQueue(currentRoomId, { silent: true });
     } catch (err) {
-      toast.error(err?.message || 'Không thể cập nhật trạng thái hoàn tất.');
+      toast.error(performErrorMessage(err));
+      await loadQueue(currentRoomId, { silent: true });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // UC-66 AF-02: trả chỉ định về hàng chờ (đúng số thứ tự cũ) kèm lý do.
+  const handleConfirmReturn = async (order, reason) => {
+    try {
+      setActionLoadingId(order.id);
+      await technicianApi.returnToWaiting(order.id, reason);
+      setOrderToReturn(null);
+      if (selectedOrder?.id === order.id) {
+        setIsDrawerOpen(false);
+        setSelectedOrder(null);
+      }
+      toast.info(PERFORM_MESSAGES.returned);
+      await loadQueue(currentRoomId, { silent: true });
+    } catch (err) {
+      toast.error(performErrorMessage(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -839,16 +872,38 @@ export function TechnicianQueuePage() {
                             </button>
                           )}
 
-                          {/* Nút Hoàn thành (khi IN_PROGRESS) */}
+                          {/* UC-66: Đã thực hiện / Nhập KQ ngay (AF-01) / Trả về hàng chờ (AF-02) khi IN_PROGRESS */}
                           {isInProgress && (
-                            <button
-                              type="button"
-                              onClick={() => handleCompleteOrder(order)}
-                              className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                              title="Hoàn thành kỹ thuật"
-                            >
-                              <span>Hoàn thành</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                disabled={actionLoadingId === order.id}
+                                onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                title="Xác nhận đã thực hiện xong dịch vụ"
+                              >
+                                <span>Đã thực hiện</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoadingId === order.id}
+                                onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order, { openResultNow: true }); }}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                title="Xác nhận đã thực hiện và nhập kết quả ngay"
+                              >
+                                <span>Nhập KQ</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoadingId === order.id}
+                                onClick={(e) => { e.stopPropagation(); setOrderToReturn(order); }}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                title="Không thực hiện được: trả về hàng chờ kèm lý do"
+                              >
+                                <RotateCcw className="w-3 h-3 shrink-0" />
+                                <span>Trả về</span>
+                              </button>
+                            </>
                           )}
                         </div>
                       )}
@@ -907,6 +962,14 @@ export function TechnicianQueuePage() {
         onSkipOrder={(order) => handleSkipOrder(order)}
         onCompleteOrder={(order) => handleCompleteOrder(order)}
         onOpenRejectModal={(order) => handleOpenRejectModal(order)}
+      />
+
+      {/* UC-66 AF-02: TRẢ VỀ HÀNG CHỜ */}
+      <ReturnToWaitingDialog
+        key={orderToReturn?.id ?? 'none'}
+        order={orderToReturn}
+        onClose={() => setOrderToReturn(null)}
+        onConfirm={handleConfirmReturn}
       />
 
       {/* 6. MODAL TỪ CHỐI / HỦY Y LỆNH */}

@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
+import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianQueueStatsResponse;
@@ -416,8 +417,10 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        requireInProgressBy(detail, technicianAccountId);
 
-        detail.completePerformance(now);
+        // UC-66 step 3: Performed, waiting for its result (UC-64).
+        detail.completePerformance(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
         Map<String, Object> audit = new LinkedHashMap<>();
@@ -428,6 +431,42 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 detail.getMachidinh(), audit, now);
 
         return getQueueDetail(detailId);
+    }
+
+    @Override
+    @Transactional
+    public TechnicianQueueItemResponse returnToWaiting(
+            UUID detailId, UUID technicianAccountId, ReturnParaclinicalOrderToWaitingRequest request) {
+        Instant now = clock.instant();
+        ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+
+        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        requireInProgressBy(detail, technicianAccountId);
+
+        // UC-66 AF-02: back to Waiting at its original place; the reason is recorded in the audit log.
+        detail.returnToWaiting(technicianAccountId, now);
+        paraclinicalOrderDetailRepository.save(detail);
+
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("action", "RETURN_TO_WAITING");
+        audit.put("status", detail.getStatus().name());
+        audit.put("reason", request.reason().strip());
+        auditLogService.recordBusinessChange(
+                technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
+                detail.getMachidinh(), audit, now);
+
+        return getQueueDetail(detailId);
+    }
+
+    /** UC-66 EF-01: only the technician who accepted the service, while it is In Progress (MSG13). */
+    private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
+        if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
+            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
+        }
+        if (!detail.isPerformedBy(technicianAccountId)) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
     }
 
     @Override
