@@ -231,4 +231,41 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
             this.releasedAt = when;
         }
     }
+
+    public void accept(UUID performerAccountId, Instant when) {
+        this.status = ParaclinicalOrderDetailStatus.IN_PROGRESS;
+        this.acceptedAt = when;
+        this.performerAccountId = performerAccountId;
+        this.isSkipped = false;
+        touch(when);
+    }
+
+    public void skip(Instant when) {
+        this.isSkipped = true;
+        this.skippedAt = when;
+        touch(when);
+    }
+
+    public void unskip(Instant when) {
+        this.isSkipped = false;
+        this.skippedAt = null;
+        touch(when);
+    }
+
+    public void completePerformance(Instant when) {
+        this.status = ParaclinicalOrderDetailStatus.PENDING_RESULT;
+        this.performedAt = when;
+        touch(when);
+    }
+
+    public void cancel(String reason, UUID cancelledByAccountId, Instant when) {
+        if (isFinished()) {
+            throw new IllegalStateException("Paraclinical service is already finished");
+        }
+        this.status = ParaclinicalOrderDetailStatus.CANCELLED;
+        this.cancelReason = reason;
+        this.cancelledByAccountId = cancelledByAccountId;
+        this.cancelledAt = when;
+        touch(when);
+    }
 }

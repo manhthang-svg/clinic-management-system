@@ -1,5 +1,7 @@
 package clinic.backend.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +13,6 @@ public interface ClinicalExaminationRepository extends JpaRepository<ClinicalExa
 
     @EntityGraph(attributePaths = "diagnoses")
     Optional<ClinicalExamination> findByMedicalRecordId(UUID medicalRecordId);
+
+    List<ClinicalExamination> findByMedicalRecordIdIn(Collection<UUID> medicalRecordIds);
 }
