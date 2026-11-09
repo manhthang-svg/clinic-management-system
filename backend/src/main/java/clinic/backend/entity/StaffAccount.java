@@ -72,6 +72,10 @@ public class StaffAccount {
     @Column(name = "practice_license_no", length = 255)
     private String practiceLicenseNo;
 
+    /** Prescriber link code from the national prescription system; required to prescribe (BR-49, UC-93). */
+    @Column(name = "ma_lienthong_bacsi", length = 50)
+    private String maLienthongBacsi;
+
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
 

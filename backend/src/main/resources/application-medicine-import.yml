@@ -1,0 +1,22 @@
+# Operator-only import of a medicine list (README, "Load the medicine catalog"). It loads one file and exits
+# without opening an HTTP port.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+
+clinic:
+  medicine-import:
+    file: ${MEDICINE_IMPORT_FILE:classpath:db/reference/medicine-catalog.csv}
+  visit:
+    end-of-day:
+      enabled: false
+  icd10:
+    search-cache:
+      preload: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

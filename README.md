@@ -90,6 +90,40 @@ The command opens no HTTP port and exits. It validates the whole file first and 
 
 A running backend serves ICD-10 search from memory and reloads the list every hour (`clinic.icd10.search-cache.ttl`, default `1h`), so it sees a new import within an hour; restart the backend to see it at once. Saving a code always checks the database.
 
+### Load the long-term prescription disease list
+
+The diseases whose medicines may be prescribed for more than 30 days (TT 26/2025/TT-BYT Phụ lục VII, 252 rows) are not loaded by a migration. Load them **after** the ICD-10 list, because each row's codes are expanded against the `icd10` table:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=long-term-disease-import"
+```
+
+The command opens no HTTP port and exits. It validates the whole file first and writes nothing if any row is invalid; one run is one transaction. Each row's codes are stored code by code, child codes included (`E10 - E14 (trừ E10.0, ...)` becomes every code from E10 to E14 except the excluded ones). Rows of the same document no longer in the file are retired. Running it again changes nothing.
+
+Codes the appendix prints that are not in the ICD-10 list are skipped and listed at the end: `D75.2` (moved to D47.3 by WHO), `Z69.64` and `Z69.65` (do not exist). Rows 6.26 and 10.6 are printed without a code and match no diagnosis.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LONG_TERM_DISEASE_IMPORT_FILE` | `classpath:db/reference/long-term-prescription-diseases.csv` | List to load |
+| `LONG_TERM_DISEASE_IMPORT_EFFECTIVE_FROM` | `2025-07-01` | Day the list takes effect; retired rows end the day before |
+| `LONG_TERM_DISEASE_IMPORT_SOURCE` | `TT 26/2025/TT-BYT` | Document recorded on each row |
+
+The CSV keeps the printed code text in `ma_icd_goc` and the same codes in a fixed form in `ma_icd`: items separated by spaces, `E11` (code and child codes), `F70..F79` (range), `-E11.0` (excluded).
+
+### Load the medicine catalog
+
+The medicine catalog has no rows after the migrations. The bundled list `db/reference/medicine-catalog.csv` holds 66 common outpatient medicines taken from the public registry of the Drug Administration of Vietnam (dichvucong.dav.gov.vn, registrations in effect), including four special-control medicines for testing that they cannot be prescribed. Load it with:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=medicine-import"
+```
+
+The command opens no HTTP port and exits. It validates the whole file against BR-79 first and writes nothing if any row is invalid or a registration number already belongs to another medicine. New medicines are active; existing ones, matched by `ma_thuoc`, are updated but keep their status, and medicines not in the file are left alone (activating and deactivating stays with the Admin). Running it again changes nothing. Set `MEDICINE_IMPORT_FILE` (for example `file:C:/path/medicines.csv`) to load another list.
+
+The columns are `ma_thuoc,so_dang_ky,ma_thuoc_bhyt,ten_thuoc,hoat_chat,ham_luong,duong_dung,don_vi_tinh,nhom_kiem_soat`; any further columns record the source and are not stored. In the bundled list `duong_dung` and `don_vi_tinh` are derived from the dosage form, the special-control groups are assigned by active ingredient, and `ma_thuoc_bhyt` is empty until its format is confirmed for UC-80 (I1-D45).
+
 The CSV is extracted from the official appendix PDF with the scripts in `backend/tools/icd10/` (header `ma,ten,ma_cha,ghi_chu`; `ghi_chu` holds the column 18 and 24–29 rules as `|`-separated flags).
 
 ## Testing

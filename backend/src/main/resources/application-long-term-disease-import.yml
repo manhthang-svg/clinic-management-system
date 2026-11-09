@@ -1,0 +1,24 @@
+# Operator-only import of the long-term prescription disease list (README, "Load the long-term prescription
+# disease list"). It loads one file and exits without opening an HTTP port. Run it after the ICD-10 import.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+
+clinic:
+  long-term-disease-import:
+    file: ${LONG_TERM_DISEASE_IMPORT_FILE:classpath:db/reference/long-term-prescription-diseases.csv}
+    effective-from: ${LONG_TERM_DISEASE_IMPORT_EFFECTIVE_FROM:2025-07-01}
+    source: ${LONG_TERM_DISEASE_IMPORT_SOURCE:TT 26/2025/TT-BYT}
+  visit:
+    end-of-day:
+      enabled: false
+  icd10:
+    search-cache:
+      preload: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

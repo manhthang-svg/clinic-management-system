@@ -154,6 +154,15 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <!-- PayOS.fromEnv() needs credentials to build the client bean; integration tests never call
+                         PayOS, so placeholders let the context start without PAYOS_* variables. -->
+                    <systemPropertyVariables>
+                        <payos.client-id>test-client-id</payos.client-id>
+                        <payos.api-key>test-api-key</payos.api-key>
+                        <payos.checksum-key>test-checksum-key</payos.checksum-key>
+                    </systemPropertyVariables>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
