@@ -265,3 +265,69 @@ export const MOCK_RESULT_ORDERS = [
     },
   },
 ];
+
+const BIOCHEMISTRY = [
+  { code: 'GLU', name: 'Glucose', unit: 'mmol/L', ref: { type: 'RANGE', low: 3.9, high: 6.4 } },
+  { code: 'HBA1C', name: 'HbA1c', unit: '%', ref: { type: 'UPPER', high: 6.5 } },
+  { code: 'CHOL', name: 'Cholesterol toàn phần', unit: 'mmol/L', ref: { type: 'UPPER', high: 5.2 } },
+  { code: 'TG', name: 'Triglycerid', unit: 'mmol/L', ref: { type: 'UPPER', high: 1.7 } },
+  { code: 'HDL', name: 'HDL-C', unit: 'mmol/L', ref: { type: 'LOWER', low: 0.9 } },
+  { code: 'LDL', name: 'LDL-C', unit: 'mmol/L', ref: { type: 'UPPER', high: 3.4 } },
+].map((p) => ({ ...p, valueType: 'NUMERIC', group: null }));
+
+/** Form, kind, printed section and lab parameters of each service in the technician result list. */
+const LIST_SERVICE_FORMS = {
+  XQ: { printForm: 'XRAY', kind: 'IMAGING', section: 'PHIẾU CHIẾU/CHỤP X-QUANG' },
+  SA: { printForm: 'ULTRASOUND', kind: 'IMAGING', section: 'PHIẾU SIÊU ÂM' },
+  TD: { printForm: 'ECG', kind: 'FUNCTIONAL', section: 'PHIẾU ĐIỆN TIM' },
+  'XN-01': { printForm: 'LAB', kind: 'LAB', section: 'XÉT NGHIỆM SINH HÓA', parameters: BIOCHEMISTRY },
+  'XN-02': { printForm: 'LAB', kind: 'LAB', section: 'XÉT NGHIỆM NƯỚC TIỂU', parameters: URINE },
+};
+
+// The normal-result texts of the list services reuse the templates of the matching demo services.
+Object.assign(RESULT_TEMPLATES, {
+  'XQ-01': RESULT_TEMPLATES['XQ-NT'],
+  'SA-01': RESULT_TEMPLATES['SA-OB'],
+  'TD-ECG': RESULT_TEMPLATES.DT,
+});
+
+function todayAt(time) {
+  const [hours, minutes] = String(time ?? '00:00').split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+/**
+ * Turns one row of the technician result list (constants/technicianResultData) into the order shape that the
+ * result form reads, so that every row of the list opens its form. Demo data until the API exists.
+ */
+export function resultOrderFromListEntry(entry) {
+  const form = LIST_SERVICE_FORMS[entry.serviceCode] ?? LIST_SERVICE_FORMS[entry.serviceCode.split('-')[0]];
+  const performedAt = todayAt(entry.completedAtTime);
+  return {
+    ...common,
+    id: entry.id,
+    orderCode: entry.orderCode,
+    printForm: form?.printForm ?? 'XRAY',
+    kind: form?.kind ?? 'IMAGING',
+    section: form?.section ?? 'PHIẾU KẾT QUẢ',
+    serviceCode: entry.serviceCode,
+    serviceName: entry.serviceName,
+    orderingDoctor: entry.doctorName,
+    orderingRoom: entry.doctorRoom,
+    patient: {
+      code: entry.patientId, name: entry.patientName, age: entry.age, gender: entry.gender,
+      sex: entry.gender === 'Nam' ? 1 : 2, address: '', coverage: entry.insuranceType === 'BHYT' ? 'BHYT' : 'Dịch vụ',
+      insuranceNumber: entry.insuranceNumber ?? null, ethnicity: 'Kinh', phone: entry.phone,
+    },
+    diagnosis: entry.clinicalDiagnosis,
+    clinicalNote: '',
+    orderedAt: performedAt,
+    performedAt,
+    status: 'PERFORMED',
+    performer: MOCK_TECHNICIAN,
+    ...(form?.parameters ? { parameters: form.parameters } : {}),
+    result: entry.status === 'DRAFT' ? { status: 'DRAFT', savedAt: performedAt } : null,
+  };
+}

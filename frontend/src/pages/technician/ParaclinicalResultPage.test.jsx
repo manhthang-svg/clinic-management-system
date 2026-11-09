@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockResultApi } from '../../components/paraclinicalResult';
+import { MOCK_RESULT_ORDERS, resultOrderFromListEntry } from '../../components/paraclinicalResult/resultMockData';
+import { INITIAL_PARACLINICAL_RESULTS } from '../../constants/technicianResultData';
 import { ParaclinicalResultPage } from './ParaclinicalResultPage';
 
 function renderPage(orderId, api = createMockResultApi({ latency: 0 })) {
@@ -18,6 +20,26 @@ function renderPage(orderId, api = createMockResultApi({ latency: 0 })) {
 }
 
 describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
+  it.each(INITIAL_PARACLINICAL_RESULTS.map((entry) => [entry.id, entry.serviceName]))(
+    'opens the result form of list row %s (%s)',
+    async (orderId) => {
+      const orders = [...MOCK_RESULT_ORDERS, ...INITIAL_PARACLINICAL_RESULTS.map(resultOrderFromListEntry)];
+      renderPage(orderId, createMockResultApi({ orders, latency: 0 }));
+
+      expect(await screen.findByRole('button', { name: 'Gửi kết quả' })).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
+
+  it('shows the lab parameters of a biochemistry row from the list', async () => {
+    const orders = INITIAL_PARACLINICAL_RESULTS.map(resultOrderFromListEntry);
+    const lab = INITIAL_PARACLINICAL_RESULTS.find((entry) => entry.serviceCode === 'XN-01');
+    renderPage(lab.id, createMockResultApi({ orders, latency: 0 }));
+
+    expect(await screen.findByLabelText('HbA1c')).toBeInTheDocument();
+    expect(screen.getByText(/Lưu nháp lúc/)).toBeInTheDocument();
+  });
+
   it('flags a high glucose value and submits after confirmation', async () => {
     const api = renderPage('cls-002');
     const user = userEvent.setup();
