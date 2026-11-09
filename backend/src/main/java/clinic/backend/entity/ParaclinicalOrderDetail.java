@@ -282,6 +282,28 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         touch(when);
     }
 
+    /**
+     * UC-67: true while the technician who performed the service may record its result: Performed (UC-66), or
+     * still In Progress when the result is entered right away (UC-66 AF-01).
+     */
+    public boolean awaitsResultFrom(UUID technicianAccountId) {
+        return (status == ParaclinicalOrderDetailStatus.PENDING_RESULT || status == ParaclinicalOrderDetailStatus.IN_PROGRESS)
+                && performerAccountId != null
+                && performerAccountId.equals(technicianAccountId);
+    }
+
+    /** UC-67 step 9: the result was submitted, so the service is Completed (O10). */
+    public void completeWithResult(UUID technicianAccountId, Instant when) {
+        if (!awaitsResultFrom(technicianAccountId)) {
+            throw new IllegalStateException("Paraclinical service is not waiting for a result from this technician");
+        }
+        if (performedAt == null) {
+            performedAt = when;
+        }
+        status = ParaclinicalOrderDetailStatus.COMPLETED;
+        touch(when);
+    }
+
     private void requirePerformedBy(UUID technicianAccountId) {
         if (!isPerformedBy(technicianAccountId)) {
             throw new IllegalStateException("Paraclinical service is not in progress for this technician");

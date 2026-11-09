@@ -78,6 +78,7 @@ export function interpret(parameter, value) {
 export function emptyLabResult(order) {
   return {
     receivedAt: '',
+    instrumentId: '',
     values: Object.fromEntries(order.parameters.map((p) => [p.code, ''])),
     conclusion: '',
     note: '',
@@ -87,6 +88,7 @@ export function emptyLabResult(order) {
 export function emptyDescriptiveResult() {
   return {
     technique: '', description: '', conclusion: '', recommendation: '', imageLink: '', readingDoctor: '', files: [],
+    instrumentId: '',
   };
 }
 
@@ -189,6 +191,9 @@ export function formatDateTime(iso) {
 
 const ERROR_MESSAGE = {
   NOT_FOUND: 'Không tìm thấy chỉ định.',
+  REQUEST_VALIDATION_FAILED: MSG.fixFields,
+  RESULT_NOT_EDITABLE: 'Chỉ định chưa được xác nhận thực hiện nên chưa thể nhập kết quả.',
+  INSTRUMENT_UNAVAILABLE: 'Máy thực hiện đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.', // MSG40
   NOT_PERFORMER: MSG.notPerformer,
   RESULT_ALREADY_SUBMITTED: MSG.submitted,
 };
