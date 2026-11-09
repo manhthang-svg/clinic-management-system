@@ -229,6 +229,14 @@ public class PaymentServiceImpl implements PaymentService {
                     "status", payment.getStatus().name()));
         }
 
+        // Lượt BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận, khi mức hưởng đã chốt (BR-15, BR-26, BR-27)
+        visitRepository.findById(payment.getVisitId())
+                .filter(Visit::awaitsConclusionBeforePayment)
+                .ifPresent(visit -> {
+                    throw new AppException(ErrorCode.PAYMENT_AWAITS_CONCLUSION,
+                            Map.of("paymentCode", payment.getPaymentCode()));
+                });
+
         // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
         String receiptNumber = "PT"
                 + LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE)
@@ -336,7 +344,9 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getPayosOrderCode(),
                 payment.getPayosCheckoutUrl(),
                 payment.getPayosQrCode(),
-                itemResponses
+                itemResponses,
+                payment.getStatus() == PaymentStatus.PENDING && visit != null
+                        && visit.awaitsConclusionBeforePayment()
         );
     }
 }

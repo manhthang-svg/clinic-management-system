@@ -44,6 +44,7 @@ Backend environment variables:
 | `APP_FRONTEND_ORIGIN` | Deployed environments | Origin allowed to call refresh/logout (default `http://localhost:5173`) |
 | `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
 | `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
+| `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2340000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
 | `VISIT_END_OF_DAY_ENABLED`, `VISIT_END_OF_DAY_CRON`, `VISIT_END_OF_DAY_RUN_ON_STARTUP` | No | End-of-day job (BR-22) that closes unfinished visits of earlier days; defaults `true`, `0 5 0 * * *` (00:05, Asia/Ho_Chi_Minh) and `true` (also run once at startup to catch up). Safe when several backends share one database: a visit is closed once and later runs skip it |
 
 Run the backend with `./mvnw spring-boot:run` in `backend/` and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`). Add `-Dspring-boot.run.profiles=dev` to expose local API documentation.

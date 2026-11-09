@@ -4,9 +4,13 @@ import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.dto.response.PayOSResultResponse;
 import clinic.backend.dto.response.PaymentQrResponse;
 import clinic.backend.entity.Payment;
+import clinic.backend.entity.Visit;
+import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.PaymentRepository;
+import clinic.backend.repository.VisitRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +34,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -40,6 +45,7 @@ public class PayOSPaymentService {
 
     private final PayOS payOS;
     private final PaymentRepository paymentRepository;
+    private final VisitRepository visitRepository;
     private final PaymentCompletionService paymentCompletionService;
     private final String returnUrl;
     private final String cancelUrl;
@@ -47,6 +53,7 @@ public class PayOSPaymentService {
     public PayOSPaymentService(
             PayOS payOS,
             PaymentRepository paymentRepository,
+            VisitRepository visitRepository,
             PaymentCompletionService paymentCompletionService,
             @Value("${PAYOS_RETURN_URL:http://localhost:5173/payment/result}")
             String returnUrl,
@@ -55,6 +62,7 @@ public class PayOSPaymentService {
     ) {
         this.payOS = payOS;
         this.paymentRepository = paymentRepository;
+        this.visitRepository = visitRepository;
         this.paymentCompletionService = paymentCompletionService;
         this.returnUrl = returnUrl;
         this.cancelUrl = cancelUrl;
@@ -76,6 +84,14 @@ public class PayOSPaymentService {
                     "Phiếu thu không ở trạng thái chờ thanh toán"
             );
         }
+
+        // Lượt BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận, khi mức hưởng đã chốt (BR-15, BR-26, BR-27)
+        visitRepository.findById(payment.getVisitId())
+                .filter(Visit::awaitsConclusionBeforePayment)
+                .ifPresent(visit -> {
+                    throw new AppException(ErrorCode.PAYMENT_AWAITS_CONCLUSION,
+                            Map.of("paymentCode", payment.getPaymentCode()));
+                });
 
         if (payment.getPayosOrderCode() != null
                 && payment.getPayosCheckoutUrl() != null

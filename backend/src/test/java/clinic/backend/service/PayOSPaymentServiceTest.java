@@ -2,13 +2,21 @@ package clinic.backend.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.entity.Payment;
+import clinic.backend.entity.Visit;
+import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.enums.VisitInsuranceVerifyStatus;
+import clinic.backend.enums.VisitStatus;
+import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.PaymentRepository;
+import clinic.backend.repository.VisitRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +28,7 @@ import vn.payos.model.v2.paymentRequests.PaymentLink;
 import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -41,12 +50,15 @@ class PayOSPaymentServiceTest {
     @Mock
     private PaymentCompletionService paymentCompletionService;
 
+    @Mock
+    private VisitRepository visitRepository;
+
     private PayOSPaymentService service;
     private Payment payment;
 
     @BeforeEach
     void setUp() {
-        service = new PayOSPaymentService(payOS, paymentRepository, paymentCompletionService, "http://r", "http://c");
+        service = new PayOSPaymentService(payOS, paymentRepository, visitRepository, paymentCompletionService, "http://r", "http://c");
         payment = Payment.createExaminationFee(UUID.randomUUID(), NOW, "HD1", UUID.randomUUID(),
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
     }
@@ -91,6 +103,22 @@ class PayOSPaymentServiceTest {
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         verify(paymentCompletionService).completePaidReceipt(payment, null);
+    }
+
+    @Test
+    void refusesAQrCodeForAnInsuranceVisitBeforeTheConclusion() {
+        when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
+        Visit visit = new Visit(payment.getVisitId(), NOW, "DK0000000002", UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), NOW, VisitDoituongbnLoai.BHYT, "DN4797000000001", "7000000001",
+                LocalDate.of(2026, 1, 1), LocalDate.of(2030, 12, 31), "79014", "Bệnh viện Đa khoa Sài Gòn", null,
+                (short) 80, null, null, "Khám bệnh", false, null, LocalDate.of(2026, 11, 3), 1,
+                VisitStatus.IN_EXAMINATION, VisitInsuranceVerifyStatus.VALID);
+        when(visitRepository.findById(payment.getVisitId())).thenReturn(Optional.of(visit));
+
+        assertThatThrownBy(() -> service.createQr(payment.getId()))
+                .isInstanceOfSatisfying(AppException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PAYMENT_AWAITS_CONCLUSION));
+        assertThat(payment.getPayosOrderCode()).isNull();
     }
 
     @Test

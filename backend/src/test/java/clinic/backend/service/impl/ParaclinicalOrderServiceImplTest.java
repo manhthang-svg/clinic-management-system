@@ -6,16 +6,21 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import clinic.backend.config.properties.InsuranceBillingProperties;
+import clinic.backend.dto.request.CancelParaclinicalServiceRequest;
 import clinic.backend.dto.request.CreateParaclinicalOrderRequest;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.ParaclinicalOrder;
+import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Payment;
+import clinic.backend.entity.PaymentItem;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
@@ -33,6 +38,7 @@ import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
+import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.RoomRepository;
@@ -54,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +81,7 @@ class ParaclinicalOrderServiceImplTest {
     @Mock private ParaclinicalOrderRepository paraclinicalOrderRepository;
     @Mock private AuditLogService auditLogService;
     @Mock private PaymentCompletionService paymentCompletionService;
+    @Mock private ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
 
     private ParaclinicalOrderServiceImpl service;
 
@@ -82,7 +90,13 @@ class ParaclinicalOrderServiceImplTest {
         Clock clock = Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh"));
         service = new ParaclinicalOrderServiceImpl(
                 visitRepository, medicalRecordRepository, medicalServiceRepository, serviceGroupRepository,
-                roomRepository, paymentRepository, paraclinicalOrderRepository, auditLogService, paymentCompletionService,
+                roomRepository, paymentRepository, paraclinicalOrderRepository, paraclinicalOrderDetailRepository,
+                auditLogService, paymentCompletionService,
+                new InsuranceCoverageServiceImpl(
+                        new InsuranceBillingProperties(BigDecimal.valueOf(2_340_000), BigDecimal.valueOf(15)),
+                        paymentRepository, paraclinicalOrderRepository, auditLogService, clock),
+                new ParaclinicalProgressServiceImpl(
+                        medicalRecordRepository, paraclinicalOrderRepository, visitRepository, auditLogService, clock),
                 new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 
@@ -121,22 +135,23 @@ class ParaclinicalOrderServiceImplTest {
     void splitsInsuranceAndPatientAmountsAndReleasesAnInsuranceVisitAtOnce() {
         Visit visit = insuredVisit((short) 80);
         // Insurance price below the clinic price: the patient also pays the difference (BR-27).
-        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 150000L);
+        MedicalService mri = service("MRI", "Chụp MRI sọ não", MedicalServiceType.IMAGING, 500000, 300000L);
         // Insurance price above the clinic price: insurance pays on the clinic price.
         MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 80000, 90000L);
-        stubOrder(visit, List.of(ultrasound, blood));
+        stubOrder(visit, List.of(mri, blood));
         when(paymentCompletionService.releaseOrder(any(ParaclinicalOrder.class))).thenReturn(List.of());
 
-        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId(), blood.getId()));
+        var response = service.createOrder(DOCTOR_ID, request(mri.getId(), blood.getId()));
 
-        // 150 000 × 80% = 120 000; min(80 000, 90 000) × 80% = 64 000
-        assertThat(response.tongcong()).isEqualByComparingTo("280000");
-        assertThat(response.insuranceAmount()).isEqualByComparingTo("184000");
-        assertThat(response.patientAmount()).isEqualByComparingTo("96000");
+        // 300 000 + 80 000 within scope is not below 351 000, so the card's 80% applies:
+        // 300 000 × 80% = 240 000; min(80 000, 90 000) × 80% = 64 000
+        assertThat(response.tongcong()).isEqualByComparingTo("580000");
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("304000");
+        assertThat(response.patientAmount()).isEqualByComparingTo("276000");
         assertThat(response.details())
                 .extracting(d -> d.bhytChitra().longValue(), d -> d.benhnhanphaitra().longValue())
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(120000L, 80000L),
+                        org.assertj.core.groups.Tuple.tuple(240000L, 260000L),
                         org.assertj.core.groups.Tuple.tuple(64000L, 16000L));
 
         ArgumentCaptor<Payment> payment = ArgumentCaptor.forClass(Payment.class);
@@ -148,6 +163,51 @@ class ParaclinicalOrderServiceImplTest {
         // BR-26: released to the paraclinical rooms now; the patient amount is collected after the conclusion.
         verify(paymentCompletionService).releaseOrder(any(ParaclinicalOrder.class));
         assertThat(visit.getStatus()).isEqualTo(VisitStatus.WAITING_PARACLINICAL);
+    }
+
+    @Test
+    void coversInFullWhileTheVisitStaysBelowTheExemptionThreshold() {
+        Visit visit = insuredVisit((short) 80);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 150000L);
+        stubOrder(visit, List.of(ultrasound));
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        // 150 000 within scope is below 351 000: 100% of it is covered; the patient pays only the difference.
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("150000");
+        assertThat(response.patientAmount()).isEqualByComparingTo("50000");
+    }
+
+    @Test
+    void repricesTheExaminationFeeWhenTheVisitCrossesTheExemptionThreshold() {
+        Visit visit = insuredVisit((short) 80);
+        MedicalService exam = MedicalService.create(UUID.randomUUID(), NOW, "KB", "Khám bệnh",
+                MedicalServiceType.EXAMINATION, null, null, BigDecimal.valueOf(150000), BigDecimal.valueOf(100000),
+                null);
+        // Registered alone, the examination was below the threshold and covered at 100%.
+        Payment examFee = Payment.createExaminationFee(UUID.randomUUID(), NOW, "HD0000000001", VISIT_ID,
+                BigDecimal.valueOf(150000), BigDecimal.valueOf(100000), BigDecimal.valueOf(50000));
+        examFee.addItem(PaymentItem.createInsuranceItem(UUID.randomUUID(), NOW, examFee, exam, (short) 100));
+        List<Payment> visitPayments = new ArrayList<>(List.of(examFee));
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 300000, 260000L);
+        stubOrder(visit, List.of(ultrasound));
+        when(paymentRepository.findByVisitId(VISIT_ID)).thenAnswer(i -> List.copyOf(visitPayments));
+        when(paymentRepository.saveAndFlush(any(Payment.class))).thenAnswer(i -> {
+            visitPayments.add(i.getArgument(0));
+            return i.getArgument(0);
+        });
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        // 100 000 + 260 000 = 360 000 within scope is not below 351 000: the card's 80% now applies to both.
+        assertThat(response.insuranceAmount()).isEqualByComparingTo("208000");
+        assertThat(response.patientAmount()).isEqualByComparingTo("92000");
+        assertThat(examFee.getInsuranceTotalAmount()).isEqualByComparingTo("80000");
+        assertThat(examFee.getPatientTotalAmount()).isEqualByComparingTo("70000");
+        assertThat(examFee.getItems()).singleElement()
+                .satisfies(item -> assertThat(item.getCoverageRate()).isEqualTo((short) 80));
+        verify(auditLogService).recordSystemChange(
+                eq(AuditLogAction.UPDATE), eq("payments"), eq(examFee.getId()), any(), any(), eq(NOW));
     }
 
     @Test
@@ -300,6 +360,160 @@ class ParaclinicalOrderServiceImplTest {
                     assertThat(option.name()).isEqualTo("Siêu âm ổ bụng");
                     assertThat(option.clinicPrice()).isEqualByComparingTo("200000");
                 });
+    }
+
+    // ---- BR-25, BR-41: the Doctor cancels a service the patient refused ----
+
+    @Test
+    void cancelsOneServiceOfAnUnpaidSelfPaidReceiptAndRecalculatesIt() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 80000);
+        Ordered ordered = orderFor(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID), ultrasound, blood);
+        ParaclinicalOrderDetail refused = ordered.detail(0);
+
+        var result = service.cancelService(DOCTOR_ID, refused.getId(), cancel("Bệnh nhân không đồng ý chụp"));
+
+        assertThat(refused.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.CANCELLED);
+        assertThat(refused.getCancelReason()).isEqualTo("Bệnh nhân không đồng ý chụp");
+        assertThat(refused.getCancelledByAccountId()).isEqualTo(DOCTOR_ID);
+        assertThat(ordered.payment().getTotalAmount()).isEqualByComparingTo("80000");
+        assertThat(ordered.payment().getPatientTotalAmount()).isEqualByComparingTo("80000");
+        assertThat(result.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(result.visitStatus()).isEqualTo(VisitStatus.WAITING_PARACLINICAL);
+        verify(auditLogService).recordBusinessChange(
+                eq(DOCTOR_ID), eq(AuditLogAction.CANCEL), eq("paraclinical_order_details"), eq(refused.getId()),
+                any(), any(), eq(NOW));
+    }
+
+    @Test
+    void cancellingTheLastServiceCancelsTheReceiptAndSendsTheVisitToConclusion() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Ordered ordered = orderFor(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID), ultrasound);
+
+        var result = service.cancelService(DOCTOR_ID, ordered.detail(0).getId(), cancel("Bệnh nhân từ chối"));
+
+        assertThat(ordered.payment().getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(ordered.order().getStatus()).isEqualTo(ParaclinicalOrderStatus.CANCELLED);
+        assertThat(result.visitStatus()).isEqualTo(VisitStatus.WAITING_CONCLUSION);
+        assertThat(ordered.visit().getStatus()).isEqualTo(VisitStatus.WAITING_CONCLUSION);
+    }
+
+    @Test
+    void refusesToCancelAServiceAlreadyPaidFor() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Ordered ordered = orderFor(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID), ultrasound);
+        ordered.payment().markAsPaid(clinic.backend.enums.PaymentMethod.CASH, UUID.randomUUID(), "PT1");
+
+        assertThatThrownBy(() -> service.cancelService(DOCTOR_ID, ordered.detail(0).getId(), cancel("Từ chối")))
+                .isInstanceOfSatisfying(AppException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PARACLINICAL_SERVICE_NOT_CANCELLABLE));
+        assertThat(ordered.detail(0).getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+    }
+
+    @Test
+    void refusesToCancelAServiceATechnicianHasAccepted() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000, 150000L);
+        Ordered ordered = orderFor(insuredVisit((short) 80), ultrasound);
+        forceField(ordered.detail(0), "status", ParaclinicalOrderDetailStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> service.cancelService(DOCTOR_ID, ordered.detail(0).getId(), cancel("Từ chối")))
+                .isInstanceOfSatisfying(AppException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PARACLINICAL_SERVICE_NOT_CANCELLABLE));
+    }
+
+    @Test
+    void cancellingAnInsuredServiceBringsTheVisitBackUnderTheExemptionThreshold() {
+        // 300 000 + 100 000 within scope is above 351 000: both are covered at the card's 80%.
+        MedicalService mri = service("MRI", "Chụp MRI", MedicalServiceType.IMAGING, 300000, 300000L);
+        MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 100000, 100000L);
+        Ordered ordered = orderFor(insuredVisit((short) 80), mri, blood);
+        assertThat(ordered.payment().getPatientTotalAmount()).isEqualByComparingTo("80000");
+
+        service.cancelService(DOCTOR_ID, ordered.detail(0).getId(), cancel("Bệnh nhân không chụp MRI"));
+
+        // 100 000 left is below 351 000: covered at 100%, the patient owes nothing.
+        assertThat(ordered.payment().getInsuranceTotalAmount()).isEqualByComparingTo("100000");
+        assertThat(ordered.payment().getPatientTotalAmount()).isEqualByComparingTo("0");
+        assertThat(ordered.payment().getStatus()).isEqualTo(PaymentStatus.FEE_EXEMPT);
+    }
+
+    @Test
+    void onlyTheDoctorOfTheVisitCancelsItsServices() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Ordered ordered = orderFor(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID), ultrasound);
+
+        assertThatThrownBy(() -> service.cancelService(UUID.randomUUID(), ordered.detail(0).getId(), cancel("Từ chối")))
+                .isInstanceOfSatisfying(AppException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+    }
+
+    @Test
+    void listsWhichServicesTheDoctorCanStillCancel() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 80000);
+        Ordered ordered = orderFor(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID), ultrasound, blood);
+        service.cancelService(DOCTOR_ID, ordered.detail(0).getId(), cancel("Bệnh nhân từ chối"));
+
+        var details = service.listOrdersByVisit(DOCTOR_ID, VISIT_ID).getFirst().details();
+
+        assertThat(details)
+                .extracting(d -> d.cancellable(), d -> d.cancelReason())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(false, "Bệnh nhân từ chối"),
+                        org.assertj.core.groups.Tuple.tuple(true, null));
+    }
+
+    /** An order created through UC-49, with every lookup the cancellation needs. */
+    private Ordered orderFor(Visit visit, MedicalService... services) {
+        stubOrder(visit, List.of(services));
+        List<Payment> payments = new ArrayList<>();
+        lenient().when(paymentRepository.saveAndFlush(any(Payment.class))).thenAnswer(i -> {
+            payments.add(i.getArgument(0));
+            return i.getArgument(0);
+        });
+        lenient().when(paymentRepository.findByVisitId(VISIT_ID)).thenAnswer(i -> List.copyOf(payments));
+        lenient().when(paymentCompletionService.releaseOrder(any())).thenReturn(List.of());
+
+        service.createOrder(DOCTOR_ID, request(java.util.Arrays.stream(services).map(MedicalService::getId)
+                .toArray(UUID[]::new)));
+
+        ArgumentCaptor<ParaclinicalOrder> orderCaptor = ArgumentCaptor.forClass(ParaclinicalOrder.class);
+        verify(paraclinicalOrderRepository).saveAndFlush(orderCaptor.capture());
+        ArgumentCaptor<MedicalRecord> recordCaptor = ArgumentCaptor.forClass(MedicalRecord.class);
+        verify(medicalRecordRepository).save(recordCaptor.capture());
+        ParaclinicalOrder order = orderCaptor.getValue();
+        MedicalRecord record = recordCaptor.getValue();
+        Payment payment = payments.getFirst();
+
+        for (ParaclinicalOrderDetail detail : order.getDetails()) {
+            lenient().when(paraclinicalOrderDetailRepository.findById(detail.getId())).thenReturn(Optional.of(detail));
+        }
+        lenient().when(medicalRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        lenient().when(medicalRecordRepository.findByVisitId(VISIT_ID)).thenReturn(Optional.of(record));
+        lenient().when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
+        lenient().when(paraclinicalOrderRepository.findAllByMedicalRecordId(record.getId())).thenReturn(List.of(order));
+        lenient().when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+        return new Ordered(visit, order, payment);
+    }
+
+    private record Ordered(Visit visit, ParaclinicalOrder order, Payment payment) {
+        ParaclinicalOrderDetail detail(int index) {
+            return order.getDetails().get(index);
+        }
+    }
+
+    private static CancelParaclinicalServiceRequest cancel(String reason) {
+        return new CancelParaclinicalServiceRequest(reason);
+    }
+
+    private static void forceField(Object target, String name, Object value) {
+        try {
+            var field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private void stubOrder(Visit visit, List<MedicalService> services) {

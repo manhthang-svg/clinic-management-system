@@ -59,6 +59,7 @@ import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ClinicalExaminationService;
 import clinic.backend.service.DutyShiftConfigService;
+import clinic.backend.service.InsuranceCoverageService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -90,6 +91,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     private final ClinicalExaminationMapper mapper;
     private final UuidV7Generator ids;
     private final DutyShiftConfigService dutyShiftConfigService;
+    private final InsuranceCoverageService insuranceCoverageService;
     private final Clock clock;
 
     @Override
@@ -366,7 +368,10 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         return new ClinicalExaminationResponse(
                 visit.getId(), record.getId(), examination.getId(), examination.getVersion(), visit.getSovaovien(),
                 visit.getQueueNumber(), visit.getStatus(), visit.getThoigianvaovien(), visit.getDenkhambenhluc(),
-                visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getInsuranceCoverageRate(), patient.getId(), patient.getMabenhnhan(),
+                visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getInsuranceCoverageRate(),
+                visit.isInsuranceCovered() ? insuranceCoverageService.scopeTotal(visit.getId()) : null,
+                visit.isInsuranceCovered() ? insuranceCoverageService.coPaymentExemptionThreshold() : null,
+                patient.getId(), patient.getMabenhnhan(),
                 patient.getHoten(), patient.getNgaysinh(), patientGender(patient), patient.getNghenghiep(),
                 patient.getDantoc(), patient.getDiachi(), room.getId(), room.getRoomCode(), room.getRoomName(),
                 context.doctor().getId(), context.doctor().getFullName(), visit.getLydovaovien(),

@@ -1,7 +1,6 @@
 package clinic.backend.service.impl;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -70,6 +69,7 @@ import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.DutyShiftConfigService;
+import clinic.backend.service.InsuranceCoverageService;
 import clinic.backend.service.InsuranceVerificationService;
 import clinic.backend.service.VisitService;
 import clinic.backend.utils.UuidV7Generator;
@@ -111,6 +111,7 @@ public class VisitServiceImpl implements VisitService {
     private final UuidV7Generator ids;
     private final ExaminationRoomDuty examinationRoomDuty;
     private final DutyShiftConfigService dutyShiftConfigService;
+    private final InsuranceCoverageService insuranceCoverageService;
     private final Clock clock;
 
     @Override
@@ -282,16 +283,23 @@ public class VisitServiceImpl implements VisitService {
         return appointment;
     }
 
+    /**
+     * BR-27: the fee is the clinic price. With a valid card and an insurance price, insurance pays the cost within
+     * scope, min(insurance price, clinic price), at the applied rate; the examination is the visit's only service
+     * so far, so it alone decides whether the visit is under the co-payment exemption threshold.
+     */
     private FeeCalculation calculateFee(MedicalService service, InsuranceData insurance) {
+        BigDecimal clinicPrice = service.getClinicPrice();
         boolean covered = insurance.status() == VisitInsuranceVerifyStatus.VALID
+                && insurance.coverageRate() != null
                 && service.getInsurancePrice() != null;
-        BigDecimal appliedPrice = covered ? service.getInsurancePrice() : service.getClinicPrice();
-        BigDecimal insuranceAmount = covered
-                ? appliedPrice.multiply(BigDecimal.valueOf(insurance.coverageRate()))
-                        .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
-        return new FeeCalculation(
-                appliedPrice, insuranceAmount, appliedPrice.subtract(insuranceAmount), covered);
+        if (!covered) {
+            return new FeeCalculation(clinicPrice, BigDecimal.ZERO, clinicPrice, null);
+        }
+        BigDecimal scope = PaymentItem.insuranceScope(service);
+        short appliedRate = insuranceCoverageService.appliedCoverageRate(scope, insurance.coverageRate());
+        BigDecimal insuranceAmount = PaymentItem.insuranceAmount(scope, appliedRate);
+        return new FeeCalculation(clinicPrice, insuranceAmount, clinicPrice.subtract(insuranceAmount), appliedRate);
     }
 
     private Payment createExaminationPayment(
@@ -299,9 +307,8 @@ public class VisitServiceImpl implements VisitService {
         Payment payment = Payment.createExaminationFee(
                 ids.next(), now, "HD%010d".formatted(visitRepository.nextPaymentCode()), visit.getId(),
                 fee.appliedPrice(), fee.insuranceAmount(), fee.patientAmount());
-        PaymentItem item = fee.insuranceCovered()
-                ? PaymentItem.createInsuranceItem(
-                        ids.next(), now, payment, service, visit.getInsuranceCoverageRate())
+        PaymentItem item = fee.appliedCoverageRate() != null
+                ? PaymentItem.createInsuranceItem(ids.next(), now, payment, service, fee.appliedCoverageRate())
                 : PaymentItem.createClinicItem(ids.next(), now, payment, service, BigDecimal.ONE);
         payment.addItem(item);
         return payment;
@@ -892,7 +899,7 @@ public class VisitServiceImpl implements VisitService {
             BigDecimal appliedPrice,
             BigDecimal insuranceAmount,
             BigDecimal patientAmount,
-            boolean insuranceCovered) {
+            Short appliedCoverageRate) {
     }
 
     private record InsuranceData(

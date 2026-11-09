@@ -35,7 +35,9 @@ public record PaymentResponse(
         Long payosOrderCode,
         String payosCheckoutUrl,
         String payosQrCode,
-        List<PaymentItemResponse> items
+        List<PaymentItemResponse> items,
+        /** True when a pending receipt of an insurance visit cannot be paid until the conclusion (BR-15, BR-26). */
+        boolean awaitingConclusion
 ) {
     @JsonProperty("paymentType")
     public PaymentType paymentType() {

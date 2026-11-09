@@ -286,6 +286,66 @@ public class Payment extends VersionedEntity {
         this.items.add(item);
     }
 
+    /** True while the receipt can still be repriced: not paid, not cancelled, and no PayOS link handed out. */
+    public boolean isRepriceable() {
+        return (status == PaymentStatus.PENDING || status == PaymentStatus.FEE_EXEMPT) && payosOrderCode == null;
+    }
+
+    /**
+     * BR-27: applies the visit's new coverage rate to every insurance line and recomputes the totals. A receipt
+     * the patient now pays nothing for becomes fee-exempt, and back to pending when the patient owes again; this
+     * happens only before an insurance visit is concluded, since it cannot be paid before (BR-15, BR-26).
+     */
+    public void repriceInsurance(short appliedCoverageRate, Instant now) {
+        if (!isRepriceable()) {
+            throw new IllegalStateException("Phiếu thu đã thanh toán hoặc đã hủy, không tính lại được");
+        }
+        items.forEach(item -> item.reprice(appliedCoverageRate));
+        recomputeTotals(now);
+    }
+
+    /**
+     * BR-25, BR-41: removes the line of a cancelled service from an unpaid receipt and recomputes it. A receipt
+     * left without any line is cancelled; otherwise it is pending, or fee-exempt when the patient owes nothing.
+     */
+    public void cancelLine(UUID orderDetailId, Instant now) {
+        if (!isRepriceable()) {
+            throw new IllegalStateException("Phiếu thu đã thanh toán, đã hủy hoặc đang chờ PayOS");
+        }
+        PaymentItem line = items.stream()
+                .filter(item -> orderDetailId.equals(item.getOrderDetailId()) && !item.isCancelled())
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Dòng phiếu thu không thuộc phiếu này"));
+        line.cancel();
+        recomputeTotals(now);
+    }
+
+    /** Totals are the sums of the lines that are not cancelled (BR-27, I1-D23). */
+    private void recomputeTotals(Instant now) {
+        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal insurance = BigDecimal.ZERO;
+        BigDecimal patient = BigDecimal.ZERO;
+        boolean anyLine = false;
+        for (PaymentItem item : items) {
+            if (!item.isCancelled()) {
+                anyLine = true;
+                total = total.add(item.getThanhtien());
+                insurance = insurance.add(item.getBhytChitra());
+                patient = patient.add(item.getBenhnhanphaitra());
+            }
+        }
+        this.totalAmount = total;
+        this.insuranceTotalAmount = insurance;
+        this.patientTotalAmount = patient;
+        if (!anyLine) {
+            this.status = PaymentStatus.CANCELLED;
+            this.cancelledAt = now;
+        } else {
+            this.status = patient.signum() == 0 ? PaymentStatus.FEE_EXEMPT : PaymentStatus.PENDING;
+        }
+        touch(now);
+    }
+
     // PayOS
     public void attachPayOSPayment(
             Long orderCode,

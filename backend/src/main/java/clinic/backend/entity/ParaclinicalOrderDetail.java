@@ -159,6 +159,39 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         this.isSkipped = false;
     }
 
+    /** BR-27: keeps the order line's split equal to its receipt line after the visit's coverage rate changes. */
+    public void syncAmounts(PaymentItem item) {
+        if (item == null || !getId().equals(item.getOrderDetailId())) {
+            throw new IllegalArgumentException("Dòng phiếu thu không thuộc chỉ định này");
+        }
+        this.bhytChitra = item.getBhytChitra();
+        this.benhnhanphaitra = item.getBenhnhanphaitra();
+    }
+
+    /**
+     * BR-25: a service can be cancelled while no Technician has accepted it, i.e. it is still pending payment or
+     * waiting (including skipped). Whether its receipt allows it is checked by the receipt.
+     */
+    public boolean isCancellableBeforeAcceptance() {
+        return status == ParaclinicalOrderDetailStatus.PENDING_PAYMENT
+                || status == ParaclinicalOrderDetailStatus.WAITING;
+    }
+
+    /** BR-25, BR-41: the Doctor cancels a service the patient refused, with a mandatory reason. */
+    public void cancelByDoctor(UUID doctorAccountId, String reason, Instant now) {
+        if (!isCancellableBeforeAcceptance()) {
+            throw new IllegalStateException("Paraclinical service can no longer be cancelled");
+        }
+        if (doctorAccountId == null || reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Cancelling a paraclinical service needs the doctor and a reason");
+        }
+        status = ParaclinicalOrderDetailStatus.CANCELLED;
+        cancelReason = reason.strip();
+        cancelledByAccountId = doctorAccountId;
+        cancelledAt = now;
+        touch(now);
+    }
+
     /** True once the service is performed, cancelled or abandoned. */
     public boolean isFinished() {
         return status == ParaclinicalOrderDetailStatus.COMPLETED
