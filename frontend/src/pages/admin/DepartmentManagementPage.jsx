@@ -634,6 +634,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         targetType={formTargetType}
         initialData={editingItem}
         departments={departmentsList}
+        existingItems={items}
         onSave={handleSaveForm}
         onClose={() => setFormModalOpen(false)}
       />

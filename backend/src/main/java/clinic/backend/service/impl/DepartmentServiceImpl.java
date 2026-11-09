@@ -455,6 +455,10 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new AppException(ErrorCode.ROOM_CODE_ALREADY_EXISTS, "Mã phòng đã tồn tại: " + roomCode,
                     Map.of("roomCode", "Mã phòng đã tồn tại: " + roomCode));
         }
+        if (roomRepository.existsByRoomNameIgnoreCase(roomName)) {
+            throw new AppException(ErrorCode.ROOM_NAME_ALREADY_EXISTS, "Tên phòng đã tồn tại: " + roomName,
+                    Map.of("roomName", "Tên phòng đã tồn tại: " + roomName));
+        }
 
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND,
@@ -574,6 +578,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (roomName.length() < 2 || roomName.length() > 100) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, "Tên phòng phải từ 2 đến 100 ký tự",
                     Map.of("roomName", "Tên phòng phải từ 2 đến 100 ký tự"));
+        }
+        if (roomRepository.existsByRoomNameIgnoreCase(roomName)
+                && !roomName.equalsIgnoreCase(room.getRoomName())) {
+            throw new AppException(ErrorCode.ROOM_NAME_ALREADY_EXISTS, "Tên phòng đã tồn tại: " + roomName,
+                    Map.of("roomName", "Tên phòng đã tồn tại: " + roomName));
         }
 
         if (request.getLocation() == null || request.getLocation().isBlank()) {
