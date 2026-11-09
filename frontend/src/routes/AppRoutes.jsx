@@ -9,6 +9,7 @@ import {
   ScheduleManagementPage,
   HospitalInformationPage,
   LabParameterManagementPage,
+  MedicineManagementPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -128,6 +129,17 @@ export function AppRoutes({
             path="lab-parameters"
             element={
               <LabParameterManagementPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="medicines/*"
+            element={
+              <MedicineManagementPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

@@ -54,6 +54,7 @@ Status values:
 | Admin | Service | List, view detail, create, update information | UC-20 → UC-23 | Clinic price and insurance price (BR-08). | Source |
 | Admin | Service price | Update | UC-24 | Applies only to orders created afterwards (BR-09). | Source |
 | Admin | Service | Activate, deactivate | UC-25 | — | Source |
+| Admin | Medicine | List, view detail, create, update, activate, deactivate | UC-81 → UC-84 | Code and registration number unique (BR-51, BR-79); the code cannot change; only active medicines of the ordinary group can be prescribed (BR-33). | Decided (I1-D46) |
 | Admin | Statistics | View dashboard and visit, doctor, department/room, paraclinical, revenue, diagnosis statistics | UC-26 → UC-32 | Revenue split insurance/patient (BR-38). Contains aggregated clinical data. | Source |
 | Admin | Statistics report | Export (Excel/PDF) | UC-33 | — | Source |
 | Admin | Clinic facility | View, declare, update | UC-77 | Facility code locked once a visit exists (BR-77-02). See [`uc-77-clinic-facility.md`](uc-77-clinic-facility.md). | **ASSUMPTION** (UC-77 not yet in `usecases.xlsx`) |

@@ -43,6 +43,12 @@ set. Business behavior comes from Report 3; shared transport conventions come fr
 | `GET` | `/api/v1/services/{serviceId}/deactivation-check` | Admin bearer token | `200` + unfinished-order count |
 | `GET` | `/api/v1/services/{serviceId}/activation-check` | Admin bearer token | `200` when activation is allowed |
 | `PATCH` | `/api/v1/services/{serviceId}/status` | Admin bearer token | `200` + updated or unchanged service detail |
+| `GET` | `/api/v1/medicines` | Admin bearer token | `200` + paginated medicine summaries |
+| `GET` | `/api/v1/medicines/form-options` | Admin bearer token | `200` + route list and units in use |
+| `POST` | `/api/v1/medicines` | Admin bearer token | `201` + created medicine ID |
+| `GET` | `/api/v1/medicines/{medicineId}` | Admin bearer token | `200` + medicine detail |
+| `PUT` | `/api/v1/medicines/{medicineId}` | Admin bearer token | `200` + updated or unchanged medicine detail |
+| `PATCH` | `/api/v1/medicines/{medicineId}/status` | Admin bearer token | `200` + updated or unchanged medicine detail |
 | `GET` | `/api/v1/visits/active?patientId={patientId}` | Receptionist bearer token | `200` + active visit, or `204` |
 | `GET` | `/api/v1/visits/fee-preview` | Receptionist bearer token | `200` + examination fee breakdown |
 | `POST` | `/api/v1/insurance/verifications` | Receptionist bearer token | `200` + simulated insurance result |
@@ -94,6 +100,15 @@ UC-20 uses `GET /api/v1/services` with optional `keyword`, `type`, `group`, `dep
 defaults to `page=0&size=10`. Sorting uses `field,direction`; allowed fields are `code`, `name`, `type`,
 `clinicPrice`, `insurancePrice`, and `status`, with `code,asc` as the default. A service not covered by insurance has
 `insurancePrice: null`. An empty catalog or unmatched filter is a successful response with an empty `content` array.
+
+UC-81 uses `GET /api/v1/medicines` with optional `keyword`, `unit`, `route`, `controlGroup` (`THUONG`, `GAY_NGHIEN`,
+`HUONG_THAN`, `TIEN_CHAT`) and `status` filters. The keyword (at most 100 characters) matches the name, active
+ingredient, strength, code and registration number, ignoring case and Vietnamese accents. Pagination is as for UC-20;
+allowed sort fields are `name`, `code`, `activeIngredient` and `status`, with `name,asc` as the default. `route` must be
+one of the labels returned by `/api/v1/medicines/form-options` (for example `Uống`); a create or update with another
+route returns `400` with `details.route = NOT_IN_ROUTE_LIST`. The server upper-cases `code`, which cannot change after
+creation. Duplicates return `409 MEDICINE_CODE_ALREADY_EXISTS` or `409 MEDICINE_REGISTRATION_NUMBER_ALREADY_EXISTS`;
+update and status requests carry `version` and return `409 CONCURRENT_MODIFICATION` when it is stale (I1-D46).
 
 UC-21 uses `GET /api/v1/services/{serviceId}`. It returns the current service data and optimistic-lock `version`.
 For a paraclinical service, `performingRooms` contains active rooms in the same service group, ordered by room code.

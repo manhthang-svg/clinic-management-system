@@ -57,7 +57,7 @@ public class MedicineCatalogImportServiceImpl implements MedicineCatalogImportSe
             MedicineCatalog current = byCode.get(row.entry().code());
             if (current == null) {
                 created.add(new MedicineCatalog(ids.next(), now, row.entry()));
-            } else if (current.updateFromList(row.entry(), now)) {
+            } else if (current.update(row.entry(), now)) {
                 updated++;
             } else {
                 unchanged++;

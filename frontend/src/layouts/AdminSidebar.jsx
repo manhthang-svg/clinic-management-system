@@ -50,6 +50,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
     rooms: '/admin/rooms',
     services: '/admin/services',
     'lab-parameters': '/admin/lab-parameters',
+    medicines: '/admin/medicines',
     schedules: '/admin/schedules',
     'hospital-information': '/admin/hospital-information',
   };
