@@ -21,6 +21,10 @@ public interface Icd10Repository extends JpaRepository<Icd10, String> {
             """)
     List<SearchableCode> findSearchable();
 
+    /** Every code in the catalog, retired ones included, without loading entities. */
+    @Query("select code.maicd from Icd10 code")
+    List<String> findAllCodes();
+
     /** The fields the ICD-10 search needs, without loading entities. */
     interface SearchableCode {
         String getCode();

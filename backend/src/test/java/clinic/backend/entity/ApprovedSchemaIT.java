@@ -13,7 +13,9 @@ import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalRecordTypePhamVi;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
+import clinic.backend.enums.MedicineControlGroup;
 import clinic.backend.enums.PrescriptionLienthongStatus;
+import clinic.backend.enums.PrescriptionSubmissionResult;
 import clinic.backend.enums.RecordArchiveStatus;
 import clinic.backend.enums.RecordSignatureDocumentType;
 import clinic.backend.enums.RecordSignatureSignerType;
@@ -89,16 +91,47 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
 
     @Test
     void mapsTheMedicineCatalog() {
-        UUID id = UUID.randomUUID();
-        jdbcTemplate.update("""
-                insert into medicine_catalog (id, mathuocvattu_bv, tenthuocvattu, donvitinh, status,
-                    created_at, updated_at, version)
-                values (?, 'T-0001', 'Paracetamol 500mg viên nén', 'Viên', 'ACTIVE', now(), now(), 0)
-                """, id);
+        UUID id = insertMedicine("T-0001", "893110012345");
 
         MedicineCatalog medicine = entityManager.find(MedicineCatalog.class, id);
-        assertThat(medicine.getTenthuocvattu()).isEqualTo("Paracetamol 500mg viên nén");
+        assertThat(medicine.getTenthuocvattu()).isEqualTo("Thuốc T-0001");
+        assertThat(medicine.getHoatchat()).isEqualTo("Paracetamol");
+        assertThat(medicine.getNhomKiemSoat()).isEqualTo(MedicineControlGroup.THUONG);
         assertThat(medicine.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
+    }
+
+    @Test
+    void rejectsADuplicateRegistrationNumber() {
+        insertMedicine("T-0001", "893110012345");
+
+        assertThatThrownBy(() -> insertMedicine("T-0002", "893110012345"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsALowerCaseMedicineCode() {
+        assertThatThrownBy(() -> insertMedicine("t-0001", "893110012345"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void mapsALongTermPrescriptionDiseaseWithItsCodes() {
+        insertIcd10("E11");
+        UUID disease = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into long_term_prescription_diseases (id, stt, ma_tt, ten_benh, ma_icd_goc, van_ban,
+                    hieu_luc_tu, created_at, updated_at, version)
+                values (?, 1, '4.13', 'Đái tháo đường', 'E10-E14', 'TT 26/2025/TT-BYT', date '2025-07-01',
+                    now(), now(), 0)
+                """, disease);
+        UUID code = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into long_term_prescription_disease_codes (id, disease_id, maicd, created_at)
+                values (?, ?, 'E11', now())
+                """, code, disease);
+
+        assertThat(entityManager.find(LongTermPrescriptionDisease.class, disease).getMaIcdGoc()).isEqualTo("E10-E14");
+        assertThat(entityManager.find(LongTermPrescriptionDiseaseCode.class, code).getDiseaseId()).isEqualTo(disease);
     }
 
     @Test
@@ -308,28 +341,90 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void mapsAPrescriptionWithItsLines() {
-        UUID prescription = insertPrescription(newMedicalRecord(), "79001ABC1234-C", "C");
+    void mapsAPrescriptionWithItsLinesDiagnosesAndSubmissions() {
+        UUID prescription = insertPrescription(newMedicalRecord(), "79001abc1234-c");
+        UUID medicine = insertMedicine("T-0001", "893110012345");
+        insertPrescriptionLine(prescription, medicine, 5);
+        insertIcd10("E11");
         jdbcTemplate.update("""
-                insert into prescription_details (id, prescription_id, machidinh, tenthuocvattu, donvitinh,
-                    soluongthuocvattu, cachdung, lieu_moi_lan, so_lan_ngay, so_ngay_dung, ngaykedonthuoc, created_at)
-                values (?, ?, ?, 'Paracetamol 500mg', 'Viên', 10, 'Uống sau ăn', '1 viên', 2, 5, current_date, now())
-                """, UUID.randomUUID(), prescription, "YL-" + prescription);
+                insert into prescription_diagnoses (id, prescription_id, maicd, tenicd, thu_tu, created_at)
+                values (?, ?, 'E11', 'Bệnh E11', 1, now())
+                """, UUID.randomUUID(), prescription);
+        UUID submission = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into prescription_submissions (id, prescription_id, attempt_no, submitted_by_account_id,
+                    submitted_at, result, errors, responded_at, created_at)
+                values (?, ?, 1, ?, now(), 'REJECTED', '[{"field":"ma_thuoc"}]'::jsonb, now(), now())
+                """, submission, prescription, doctor);
 
         Prescription stored = entityManager.find(Prescription.class, prescription);
         assertThat(stored.getLienthongStatus()).isEqualTo(PrescriptionLienthongStatus.PENDING);
-        assertThat(stored.getLoaidon()).isEqualTo("C");
+        assertThat(stored.getLoaidon()).isEqualTo("c");
         assertThat(stored.getDetails()).singleElement().satisfies(line -> {
             assertThat(line.getSoLanNgay()).isEqualTo((short) 2);
             assertThat(line.getSoNgayDung()).isEqualTo((short) 5);
+            assertThat(line.getNhomKiemSoat()).isEqualTo(MedicineControlGroup.THUONG);
         });
+        assertThat(stored.getDiagnoses()).singleElement()
+                .satisfies(diagnosis -> assertThat(diagnosis.getMaicd()).isEqualTo("E11"));
+        PrescriptionSubmission storedSubmission = entityManager.find(PrescriptionSubmission.class, submission);
+        assertThat(storedSubmission.getResult()).isEqualTo(PrescriptionSubmissionResult.REJECTED);
+        assertThat(storedSubmission.getErrors()).contains("ma_thuoc");
     }
 
     @Test
-    void rejectsAPrescriptionCodeThatDoesNotEndWithItsType() {
+    void rejectsAnUpperCasePrescriptionCode() {
         UUID record = newMedicalRecord();
 
-        assertThatThrownBy(() -> insertPrescription(record, "79001ABC1234-N", "C"))
+        assertThatThrownBy(() -> insertPrescription(record, "79001ABC1234-C"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsANarcoticPrescriptionCode() {
+        UUID record = newMedicalRecord();
+
+        assertThatThrownBy(() -> insertPrescription(record, "79001abc1234-n"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void allowsOnePrescriptionPerMedicalRecord() {
+        UUID record = newMedicalRecord();
+        insertPrescription(record, "79001abc1234-c");
+
+        assertThatThrownBy(() -> insertPrescription(record, "79001xyz9876-c"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsAMedicineRepeatedOnAPrescription() {
+        UUID prescription = insertPrescription(newMedicalRecord(), "79001abc1234-c");
+        UUID medicine = insertMedicine("T-0001", "893110012345");
+        insertPrescriptionLine(prescription, medicine, 90);
+
+        assertThatThrownBy(() -> insertPrescriptionLine(prescription, medicine, 5))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsMoreThanNinetyDays() {
+        UUID prescription = insertPrescription(newMedicalRecord(), "79001abc1234-c");
+        UUID medicine = insertMedicine("T-0001", "893110012345");
+
+        assertThatThrownBy(() -> insertPrescriptionLine(prescription, medicine, 91))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void requiresTheErrorListOfARejectedSubmissionOnly() {
+        UUID prescription = insertPrescription(newMedicalRecord(), "79001abc1234-c");
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                insert into prescription_submissions (id, prescription_id, attempt_no, submitted_by_account_id,
+                    submitted_at, result, responded_at, created_at)
+                values (?, ?, 1, ?, now(), 'REJECTED', now(), now())
+                """, UUID.randomUUID(), prescription, doctor))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -518,14 +613,35 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
         return id;
     }
 
-    private UUID insertPrescription(UUID record, String madonthuoc, String loaidon) {
+    private UUID insertPrescription(UUID record, String madonthuoc) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
-                insert into prescriptions (id, sophieu, madonthuoc, loaidon, medical_record_id, doctor_account_id,
+                insert into prescriptions (id, sophieu, madonthuoc, medical_record_id, doctor_account_id,
                     doituongbn, prescribed_at, created_at, updated_at, version)
-                values (?, ?, ?, ?, ?, ?, 2, now(), now(), now(), 0)
-                """, id, madonthuoc, madonthuoc, loaidon, record, doctor);
+                values (?, ?, ?, ?, ?, 2, now(), now(), now(), 0)
+                """, id, madonthuoc, madonthuoc, record, doctor);
         return id;
+    }
+
+    private UUID insertMedicine(String code, String registrationNumber) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into medicine_catalog (id, mathuocvattu_bv, so_dang_ky, tenthuocvattu, hoatchat,
+                    hamluong, duongdung, donvitinh, nhom_kiem_soat, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, 'Paracetamol', '500mg', 'Uống', 'Viên', 'THUONG', 'ACTIVE', now(), now(), 0)
+                """, id, code, registrationNumber, "Thuốc " + code);
+        return id;
+    }
+
+    private void insertPrescriptionLine(UUID prescription, UUID medicine, int days) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into prescription_details (id, prescription_id, medicine_id, machidinh, tenthuocvattu,
+                    so_dang_ky, hoatchat, hamluong, duongdung, nhom_kiem_soat, donvitinh, soluongthuocvattu,
+                    cachdung, lieu_moi_lan, so_lan_ngay, so_ngay_dung, ngaykedonthuoc, created_at)
+                values (?, ?, ?, ?, 'Paracetamol 500mg', '893110012345', 'Paracetamol', '500mg', 'Uống', 'THUONG',
+                    'Viên', 10, 'Uống sau ăn', '1 viên', 2, ?, current_date, now())
+                """, id, prescription, medicine, "YL-" + id, days);
     }
 
     private UUID insertExportLog(UUID record, String status, String errorMessage) {

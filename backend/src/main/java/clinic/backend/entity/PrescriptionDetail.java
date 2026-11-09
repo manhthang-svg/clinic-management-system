@@ -4,8 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import clinic.backend.enums.MedicineControlGroup;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -22,7 +25,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "prescription_details", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_prescription_details_machidinh", columnNames = "machidinh")
+        @UniqueConstraint(name = "uq_prescription_details_machidinh", columnNames = "machidinh"),
+        @UniqueConstraint(name = "uq_prescription_details_medicine", columnNames = {"prescription_id", "medicine_id"})
 })
 public class PrescriptionDetail extends CreatedOnlyEntity {
 
@@ -42,12 +46,30 @@ public class PrescriptionDetail extends CreatedOnlyEntity {
     private String tenthuocvattu;
 
     /** CV 365 IV.2.6.7. */
-    @Column(name = "mathuocvattu_bv", length = 255)
+    @Column(name = "mathuocvattu_bv", length = 50)
     private String mathuocvattuBv;
 
     /** CV 365 IV.2.6.8. */
     @Column(name = "mathuocvattu_byt", length = 255)
     private String mathuocvattuByt;
+
+    /** Snapshot of the catalog's registration number. */
+    @Column(name = "so_dang_ky", nullable = false, length = 20)
+    private String soDangKy;
+
+    /** Snapshot of the catalog's active ingredient. */
+    @Column(name = "hoatchat", nullable = false, length = 500)
+    private String hoatchat;
+
+    @Column(name = "hamluong", nullable = false)
+    private String hamluong;
+
+    @Column(name = "duongdung", nullable = false)
+    private String duongdung;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "nhom_kiem_soat", nullable = false, length = 20)
+    private MedicineControlGroup nhomKiemSoat;
 
     /** CV 365 IV.2.6.4. */
     @Column(name = "donvitinh", nullable = false, length = 50)
