@@ -81,6 +81,7 @@ function DepartmentFormModalContent({
   targetType = 'ROOM', // 'ROOM' | 'DEPARTMENT'
   initialData = null,
   departments = [],
+  existingItems = [],
   onSave,
   onClose,
 }) {
@@ -289,6 +290,20 @@ function DepartmentFormModalContent({
       }
     }
 
+    if (!newErrors.code && existingItems && existingItems.length > 0) {
+      const isDuplicateCode = existingItems.some(
+        (item) =>
+          item.unitType === targetType &&
+          (!isEdit || item.id !== initialData?.id) &&
+          (item.code || '').trim().toUpperCase() === code
+      );
+      if (isDuplicateCode) {
+        newErrors.code = isRoom
+          ? 'Mã phòng khám đã tồn tại trong hệ thống'
+          : 'Mã chuyên khoa đã tồn tại trong hệ thống';
+      }
+    }
+
     // BR-68 (Khoa: 2-100 ký tự) & BR-72 (Phòng: 2-100 ký tự)
     if (!name) {
       newErrors.name = isRoom ? 'Vui lòng nhập tên phòng' : 'Vui lòng nhập tên chuyên khoa';
@@ -296,6 +311,20 @@ function DepartmentFormModalContent({
       newErrors.name = isRoom
         ? 'Tên phòng phải từ 2 đến 100 ký tự'
         : 'Tên chuyên khoa phải từ 2 đến 100 ký tự';
+    }
+
+    if (!newErrors.name && existingItems && existingItems.length > 0) {
+      const isDuplicateName = existingItems.some(
+        (item) =>
+          item.unitType === targetType &&
+          (!isEdit || item.id !== initialData?.id) &&
+          (item.name || '').trim().toLowerCase() === name.toLowerCase()
+      );
+      if (isDuplicateName) {
+        newErrors.name = isRoom
+          ? 'Tên phòng khám đã tồn tại trong hệ thống'
+          : 'Tên chuyên khoa đã tồn tại trong hệ thống';
+      }
     }
 
     if (isRoom) {

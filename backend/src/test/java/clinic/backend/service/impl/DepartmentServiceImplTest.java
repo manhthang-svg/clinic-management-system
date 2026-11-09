@@ -138,6 +138,29 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    @DisplayName("Ném ngoại lệ khi tạo phòng mà tên phòng đã tồn tại")
+    void createRoom_DuplicateName_ThrowsException() {
+        when(roomRepository.existsByRoomCode("PK-NOI-02")).thenReturn(false);
+        when(roomRepository.existsByRoomNameIgnoreCase("Phòng khám Nội 1")).thenReturn(true);
+
+        RoomRequest request = RoomRequest.builder()
+                .roomCode("PK-NOI-02")
+                .roomName("Phòng khám Nội 1")
+                .departmentId(UUID.randomUUID())
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.createRoom(request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    AppException appException = (AppException) e;
+                    assertThat(appException.getErrorCode()).isEqualTo(ErrorCode.ROOM_NAME_ALREADY_EXISTS);
+                })
+                .hasMessageContaining("Tên phòng đã tồn tại");
+    }
+
+    @Test
     @DisplayName("Tạo phòng mới thành công với entity Room refactored")
     void createRoom_Success() {
         UUID deptId = UUID.randomUUID();
@@ -547,6 +570,47 @@ class DepartmentServiceImplTest {
         assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("Không thể thay đổi loại phòng của phòng khám");
+    }
+
+    @Test
+    @DisplayName("updateRoom: Ném ngoại lệ khi cập nhật tên phòng mà tên mới đã tồn tại ở phòng khác")
+    void updateRoom_DuplicateName_ThrowsException() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+
+        Room existingRoom = new Room(
+                roomId,
+                now,
+                deptId,
+                null,
+                "PK-NOI-01",
+                "Phòng khám Nội 1",
+                "Tầng 1",
+                RoomType.EXAMINATION,
+                ActivationStatus.ACTIVE
+        );
+
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(roomRepository.existsByRoomNameIgnoreCase("Phòng khám Ngoại 1")).thenReturn(true);
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng khám Ngoại 1")
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    AppException appException = (AppException) e;
+                    assertThat(appException.getErrorCode()).isEqualTo(ErrorCode.ROOM_NAME_ALREADY_EXISTS);
+                })
+                .hasMessageContaining("Tên phòng đã tồn tại");
     }
 
     @Test

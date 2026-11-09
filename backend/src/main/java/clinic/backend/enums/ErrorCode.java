@@ -41,6 +41,7 @@ public enum ErrorCode {
             HttpStatus.CONFLICT),
     ROOM_NOT_FOUND("ROOM_NOT_FOUND", "The room does not exist.", HttpStatus.NOT_FOUND),
     ROOM_CODE_ALREADY_EXISTS("ROOM_CODE_ALREADY_EXISTS", "The room code already exists.", HttpStatus.CONFLICT),
+    ROOM_NAME_ALREADY_EXISTS("ROOM_NAME_ALREADY_EXISTS", "The room name already exists.", HttpStatus.CONFLICT),
     SERVICE_GROUP_NOT_FOUND("SERVICE_GROUP_NOT_FOUND", "The service group does not exist.", HttpStatus.NOT_FOUND),
     SERVICE_GROUP_DEPARTMENT_MISMATCH("SERVICE_GROUP_DEPARTMENT_MISMATCH",
             "The technical service group does not belong to the selected department.", HttpStatus.BAD_REQUEST),
