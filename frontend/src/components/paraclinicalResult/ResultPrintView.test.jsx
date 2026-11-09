@@ -79,3 +79,32 @@ describe('ResultPrintView', () => {
     expect(screen.getByText('BS Nguyễn Thị Nhàn')).toBeInTheDocument();
   });
 });
+
+describe('ResultPrintView – UC-68 header and performer', () => {
+  it('prints the configured clinic, the registration code, the instrument and the performed time', () => {
+    const { order: base, form } = descriptive('cls-008');
+    render(<ResultPrintView
+      order={{
+        ...base,
+        clinic: { name: 'Phòng khám Đa khoa Thử', address: '1 Đường Số 1', phone: '0281234567' },
+        registrationCode: 'DK0000000123',
+        performedAt: '2026-11-01T09:00:00Z',
+        result: { ...base.result, instrumentName: 'Máy X-quang DR' },
+      }}
+      form={form}
+    />);
+
+    expect(screen.getByText('Phòng khám Đa khoa Thử')).toBeInTheDocument();
+    expect(screen.queryByText('PHÒNG KHÁM ĐA KHOA METPH')).not.toBeInTheDocument();
+    expect(screen.getByText('DK0000000123')).toBeInTheDocument();
+    expect(screen.getByText('Máy X-quang DR')).toBeInTheDocument();
+    expect(screen.getByText('Thời gian thực hiện:')).toBeInTheDocument();
+  });
+
+  it('shows that the clinic is not configured instead of the sample header', () => {
+    const { order: base, form } = descriptive('cls-008');
+    render(<ResultPrintView order={{ ...base, clinic: null }} form={form} />);
+
+    expect(screen.getByText('CHƯA CẤU HÌNH THÔNG TIN PHÒNG KHÁM')).toBeInTheDocument();
+  });
+});

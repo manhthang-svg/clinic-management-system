@@ -45,6 +45,7 @@ import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ResultForm;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.ImagingResultRepository;
 import clinic.backend.repository.LabParameterRepository;
@@ -99,6 +100,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private final StaffAccountRepository staffAccountRepository;
     private final RoomRepository roomRepository;
     private final DepartmentRepository departmentRepository;
+    private final ClinicFacilityRepository clinicFacilityRepository;
     private final ParaclinicalProgressService paraclinicalProgressService;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
@@ -147,6 +149,17 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     public ParaclinicalResultResponse recordPrint(UUID technicianAccountId, UUID orderDetailId) {
         Context context = load(orderDetailId);
         Instant now = clock.instant();
+        // EF-01: drafts cannot be printed; only the performer prints (permission matrix, BR-29); PF-03 needs the
+        // clinic header.
+        if (!isSubmitted(context)) {
+            throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
+        }
+        if (!technicianAccountId.equals(context.detail().getPerformerAccountId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        if (clinicFacilityRepository.findCurrent().isEmpty()) {
+            throw new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED);
+        }
         if (context.isLab()) {
             LabResult result = labResultRepository.findByOrderDetailId(orderDetailId)
                     .filter(LabResult::isSubmitted)
@@ -512,7 +525,12 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                         detail.getPerformerAccountId(), staffName(detail.getPerformerAccountId())),
                 isPerformer,
                 rows.stream().map(ParaclinicalResultServiceImpl::parameter).toList(),
-                result, printCount, instruments(context));
+                result, printCount, instruments(context),
+                context.visit().map(Visit::getSovaovien).orElse(null),
+                clinicFacilityRepository.findCurrent()
+                        .map(facility -> new ParaclinicalResultResponse.Clinic(
+                                facility.getTenCskcb(), facility.getDiachi(), facility.getSodienthoai()))
+                        .orElse(null));
     }
 
     private ParaclinicalResultResponse.Result labResult(LabResult lab) {

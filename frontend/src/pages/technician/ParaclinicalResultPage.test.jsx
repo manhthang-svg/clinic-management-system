@@ -79,6 +79,31 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(api.saveDraft).toHaveBeenCalledWith('cls-004', expect.objectContaining({ instrumentId: 'm-1' }));
   });
 
+  it.each([
+    [{ clinic: null }, 'Chưa cấu hình thông tin phòng khám (UC-77) nên chưa in được phiếu kết quả.'],
+    [{ isPerformer: false }, 'Chỉ người thực hiện dịch vụ mới in phiếu kết quả.'],
+  ])('does not offer printing when %o', async (patch, message) => {
+    const demo = createMockResultApi({ latency: 0 });
+    const order = { ...(await demo.get('cls-008')), ...patch };
+    renderPage('cls-008', { ...demo, get: vi.fn().mockResolvedValue(order) });
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^In (phiếu kết quả|lại)/ })).not.toBeInTheDocument();
+  });
+
+  it('prints a submitted result and marks the next print as a copy', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    renderPage('cls-008');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'In phiếu kết quả' }));
+
+    expect(print).toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'In lại (bản sao)' })).toBeInTheDocument();
+    expect(screen.getByText('BẢN SAO')).toBeInTheDocument();
+    print.mockRestore();
+  });
+
   it('blocks submission while required fields are empty', async () => {
     renderPage('cls-002');
     const user = userEvent.setup();

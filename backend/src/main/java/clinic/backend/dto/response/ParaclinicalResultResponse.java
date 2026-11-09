@@ -19,6 +19,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param parameters   lab parameters of the service, empty for descriptive results
  * @param result       the saved draft or submitted result, null before the first save
  * @param instruments  instruments of the room that may record this kind of result (V54)
+ * @param registrationCode visit registration code printed on the slip (UC-68 step 2)
+ * @param clinic       header of the printed slip (UC-77); null while the clinic facility is not configured
  */
 public record ParaclinicalResultResponse(
         UUID id,
@@ -46,8 +48,14 @@ public record ParaclinicalResultResponse(
         List<Parameter> parameters,
         Result result,
         int printCount,
-        List<Instrument> instruments
+        List<Instrument> instruments,
+        String registrationCode,
+        Clinic clinic
 ) {
+
+    /** TBD: the parent agency ("Sở Y tế …") is not a facility field yet, so it is not printed. */
+    public record Clinic(String name, String address, String phone) {
+    }
 
     public record Patient(String code, String name, Integer age, String gender, short sex, String address,
                           String coverage, String insuranceNumber, String ethnicity, String phone) {
