@@ -45,6 +45,8 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
     const [saveError, setSaveError] = useState('');
     const [saving, setSaving] = useState(false);
     const [confirmDiscard, setConfirmDiscard] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [stale, setStale] = useState(false);
     const onLoadedRef = useRef(onLoaded);
     useEffect(() => { onLoadedRef.current = onLoaded; }, [onLoaded]);
 
@@ -64,12 +66,24 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
             })
             .finally(() => setLoading(false));
         return () => controller.abort();
-    }, [visitApi, visitId]);
+    }, [visitApi, visitId, reloadKey]);
+
+    /** Retry after a load failure, or fetch the other Doctor's changes after MSG75; unsaved edits are dropped. */
+    const reload = () => {
+        setLoading(true);
+        setLoadError('');
+        setSaveError('');
+        setStale(false);
+        setConfirmDiscard(false);
+        setEditing(false);
+        setReloadKey((key) => key + 1);
+    };
 
     const startEditing = () => {
         setDraft(draftFrom(data));
         setErrors({});
         setSaveError('');
+        setStale(false);
         setEditing(true);
     };
 
@@ -113,6 +127,7 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
             toast.success(MESSAGES.saved);
         } catch (error) {
             setSaveError(saveErrorMessage(error));
+            setStale(error?.errorResponse?.code === 'CONCURRENT_MODIFICATION');
         } finally {
             setSaving(false);
         }
@@ -137,7 +152,12 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
             </div>
 
             {loading && !data && <p className="mt-3 text-xs text-slate-500">Đang tải tiền sử và dị ứng…</p>}
-            {loadError && <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{loadError}</p>}
+            {loadError && (
+                <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <span>{loadError}</span>
+                    <button type="button" onClick={reload} className="font-semibold underline">Thử lại</button>
+                </div>
+            )}
             {notice && !editing && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{notice}</p>}
 
             {data && !editing && (
@@ -213,7 +233,12 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
                         )}
                     </fieldset>
 
-                    {saveError && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{saveError}</p>}
+                    {saveError && (
+                        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
+                            <span>{saveError}</span>
+                            {stale && <button type="button" onClick={reload} className="font-semibold underline">Tải lại</button>}
+                        </div>
+                    )}
 
                     {confirmDiscard ? (
                         <div role="alertdialog" aria-label="Loại bỏ thay đổi" className="rounded-lg border border-amber-200 bg-amber-50 p-3">

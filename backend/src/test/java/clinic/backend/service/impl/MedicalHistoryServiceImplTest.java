@@ -32,6 +32,8 @@ import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -171,6 +173,39 @@ class MedicalHistoryServiceImplTest {
     @Test
     void visitThatIsNotBeingExaminedIsReadOnly() {
         when(visit.getStatus()).thenReturn(VisitStatus.WAITING);
+        when(medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(PATIENT_ID)).thenReturn(List.of());
+
+        assertThat(service.getForVisit(DOCTOR_ID, VISIT_ID).readOnlyReason()).isEqualTo("NOT_IN_EXAMINATION");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = VisitStatus.class, names = {"IN_EXAMINATION", "WAITING_CONCLUSION"}, mode = EnumSource.Mode.EXCLUDE)
+    void visitOutsideExaminationCannotBeChanged(VisitStatus status) {
+        when(visit.getStatus()).thenReturn(status);
+
+        assertThatThrownBy(() -> service.updateForVisit(DOCTOR_ID, VISIT_ID,
+                new UpdateMedicalHistoryRequest(List.of(), List.of(), true, null)))
+                .isInstanceOfSatisfying(AppException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+        verify(medicalHistoryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void visitBeingConcludedIsStillEditable() {
+        when(visit.getStatus()).thenReturn(VisitStatus.WAITING_CONCLUSION);
+        when(medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(PATIENT_ID)).thenReturn(List.of());
+
+        var response = service.updateForVisit(DOCTOR_ID, VISIT_ID, new UpdateMedicalHistoryRequest(
+                List.of(new HistoryItem(MedicalHistoryCategory.FAMILY, "Mẹ đái tháo đường")), List.of(), false, null));
+
+        assertThat(response.editable()).isTrue();
+        assertThat(response.history()).extracting("category").containsExactly(MedicalHistoryCategory.FAMILY);
+    }
+
+    @Test
+    void doctorWithoutRoomCannotChangeHistory() {
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.empty());
         when(medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(PATIENT_ID)).thenReturn(List.of());
 
         assertThat(service.getForVisit(DOCTOR_ID, VISIT_ID).readOnlyReason()).isEqualTo("NOT_IN_EXAMINATION");

@@ -172,11 +172,79 @@ class MedicalHistoryApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void completedVisitIsReadOnlyAndKeepsTheSavedData() throws Exception {
+        Fixture fixture = fixture("IN_EXAMINATION");
+        String token = accessToken(fixture.doctor());
+        mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"history\":[],\"allergies\":[{\"drug\":\"Aspirin\"}],\"noKnownDrugAllergy\":false}"))
+                .andExpect(status().isOk());
+        jdbc.update("UPDATE visits SET status = 'COMPLETED' WHERE id = ?", fixture.visitId());
+
+        mockMvc.perform(get(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.editable").value(false))
+                .andExpect(jsonPath("$.data.readOnlyReason").value("NOT_IN_EXAMINATION"))
+                .andExpect(jsonPath("$.data.allergies[0].drug").value("Aspirin"));
+        mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"history\":[],\"allergies\":[],\"noKnownDrugAllergy\":true}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void savedAllergiesAppearReadOnlyOnThePatientProfile() throws Exception {
+        Fixture fixture = fixture("IN_EXAMINATION");
+        String token = accessToken(fixture.doctor());
+        mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"history\":[{\"category\":\"SURGERY\",\"content\":\"Mổ ruột thừa\"}],"
+                                + "\"allergies\":[{\"drug\":\"Penicillin\"}],\"noKnownDrugAllergy\":false}"))
+                .andExpect(status().isOk());
+
+        // UC-36 / BR-23: the Receptionist sees the allergy, but not the medical history.
+        mockMvc.perform(get("/api/v1/patients/" + fixture.patientId() + "/overview")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.drugAllergies", hasSize(1)))
+                .andExpect(jsonPath("$.data.drugAllergies[0]").value("Penicillin"));
+    }
+
+    @Test
+    void savingAgainReplacesRemovedEntries() throws Exception {
+        Fixture fixture = fixture("IN_EXAMINATION");
+        String token = accessToken(fixture.doctor());
+        String saved = mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"history\":[{\"category\":\"OTHER\",\"content\":\"Hút thuốc\"}],"
+                                + "\"allergies\":[{\"drug\":\"Aspirin\"}],\"noKnownDrugAllergy\":false}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String updatedAt = objectMapper.readTree(saved).at("/data/updatedAt").asText();
+
+        mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"history\":[],\"allergies\":[],\"noKnownDrugAllergy\":true,\"lastUpdatedAt\":\""
+                                + updatedAt + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.history", hasSize(0)))
+                .andExpect(jsonPath("$.data.allergies", hasSize(0)))
+                .andExpect(jsonPath("$.data.noKnownDrugAllergy").value(true));
+        Integer rows = jdbc.queryForObject(
+                "SELECT count(*) FROM medical_histories WHERE patient_id = ?", Integer.class, fixture.patientId());
+        assertThat(rows).isEqualTo(1);
+    }
+
+    @Test
     void onlyDoctorsCanReadOrChangeHistory() throws Exception {
         Fixture fixture = fixture("IN_EXAMINATION");
         for (Role role : new Role[] {Role.RECEPTIONIST, Role.CASHIER, Role.TECHNICIAN, Role.ADMIN}) {
-            mockMvc.perform(get(path(fixture))
-                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(role))))
+            String token = accessToken(account(role));
+            mockMvc.perform(get(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(put(path(fixture)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"history\":[],\"allergies\":[],\"noKnownDrugAllergy\":true}"))
                     .andExpect(status().isForbidden());
         }
         mockMvc.perform(get(path(fixture))).andExpect(status().isUnauthorized());
