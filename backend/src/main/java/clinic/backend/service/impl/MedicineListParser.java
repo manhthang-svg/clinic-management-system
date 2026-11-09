@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import clinic.backend.entity.MedicineCatalog.CatalogEntry;
 import clinic.backend.enums.MedicineControlGroup;
+import clinic.backend.enums.MedicineRoute;
 import clinic.backend.service.MedicineCatalogImportService.InvalidListException;
 
 /**
@@ -93,6 +94,9 @@ final class MedicineListParser {
         String ingredient = text(line, "hoat_chat", row.get(4), 2, 500, errors);
         String strength = text(line, "ham_luong", row.get(5), 1, Integer.MAX_VALUE, errors);
         String route = text(line, "duong_dung", row.get(6), 1, Integer.MAX_VALUE, errors);
+        if (route != null && MedicineRoute.fromLabel(route).isEmpty()) {
+            errors.add("line " + line + ": duong_dung '" + route + "' is not in the route list");
+        }
         String unit = text(line, "don_vi_tinh", row.get(7), 1, 50, errors);
         MedicineControlGroup group = null;
         try {

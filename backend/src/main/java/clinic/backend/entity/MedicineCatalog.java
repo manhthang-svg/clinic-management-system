@@ -76,7 +76,7 @@ public class MedicineCatalog extends VersionedEntity {
     @Column(name = "status", nullable = false, length = 20)
     private ActivationStatus status;
 
-    /** One medicine of an imported list, already validated against BR-79. */
+    /** The editable fields of a medicine, already validated against BR-79 and normalized. */
     public record CatalogEntry(
             String code, String soDangKy, String maThuocBhyt, String name, String hoatchat, String hamluong,
             String duongdung, String donvitinh, MedicineControlGroup nhomKiemSoat) {
@@ -91,16 +91,35 @@ public class MedicineCatalog extends VersionedEntity {
     }
 
     /**
-     * Updates the medicine from an imported list; its code and status are kept. Prescriptions keep the values
-     * copied when they were written (UC-83). Returns whether anything changed.
+     * Updates the medicine (UC-83, or an import). The code cannot change and the status is kept; prescriptions keep
+     * the values copied when they were written. Returns whether anything changed.
      */
-    public boolean updateFromList(CatalogEntry entry, Instant now) {
+    public boolean update(CatalogEntry entry, Instant now) {
+        if (!mathuocvattuBv.equals(entry.code())) {
+            throw new IllegalArgumentException("The medicine code cannot change");
+        }
         if (matches(entry)) {
             return false;
         }
         apply(entry);
         touch(now);
         return true;
+    }
+
+    /** Activates or deactivates the medicine (UC-84); a deactivated medicine cannot be prescribed. */
+    public boolean changeStatus(ActivationStatus newStatus, Instant now) {
+        if (status == Objects.requireNonNull(newStatus, "newStatus")) {
+            return false;
+        }
+        status = newStatus;
+        touch(now);
+        return true;
+    }
+
+    /** The fields of the medicine as an entry, for comparing and auditing changes. */
+    public CatalogEntry toEntry() {
+        return new CatalogEntry(mathuocvattuBv, soDangKy, mathuocvattuByt, tenthuocvattu, hoatchat, hamluong,
+                duongdung, donvitinh, nhomKiemSoat);
     }
 
     private boolean matches(CatalogEntry entry) {
