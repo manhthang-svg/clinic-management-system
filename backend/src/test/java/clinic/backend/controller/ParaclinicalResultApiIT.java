@@ -97,9 +97,35 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"conclusion\":\"Sửa\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESULT_ALREADY_SUBMITTED"));
+        // UC-68: the slip needs the clinic header; only the performer prints; every print is counted (AF-01 copy).
         mockMvc.perform(withToken(post(path(fixture) + "/commands/record-print"), token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.printCount").value(1));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CLINIC_FACILITY_NOT_CONFIGURED"));
+        UUID facility = UUID.randomUUID();
+        jdbc.update("""
+                insert into clinic_facility (id, ma_cskcb, ten_cskcb, diachi, sodienthoai, so_giay_phep_hoat_dong,
+                    hinh_thuc_to_chuc, created_at, updated_at, version)
+                values (?, '79999', 'Phòng khám Thử', '1 Đường Số 1', '0281234567', 'GP-001', 'PHONG_KHAM_DA_KHOA',
+                    now(), now(), 0)
+                """, facility);
+        try {
+            mockMvc.perform(withToken(post(path(fixture) + "/commands/record-print"),
+                            accessToken(account(Role.TECHNICIAN))))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(withToken(post(path(fixture) + "/commands/record-print"), token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.printCount").value(1))
+                    .andExpect(jsonPath("$.data.clinic.name").value("Phòng khám Thử"))
+                    .andExpect(jsonPath("$.data.registrationCode").value(org.hamcrest.Matchers.startsWith("DK-")));
+            mockMvc.perform(withToken(post(path(fixture) + "/commands/record-print"), token))
+                    .andExpect(jsonPath("$.data.printCount").value(2));
+            assertThat(jdbc.queryForObject(
+                    "select count(*) from audit_logs where entity_id = ? and action = 'PRINT'",
+                    Integer.class, fixture.detailId())).isEqualTo(2);
+        } finally {
+            // Only one clinic facility may exist; other suites create their own.
+            jdbc.update("delete from clinic_facility where id = ?", facility);
+        }
     }
 
     @Test
