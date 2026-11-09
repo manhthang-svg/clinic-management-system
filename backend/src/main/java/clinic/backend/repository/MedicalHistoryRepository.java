@@ -1,5 +1,6 @@
 package clinic.backend.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,4 +17,6 @@ public interface MedicalHistoryRepository extends JpaRepository<MedicalHistory, 
 
     /** UC-39: every history and allergy item of the patient. */
     List<MedicalHistory> findByPatientIdOrderByCreatedAtAsc(UUID patientId);
+
+    List<MedicalHistory> findByPatientIdInOrderByCreatedAtAsc(Collection<UUID> patientIds);
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { X, Ban, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { REJECT_REASONS } from '../../constants/technicianQueueData';
+import { X, Ban, AlertTriangle } from 'lucide-react';
+import { REJECT_REASONS } from '../../constants/technicianConstants';
 
 export function RejectOrderModal({ isOpen, onClose, order, onConfirmReject }) {
   const [selectedReason, setSelectedReason] = useState(REJECT_REASONS[0]);

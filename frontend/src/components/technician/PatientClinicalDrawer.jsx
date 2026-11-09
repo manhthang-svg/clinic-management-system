@@ -13,6 +13,7 @@ import {
   Play,
   SkipForward,
   Ban,
+  Eye,
 } from 'lucide-react';
 
 const FALLBACK_ORDER = {
@@ -47,6 +48,7 @@ export function PatientClinicalDrawer({
   isOpen,
   onClose,
   order,
+  canManage = true,
   onStartOrder,
   onSkipOrder,
   onCompleteOrder,
@@ -121,6 +123,12 @@ export function PatientClinicalDrawer({
             </div>
 
             <div className="flex items-center gap-2.5">
+              {!canManage && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                  <Eye className="w-3.5 h-3.5 text-amber-600" />
+                  Chỉ xem
+                </span>
+              )}
               <span
                 className={`px-3 py-1 rounded-full text-xs sm:text-sm font-bold border shadow-2xs ${
                   currentOrder.priority === 'PRIORITY'
@@ -367,74 +375,103 @@ export function PatientClinicalDrawer({
             </div>
           </div>
 
-          {/* 5. CỤM NÚT ĐIỀU HƯỚNG HÀNH ĐỘNG (ACTION FOOTER) - Lớn hơn, dễ bấm hơn */}
+          {/* 5. CỤM NÚT ĐIỀU HƯỚNG HÀNH ĐỘNG (ACTION FOOTER) */}
           <div className="p-4 sm:p-5 px-6 border-t border-slate-200 bg-slate-50/95 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <button
-              type="button"
-              disabled={isCancelled || isCurrentRoomCompleted}
-              onClick={() => onOpenRejectModal(currentOrder)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
-            >
-              <Ban className="w-4 h-4" />
-              <span>Hủy / Từ chối (Lý do)</span>
-            </button>
+            {!canManage ? (
+              <div className="flex items-center justify-between w-full gap-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200/90 rounded-xl text-amber-800 text-xs font-semibold">
+                  <Eye className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Chế độ chỉ xem: Bạn không phụ trách phòng máy này nên không thể thao tác y lệnh.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs shrink-0"
+                >
+                  Đóng
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={isCancelled || isCurrentRoomCompleted}
+                  onClick={() => onOpenRejectModal(currentOrder)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
+                >
+                  <Ban className="w-4 h-4" />
+                  <span>Hủy / Từ chối (Lý do)</span>
+                </button>
 
-            <div className="flex items-center gap-3">
-              {isCurrentRoomWaiting && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onStartOrder(currentOrder)}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Tiếp nhận</span>
-                  </button>
-                  {onSkipOrder && (
+                <div className="flex items-center gap-3">
+                  {isCurrentRoomWaiting && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onStartOrder(currentOrder)}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Tiếp nhận</span>
+                      </button>
+                      {onSkipOrder && (
+                        <button
+                          type="button"
+                          onClick={() => onSkipOrder(currentOrder)}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+                        >
+                          <SkipForward className="w-4 h-4 text-slate-600" />
+                          <span>Bỏ qua</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {isCurrentRoomSkipped && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-4 py-2.5 text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 shadow-2xs">
+                        <SkipForward className="w-4 h-4 text-amber-600" />
+                        Đã bỏ qua
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onStartOrder(currentOrder)}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Tiếp nhận lại</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {isCancelled && (
+                    <span className="px-5 py-2.5 text-sm font-bold text-rose-800 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 shadow-2xs">
+                      <Ban className="w-4 h-4 text-rose-600" />
+                      Đã từ chối y lệnh
+                    </span>
+                  )}
+
+                  {isCurrentRoomInProgress && onCompleteOrder && (
                     <button
                       type="button"
-                      onClick={() => onSkipOrder(currentOrder)}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+                      onClick={() => onCompleteOrder(currentOrder)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
                     >
-                      <SkipForward className="w-4 h-4 text-slate-600" />
-                      <span>Bỏ qua</span>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Hoàn thành kỹ thuật</span>
                     </button>
                   )}
-                </>
-              )}
 
-              {isCurrentRoomSkipped && (
-                <div className="flex items-center gap-2">
-                  <span className="px-4 py-2.5 text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 shadow-2xs">
-                    <SkipForward className="w-4 h-4 text-amber-600" />
-                    Đã bỏ qua
-                  </span>
                   <button
                     type="button"
-                    onClick={() => onStartOrder(currentOrder)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-extrabold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                    onClick={onClose}
+                    className="px-5 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs"
                   >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Tiếp nhận lại</span>
+                    Đóng
                   </button>
                 </div>
-              )}
-
-              {isCancelled && (
-                <span className="px-5 py-2.5 text-sm font-bold text-rose-800 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 shadow-2xs">
-                  <Ban className="w-4 h-4 text-rose-600" />
-                  Đã từ chối y lệnh
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs"
-              >
-                Đóng
-              </button>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>

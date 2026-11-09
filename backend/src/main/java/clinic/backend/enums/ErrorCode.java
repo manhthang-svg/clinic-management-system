@@ -90,6 +90,8 @@ public enum ErrorCode {
             "No active examination room is assigned to the Doctor.", HttpStatus.CONFLICT),
     DOCTOR_OFF_DUTY("DOCTOR_OFF_DUTY",
             "The Doctor is not on duty in the assigned room for the current shift.", HttpStatus.FORBIDDEN),
+    TECHNICIAN_NOT_ASSIGNED_TO_ROOM("TECHNICIAN_NOT_ASSIGNED_TO_ROOM",
+            "You are not assigned to manage this paraclinical room.", HttpStatus.FORBIDDEN),
     EXAMINATION_SERVICE_NOT_CONFIGURED("EXAMINATION_SERVICE_NOT_CONFIGURED",
             "No active examination service is configured.", HttpStatus.CONFLICT),
     CLINIC_FACILITY_NOT_CONFIGURED("CLINIC_FACILITY_NOT_CONFIGURED",

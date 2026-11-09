@@ -79,6 +79,7 @@ public class SecurityConfig {
                                 "/api/v1/payments/**"
                         ).authenticated()
                         .requestMatchers("/api/v1/paraclinical-orders", "/api/v1/paraclinical-orders/**").authenticated()
+                        .requestMatchers("/api/v1/technician", "/api/v1/technician/**").authenticated()
                         .requestMatchers("/api/v1/duty-schedules", "/api/v1/duty-schedules/**").authenticated()
                         .anyRequest().denyAll())
                 .build();

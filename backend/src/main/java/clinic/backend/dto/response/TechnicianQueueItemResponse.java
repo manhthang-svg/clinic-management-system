@@ -1,0 +1,40 @@
+package clinic.backend.dto.response;
+
+import java.util.List;
+import java.util.UUID;
+
+public record TechnicianQueueItemResponse(
+        UUID id,
+        UUID orderId,
+        Integer queueNumber,
+        String orderCode,
+        UUID roomId,
+        String priority,
+        String priorityLabel,
+        String patientId,
+        String patientName,
+        Integer age,
+        String gender,
+        String insuranceType,
+        String insuranceNumber,
+        String cccd,
+        String phone,
+        String address,
+        String serviceName,
+        String serviceCode,
+        String doctorName,
+        String doctorRoom,
+        String orderTime,
+        String status,
+        boolean isSkipped,
+        String chiefComplaint,
+        String clinicalDiagnosis,
+        String icd10,
+        String physicalExam,
+        String medicalHistory,
+        String allergies,
+        boolean hasAllergyAlert,
+        String rejectReason,
+        List<TechnicianSiblingOrderResponse> allOrdersToday
+) {}
+
