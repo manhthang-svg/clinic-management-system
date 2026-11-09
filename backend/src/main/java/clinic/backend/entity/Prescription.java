@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,6 +14,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -29,7 +31,8 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "prescriptions", uniqueConstraints = {
         @UniqueConstraint(name = "uq_prescriptions_sophieu", columnNames = "sophieu"),
-        @UniqueConstraint(name = "uq_prescriptions_madonthuoc", columnNames = "madonthuoc")
+        @UniqueConstraint(name = "uq_prescriptions_madonthuoc", columnNames = "madonthuoc"),
+        @UniqueConstraint(name = "uq_prescriptions_medical_record_id", columnNames = "medical_record_id")
 })
 public class Prescription extends VersionedEntity {
 
@@ -40,7 +43,7 @@ public class Prescription extends VersionedEntity {
     @Column(name = "madonthuoc", nullable = false, updatable = false, length = 14)
     private String madonthuoc;
 
-    /** N narcotic, H psychotropic or precursor, C other. */
+    /** Always "c", an ordinary prescription (BR-52). */
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "loaidon", nullable = false, length = 1)
     private String loaidon;
@@ -72,14 +75,33 @@ public class Prescription extends VersionedEntity {
     @Column(name = "lienthong_sent_at")
     private Instant lienthongSentAt;
 
-    @Column(name = "lienthong_error")
-    private String lienthongError;
+    /** Notes on the prescription (BR-107). */
+    @Column(name = "luu_y", length = 2000)
+    private String luuY;
+
+    /** Advice on the prescription (BR-107). */
+    @Column(name = "loi_dan", length = 2000)
+    private String loiDan;
+
+    /** Follow-up date copied from the appointment when sent (BR-54). */
+    @Column(name = "ngay_tai_kham")
+    private LocalDate ngayTaiKham;
 
     @Getter(AccessLevel.NONE)
     @OneToMany(mappedBy = "prescription", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PrescriptionDetail> details = new ArrayList<>();
 
+    /** Conclusion diagnoses copied when sent; thu_tu 1 is the main diagnosis. */
+    @Getter(AccessLevel.NONE)
+    @OneToMany(mappedBy = "prescription", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("thuTu")
+    private List<PrescriptionDiagnosis> diagnoses = new ArrayList<>();
+
     public List<PrescriptionDetail> getDetails() {
         return Collections.unmodifiableList(details);
+    }
+
+    public List<PrescriptionDiagnosis> getDiagnoses() {
+        return Collections.unmodifiableList(diagnoses);
     }
 }
