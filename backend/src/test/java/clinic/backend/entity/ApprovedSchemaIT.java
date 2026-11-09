@@ -7,6 +7,7 @@ import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.ImagingResultStatus;
+import clinic.backend.enums.InstrumentResultType;
 import clinic.backend.enums.LabResultStatus;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalRecordTypePhamVi;
@@ -193,21 +194,17 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void mapsAnOrderWithItsLabResultAndFiles() {
+    void mapsAnOrderWithItsLabResultAndItems() {
         UUID detail = newOrderDetail();
-        UUID labResult = UUID.randomUUID();
-        jdbcTemplate.update("""
-                insert into lab_results (id, order_detail_id, performer_account_id, sophieu, status, submitted_at,
-                    created_at, updated_at, version)
-                values (?, ?, ?, ?, 'SUBMITTED', now(), now(), now(), 0)
-                """, labResult, detail, doctor, "KQ-" + detail);
+        UUID labResult = insertLabResult(detail);
+        UUID analyzer = insertInstrument("HEMA-01", "LAB");
         for (String flag : List.of("0", "1")) {
             jdbcTemplate.update("""
-                    insert into lab_result_items (id, lab_result_id, pkqxn_tenxetnghiem, ketqua, ketquabatthuong)
-                    values (?, ?, 'Glucose', '5.4', ?)
-                    """, UUID.randomUUID(), labResult, flag);
+                    insert into lab_result_items (id, lab_result_id, pkqxn_tenxetnghiem, ketqua, ketquabatthuong,
+                        instrument_id, instrument_name_snapshot)
+                    values (?, ?, 'Glucose', '5.4', ?, ?, 'Máy HEMA-01')
+                    """, UUID.randomUUID(), labResult, flag, analyzer);
         }
-        insertResultFile(null, labResult);
 
         ParaclinicalOrder storedOrder = entityManager.find(ParaclinicalOrder.class, order);
         assertThat(storedOrder.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
@@ -218,23 +215,76 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
         LabResult stored = entityManager.find(LabResult.class, labResult);
         assertThat(stored.getStatus()).isEqualTo(LabResultStatus.SUBMITTED);
         assertThat(stored.getItems()).extracting(LabResultItem::getKetquabatthuong).containsExactlyInAnyOrder("0", "1");
+        assertThat(stored.getItems()).extracting(LabResultItem::getInstrumentId).containsOnly(analyzer);
+        ParaclinicalInstrument instrument = entityManager.find(ParaclinicalInstrument.class, analyzer);
+        assertThat(instrument.getResultType()).isEqualTo(InstrumentResultType.LAB);
+        assertThat(instrument.isActive()).isTrue();
     }
 
     @Test
-    void attachesAResultFileToExactlyOneResult() {
-        UUID detail = newOrderDetail();
-        UUID imagingResult = UUID.randomUUID();
-        jdbcTemplate.update("""
-                insert into imaging_results (id, order_detail_id, performer_account_id, sophieu, kqcls_mota,
-                    kqcls_ketluan, status, created_at, updated_at, version)
-                values (?, ?, ?, ?, 'Gan bình thường', 'Bình thường', 'DRAFT', now(), now(), 0)
-                """, imagingResult, detail, doctor, "CDHA-" + detail);
-        UUID file = insertResultFile(imagingResult, null);
+    void attachesImagesToAnImagingResultInOrder() {
+        UUID imagingResult = insertImagingResult(newOrderDetail());
+        UUID ultrasound = insertInstrument("SA-01", "IMAGING");
+        jdbcTemplate.update("update imaging_results set instrument_id = ?, instrument_name_snapshot = 'Máy SA-01' "
+                + "where id = ?", ultrasound, imagingResult);
+        UUID image = insertImage(imagingResult, "image/jpeg", 1);
+        insertImage(imagingResult, "image/png", 2);
 
-        assertThat(entityManager.find(ImagingResult.class, imagingResult).getStatus())
-                .isEqualTo(ImagingResultStatus.DRAFT);
-        assertThat(entityManager.find(ResultFile.class, file).getFileSha256()).hasSize(64);
-        assertThatThrownBy(() -> insertResultFile(null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        ImagingResult stored = entityManager.find(ImagingResult.class, imagingResult);
+        assertThat(stored.getStatus()).isEqualTo(ImagingResultStatus.DRAFT);
+        assertThat(stored.getInstrumentId()).isEqualTo(ultrasound);
+        ImagingResultImage storedImage = entityManager.find(ImagingResultImage.class, image);
+        assertThat(storedImage.getImagingResultId()).isEqualTo(imagingResult);
+        assertThat(storedImage.getFileSha256()).hasSize(64);
+        assertThatThrownBy(() -> insertImage(imagingResult, "image/jpeg", 2))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void acceptsOnlyImages() {
+        UUID imagingResult = insertImagingResult(newOrderDetail());
+
+        assertThatThrownBy(() -> insertImage(imagingResult, "application/pdf", 1))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void requiresAnImagingResultForEveryImage() {
+        newOrderDetail();
+
+        assertThatThrownBy(() -> insertImage(null, "image/jpeg", 1))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsAnImagingInstrumentOnALabValue() {
+        UUID labResult = insertLabResult(newOrderDetail());
+        UUID ultrasound = insertInstrument("SA-02", "IMAGING");
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                insert into lab_result_items (id, lab_result_id, pkqxn_tenxetnghiem, ketqua, instrument_id)
+                values (?, ?, 'Glucose', '5.4', ?)
+                """, UUID.randomUUID(), labResult, ultrasound))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsALabInstrumentOnAnImagingResult() {
+        UUID imagingResult = insertImagingResult(newOrderDetail());
+        UUID analyzer = insertInstrument("HEMA-02", "LAB");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update imaging_results set instrument_id = ? where id = ?", analyzer, imagingResult))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsADuplicateInstrumentCode() {
+        newOrderDetail();
+        insertInstrument("XQ-01", "IMAGING");
+
+        assertThatThrownBy(() -> insertInstrument("XQ-01", "LAB"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -428,13 +478,43 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 """, id, sophieu, record, doctor, payment);
     }
 
-    private UUID insertResultFile(UUID imagingResult, UUID labResult) {
+    private UUID insertLabResult(UUID detail) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
-                insert into result_files (id, imaging_result_id, lab_result_id, hinhanh, file_name, mime_type,
-                    file_sha256, uploaded_by_account_id, uploaded_at)
-                values (?, ?, ?, 'results/ket-qua.pdf', 'ket-qua.pdf', 'application/pdf', repeat('a', 64), ?, now())
-                """, id, imagingResult, labResult, doctor);
+                insert into lab_results (id, order_detail_id, performer_account_id, sophieu, status, submitted_at,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'SUBMITTED', now(), now(), now(), 0)
+                """, id, detail, doctor, "KQ-" + detail);
+        return id;
+    }
+
+    private UUID insertImagingResult(UUID detail) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into imaging_results (id, order_detail_id, performer_account_id, sophieu, kqcls_mota,
+                    kqcls_ketluan, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, 'Gan bình thường', 'Bình thường', 'DRAFT', now(), now(), 0)
+                """, id, detail, doctor, "CDHA-" + detail);
+        return id;
+    }
+
+    private UUID insertImage(UUID imagingResult, String mimeType, int displayOrder) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into imaging_result_images (id, imaging_result_id, hinhanh, file_name, mime_type,
+                    file_sha256, uploaded_by_account_id, uploaded_at, display_order)
+                values (?, ?, 'results/anh.jpg', 'anh.jpg', ?, repeat('a', 64), ?, now(), ?)
+                """, id, imagingResult, mimeType, doctor, displayOrder);
+        return id;
+    }
+
+    private UUID insertInstrument(String code, String resultType) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into paraclinical_instruments (id, code, name, result_type, room_id, created_at, updated_at,
+                    version)
+                values (?, ?, ?, ?, ?, now(), now(), 0)
+                """, id, code, "Máy " + code, resultType, room);
         return id;
     }
 

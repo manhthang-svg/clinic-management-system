@@ -1,6 +1,6 @@
 // In-memory stand-in for the technician result API (UC-64, UC-67). ASSUMPTION: replace with a real
 // adapter (same method names) once the backend exposes the endpoints. Data resets on page reload.
-import { MOCK_RESULT_ORDERS, MOCK_TECHNICIAN } from './resultMockData';
+import { MOCK_RESULT_ORDERS, MOCK_TECHNICIAN, resultOrderFromListEntry } from './resultMockData';
 import { INITIAL_PARACLINICAL_RESULTS } from '../../constants/technicianResultData';
 
 function clone(value) {
@@ -79,4 +79,8 @@ export function createMockResultApi({ orders = MOCK_RESULT_ORDERS, technician = 
   };
 }
 
-export const resultMockApi = createMockResultApi();
+// The technician result list shows INITIAL_PARACLINICAL_RESULTS, so the store holds those orders too;
+// otherwise opening a row of the list finds no order.
+export const resultMockApi = createMockResultApi({
+  orders: [...MOCK_RESULT_ORDERS, ...INITIAL_PARACLINICAL_RESULTS.map(resultOrderFromListEntry)],
+});

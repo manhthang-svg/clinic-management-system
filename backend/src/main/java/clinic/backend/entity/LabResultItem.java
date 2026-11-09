@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -63,4 +64,12 @@ public class LabResultItem extends UuidEntity {
     /** CV 365 VII.2.13.3. */
     @Column(name = "ngayketqua")
     private Instant ngayketqua;
+
+    /** LAB instrument that ran this value (V54); null while the result is a draft. */
+    @Column(name = "instrument_id")
+    private UUID instrumentId;
+
+    /** Instrument name when the result was submitted, so later renames do not change the slip (V54). */
+    @Column(name = "instrument_name_snapshot", length = 255)
+    private String instrumentNameSnapshot;
 }

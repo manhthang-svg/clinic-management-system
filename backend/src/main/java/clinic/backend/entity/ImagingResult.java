@@ -81,4 +81,12 @@ public class ImagingResult extends VersionedEntity {
     /** Prints so far; the second and later prints are marked as a copy (UC-68). */
     @Column(name = "print_count", nullable = false)
     private int printCount;
+
+    /** IMAGING instrument that performed the service (V54); null while the result is a draft. */
+    @Column(name = "instrument_id")
+    private UUID instrumentId;
+
+    /** Instrument name when the result was submitted, so later renames do not change the slip (V54). */
+    @Column(name = "instrument_name_snapshot", length = 255)
+    private String instrumentNameSnapshot;
 }
