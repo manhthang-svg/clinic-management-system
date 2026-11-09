@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
+import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
@@ -97,13 +98,25 @@ public class TechnicianQueueController {
 
     @PostMapping("/queue/{detailId}/complete")
     @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
-    @Operation(summary = "Hoàn tất kỹ thuật thực hiện")
+    @Operation(summary = "UC-66 Xác nhận đã thực hiện chỉ định cận lâm sàng")
     public ApiResponse<TechnicianQueueItemResponse> completeOrder(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID detailId
     ) {
         UUID technicianId = StaffPrincipal.from(jwt).accountId();
         return ApiResponse.success(technicianQueueService.completeOrder(detailId, technicianId));
+    }
+
+    @PostMapping("/queue/{detailId}/return-to-waiting")
+    @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
+    @Operation(summary = "UC-66 AF-02 Trả chỉ định về hàng chờ kèm lý do")
+    public ApiResponse<TechnicianQueueItemResponse> returnToWaiting(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID detailId,
+            @Valid @RequestBody ReturnParaclinicalOrderToWaitingRequest request
+    ) {
+        UUID technicianId = StaffPrincipal.from(jwt).accountId();
+        return ApiResponse.success(technicianQueueService.returnToWaiting(detailId, technicianId, request));
     }
 
     @PostMapping("/queue/{detailId}/reject")

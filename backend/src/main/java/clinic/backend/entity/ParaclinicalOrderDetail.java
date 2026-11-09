@@ -252,10 +252,40 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         touch(when);
     }
 
-    public void completePerformance(Instant when) {
+    /** UC-66: true when the service is In Progress and was accepted by this technician (EF-01). */
+    public boolean isPerformedBy(UUID technicianAccountId) {
+        return status == ParaclinicalOrderDetailStatus.IN_PROGRESS
+                && performerAccountId != null
+                && performerAccountId.equals(technicianAccountId);
+    }
+
+    /**
+     * UC-66 step 3: the technician who accepted the service confirms it was performed; it waits for its result
+     * (UC-64, UC-67).
+     */
+    public void completePerformance(UUID technicianAccountId, Instant when) {
+        requirePerformedBy(technicianAccountId);
         this.status = ParaclinicalOrderDetailStatus.PENDING_RESULT;
         this.performedAt = when;
         touch(when);
+    }
+
+    /**
+     * UC-66 AF-02: the service cannot be performed now, so it goes back to Waiting at its original place. The
+     * queue number is kept, so the order is not moved to the end of the list; the reason is kept in the audit log.
+     */
+    public void returnToWaiting(UUID technicianAccountId, Instant when) {
+        requirePerformedBy(technicianAccountId);
+        this.status = ParaclinicalOrderDetailStatus.WAITING;
+        this.performerAccountId = null;
+        this.acceptedAt = null;
+        touch(when);
+    }
+
+    private void requirePerformedBy(UUID technicianAccountId) {
+        if (!isPerformedBy(technicianAccountId)) {
+            throw new IllegalStateException("Paraclinical service is not in progress for this technician");
+        }
     }
 
     public void cancel(String reason, UUID cancelledByAccountId, Instant when) {
