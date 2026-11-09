@@ -59,6 +59,26 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect((await api.get('cls-002')).result).toMatchObject({ status: 'SUBMITTED', values: { GLU: '11,4' } });
   });
 
+  it('sends the chosen instrument and hides image upload when the API cannot store images', async () => {
+    const demo = createMockResultApi({ latency: 0 });
+    const order = { ...(await demo.get('cls-004')), instruments: [{ id: 'm-1', code: 'SA-01', name: 'Máy siêu âm' }] };
+    const api = {
+      supportsFiles: false,
+      get: vi.fn().mockResolvedValue(order),
+      saveDraft: vi.fn().mockResolvedValue({ ...order, result: { status: 'DRAFT', savedAt: '2026-11-10T02:00:00Z', instrumentId: 'm-1' } }),
+      submit: vi.fn(),
+      recordPrint: vi.fn(),
+    };
+    renderPage('cls-004', api);
+    const user = userEvent.setup();
+
+    await user.selectOptions(await screen.findByLabelText('Máy thực hiện'), 'm-1');
+    expect(screen.getByText('Chức năng tải ảnh kết quả chưa được hỗ trợ.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+
+    expect(api.saveDraft).toHaveBeenCalledWith('cls-004', expect.objectContaining({ instrumentId: 'm-1' }));
+  });
+
   it('blocks submission while required fields are empty', async () => {
     renderPage('cls-002');
     const user = userEvent.setup();

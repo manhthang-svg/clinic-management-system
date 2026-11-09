@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../ui';
 import { ResultPrintView } from './ResultPrintView';
+import { ResultApiContext } from './resultContext';
+import { Field, INPUT_CLASS } from '../shared/FormFields';
 import { PRINT_FORMS } from './resultMockData';
 import {
   KIND_LABEL, MSG, formForSave, formatDateTime, resultErrorMessage, resultToForm, templateFor, validateResult,
@@ -215,7 +217,33 @@ export function ResultEditor({ order: initialOrder, api, children }) {
         </div>
       )}
 
-      {children({ order, form, set, errors: shownErrors, readOnly, templateButton })}
+      {(order.instruments?.length > 0 || order.result?.instrumentName) && (
+        <ResultSection title="Máy thực hiện" description="Máy đã chạy mẫu hoặc thực hiện dịch vụ (in trên phiếu).">
+          <div className="max-w-sm">
+            <Field id="result-instrument" label="Máy thực hiện">
+              {readOnly ? (
+                <p id="result-instrument" className="text-sm font-semibold text-slate-800">{order.result?.instrumentName || '—'}</p>
+              ) : (
+                <select
+                  id="result-instrument"
+                  value={form.instrumentId ?? ''}
+                  onChange={(event) => set('instrumentId', event.target.value)}
+                  className={INPUT_CLASS}
+                >
+                  <option value="">-- Chọn máy --</option>
+                  {order.instruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.code} – {instrument.name}</option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          </div>
+        </ResultSection>
+      )}
+
+      <ResultApiContext.Provider value={{ supportsFiles: api?.supportsFiles !== false }}>
+        {children({ order, form, set, errors: shownErrors, readOnly, templateButton })}
+      </ResultApiContext.Provider>
 
       {(submitted || showPreview) && (
         <ResultSection

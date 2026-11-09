@@ -1,6 +1,8 @@
 // Field blocks shared by the per-service result pages.
 import { Field, INPUT_CLASS } from '../shared/FormFields';
+import { useContext } from 'react';
 import { ResultFiles } from './ResultFiles';
+import { ResultApiContext } from './resultContext';
 import { ResultSection } from './ResultEditor';
 import { sectionsFor } from './resultSections';
 
@@ -124,9 +126,14 @@ export function ImageLinkField({ form, set, errors, readOnly }) {
 }
 
 export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description }) {
+  const { supportsFiles } = useContext(ResultApiContext);
   return (
     <ResultSection title={title} description={description}>
-      <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
+      {supportsFiles ? (
+        <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
+      ) : (
+        <p className="text-sm text-slate-500">Chức năng tải ảnh kết quả chưa được hỗ trợ.</p>
+      )}
     </ResultSection>
   );
 }
