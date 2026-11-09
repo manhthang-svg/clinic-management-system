@@ -171,7 +171,7 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phòng này đã có người trực trong ca làm việc này");
             }
 
-            schedule.update(request.getRoomId(), request.getNotes(), currentUserId, now);
+            schedule.update(request.getStaffAccountId(), request.getRoomId(), request.getNotes(), currentUserId, now);
         } else {
             // Kiểm tra nhân viên không trùng ca trong ngày
             dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(

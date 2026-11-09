@@ -68,10 +68,17 @@ public class DutySchedule extends VersionedEntity {
         this.assignedByAccountId = assignedByAccountId;
     }
 
-    public void update(UUID roomId, String notes, UUID assignedByAccountId, Instant now) {
+    public void update(UUID staffAccountId, UUID roomId, String notes, UUID assignedByAccountId, Instant now) {
+        if (staffAccountId != null) {
+            this.staffAccountId = staffAccountId;
+        }
         this.roomId = roomId;
         this.notes = notes;
         this.assignedByAccountId = assignedByAccountId;
         touch(now);
+    }
+
+    public void update(UUID roomId, String notes, UUID assignedByAccountId, Instant now) {
+        update(null, roomId, notes, assignedByAccountId, now);
     }
 }
