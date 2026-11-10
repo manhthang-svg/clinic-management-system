@@ -14,6 +14,7 @@ import {
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
 import ProtectRoute from "./ProtectRoute.jsx";
+import NotFound from "../pages/NotFound.jsx";
 
 import CashierOverviewPage from "../pages/cashier/CashierOverviewPage.jsx";
 import PaymentManagementPage from "../pages/cashier/PaymentManagementPage.jsx";
@@ -374,7 +375,7 @@ export function AppRoutes({
       <Route path="/payment/success" element={<PaymentResultPage />} />
       <Route path="/payment/cancel" element={<PaymentResultPage />} />
 
-      <Route path="/404" element={<div>404 - Không tìm thấy trang</div>} />
+      <Route path="/404" element={<NotFound />} />
 
       {/* Các đường dẫn không tồn tại */}
       <Route path="*" element={<Navigate to="/404" replace />} />
