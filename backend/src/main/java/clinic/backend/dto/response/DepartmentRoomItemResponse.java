@@ -34,4 +34,6 @@ public class DepartmentRoomItemResponse {
     private Instant updatedAt;
     private Long version;
     private List<RoomServiceItemResponse> assignedServices;
+    private Boolean hasDoctorOnDutyToday;
+    private String doctorOnDutyToday;
 }

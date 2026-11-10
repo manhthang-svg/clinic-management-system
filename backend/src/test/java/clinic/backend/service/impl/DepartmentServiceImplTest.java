@@ -2,6 +2,7 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -12,15 +13,19 @@ import clinic.backend.dto.request.RoomRequest;
 import clinic.backend.dto.response.DepartmentRoomItemResponse;
 import clinic.backend.dto.response.DepartmentStatsResponse;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.DutyShift;
+import clinic.backend.enums.Role;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.RoomType;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
@@ -61,6 +66,9 @@ class DepartmentServiceImplTest {
     private clinic.backend.repository.MedicalServiceRepository medicalServiceRepository;
 
     @Mock
+    private DutyScheduleRepository dutyScheduleRepository;
+
+    @Mock
     private UuidV7Generator uuidV7Generator;
 
     private Clock clock;
@@ -77,6 +85,7 @@ class DepartmentServiceImplTest {
                 staffRoomAssignmentRepository,
                 staffAccountRepository,
                 medicalServiceRepository,
+                dutyScheduleRepository,
                 clock,
                 uuidV7Generator
         );
@@ -771,5 +780,69 @@ class DepartmentServiceImplTest {
                 .isInstanceOf(clinic.backend.exceptions.AppException.class)
                 .satisfies(e -> assertThat(((clinic.backend.exceptions.AppException) e).getErrorCode())
                         .isEqualTo(clinic.backend.enums.ErrorCode.CONCURRENT_MODIFICATION));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_DOCTOR_ON_DUTY) khi tạm ngưng phòng đang có bác sĩ trực trong ngày qua toggleRoomStatus")
+    void toggleRoomStatus_ThrowsException_WhenDoctorOnDutyToday() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        UUID doctorId = UUID.randomUUID();
+        DutySchedule duty = new DutySchedule(UUID.randomUUID(), now, today, DutyShift.MORNING, doctorId, roomId, null, null);
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of(duty));
+
+        StaffAccount doctor = StaffAccount.builder()
+                .id(doctorId)
+                .fullName("Bác sĩ A")
+                .role(Role.DOCTOR)
+                .build();
+        when(staffAccountRepository.findAllById(java.util.Set.of(doctorId))).thenReturn(List.of(doctor));
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_DOCTOR_ON_DUTY) khi cập nhật phòng sang INACTIVE và phòng đang có bác sĩ trực trong ngày")
+    void updateRoom_ThrowsException_WhenDoctorOnDutyTodayAndStatusInactive() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        UUID doctorId = UUID.randomUUID();
+        DutySchedule duty = new DutySchedule(UUID.randomUUID(), now, today, DutyShift.MORNING, doctorId, roomId, null, null);
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of(duty));
+
+        StaffAccount doctor = StaffAccount.builder()
+                .id(doctorId)
+                .fullName("Bác sĩ A")
+                .role(Role.DOCTOR)
+                .build();
+        when(staffAccountRepository.findAllById(java.util.Set.of(doctorId))).thenReturn(List.of(doctor));
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng 1")
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.INACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY));
     }
 }
