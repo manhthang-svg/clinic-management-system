@@ -18,6 +18,7 @@ Status values:
 | --- | --- |
 | Source | Assigned in the `Mới` sheet and consistent with the business rules |
 | TBD | Assignment or scope is unclear; see the referenced open question in `business-context.md` |
+| Decision | Not in the `Mới` sheet; added by a team decision recorded in [`iteration-1-decisions.md`](iteration-1-decisions.md) |
 
 ## Role Summary
 
@@ -86,6 +87,7 @@ Status values:
 | Cashier | Payment / receipt | View pending, search, view history | UC-69, UC-70, UC-73 | — | Source |
 | Cashier | Payment / receipt | Confirm payment | UC-71 | Cannot create receipts manually (BR-36). | Source |
 | Cashier | Payment / receipt | Print receipt | UC-72 | Only after payment is confirmed (BR-37). | Source |
+| Cashier | Visit | Print the queue-number ticket | UC-41 | Only a visit that already has its queue number, i.e. its examination fee is paid; otherwise `PAYMENT_NOT_PAID` (I1-D48). Uses the examination-ticket endpoints. | Decision |
 | System | Visit, order, receipt | End-of-day cancellation and abandonment | — | BR-22; not triggered by any user role. | Source |
 
 ## Not Granted

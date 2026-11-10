@@ -118,8 +118,9 @@ public class Visit extends VersionedEntity {
     @Column(name = "queue_date", nullable = false)
     private LocalDate queueDate;
 
-    @Column(name = "queue_number", nullable = false)
-    private int queueNumber;
+    /** Null while the examination fee is unpaid; issued when it is paid (I1-D48). */
+    @Column(name = "queue_number")
+    private Integer queueNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -151,7 +152,7 @@ public class Visit extends VersionedEntity {
             boolean isPriority,
             PriorityReason priorityReason,
             LocalDate queueDate,
-            int queueNumber,
+            Integer queueNumber,
             VisitStatus status,
             VisitInsuranceVerifyStatus insuranceVerifyStatus
     ) {
@@ -185,7 +186,7 @@ public class Visit extends VersionedEntity {
             boolean isPriority,
             PriorityReason priorityReason,
             LocalDate queueDate,
-            int queueNumber,
+            Integer queueNumber,
             VisitStatus status,
             VisitInsuranceVerifyStatus insuranceVerifyStatus
     ) {
@@ -227,13 +228,15 @@ public class Visit extends VersionedEntity {
         touch(now);
     }
 
-    public void markAsWaiting() {
+    /** BR-15, I1-D48: the examination fee is paid; the visit joins the waiting list with its new queue number. */
+    public void markAsWaiting(int queueNumber) {
         if (this.status != VisitStatus.WAITING_FEE_PAYMENT) {
             throw new IllegalStateException(
                     "Lượt khám không ở trạng thái chờ thanh toán"
             );
         }
 
+        this.queueNumber = queueNumber;
         this.status = VisitStatus.WAITING;
     }
 

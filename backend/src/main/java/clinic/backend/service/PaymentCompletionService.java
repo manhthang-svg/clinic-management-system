@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UC-71 steps 7–8 after a receipt becomes Paid, shared by the counter confirmation and PayOS: the examination
- * fee puts the visit in its room's waiting list (BR-15); the paraclinical fee releases the orders of UC-49 to the
+ * fee issues the visit's queue number and puts it in its room's waiting list (BR-15, I1-D48); the paraclinical fee releases the orders of UC-49 to the
  * rooms the Doctor chose (BR-26, I1-D47). Both write the audit entry (BR-37). UC-49 uses the same routing to release
  * orders that do not wait for payment.
  */
@@ -68,10 +68,13 @@ public class PaymentCompletionService {
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
 
         List<String> unroutedServices = new ArrayList<>();
+        Integer issuedQueueNumber = null;
         if (payment.getType() == PaymentType.EXAMINATION_FEE) {
             if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
-                visit.markAsWaiting();
+                // I1-D48: the queue number is issued only now, in the room and on the date of registration.
+                visit.markAsWaiting(queueCounterRepository.takeNext(visit.getRoomId(), visit.getQueueDate()));
                 visitRepository.save(visit);
+                issuedQueueNumber = visit.getQueueNumber();
             }
         } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
             // An insurance visit's orders were already released at order time (BR-26); only pending ones move.
@@ -84,6 +87,9 @@ public class PaymentCompletionService {
         audit.put("type", payment.getType().name());
         audit.put("paymentMethod", payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null);
         audit.put("patientAmount", payment.getPatientTotalAmount());
+        if (issuedQueueNumber != null) {
+            audit.put("queueNumber", issuedQueueNumber);
+        }
         if (!unroutedServices.isEmpty()) {
             audit.put("unroutedServices", unroutedServices);
         }

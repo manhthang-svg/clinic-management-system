@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import {
-    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText,
+    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText, queueTicketVisitId as ticketVisitOf,
 } from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
+import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 
 function formatMoney(amount) {
     if (amount === undefined || amount === null) return '0 ₫';
@@ -49,6 +50,8 @@ export default function CashierOverviewPage() {
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
     const [notice, setNotice] = useState('');
+    // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
+    const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
     const [error, setError] = useState('');
 
     // Modal Tiền mặt
@@ -160,7 +163,9 @@ export default function CashierOverviewPage() {
                 note: 'Thu tiền mặt tại quầy',
             });
 
-            setNotice(confirmedNoticeText(res?.data || res));
+            const confirmed = res?.data || res;
+            setNotice(confirmedNoticeText(confirmed));
+            setQueueTicketVisitId(ticketVisitOf(confirmed));
             setCashModal(null);
             fetchPayments();
         } catch (err) {
@@ -204,6 +209,7 @@ export default function CashierOverviewPage() {
                         ? `Thanh toán PayOS thành công cho ${qrModal.payment.patientName}! Bệnh nhân đã sẵn sàng vào phòng khám.`
                         : `Thanh toán PayOS thành công cho ${qrModal.payment.patientName}! Các chỉ định CLS đã sẵn sàng thực hiện.`
                 );
+                setQueueTicketVisitId(ticketVisitOf(qrModal.payment));
                 setQrModal(null);
                 fetchPayments();
             } else {
@@ -231,6 +237,7 @@ export default function CashierOverviewPage() {
                             ? `Thanh toán PayOS thành công cho ${qrModal.payment.patientName}! Bệnh nhân đã sẵn sàng vào phòng khám.`
                             : `Thanh toán PayOS thành công cho ${qrModal.payment.patientName}! Các chỉ định CLS đã sẵn sàng thực hiện.`
                     );
+                    setQueueTicketVisitId(ticketVisitOf(qrModal.payment));
                     setQrModal(null);
                     fetchPayments();
                 }
@@ -820,6 +827,10 @@ export default function CashierOverviewPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {queueTicketVisitId && (
+                <QueueTicketDialog visitId={queueTicketVisitId} onClose={() => setQueueTicketVisitId(null)} />
             )}
         </main>
     );

@@ -2625,11 +2625,14 @@ tables:
         field: queueNumber
         sql_type: integer
         base_type: integer
-        nullable: false
+        nullable: true
         java_type: Integer
+        checks:
+        - (queue_number >= 1)
+        - (queue_number IS NOT NULL OR status IN ('WAITING_FEE_PAYMENT', 'CANCELLED'))
         proposal: keep
         standard: Không
-        description: Số thứ tự trong phòng theo ngày
+        description: Số thứ tự trong phòng theo ngày; lượt khám phải trả phí khám chỉ có số khi đã thanh toán (I1-D48, V56)
       status:
         field: status
         sql_type: varchar(30)
@@ -2838,7 +2841,7 @@ tables:
     source_tag: GIỮ TỪ CODE HIỆN TẠI
     proposal: Bắt buộc giữ
     proposal_note: Đã code; tránh trùng số thứ tự
-    description: Khóa chính ghép (room_id, queue_date). INSERT ... ON CONFLICT DO UPDATE để cấp số không trùng khi đăng ký
+    description: Khóa chính ghép (room_id, queue_date). INSERT ... ON CONFLICT DO UPDATE để cấp số không trùng khi đăng ký hoặc khi thanh toán phí khám (I1-D48)
       đồng thời.
     append_only: false
     primary_key:

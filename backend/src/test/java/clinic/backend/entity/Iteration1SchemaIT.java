@@ -95,6 +95,20 @@ class Iteration1SchemaIT {
     }
 
     @Test
+    void onlyAnUnpaidOrCancelledVisitMayLackAQueueNumber() {
+        // I1-D48: the number is issued when the examination fee is paid.
+        UUID visit = insertVisit("DK-QUEUE-NULL", "BN00000003", "DV", false, null, null, null);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update visits set queue_number = null where id = ?", visit))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_visits_queue_number_issued");
+        jdbcTemplate.update("update visits set status = 'CANCELLED', queue_number = null where id = ?", visit);
+        assertThat(jdbcTemplate.queryForObject(
+                "select queue_number from visits where id = ?", Integer.class, visit)).isNull();
+    }
+
+    @Test
     void mapsAllStaffAccountFieldsToTheDatabase() {
         UUID id = UUID.randomUUID();
         UUID actorId = jdbcTemplate.queryForObject(

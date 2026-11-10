@@ -70,6 +70,7 @@ const TICKET_CODE_MESSAGES = {
   ROOM_NOT_AVAILABLE: 'Không tìm thấy phòng khám của lượt khám.',
   NOT_FOUND: 'Không tìm thấy lượt khám hoặc phiếu thu phí khám.',
   FORBIDDEN: 'Bạn không có quyền xem phiếu khám.',
+  PAYMENT_NOT_PAID: 'Chỉ in được phiếu số thứ tự sau khi đã thanh toán phí khám.',
 };
 
 /** Message for a failed ticket load; an unknown failure names its error code so it can be reported. */

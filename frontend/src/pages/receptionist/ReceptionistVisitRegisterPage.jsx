@@ -305,8 +305,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     setConfirm((prev) => ({ ...prev, submitting: true, error: null }));
     try {
       const visit = await visitApi.create(formToVisitRequest(form, patientId, insurance));
-      // MSG21
-      toast.success(`Đã tạo lượt khám ${visit.sovaovien}. Số thứ tự ${visit.queueNumber} – ${visit.roomName ?? selectedRoom?.name}.`);
+      // MSG21; a visit that must pay first has no queue number yet (I1-D48).
+      const roomName = visit.roomName ?? selectedRoom?.name;
+      toast.success(visit.queueNumber != null
+        ? `Đã tạo lượt khám ${visit.sovaovien}. Số thứ tự ${visit.queueNumber} – ${roomName}.`
+        : `Đã tạo lượt khám ${visit.sovaovien} – ${roomName}. Số thứ tự được cấp sau khi thanh toán phí khám.`);
       setCreated({ visit, ticket: null, loading: true, error: null });
       setConfirm(null);
       try {

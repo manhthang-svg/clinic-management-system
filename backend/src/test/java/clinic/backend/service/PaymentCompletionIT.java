@@ -46,7 +46,7 @@ class PaymentCompletionIT extends PostgresIntegrationTest {
                 insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
                     doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
                     status, created_at, updated_at, version)
-                values (?, 'VV-PAYOS-1', ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, 1,
+                values (?, 'VV-PAYOS-1', ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, null,
                     'WAITING_FEE_PAYMENT', now(), now(), 0)
                 """, visit, patient, ROOM, RECEPTIONIST, LocalDate.now(clock));
         UUID paymentId = UUID.randomUUID();
@@ -67,6 +67,10 @@ class PaymentCompletionIT extends PostgresIntegrationTest {
                 .isEqualTo("PAID");
         assertThat(jdbc.queryForObject("select status from visits where id = ?", String.class, visit))
                 .isEqualTo("WAITING");
+        // I1-D48: the unpaid visit had no queue number; paying issues one.
+        assertThat(jdbc.queryForObject("select queue_number from visits where id = ?", Integer.class, visit))
+                .isNotNull()
+                .isPositive();
         Map<String, Object> audit = jdbc.queryForMap(
                 "select action, actor_account_id from audit_logs where entity_type = 'payments' and entity_id = ?",
                 paymentId);

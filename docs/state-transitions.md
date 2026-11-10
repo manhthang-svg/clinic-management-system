@@ -103,9 +103,9 @@ stateDiagram-v2
 
 | ID | Từ | Sự kiện | Điều kiện | Đến | Thực hiện | UC | Bước / BR | Tình trạng |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| V01 | — | Lễ tân đăng ký lượt khám; hệ thống tạo hóa đơn phí khám | Phần BN phải trả > 0 | `CHO_TT_PK` | Lễ tân, Hệ thống | UC-31 | F01-09, F01-11; BR-24, BR-29 | Nguồn |
+| V01 | — | Lễ tân đăng ký lượt khám; hệ thống tạo hóa đơn phí khám. Chưa cấp số thứ tự (I1-D48) | Phần BN phải trả > 0 | `CHO_TT_PK` | Lễ tân, Hệ thống | UC-31 | F01-09, F01-11; BR-24, BR-29 | Nguồn |
 | V02 | — | Lễ tân đăng ký lượt khám; hệ thống tạo hóa đơn phí khám | Phần BN phải trả = 0 | `CHO_KHAM` | Lễ tân, Hệ thống | UC-31 | F01-11; BR-24 | Nguồn |
-| V03 | `CHO_TT_PK` | Thu ngân xác nhận đã thu hóa đơn phí khám (S1) | Hóa đơn phí khám chuyển `DA_TT` | `CHO_KHAM` | Thu ngân | UC-65 | F01-14; BR-18, BR-26 | Nguồn |
+| V03 | `CHO_TT_PK` | Thu ngân xác nhận đã thu hóa đơn phí khám, hoặc PayOS xác nhận (S1). Cấp số thứ tự tiếp theo của phòng cho ngày đăng ký (I1-D48) | Hóa đơn phí khám chuyển `DA_TT` | `CHO_KHAM` | Thu ngân | UC-65 | F01-14; BR-18, BR-26 | Nguồn |
 | V04 | `CHO_TT_PK` | Thu ngân hủy hóa đơn phí khám với lý do "BN không khám", hoặc tác vụ cuối ngày (S2) | Hóa đơn chưa thanh toán | `DA_HUY` | Thu ngân, Hệ thống | UC-66 | Mục 8 | Đề xuất |
 | V05 | `CHO_KHAM` | Bác sĩ gọi bệnh nhân tiếp theo | Bệnh nhân có mặt | `DANG_KHAM` | Bác sĩ | UC-40 | F02-02; BR-29 | Nguồn |
 | V06 | `CHO_KHAM` | Bác sĩ gọi bệnh nhân | Bệnh nhân vắng; ghi `bo_qua_tu = CHO_KHAM`, `so_lan_vang = 1` | `DA_BO_QUA` | Bác sĩ | UC-40 | F02-03; BR-10, BR-20 | Đề xuất (Q-18) |
@@ -126,7 +126,7 @@ stateDiagram-v2
 
 ### 2.4 Ghi chú
 
-**Hàng chờ phòng khám.** Danh sách chờ (UC-39) gồm các lượt `CHO_KHAM` và `CHO_KET_LUAN` của phòng, không gồm `CHO_TT_PK` (BR-26). Khóa sắp xếp thống nhất cho mọi phòng là `(uu_tien giảm dần, thoi_diem_dang_ky tăng dần)`. Số thứ tự chỉ dùng để hiển thị và gọi. Khóa này áp dụng cả cho lượt chuyển phòng (V11) và phân lại phòng (V10), khớp BR-21 và quyết định Q-24. *Quyết định (Q-24).*
+**Hàng chờ phòng khám.** Danh sách chờ (UC-39) gồm các lượt `CHO_KHAM` và `CHO_KET_LUAN` của phòng, không gồm `CHO_TT_PK` (BR-26). Khóa sắp xếp thống nhất cho mọi phòng là `(uu_tien giảm dần, thoi_diem_dang_ky tăng dần)`. Số thứ tự chỉ dùng để hiển thị và gọi. *Thay đổi bởi I1-D48:* danh sách chờ khám xếp theo `(uu_tien giảm dần, so_thu_tu tăng dần)`; lượt khám phải trả phí khám chỉ có số thứ tự khi thanh toán xong, nên thứ tự là thứ tự thanh toán. Khóa này áp dụng cả cho lượt chuyển phòng (V11) và phân lại phòng (V10), khớp BR-21 và quyết định Q-24. *Quyết định (Q-24).*
 
 **Gọi lại.** Lượt được gọi lại (V07, V17) được xử lý ngay sau ca đang khám, không xếp lại theo khóa sắp xếp. Con số "khoảng 10 lượt" của AS-IS (BR-20) chỉ là gợi ý hiển thị trên danh sách bỏ qua, không phải điều kiện chuyển trạng thái. *Đề xuất (Q-18).*
 

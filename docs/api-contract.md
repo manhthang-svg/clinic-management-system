@@ -66,7 +66,9 @@ the response includes portal identity data for MSG18. Visit creation never trust
 repeats verification before applying the portal-provided coverage rate.
 
 The examination visit enters `WAITING` only when the persisted examination-fee receipt has a patient amount of zero.
-Any positive patient amount, including insurance co-payment, leaves the visit in `WAITING_FEE_PAYMENT`. Ticket data is
+Any positive patient amount, including insurance co-payment, leaves the visit in `WAITING_FEE_PAYMENT`. Such a visit has
+`queueNumber: null` in the visit and ticket responses until its examination fee is paid; the number is issued then and
+returned as `visitQueueNumber` on the examination-fee `PaymentResponse` and on the receipt print data (I1-D48). Ticket data is
 assembled from the persisted visit and receipt rather than from the earlier fee preview. The print command records every
 print attempt; responses after the first recorded print set `reprint: true`.
 

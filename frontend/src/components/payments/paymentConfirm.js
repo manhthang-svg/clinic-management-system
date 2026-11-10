@@ -43,13 +43,17 @@ export function printErrorMessage(error) {
 }
 
 /**
- * MSG30 plus, for a paraclinical fee, where each service is performed (BR-28) and which services have no
- * Active room yet (AF-02).
+ * MSG30 plus, for an examination fee, the queue number issued with the payment (I1-D48); for a paraclinical fee,
+ * where each service is performed (BR-28) and which services have no Active room yet (AF-02).
  */
 export function confirmedNotice(payment) {
     const lines = [`Đã xác nhận thanh toán phiếu ${payment?.receiptNumber || payment?.paymentCode || ''}.`.trim()];
     if (payment?.type !== 'PARACLINICAL_FEE') {
-        return { message: lines[0], rooms: [], unrouted: [] };
+        if (payment?.type === 'EXAMINATION_FEE' && payment?.visitQueueNumber != null) {
+            const room = payment.roomName ? ` – ${payment.roomName}` : '';
+            lines.push(`Số thứ tự ${payment.visitQueueNumber}${room}.`);
+        }
+        return { message: lines.join(' '), rooms: [], unrouted: [] };
     }
     const items = payment.items || [];
     const rooms = items
@@ -78,4 +82,10 @@ export function confirmedNoticeText(payment) {
         parts.push(`Chưa có phòng đang hoạt động cho: ${unrouted.join(', ')}. Chỉ định vẫn ở trạng thái chờ.`);
     }
     return parts.join(' ');
+}
+
+/** I1-D48: the visit whose queue-number ticket the Cashier prints once its examination fee is paid; otherwise null. */
+export function queueTicketVisitId(payment) {
+    const type = payment?.type ?? payment?.paymentType;
+    return type === 'EXAMINATION_FEE' && payment?.visitId ? payment.visitId : null;
 }

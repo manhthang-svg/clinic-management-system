@@ -56,12 +56,15 @@ import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -490,6 +493,29 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void cashierCannotLoadOrPrintTheTicketBeforeTheExaminationFeeIsPaid() {
+        // I1-D48: the Cashier prints the queue-number ticket, so only once the visit has its number.
+        UUID visitId = UUID.randomUUID();
+        Visit visit = mock(Visit.class);
+        when(visit.getQueueNumber()).thenReturn(null);
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("cashier", null, "ROLE_CASHIER"));
+        try {
+            assertThatThrownBy(() -> service.getTicket(visitId))
+                    .isInstanceOfSatisfying(AppException.class,
+                            exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PAYMENT_NOT_PAID));
+            assertThatThrownBy(() -> service.prepareTicketPrint(
+                    new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), visitId))
+                    .isInstanceOfSatisfying(AppException.class,
+                            exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PAYMENT_NOT_PAID));
+            verifyNoInteractions(auditLogService);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void registersSelfPaidVisitAndCreatesPendingExaminationPayment() {
         UUID patientId = UUID.randomUUID();
         UUID receptionistId = UUID.randomUUID();
@@ -517,7 +543,6 @@ class VisitServiceImplTest {
                 .thenReturn(Optional.of(mock(StaffAccount.class)));
         when(medicalServiceRepository.findByTypeAndDepartmentIdIsNullAndServiceGroupIdIsNullAndStatus(
                 MedicalServiceType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(Optional.of(examination));
-        when(roomQueueCounterRepository.takeNext(BUSY_ROOM_ID, QUEUE_DATE)).thenReturn(1);
         when(visitRepository.nextRegistrationCode()).thenReturn(1L);
         when(visitRepository.nextPaymentCode()).thenReturn(1L);
         when(uuidV7Generator.next()).thenReturn(visitId, paymentId, itemId, UUID.randomUUID());
@@ -533,7 +558,9 @@ class VisitServiceImplTest {
 
         assertThat(response.sovaovien()).isEqualTo("DK0000000001");
         assertThat(response.status()).isEqualTo(VisitStatus.WAITING_FEE_PAYMENT);
-        assertThat(response.queueNumber()).isEqualTo(1);
+        // I1-D48: no queue number until the examination fee is paid.
+        assertThat(response.queueNumber()).isNull();
+        verify(roomQueueCounterRepository, never()).takeNext(any(), any());
         ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().getPatientTotalAmount()).isEqualByComparingTo("150000");
