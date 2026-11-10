@@ -12,7 +12,9 @@ import jakarta.validation.constraints.Size;
 public record RoleChangeRequest(
         @NotNull Role newRole,
         @NotNull Role expectedRole,
-        @Size(max = 50) String academicTitle,
+        // BR-62: letters, spaces, dots and commas.
+        @Size(max = 50, message = "TOO_LONG")
+        @Pattern(regexp = "^[\\p{L}\\p{M} .,]*$", message = "INVALID_FORMAT") String academicTitle,
         @Size(min = 5, max = 50, message = "INVALID_FORMAT")
         @Pattern(regexp = "^[\\p{L}\\p{N}/-]+$", message = "INVALID_FORMAT")
         String practiceLicenseNo) {

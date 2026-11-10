@@ -15,10 +15,13 @@ import jakarta.validation.constraints.Size;
 
 public record CreateAccountRequest(
         @NotBlank @Size(max = 64) String username,
-        @NotBlank @Size(max = 100)
-        @Pattern(regexp = "^[\\p{L}\\p{M} ]+$", message = "Full name may contain letters and spaces only.")
+        // BR-59: letters, spaces, apostrophes and hyphens; the 2-120 length applies after normalization.
+        @NotBlank @Size(max = 255, message = "TOO_LONG")
+        @Pattern(regexp = "^[\\p{L}\\p{M} '-]+$", message = "INVALID_FORMAT")
         String fullName,
-        @Size(max = 50) String academicTitle,
+        // BR-62: letters, spaces, dots and commas.
+        @Size(max = 50, message = "TOO_LONG")
+        @Pattern(regexp = "^[\\p{L}\\p{M} .,]*$", message = "INVALID_FORMAT") String academicTitle,
         @Size(min = 5, max = 50, message = "INVALID_FORMAT")
         @Pattern(regexp = "^[\\p{L}\\p{N}/-]+$", message = "INVALID_FORMAT")
         String practiceLicenseNo,

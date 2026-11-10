@@ -82,6 +82,10 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     private static final Pattern PRACTICE_LICENSE_FORMAT =
             Pattern.compile("^[\\p{L}\\p{N}/-]{5,50}$");
 
+    /** BR-59: a staff full name has 2–120 characters after trimming and collapsing repeated spaces. */
+    private static final int FULL_NAME_MIN_LENGTH = 2;
+    private static final int FULL_NAME_MAX_LENGTH = 120;
+
     /** BR-97: an action reason has 5–500 characters after trimming; the request DTO enforces the maximum. */
     private static final int LOCK_REASON_MIN_LENGTH = 5;
 
@@ -161,7 +165,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         String temporaryPassword = temporaryPassword(request.passwordMode(), request.initialPassword());
         Instant now = clock.instant();
         StaffAccount account = StaffAccount.create(
-                ids.next(), username, passwordHasher.hash(temporaryPassword), request.fullName().strip(),
+                ids.next(), username, passwordHasher.hash(temporaryPassword), normalizeFullName(request.fullName()),
                 normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(), request.gender(),
                 request.phoneNumber(), email, normalizeOptional(request.address()), request.role(),
                 principal.accountId(), request.submissionId(),
@@ -200,7 +204,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         Instant now = clock.instant();
         account.updatePersonalInformation(
-                request.fullName().strip(), normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(),
+                normalizeFullName(request.fullName()), normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(),
                 request.gender(), request.phoneNumber(), email, normalizeOptional(request.address()), now);
         try {
             accountRepository.saveAndFlush(account);
@@ -589,6 +593,19 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         return value;
     }
 
+    /** BR-59: trims the full name, collapses repeated spaces and checks the 2–120 character length. */
+    static String normalizeFullName(String fullName) {
+        String normalized = fullName == null ? "" : fullName.strip().replaceAll("\\s+", " ");
+        int length = normalized.codePointCount(0, normalized.length());
+        if (length < FULL_NAME_MIN_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("fullName", "INVALID_FORMAT"));
+        }
+        if (length > FULL_NAME_MAX_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("fullName", "TOO_LONG"));
+        }
+        return normalized;
+    }
+
     private void requireProfessionalInformation(Role role, String title, String practiceLicenseNo) {
         if (needsRoom(role) && (title == null || title.isBlank())) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("academicTitle", "REQUIRED"));
@@ -644,7 +661,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
 
     private Map<String, Object> editableValues(UpdateAccountRequest request, String email) {
         Map<String, Object> values = new LinkedHashMap<>();
-        values.put("fullName", request.fullName().strip());
+        values.put("fullName", normalizeFullName(request.fullName()));
         values.put("academicTitle", normalizeOptional(request.academicTitle()));
         values.put("practiceLicenseNo", normalizeOptional(request.practiceLicenseNo()));
         values.put("dateOfBirth", request.dateOfBirth());
