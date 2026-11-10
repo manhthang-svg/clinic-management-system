@@ -34,7 +34,7 @@ public record VisitResponse(
         boolean isPriority,
         String priorityReason,
         LocalDate queueDate,
-        int queueNumber,
+        Integer queueNumber,
         VisitStatus status,
         boolean isSkipped,
         Instant skippedAt,

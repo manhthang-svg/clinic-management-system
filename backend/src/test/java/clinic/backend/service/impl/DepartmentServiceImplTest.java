@@ -66,6 +66,9 @@ class DepartmentServiceImplTest {
     private clinic.backend.repository.MedicalServiceRepository medicalServiceRepository;
 
     @Mock
+    private clinic.backend.repository.ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+
+    @Mock
     private DutyScheduleRepository dutyScheduleRepository;
 
     @Mock
@@ -85,6 +88,7 @@ class DepartmentServiceImplTest {
                 staffRoomAssignmentRepository,
                 staffAccountRepository,
                 medicalServiceRepository,
+                paraclinicalOrderDetailRepository,
                 dutyScheduleRepository,
                 clock,
                 uuidV7Generator
@@ -354,6 +358,36 @@ class DepartmentServiceImplTest {
         DepartmentRoomItemResponse response = departmentService.toggleRoomStatus(roomId);
 
         assertThat(response.getStatus()).isEqualTo("INACTIVE");
+        assertThat(room.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("BR-50-03: không tắt được phòng CLS còn dịch vụ đã chọn phòng đang chờ thanh toán, chờ hoặc đang làm")
+    void toggleRoomStatus_RefusesParaclinicalRoomWithPendingServices() {
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, now, UUID.randomUUID(), UUID.randomUUID(), "SA1", "Phòng siêu âm 1", "Tầng 2",
+                RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ROOM_HAS_PENDING_WORK));
+        assertThat(room.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("Phòng CLS không còn dịch vụ dở dang thì tắt được")
+    void toggleRoomStatus_DeactivatesParaclinicalRoomWithoutPendingServices() {
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, now, UUID.randomUUID(), UUID.randomUUID(), "SA1", "Phòng siêu âm 1", "Tầng 2",
+                RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(any(), any())).thenReturn(false);
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        departmentService.toggleRoomStatus(roomId);
+
         assertThat(room.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
     }
 

@@ -7,9 +7,11 @@ import clinic.backend.dto.request.CancelParaclinicalServiceRequest;
 import clinic.backend.dto.request.CreateParaclinicalOrderRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.ParaclinicalCancellationResponse;
+import clinic.backend.dto.response.ParaclinicalOrderPrintResponse;
 import clinic.backend.dto.response.ParaclinicalOrderResponse;
 import clinic.backend.dto.response.ParaclinicalServiceOptionResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.ParaclinicalOrderPrintService;
 import clinic.backend.service.ParaclinicalOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ParaclinicalOrderController {
 
     private final ParaclinicalOrderService paraclinicalOrderService;
+    private final ParaclinicalOrderPrintService paraclinicalOrderPrintService;
 
     @PostMapping
     @PreAuthorize("hasRole('DOCTOR')")
@@ -63,6 +66,17 @@ public class ParaclinicalOrderController {
             @PathVariable UUID orderId
     ) {
         return ApiResponse.success(paraclinicalOrderService.getOrderById(orderId));
+    }
+
+    @PostMapping("/{orderId}/commands/prepare-print")
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "UC-50 In phiếu chỉ định cận lâm sàng")
+    public ApiResponse<ParaclinicalOrderPrintResponse> preparePrint(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID orderId
+    ) {
+        return ApiResponse.success(
+                paraclinicalOrderPrintService.preparePrint(StaffPrincipal.from(jwt).accountId(), orderId));
     }
 
     @PostMapping("/details/{orderDetailId}/commands/cancel")

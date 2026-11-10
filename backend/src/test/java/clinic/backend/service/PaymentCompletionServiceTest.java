@@ -40,6 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -78,16 +79,35 @@ class PaymentCompletionServiceTest {
                 UUID.randomUUID(), NOW, "HD1", VISIT_ID,
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
         payment.markAsPaid(PaymentMethod.CASH, cashierId, "PT20261028-HD1");
-        Visit visit = visit(VisitStatus.WAITING_FEE_PAYMENT);
+        Visit visit = unpaidVisit();
         when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit));
+        when(queueCounterRepository.takeNext(visit.getRoomId(), LocalDate.of(2026, 10, 28))).thenReturn(4);
 
         service.completePaidReceipt(payment, cashierId);
 
+        // I1-D48: the queue number is issued with the payment, not at registration.
         assertThat(visit.getStatus()).isEqualTo(VisitStatus.WAITING);
+        assertThat(visit.getQueueNumber()).isEqualTo(4);
         verify(paraclinicalOrderRepository, never()).findByPaymentId(any());
         verify(auditLogService).recordBusinessChange(
                 eq(cashierId), eq(AuditLogAction.UPDATE), eq("payments"), eq(payment.getId()),
-                eq(visit.getSovaovien()), any(), eq(NOW));
+                eq(visit.getSovaovien()), argThat(details -> Integer.valueOf(4).equals(details.get("queueNumber"))),
+                eq(NOW));
+    }
+
+    @Test
+    void doesNotIssueASecondQueueNumberWhenTheVisitIsAlreadyWaiting() {
+        Payment payment = Payment.createExaminationFee(
+                UUID.randomUUID(), NOW, "HD2", VISIT_ID,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
+        payment.markAsPaid(PaymentMethod.CASH, UUID.randomUUID(), "PT20261028-HD2");
+        Visit visit = visit(VisitStatus.WAITING);
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit));
+
+        service.completePaidReceipt(payment, null);
+
+        assertThat(visit.getQueueNumber()).isEqualTo(1);
+        verify(queueCounterRepository, never()).takeNext(any(), any());
     }
 
     @Test
@@ -181,6 +201,47 @@ class PaymentCompletionServiceTest {
         assertThat(detail.getRoomId()).isEqualTo(room.getId());
     }
 
+    @Test
+    void sendsAPaidServiceToTheRoomTheDoctorChoseEvenWhenAnotherIsLessBusy() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room chosen = room(groupId, "CLS01");
+        ParaclinicalOrderDetail detail = detail(order, chosen.getId());
+        order.addDetail(detail);
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_PARACLINICAL)));
+        when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+        when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
+        when(queueCounterRepository.takeNext(chosen.getId(), LocalDate.of(2026, 10, 28))).thenReturn(5);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        // I1-D47, BR-50-02: the chosen room keeps the service; the queue number is taken now.
+        assertThat(detail.getRoomId()).isEqualTo(chosen.getId());
+        assertThat(detail.getQueueNumber()).isEqualTo(5);
+        verify(roomRepository, never()).findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(any(), any());
+    }
+
+    @Test
+    void fallsBackToTheLeastBusyRoomWhenTheChosenRoomWasDeactivated() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room closed = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), groupId, "CLS01", "Phòng CLS01", "Tầng 2",
+                RoomType.PARACLINICAL, ActivationStatus.INACTIVE);
+        Room open = room(groupId, "CLS02");
+        ParaclinicalOrderDetail detail = detail(order, closed.getId());
+        order.addDetail(detail);
+        stubParaclinical(payment, order, groupId, List.of(open));
+        when(roomRepository.findById(closed.getId())).thenReturn(Optional.of(closed));
+        when(queueCounterRepository.takeNext(open.getId(), LocalDate.of(2026, 10, 28))).thenReturn(2);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getRoomId()).isEqualTo(open.getId());
+        assertThat(detail.getQueueNumber()).isEqualTo(2);
+    }
+
     private void stubParaclinical(Payment payment, ParaclinicalOrder order, UUID groupId, List<Room> rooms) {
         MedicalService medicalService = mock(MedicalService.class);
         when(medicalService.getServiceGroupId()).thenReturn(groupId);
@@ -207,15 +268,26 @@ class PaymentCompletionServiceTest {
     }
 
     private static ParaclinicalOrderDetail detail(ParaclinicalOrder order) {
+        return detail(order, null);
+    }
+
+    private static ParaclinicalOrderDetail detail(ParaclinicalOrder order, UUID chosenRoomId) {
         return new ParaclinicalOrderDetail(
                 UUID.randomUUID(), NOW, order, SERVICE_ID, "CD2-01", NOW, "Siêu âm ổ bụng", null, null,
                 BigDecimal.ONE, BigDecimal.valueOf(200000), BigDecimal.valueOf(200000), BigDecimal.ZERO,
-                BigDecimal.valueOf(200000), null, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+                BigDecimal.valueOf(200000), chosenRoomId, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
     }
 
     private static Room room(UUID groupId, String code) {
         return new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), groupId, code, "Phòng " + code, "Tầng 2",
                 RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+    }
+
+    private static Visit unpaidVisit() {
+        return new Visit(VISIT_ID, NOW, "VV202610280000001", UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), NOW, VisitDoituongbnLoai.DV, null, null, null, "Khám bệnh", false, null,
+                LocalDate.of(2026, 10, 28), null, VisitStatus.WAITING_FEE_PAYMENT,
+                VisitInsuranceVerifyStatus.NOT_APPLICABLE);
     }
 
     private static Visit visit(VisitStatus status) {

@@ -21,6 +21,27 @@ const blood = {
     cancellable: false, cancelReason: null,
 };
 
+const slip = {
+    orderId: 'o1', sophieu: 'CD1', reprint: false, orderedAt: '2026-11-08T03:00:00Z',
+    facility: { tenCskcb: 'Phòng khám Đa khoa A', diachi: '1 Lê Lợi', sodienthoai: '0281234567' },
+    patient: {
+        fullName: 'Nguyễn Văn An', birthYear: 1980, age: 46, gender: 'Nam', address: 'Hà Nội',
+        patientCode: 'BN00000001', visitCode: 'DK0000000001', visitType: 'DV', insuranceCardNumber: null,
+    },
+    orderingDepartment: 'Khoa Nội', orderingRoom: 'Phòng khám Nội 1', chandoansobo: 'Đau bụng',
+    mucdochidinh: 'Thường', doctorName: 'BS. Trần Văn B',
+    sheets: [
+        {
+            index: 1, total: 2, room: { roomCode: 'SA1', roomName: 'Phòng siêu âm 1', location: 'Tầng 2, khu B' },
+            serviceGroupName: 'Siêu âm', services: [{ machidinh: 'CD1-01', tenchidinh: 'Siêu âm ổ bụng', soluong: 1 }],
+        },
+        {
+            index: 2, total: 2, room: { roomCode: 'XN1', roomName: 'Phòng xét nghiệm', location: 'Tầng 1' },
+            serviceGroupName: 'Huyết học', services: [{ machidinh: 'CD1-02', tenchidinh: 'Tổng phân tích máu', soluong: 1 }],
+        },
+    ],
+};
+
 describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
     it('offers to cancel only the services that can still be cancelled', async () => {
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])) }} />);
@@ -84,5 +105,55 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
 
         expect(screen.getByRole('alert')).toHaveTextContent('Lý do hủy từ 5 đến 500 ký tự.');
         expect(api.cancelParaclinicalService).not.toHaveBeenCalled();
+    });
+    it('prints the order slip with one sheet per room and its location (UC-50)', async () => {
+        const user = userEvent.setup();
+        const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+        const api = {
+            getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])),
+            prepareParaclinicalOrderPrint: vi.fn().mockResolvedValue(slip),
+        };
+        render(<ParaclinicalOrderList visitId="v1" api={api} />);
+
+        await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
+
+        expect(api.prepareParaclinicalOrderPrint).toHaveBeenCalledWith('o1');
+        const first = await screen.findByRole('article', { name: 'Phiếu chỉ định tờ 1/2' });
+        expect(within(first).getByTestId('slip-room')).toHaveTextContent('Nơi thực hiện: Phòng siêu âm 1 – Tầng 2, khu B');
+        expect(within(first).getByText('Siêu âm ổ bụng')).toBeInTheDocument();
+        expect(within(first).queryByText(/₫/)).not.toBeInTheDocument();
+        expect(screen.getByRole('article', { name: 'Phiếu chỉ định tờ 2/2' })).toHaveTextContent('Phòng xét nghiệm');
+        await vi.waitFor(() => expect(print).toHaveBeenCalled());
+        print.mockRestore();
+    });
+
+    it('marks a reprint and explains an order that can no longer be printed', async () => {
+        const user = userEvent.setup();
+        const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+        const api = {
+            getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound])),
+            prepareParaclinicalOrderPrint: vi.fn()
+                .mockResolvedValueOnce({ ...slip, reprint: true })
+                .mockRejectedValueOnce(new ApiError('raw', {
+                    status: 409, errorResponse: { code: 'PARACLINICAL_ORDER_NOT_PRINTABLE' },
+                })),
+        };
+        render(<ParaclinicalOrderList visitId="v1" api={api} />);
+
+        await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
+        expect((await screen.findAllByText('BẢN IN LẠI')).length).toBeGreaterThan(0);
+        await user.click(screen.getByRole('button', { name: 'In lại phiếu chỉ định' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.');
+        expect(screen.queryByText('raw')).not.toBeInTheDocument();
+        print.mockRestore();
+    });
+
+    it('offers no print for an order whose services were all cancelled (BR-50-05)', async () => {
+        const cancelled = { ...ultrasound, status: 'CANCELLED', cancellable: false, cancelReason: 'Bệnh nhân từ chối' };
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([cancelled])) }} />);
+
+        expect(await screen.findByText('Phiếu chỉ định CD1')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'In phiếu chỉ định' })).not.toBeInTheDocument();
     });
 });

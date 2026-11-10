@@ -346,7 +346,8 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getPayosQrCode(),
                 itemResponses,
                 payment.getStatus() == PaymentStatus.PENDING && visit != null
-                        && visit.awaitsConclusionBeforePayment()
+                        && visit.awaitsConclusionBeforePayment(),
+                visit != null && payment.getType() == PaymentType.EXAMINATION_FEE ? visit.getQueueNumber() : null
         );
     }
 }

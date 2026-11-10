@@ -22,6 +22,7 @@ import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
@@ -48,6 +49,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -85,19 +87,47 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         // UC-49 bước 2: chỉ dịch vụ CLS đang hoạt động, kèm giá dịch vụ và giá BHYT (BR-08, BR-10)
         Map<UUID, String> groupNames = serviceGroupRepository.findAll().stream()
                 .collect(Collectors.toMap(ServiceGroup::getId, ServiceGroup::getServiceGroupName));
+        // I1-D47: các phòng đang hoạt động của nhóm dịch vụ, chọn sẵn phòng ít người chờ nhất (BR-50-01)
+        Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = new HashMap<>();
         return medicalServiceRepository
                 .findAllByStatusAndTypeInOrderByTenchidinhAsc(ActivationStatus.ACTIVE, PARACLINICAL_TYPES)
                 .stream()
-                .map(service -> new ParaclinicalServiceOptionResponse(
-                        service.getId(),
-                        service.getCode(),
-                        service.getTenchidinh(),
-                        service.getType(),
-                        service.getServiceGroupId(),
-                        groupNames.get(service.getServiceGroupId()),
-                        service.getClinicPrice(),
-                        service.getInsurancePrice()))
+                .map(service -> {
+                    List<ParaclinicalServiceOptionResponse.RoomOption> rooms = service.getServiceGroupId() == null
+                            ? List.of()
+                            : roomsByGroup.computeIfAbsent(service.getServiceGroupId(), this::roomOptions);
+                    return new ParaclinicalServiceOptionResponse(
+                            service.getId(),
+                            service.getCode(),
+                            service.getTenchidinh(),
+                            service.getType(),
+                            service.getServiceGroupId(),
+                            groupNames.get(service.getServiceGroupId()),
+                            service.getClinicPrice(),
+                            service.getInsurancePrice(),
+                            rooms,
+                            leastBusy(rooms));
+                })
                 .toList();
+    }
+
+    private List<ParaclinicalServiceOptionResponse.RoomOption> roomOptions(UUID serviceGroupId) {
+        return roomRepository
+                .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(serviceGroupId, ActivationStatus.ACTIVE)
+                .stream()
+                .map(room -> new ParaclinicalServiceOptionResponse.RoomOption(
+                        room.getId(), room.getRoomCode(), room.getRoomName(), room.getLocation(),
+                        paraclinicalOrderDetailRepository.countByRoomIdAndStatus(
+                                room.getId(), ParaclinicalOrderDetailStatus.WAITING)))
+                .toList();
+    }
+
+    /** Same choice as {@link PaymentCompletionService#leastBusyRoom}: fewest waiting, then lower room code. */
+    private static UUID leastBusy(List<ParaclinicalServiceOptionResponse.RoomOption> rooms) {
+        return rooms.stream()
+                .min(Comparator.comparingLong(ParaclinicalServiceOptionResponse.RoomOption::waitingCount))
+                .map(ParaclinicalServiceOptionResponse.RoomOption::roomId)
+                .orElse(null);
     }
 
     @Override
@@ -114,8 +144,15 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
             throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION, Map.of("status", visit.getStatus().name()));
         }
 
-        // 2. Bước 7: không trùng dịch vụ (MSG07), dịch vụ CLS tồn tại và đang hoạt động (MSG42)
-        List<MedicalService> services = requireOrderableServices(request.serviceIds());
+        // 2. Bước 7: không trùng dịch vụ (MSG07), dịch vụ CLS tồn tại và đang hoạt động (MSG42);
+        // I1-D47: phòng thực hiện bác sĩ chọn phải đang hoạt động và thuộc nhóm của dịch vụ (BR-50-01)
+        List<MedicalService> services = requireOrderableServices(request.items().stream()
+                .map(CreateParaclinicalOrderRequest.Item::serviceId)
+                .toList());
+        List<UUID> roomIds = new ArrayList<>();
+        for (int i = 0; i < services.size(); i++) {
+            roomIds.add(chosenRoom(services.get(i), request.items().get(i).roomId()));
+        }
 
         // 3. Bệnh án đang mở; chưa có thì mở bệnh án ngoại trú (từ đây không chuyển phòng được nữa, BR-24)
         MedicalRecord medicalRecord = medicalRecordRepository.findByVisitId(visit.getId())
@@ -169,7 +206,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                     detailId, now, order, service.getId(),
                     "%s-%02d".formatted(sophieu, i + 1), now, service.getTenchidinh(), null, null,
                     BigDecimal.ONE, item.getDongia(), item.getThanhtien(), item.getBhytChitra(),
-                    item.getBenhnhanphaitra(), null, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+                    item.getBenhnhanphaitra(), roomIds.get(i), ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
             order.addDetail(detail);
             paymentItems.add(item);
         }
@@ -225,6 +262,34 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 .map(PaymentItem::insuranceScope)
                 .reduce(insuranceCoverageService.scopeTotal(visit.getId()), BigDecimal::add);
         return insuranceCoverageService.appliedCoverageRate(scopeTotal, visit.getInsuranceCoverageRate());
+    }
+
+    /**
+     * I1-D47, BR-50-01: the room the Doctor chose, which must be an Active paraclinical room of the service's group.
+     * Without a choice the least busy Active room is used; {@code null} when no Active room performs the service, and
+     * the release then reports it as unrouted (UC-71 AF-02).
+     */
+    private UUID chosenRoom(MedicalService service, UUID roomId) {
+        if (roomId == null) {
+            return paymentCompletionService.leastBusyRoom(service.getServiceGroupId()).map(Room::getId).orElse(null);
+        }
+        Room room = roomRepository.findById(roomId).orElse(null);
+        boolean eligible = room != null
+                && room.getStatus() == ActivationStatus.ACTIVE
+                && room.getType() == RoomType.PARACLINICAL
+                && room.getServiceGroupId() != null
+                && room.getServiceGroupId().equals(service.getServiceGroupId());
+        if (!eligible) {
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("roomId", roomId.toString());
+            details.put("serviceId", service.getId().toString());
+            details.put("serviceName", service.getTenchidinh());
+            if (room != null) {
+                details.put("roomName", room.getRoomName());
+            }
+            throw new AppException(ErrorCode.PARACLINICAL_ROOM_NOT_ELIGIBLE, details);
+        }
+        return room.getId();
     }
 
     private List<MedicalService> requireOrderableServices(List<UUID> serviceIds) {

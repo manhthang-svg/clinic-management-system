@@ -16,9 +16,10 @@ import {
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import {
-    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText,
+    AWAITING_CONCLUSION_LABEL, MSG, confirmErrorMessage, confirmedNoticeText, queueTicketVisitId as ticketVisitOf,
 } from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
+import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 import { SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
 
 const money = (n) =>
@@ -84,6 +85,8 @@ export default function PaymentManagementPage() {
     const [toDate, setToDate] = useState('');
     const [searchError, setSearchError] = useState('');
     const [notice, setNotice] = useState('');
+    // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
+    const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
     const navigate = useNavigate();
 
     // Modal state
@@ -138,7 +141,9 @@ export default function PaymentManagementPage() {
                 paymentMethod: 'CASH',
                 note: cashNote.trim() || undefined,
             });
-            setNotice(confirmedNoticeText(res?.data || res));
+            const confirmed = res?.data || res;
+            setNotice(confirmedNoticeText(confirmed));
+            setQueueTicketVisitId(ticketVisitOf(confirmed));
             setCashModalPayment(null);
             setCashNote('');
             fetchPayments();
@@ -179,6 +184,7 @@ export default function PaymentManagementPage() {
             const data = res?.data || res;
             if (data?.status === 'PAID') {
                 setNotice(`Phiếu ${qrModalPayment.paymentCode} đã thanh toán thành công qua PayOS!`);
+                setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                 setQrModalPayment(null);
                 setQrData(null);
                 fetchPayments();
@@ -201,6 +207,7 @@ export default function PaymentManagementPage() {
                 const data = res?.data || res;
                 if (data?.status === 'PAID') {
                     setNotice(`Thanh toán PayOS thành công cho phiếu ${qrModalPayment.paymentCode}!`);
+                    setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                     setQrModalPayment(null);
                     setQrData(null);
                     fetchPayments();
@@ -629,6 +636,10 @@ export default function PaymentManagementPage() {
                 </div>
             )}
 
+
+            {queueTicketVisitId && (
+                <QueueTicketDialog visitId={queueTicketVisitId} onClose={() => setQueueTicketVisitId(null)} />
+            )}
         </main>
     );
 }

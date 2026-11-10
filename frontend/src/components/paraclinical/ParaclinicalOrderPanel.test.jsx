@@ -33,7 +33,7 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
 
     it('shows the selection with its cost and creates the order (steps 3–9)', async () => {
         const user = userEvent.setup();
-        const order = { paymentCode: 'HD0000000002', tongcong: 280000 };
+        const order = { id: 'o1', sophieu: 'CD0000000002', paymentCode: 'HD0000000002', tongcong: 280000 };
         const api = { getParaclinicalServices: vi.fn().mockResolvedValue(services), orderParaclinical: vi.fn().mockResolvedValue(order) };
         const onCreated = renderPanel(api, { preliminaryDiagnosis: 'Viêm dạ dày' });
 
@@ -43,8 +43,61 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(screen.getByTestId('cls-total')).toHaveTextContent('280.000');
         await user.click(screen.getByRole('button', { name: 'Xác nhận chỉ định' }));
 
-        expect(api.orderParaclinical).toHaveBeenCalledWith({ visitId: 'v1', chandoansobo: 'Viêm dạ dày', serviceIds: ['s1', 's2'] });
+        expect(api.orderParaclinical).toHaveBeenCalledWith({
+            visitId: 'v1',
+            chandoansobo: 'Viêm dạ dày',
+            items: [{ serviceId: 's1', roomId: null }, { serviceId: 's2', roomId: null }],
+        });
+        // UC-50 AF-01: the slip can be printed before leaving
+        expect(await screen.findByRole('button', { name: 'In phiếu chỉ định' })).toBeInTheDocument();
+        expect(onCreated).not.toHaveBeenCalled();
+        await user.click(screen.getByRole('button', { name: 'Về danh sách chờ' }));
         expect(onCreated).toHaveBeenCalledWith(order);
+    });
+
+    it('preselects the least busy room and sends the room the Doctor chose (I1-D47)', async () => {
+        const user = userEvent.setup();
+        const withRooms = [{
+            ...services[0],
+            rooms: [
+                { roomId: 'r1', roomCode: 'SA1', roomName: 'Phòng siêu âm 1', location: 'Tầng 2', waitingCount: 4 },
+                { roomId: 'r2', roomCode: 'SA2', roomName: 'Phòng siêu âm 2', location: 'Tầng 3', waitingCount: 1 },
+            ],
+            suggestedRoomId: 'r2',
+        }];
+        const api = {
+            getParaclinicalServices: vi.fn().mockResolvedValue(withRooms),
+            orderParaclinical: vi.fn().mockResolvedValue({ id: 'o1', sophieu: 'CD1' }),
+        };
+        renderPanel(api);
+
+        await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
+        const room = screen.getByRole('combobox', { name: 'Phòng thực hiện Siêu âm ổ bụng' });
+        expect(room).toHaveValue('r2');
+        await user.selectOptions(room, 'r1');
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chỉ định' }));
+
+        expect(api.orderParaclinical).toHaveBeenCalledWith(expect.objectContaining({
+            items: [{ serviceId: 's1', roomId: 'r1' }],
+        }));
+    });
+
+    it('asks for another room when the chosen one was deactivated (MSG40)', async () => {
+        const user = userEvent.setup();
+        const api = {
+            getParaclinicalServices: vi.fn().mockResolvedValue(services),
+            orderParaclinical: vi.fn().mockRejectedValue(new ApiError('raw', {
+                status: 409,
+                errorResponse: { code: 'PARACLINICAL_ROOM_NOT_ELIGIBLE', details: { serviceId: 's1', roomName: 'Phòng siêu âm 1' } },
+            })),
+        };
+        renderPanel(api);
+
+        await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chỉ định' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Phòng siêu âm 1 đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.');
+        expect(api.getParaclinicalServices).toHaveBeenCalledTimes(2);
     });
 
     it('splits the insurance and patient amounts for an insured visit (step 4, BR-27)', async () => {

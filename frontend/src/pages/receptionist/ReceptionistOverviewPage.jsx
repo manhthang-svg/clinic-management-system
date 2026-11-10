@@ -192,7 +192,7 @@ export default function ReceptionistOverviewPage() {
 
             setVisitSuccessData({
                 sovaovien: data?.sovaovien || '—',
-                queueNumber: data?.queueNumber || '—',
+                queueNumber: data?.queueNumber ?? null,
                 roomName: chosenRoom?.name || 'Phòng khám chỉ định',
                 patientName: visitPatient.hoten,
             });
@@ -526,7 +526,11 @@ export default function ReceptionistOverviewPage() {
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-slate-500">Số thứ tự khám:</span>
-                                            <span className="font-bold text-slate-800">STT #{visitSuccessData.queueNumber}</span>
+                                            <span className="font-bold text-slate-800">
+                                                {visitSuccessData.queueNumber != null
+                                                    ? `STT #${visitSuccessData.queueNumber}`
+                                                    : 'Cấp sau khi thanh toán phí khám'}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-slate-500">Phòng khám chỉ định:</span>

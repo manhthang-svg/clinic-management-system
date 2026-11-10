@@ -40,6 +40,13 @@ export const visitApi = {
         return apiClient.request('/paraclinical-orders/services', { signal });
     },
 
+    // UC-50: content of the order slip; the server records the print (BR-50-08).
+    prepareParaclinicalOrderPrint(orderId) {
+        return apiClient.request(`/paraclinical-orders/${encodeURIComponent(orderId)}/commands/prepare-print`, {
+            method: 'POST',
+        });
+    },
+
     getQueue(params = {}, signal) {
         const query = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {

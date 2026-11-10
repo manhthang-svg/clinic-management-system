@@ -17,7 +17,9 @@ import PaymentReceipt from '../../components/payments/PaymentReceipt';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import {
     AWAITING_CONCLUSION_LABEL, MSG, PRINT_MSG, confirmErrorMessage, confirmedNoticeText, printErrorMessage,
+    queueTicketVisitId,
 } from '../../components/payments/paymentConfirm';
+import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -85,6 +87,13 @@ export default function PaymentDetailPage() {
     const [checkingQr, setCheckingQr] = useState(false);
     const isPrintable = payment?.status === 'PAID' || payment?.status === 'FEE_EXEMPT';
     const [receipt, setReceipt] = useState(null);
+    // I1-D48: a paid examination fee lets the Cashier print the ticket with the queue number.
+    const [queueTicketOpen, setQueueTicketOpen] = useState(false);
+    const ticketVisitId = payment?.status === 'PAID' ? queueTicketVisitId(payment) : null;
+    const openQueueTicket = () => {
+        setReceipt(null); // only one sheet may be on the page when printing
+        setQueueTicketOpen(true);
+    };
 
     // UC-72: lấy nội dung phiếu (ghi log in / bản sao), hiện bản xem trước rồi mở hộp thoại in
     const handlePrint = async () => {
@@ -416,6 +425,15 @@ export default function PaymentDetailPage() {
                         >
                             <Printer size={16} /> In phiếu thu
                         </button>
+                        {ticketVisitId && (
+                            <button
+                                type="button"
+                                onClick={openQueueTicket}
+                                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#127e7a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0e6b67] shadow-xs"
+                            >
+                                <Printer size={16} /> In phiếu số thứ tự
+                            </button>
+                        )}
                         {!isPrintable && (
                             <span className="text-xs text-slate-500">{PRINT_MSG.NOT_PAID}</span>
                         )}
@@ -592,6 +610,9 @@ export default function PaymentDetailPage() {
                 <section aria-label="Xem trước phiếu thu" className="mx-auto mt-6 max-w-2xl">
                     <PaymentReceipt receipt={receipt} />
                 </section>
+            )}
+            {queueTicketOpen && ticketVisitId && (
+                <QueueTicketDialog visitId={ticketVisitId} onClose={() => setQueueTicketOpen(false)} />
             )}
         </main>
     );

@@ -165,16 +165,17 @@ public class VisitController {
         return ApiResponse.success(visitService.getRoomQueueStatus(date));
     }
 
-    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
+    // I1-D48: the Cashier prints the ticket with the queue number once the examination fee is paid.
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'CASHIER')")
     @GetMapping("/{visitId}/ticket")
     @Operation(summary = "UC-41 Lấy dữ liệu phiếu khám")
     public ApiResponse<VisitTicketResponse> getTicket(@PathVariable UUID visitId) {
         return ApiResponse.success(visitService.getTicket(visitId));
     }
 
-    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'CASHIER')")
     @PostMapping("/{visitId}/commands/prepare-ticket-print")
-    @Operation(summary = "UC-41 Chuẩn bị in hoặc in lại phiếu khám và ghi audit (bác sĩ: UC-48 AF-02)")
+    @Operation(summary = "UC-41 Chuẩn bị in hoặc in lại phiếu khám và ghi audit (bác sĩ: UC-48 AF-02; thu ngân: phiếu số thứ tự, I1-D48)")
     public ApiResponse<VisitTicketResponse> prepareTicketPrint(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID visitId) {

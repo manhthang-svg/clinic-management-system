@@ -2,7 +2,8 @@ import { useEffect, useId, useState } from 'react';
 import { ClipboardList, LoaderCircle } from 'lucide-react';
 
 import visitApi from '../../apis/visitApi';
-import { cancelErrorMessage, cancelledMessage, formatAmount } from './paraclinicalOrder';
+import { cancelErrorMessage, cancelledMessage, formatAmount, isPrintable } from './paraclinicalOrder';
+import { PrintOrderButton } from './ParaclinicalOrderSlip';
 
 // Labels from docs/state-transitions.md section 3.1. PENDING_RESULT has no documented label yet (TBD).
 const SERVICE_STATUS_LABELS = {
@@ -95,7 +96,7 @@ function CancelServiceDialog({ detail, api, onClose, onCancelled }) {
     );
 }
 
-function OrderCard({ order, onCancel }) {
+function OrderCard({ order, api, onCancel }) {
     return (
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
@@ -148,6 +149,9 @@ function OrderCard({ order, onCancel }) {
             <p className="mt-3 text-right text-xs text-slate-600">
                 Tổng cộng: <strong className="tabular-nums">{formatAmount(order.tongcong)} ₫</strong>
             </p>
+
+            {/* UC-50: in phiếu chỉ định khi phiếu chưa hủy và còn dịch vụ cần làm (BR-50-05) */}
+            {isPrintable(order) && <PrintOrderButton orderId={order.id} api={api} className="mt-3" />}
         </article>
     );
 }
@@ -206,7 +210,7 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, onCancelled }) 
             )}
             {orders.length === 0
                 ? <p className="text-sm text-slate-500">Chưa có chỉ định cận lâm sàng.</p>
-                : orders.map((order) => <OrderCard key={order.id} order={order} onCancel={setCancelling} />)}
+                : orders.map((order) => <OrderCard key={order.id} order={order} api={api} onCancel={setCancelling} />)}
             {cancelling && (
                 <CancelServiceDialog
                     detail={cancelling}

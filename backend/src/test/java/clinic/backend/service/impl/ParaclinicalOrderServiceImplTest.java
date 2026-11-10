@@ -21,6 +21,7 @@ import clinic.backend.entity.ParaclinicalOrder;
 import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.PaymentItem;
+import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
@@ -32,6 +33,7 @@ import clinic.backend.enums.ParaclinicalOrderStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.PriceType;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
@@ -346,6 +348,98 @@ class ParaclinicalOrderServiceImplTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.MEDICAL_RECORD_CLOSED));
     }
 
+    // ---- I1-D47, BR-50-01: the Doctor chooses the performing room ----
+
+    @Test
+    void storesTheRoomTheDoctorChoseOnTheOrderLine() {
+        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
+        stubOrder(visit, List.of(ultrasound));
+        // lenient: the ordering room of the visit is looked up through the same repository
+        lenient().when(roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
+
+        var response = service.createOrder(DOCTOR_ID, requestWithRoom(ultrasound.getId(), room.getId()));
+
+        assertThat(response.details()).singleElement()
+                .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(room.getId()));
+        // A self-paid order still waits for the cashier; the queue number is taken at release (BR-50-02).
+        verify(paymentCompletionService, never()).releaseOrder(any());
+    }
+
+    @Test
+    void preselectsTheLeastBusyRoomWhenTheDoctorChoseNone() {
+        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
+        stubOrder(visit, List.of(ultrasound));
+        when(paymentCompletionService.leastBusyRoom(ultrasound.getServiceGroupId())).thenReturn(Optional.of(room));
+
+        var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
+
+        assertThat(response.details()).singleElement()
+                .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(room.getId()));
+    }
+
+    @Test
+    void refusesARoomOfAnotherServiceGroup() {
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID)));
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        when(medicalServiceRepository.findAllById(List.of(ultrasound.getId()))).thenReturn(List.of(ultrasound));
+        Room labRoom = paraclinicalRoom(UUID.randomUUID(), ActivationStatus.ACTIVE);
+        when(roomRepository.findById(labRoom.getId())).thenReturn(Optional.of(labRoom));
+
+        assertThatThrownBy(() -> service.createOrder(DOCTOR_ID, requestWithRoom(ultrasound.getId(), labRoom.getId())))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PARACLINICAL_ROOM_NOT_ELIGIBLE);
+                    assertThat(e.getDetails()).containsEntry("roomName", "Phòng siêu âm 1");
+                });
+        verify(paymentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void refusesAnInactiveRoom() {
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID)));
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        when(medicalServiceRepository.findAllById(List.of(ultrasound.getId()))).thenReturn(List.of(ultrasound));
+        Room closed = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.INACTIVE);
+        when(roomRepository.findById(closed.getId())).thenReturn(Optional.of(closed));
+
+        assertThatThrownBy(() -> service.createOrder(DOCTOR_ID, requestWithRoom(ultrasound.getId(), closed.getId())))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PARACLINICAL_ROOM_NOT_ELIGIBLE));
+    }
+
+    @Test
+    void listsTheActiveRoomsOfEachServiceWithTheLeastBusyPreselected() {
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        when(medicalServiceRepository.findAllByStatusAndTypeInOrderByTenchidinhAsc(
+                ActivationStatus.ACTIVE,
+                List.of(MedicalServiceType.LAB, MedicalServiceType.IMAGING, MedicalServiceType.FUNCTIONAL)))
+                .thenReturn(List.of(ultrasound));
+        Room busy = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA1",
+                "Phòng siêu âm 1", "Tầng 2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        Room free = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA2",
+                "Phòng siêu âm 2", "Tầng 3", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(
+                ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE)).thenReturn(List.of(busy, free));
+        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(busy.getId(), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(4L);
+        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(free.getId(), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(1L);
+
+        assertThat(service.listOrderableServices())
+                .singleElement()
+                .satisfies(option -> {
+                    assertThat(option.rooms())
+                            .extracting(r -> r.roomName(), r -> r.location(), r -> r.waitingCount())
+                            .containsExactly(
+                                    org.assertj.core.groups.Tuple.tuple("Phòng siêu âm 1", "Tầng 2", 4L),
+                                    org.assertj.core.groups.Tuple.tuple("Phòng siêu âm 2", "Tầng 3", 1L));
+                    assertThat(option.suggestedRoomId()).isEqualTo(free.getId());
+                });
+    }
+
     @Test
     void listsOnlyActiveParaclinicalServices() {
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
@@ -527,7 +621,20 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     private static CreateParaclinicalOrderRequest request(UUID... serviceIds) {
-        return new CreateParaclinicalOrderRequest(VISIT_ID, "Theo dõi đau bụng", null, List.of(serviceIds));
+        return new CreateParaclinicalOrderRequest(VISIT_ID, "Theo dõi đau bụng", null,
+                java.util.Arrays.stream(serviceIds)
+                        .map(id -> new CreateParaclinicalOrderRequest.Item(id, null))
+                        .toList());
+    }
+
+    private static CreateParaclinicalOrderRequest requestWithRoom(UUID serviceId, UUID roomId) {
+        return new CreateParaclinicalOrderRequest(VISIT_ID, "Theo dõi đau bụng", null,
+                List.of(new CreateParaclinicalOrderRequest.Item(serviceId, roomId)));
+    }
+
+    private static Room paraclinicalRoom(UUID serviceGroupId, ActivationStatus status) {
+        return new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), serviceGroupId, "SA1", "Phòng siêu âm 1",
+                "Tầng 2, khu B", RoomType.PARACLINICAL, status);
     }
 
     private static MedicalService service(String code, String name, MedicalServiceType type, long price) {

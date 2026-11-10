@@ -31,11 +31,13 @@ import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.RoomType;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.DepartmentRepository;
 import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.MedicalServiceRepository;
+import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
@@ -51,12 +53,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class DepartmentServiceImpl implements DepartmentService {
 
+    /** Order line statuses that keep their chosen paraclinical room active (BR-50-03). */
+    private static final List<ParaclinicalOrderDetailStatus> ROOM_PENDING_WORK = List.of(
+            ParaclinicalOrderDetailStatus.PENDING_PAYMENT,
+            ParaclinicalOrderDetailStatus.WAITING,
+            ParaclinicalOrderDetailStatus.IN_PROGRESS);
+
     private final DepartmentRepository departmentRepository;
     private final RoomRepository roomRepository;
     private final ServiceGroupRepository serviceGroupRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final MedicalServiceRepository medicalServiceRepository;
+    private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     private final DutyScheduleRepository dutyScheduleRepository;
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private final Clock clock;
@@ -741,6 +750,15 @@ public class DepartmentServiceImpl implements DepartmentService {
         ActivationStatus nextStatus = room.getStatus() == ActivationStatus.ACTIVE
                 ? ActivationStatus.INACTIVE
                 : ActivationStatus.ACTIVE;
+
+        // BR-50-03 (I1-D47, extends I1-D32): a paraclinical room chosen by services that are still pending payment,
+        // waiting or in progress stays active, so those services keep the room printed on their order slip.
+        if (nextStatus == ActivationStatus.INACTIVE
+                && room.getType() == RoomType.PARACLINICAL
+                && paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(room.getId(), ROOM_PENDING_WORK)) {
+            throw new AppException(ErrorCode.ROOM_HAS_PENDING_WORK, Map.of(
+                    "roomId", room.getId().toString(), "roomName", room.getRoomName()));
+        }
 
         room.setStatus(nextStatus, now);
         Room saved = roomRepository.save(room);

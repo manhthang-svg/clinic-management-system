@@ -129,7 +129,11 @@ public class VisitServiceImpl implements VisitService {
 
         Instant now = clock.instant();
         LocalDate queueDate = LocalDate.ofInstant(now, CLINIC_ZONE);
-        int queueNumber = queueCounterRepository.takeNext(room.getId(), queueDate);
+        VisitStatus initialStatus = initialStatusFor(request.doituongbnLoai(), fee);
+        // I1-D48: a visit that must pay first gets its number when the fee is paid (PaymentCompletionService).
+        Integer queueNumber = initialStatus == VisitStatus.WAITING
+                ? queueCounterRepository.takeNext(room.getId(), queueDate)
+                : null;
         String registrationCode = "DK%010d".formatted(visitRepository.nextRegistrationCode());
 
         Visit visit = new Visit(
@@ -140,7 +144,7 @@ public class VisitServiceImpl implements VisitService {
                 normalize(request.lydotiepnhan()), normalize(request.noigioithieuLoai()),
                 request.lydovaovien().strip(), Boolean.TRUE.equals(request.isPriority()), priorityReason,
                 queueDate, queueNumber,
-                initialStatusFor(request.doituongbnLoai(), fee),
+                initialStatus,
                 insurance.status());
 
         if (appointment != null) {
@@ -331,6 +335,19 @@ public class VisitServiceImpl implements VisitService {
                 ? visitRepository.findAllByQueueDate(queryDate)
                 : visitRepository.findRoomQueue(targetRoomId, queryDate);
         return visits.stream().map(this::toResponse).toList();
+    }
+
+    /** I1-D48: the Cashier prints the queue-number ticket, so only for a visit that already has its number. */
+    private static void rejectCashierBeforePayment(Visit visit) {
+        if (currentCallerHasRole("ROLE_CASHIER") && visit.getQueueNumber() == null) {
+            throw new AppException(ErrorCode.PAYMENT_NOT_PAID);
+        }
+    }
+
+    private static boolean currentCallerHasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.equals(authority.getAuthority()));
     }
 
     private static boolean currentCallerIsDoctor() {
@@ -755,6 +772,7 @@ public class VisitServiceImpl implements VisitService {
     public VisitTicketResponse getTicket(UUID visitId) {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        rejectCashierBeforePayment(visit);
         return toTicketResponse(visit, false);
     }
 
@@ -763,6 +781,7 @@ public class VisitServiceImpl implements VisitService {
     public VisitTicketResponse prepareTicketPrint(StaffPrincipal principal, UUID visitId) {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        rejectCashierBeforePayment(visit);
         boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId);
         auditLogService.recordBusinessChange(
                 principal.accountId(), AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId,

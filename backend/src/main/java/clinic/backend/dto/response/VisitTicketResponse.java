@@ -17,7 +17,7 @@ public record VisitTicketResponse(
         String patientName,
         Integer birthYear,
         String gender,
-        int queueNumber,
+        Integer queueNumber,
         String roomName,
         String roomLocation,
         List<String> doctorNames,

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import ApiError from '../../apis/apiError';
-import { MSG, confirmErrorMessage, confirmedNotice, confirmedNoticeText } from './paymentConfirm';
+import {
+    MSG, confirmErrorMessage, confirmedNotice, confirmedNoticeText, queueTicketVisitId,
+} from './paymentConfirm';
 
 const paraclinical = {
     type: 'PARACLINICAL_FEE',
@@ -16,6 +18,20 @@ describe('confirmedNotice (UC-71 steps 8–9)', () => {
     it('shows MSG30 for an examination fee', () => {
         expect(confirmedNoticeText({ type: 'EXAMINATION_FEE', receiptNumber: 'PT20261103-P0', items: [] }))
             .toBe('Đã xác nhận thanh toán phiếu PT20261103-P0.');
+    });
+
+    it('shows the queue number issued with the examination fee (I1-D48)', () => {
+        expect(confirmedNoticeText({
+            type: 'EXAMINATION_FEE', receiptNumber: 'PT20261103-P0', roomName: 'Phòng Nội', visitQueueNumber: 5,
+            items: [],
+        })).toBe('Đã xác nhận thanh toán phiếu PT20261103-P0. Số thứ tự 5 – Phòng Nội.');
+    });
+
+    it('offers the queue-number ticket only for an examination fee (I1-D48)', () => {
+        expect(queueTicketVisitId({ type: 'EXAMINATION_FEE', visitId: 'v1' })).toBe('v1');
+        expect(queueTicketVisitId({ paymentType: 'EXAMINATION_FEE', visitId: 'v2' })).toBe('v2');
+        expect(queueTicketVisitId({ type: 'PARACLINICAL_FEE', visitId: 'v1' })).toBeNull();
+        expect(queueTicketVisitId(null)).toBeNull();
     });
 
     it('lists the room of each paid service and the services without an Active room (AF-02)', () => {

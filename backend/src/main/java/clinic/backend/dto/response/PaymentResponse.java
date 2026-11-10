@@ -37,7 +37,9 @@ public record PaymentResponse(
         String payosQrCode,
         List<PaymentItemResponse> items,
         /** True when a pending receipt of an insurance visit cannot be paid until the conclusion (BR-15, BR-26). */
-        boolean awaitingConclusion
+        boolean awaitingConclusion,
+        /** Examination fee only: the visit's queue number, issued once the fee is paid (I1-D48); otherwise null. */
+        Integer visitQueueNumber
 ) {
     @JsonProperty("paymentType")
     public PaymentType paymentType() {
