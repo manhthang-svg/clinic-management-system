@@ -258,6 +258,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     public RoleChangeCheckResponse checkRoleChange(UUID accountId, RoleChangeRequest request) {
         StaffAccount account = requiredAccount(accountId);
         validateRoleChange(account, request);
+        validateProfessionalInformation(account, request);
         return roleCheck(account, request.newRole());
     }
 
@@ -275,6 +276,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         StaffAccount account = requiredAccount(accountId);
         rejectAdminOrSelf(principal, account);
         validateRoleChange(account, request);
+        validateProfessionalInformation(account, request);
         RoleChangeCheckResponse check = roleCheck(account, request.newRole());
         if (check.visitsInProgress() + check.ordersInProgress() > 0) {
             throw new AppException(ErrorCode.WORK_IN_PROGRESS, Map.of(
@@ -283,16 +285,31 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         Instant now = clock.instant();
         Role oldRole = account.getRole();
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        oldValues.put("role", oldRole);
+        newValues.put("role", request.newRole());
+        if (needsRoom(request.newRole())) {
+            // I1-D47: a Doctor or Technician always has an academic title and practice-license number.
+            String title = request.academicTitle().strip();
+            String license = request.practiceLicenseNo().strip();
+            putIfChanged(oldValues, newValues, "academicTitle", account.getAcademicTitle(), title);
+            putIfChanged(oldValues, newValues, "practiceLicenseNo", account.getPracticeLicenseNo(), license);
+            account.updateProfessionalInformation(title, license, now);
+        }
         account.changeRole(request.newRole(), now);
         if (needsRoom(oldRole)) {
             assignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(accountId)
                     .ifPresent(assignment -> assignment.remove(principal.accountId(), now));
         }
-        accountRepository.saveAndFlush(account);
+        try {
+            accountRepository.saveAndFlush(account);
+        } catch (DataIntegrityViolationException exception) {
+            throw uniquenessConflict();
+        }
         sessionRepository.revokeAllForAccount(accountId, SessionRevocationReason.ROLE_CHANGED, now);
         auditLogService.recordAccountChange(
-                principal.accountId(), accountId, AuditLogAction.UPDATE,
-                Map.of("role", oldRole), Map.of("role", request.newRole()), now);
+                principal.accountId(), accountId, AuditLogAction.UPDATE, oldValues, newValues, now);
         securityAuditService.record(
                 SecurityAuditEventType.ROLE_CHANGED, principal.accountId(), accountId, AuditOutcome.SUCCESS, now);
         return detail(account, principal.accountId());
@@ -475,6 +492,27 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         if (account.getRole() == request.newRole()) {
             throw new AppException(ErrorCode.ROLE_CHANGE_NOT_ALLOWED, Map.of("newRole", "UNCHANGED"));
+        }
+    }
+
+    /** I1-D47: a change to Doctor or Technician carries a valid academic title and unique practice license. */
+    private void validateProfessionalInformation(StaffAccount account, RoleChangeRequest request) {
+        if (!needsRoom(request.newRole())) {
+            return;
+        }
+        requireProfessionalInformation(request.newRole(), request.academicTitle(), request.practiceLicenseNo());
+        requireValidStaffInformation(null, request.practiceLicenseNo());
+        String license = request.practiceLicenseNo().strip();
+        if (accountRepository.existsByPracticeLicenseNoAndIdNot(license, account.getId())) {
+            throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, Map.of("practiceLicenseNo", "ALREADY_EXISTS"));
+        }
+    }
+
+    private static void putIfChanged(
+            Map<String, Object> oldValues, Map<String, Object> newValues, String field, String oldValue, String newValue) {
+        if (!newValue.equals(oldValue)) {
+            oldValues.put(field, oldValue);
+            newValues.put(field, newValue);
         }
     }
 

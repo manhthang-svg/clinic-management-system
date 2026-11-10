@@ -383,6 +383,13 @@ public class StaffAccount {
         updatedAt = Objects.requireNonNull(now, "now");
     }
 
+    /** I1-D47: the professional information a Doctor or Technician role requires, set with the role change. */
+    public void updateProfessionalInformation(String newAcademicTitle, String newPracticeLicenseNo, Instant now) {
+        academicTitle = requireText(newAcademicTitle, "academicTitle").strip();
+        practiceLicenseNo = requireText(newPracticeLicenseNo, "practiceLicenseNo").strip();
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
     public void changeRole(Role newRole, Instant now) {
         if (role == Role.ADMIN || newRole == Role.ADMIN || role == newRole) {
             throw new IllegalArgumentException("Role transition is not allowed");
