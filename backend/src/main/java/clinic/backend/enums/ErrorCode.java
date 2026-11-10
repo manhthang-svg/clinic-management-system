@@ -52,6 +52,8 @@ public enum ErrorCode {
     ROOM_IMMUTABLE_FIELD_CHANGE("ROOM_IMMUTABLE_FIELD_CHANGE",
             "The department or type of a room cannot be changed.", HttpStatus.BAD_REQUEST),
     SERVICE_NOT_FOUND("SERVICE_NOT_FOUND", "The medical service does not exist.", HttpStatus.NOT_FOUND),
+    ROOM_HAS_DOCTOR_ON_DUTY("ROOM_HAS_DOCTOR_ON_DUTY",
+            "Cannot deactivate a room that has a doctor on duty today.", HttpStatus.CONFLICT),
     SERVICE_CODE_ALREADY_EXISTS("SERVICE_CODE_ALREADY_EXISTS", "The medical service code already exists.",
             HttpStatus.CONFLICT),
     SERVICE_NAME_ALREADY_EXISTS("SERVICE_NAME_ALREADY_EXISTS", "The medical service name already exists.",
