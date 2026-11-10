@@ -6,4 +6,4 @@ export { AccountCreateView } from './AccountCreateView';
 export { AccountEditView } from './AccountEditView';
 export { ProfileView } from './ProfileView';
 export { AccountAssignRoleView } from './AccountAssignRoleView';
-export { AccountResetPasswordView } from './AccountResetPasswordView';
+export { AccountResetPasswordModal } from './AccountResetPasswordModal';

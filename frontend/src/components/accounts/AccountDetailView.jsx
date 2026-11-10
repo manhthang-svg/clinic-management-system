@@ -15,7 +15,6 @@ import {
   LogIn,
   LogOut,
   CircleAlert,
-  Building2,
 } from 'lucide-react';
 import {
   ROLE_MAP,
@@ -172,12 +171,13 @@ function HistoryPager({ page, totalPages, onPageChange }) {
   );
 }
 
-function EditButton({ onClick, label = 'Sửa' }) {
+function EditButton({ onClick, label = 'Sửa', disabled = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
     >
       <Pencil className="w-3.5 h-3.5" />
       {label}
@@ -219,7 +219,7 @@ function HeaderStat({ icon: Icon, label, iso, empty, note }) {
 }
 
 /** UC-6 View Account Detail, with entry points to UC-8 … UC-11 and room assignment (UC-15). */
-export function AccountDetailView({ account, loginEvents, changeHistory = [], historyPage, onHistoryPageChange, accountNames, workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onAssignRoom, onToggleLock, onResetPassword }) {
+export function AccountDetailView({ account, loginEvents, changeHistory = [], historyPage, onHistoryPageChange, accountNames, workInProgress, isSelf, onBack, onGoToList, onEdit, onAssignRole, onToggleLock, onResetPassword }) {
   const [loginHistoryState, setLoginHistoryState] = useState({ accountId: account.id, page: 0 });
   const locked = account.status === 'LOCKED';
   const permissions = ROLE_PERMISSIONS[account.role] || { modules: [], actions: [] };
@@ -228,7 +228,6 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
     ? { name: account.roomName, department: account.departmentName }
     : null;
   const actions = account.allowedActions || {};
-  const canAssignRoom = Boolean(actions.assignRoom && hasRoom && !isSelf);
   const loginHistoryTotalPages = Math.max(1, Math.ceil(loginEvents.length / HISTORY_PAGE_SIZE));
   const loginHistoryPage = loginHistoryState.accountId === account.id
     ? Math.min(loginHistoryState.page, loginHistoryTotalPages - 1)
@@ -330,10 +329,11 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 w-full xl:w-96 xl:border-l xl:border-slate-100 xl:pl-5">
-          {!locked && actions.update !== false && <button
+          {actions.update !== false && <button
             type="button"
             onClick={onEdit}
-            className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+            disabled={locked}
+            className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-white"
           >
             <Pencil className="w-4 h-4" />
             Chỉnh sửa tài khoản
@@ -342,27 +342,19 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
             <button
               type="button"
               onClick={onAssignRole}
-              className={`${canAssignRoom ? '' : 'col-span-2'} min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer`}
+              disabled={locked}
+              className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-white"
             >
               <UserCog className="w-4 h-4" />
               Đổi vai trò
             </button>
           )}
-          {!locked && canAssignRoom && (
-            <button
-              type="button"
-              onClick={onAssignRoom}
-              className="min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <Building2 className="w-4 h-4" />
-              Phân công phòng
-            </button>
-          )}
-          {!locked && actions.resetPassword && !isSelf && (
+          {actions.resetPassword && !isSelf && (
             <button
               type="button"
               onClick={onResetPassword}
-              className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-[#b56f08] bg-[#fff8e8] border border-[#f4d99f] rounded-xl hover:bg-[#fdf0d1] hover:border-[#edc978] transition-colors cursor-pointer"
+              disabled={locked}
+              className="col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-[#b56f08] bg-[#fff8e8] border border-[#f4d99f] rounded-xl hover:bg-[#fdf0d1] hover:border-[#edc978] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#fff8e8] disabled:hover:border-[#f4d99f]"
             >
               <KeyRound className="w-4 h-4" />
               Đặt lại mật khẩu
@@ -387,13 +379,13 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
 
       {locked && (
         <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Tài khoản đang bị khóa. Hãy mở khóa tài khoản để sử dụng các chức năng chỉnh sửa, đổi vai trò, phân công phòng hoặc đặt lại mật khẩu.
+          Tài khoản đang bị khóa. Hãy mở khóa tài khoản trước khi chỉnh sửa, đổi vai trò hoặc đặt lại mật khẩu.
         </div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
         <div className="space-y-5">
-          <SectionCard icon={User} title="Thông tin cá nhân" action={!locked && actions.update !== false ? <EditButton onClick={onEdit} /> : null}>
+          <SectionCard icon={User} title="Thông tin cá nhân" action={actions.update !== false ? <EditButton onClick={onEdit} disabled={locked} /> : null}>
             <InfoList rows={personalRows} />
           </SectionCard>
 

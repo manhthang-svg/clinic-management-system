@@ -8,7 +8,6 @@ export const ROUTES = {
     ACCOUNT_DETAIL: '/admin/accounts/:id',
     ACCOUNT_EDIT: '/admin/accounts/:id/edit',
     ACCOUNT_ASSIGN_ROLE: '/admin/accounts/:id/assign-role',
-    ACCOUNT_RESET_PASSWORD: '/admin/accounts/:id/reset-password',
     SERVICES: '/admin/services',
     SERVICE_CREATE: '/admin/services/new',
     SERVICE_DETAIL: '/admin/services/:id',

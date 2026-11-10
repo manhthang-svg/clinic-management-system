@@ -15,7 +15,6 @@ function renderDetail(account, props = {}) {
       onGoToList={vi.fn()}
       onEdit={vi.fn()}
       onAssignRole={vi.fn()}
-      onAssignRoom={vi.fn()}
       onToggleLock={vi.fn()}
       onResetPassword={vi.fn()}
       {...props}
@@ -33,14 +32,10 @@ const doctor = {
 };
 
 describe('AccountDetailView room assignment action', () => {
-  it('shows the action for an eligible Doctor and invokes UC-15 navigation', async () => {
-    const user = userEvent.setup();
-    const onAssignRoom = vi.fn();
-    renderDetail(doctor, { onAssignRoom });
+  it('does not show the room assignment action on account details', () => {
+    renderDetail(doctor);
 
-    await user.click(screen.getByRole('button', { name: 'Phân công phòng' }));
-
-    expect(onAssignRoom).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Phân công phòng' })).not.toBeInTheDocument();
   });
 
   it('hides the action when the backend does not allow room assignment', () => {
@@ -52,9 +47,11 @@ describe('AccountDetailView room assignment action', () => {
 });
 
 describe('AccountDetailView locked account actions', () => {
-  it('allows changing the role and unlocking while other actions remain unavailable', async () => {
+  it('shows management actions but only allows unlocking', async () => {
     const user = userEvent.setup();
+    const onEdit = vi.fn();
     const onAssignRole = vi.fn();
+    const onResetPassword = vi.fn();
     renderDetail({
       ...doctor,
       status: 'LOCKED',
@@ -65,15 +62,20 @@ describe('AccountDetailView locked account actions', () => {
         resetPassword: true,
         unlock: true,
       },
-    }, { onAssignRole });
+    }, { onEdit, onAssignRole, onResetPassword });
 
     expect(screen.getByRole('button', { name: 'Mở khóa tài khoản' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chỉnh sửa tài khoản' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Đổi vai trò' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Đặt lại mật khẩu' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sửa' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Chỉnh sửa tài khoản' }));
     await user.click(screen.getByRole('button', { name: 'Đổi vai trò' }));
-    expect(onAssignRole).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('button', { name: 'Chỉnh sửa tài khoản' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Đặt lại mật khẩu' }));
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onAssignRole).not.toHaveBeenCalled();
+    expect(onResetPassword).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Phân công phòng' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Đặt lại mật khẩu' })).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Tài khoản đang bị khóa');
+    expect(screen.getByRole('status')).toHaveTextContent('Hãy mở khóa tài khoản trước');
   });
 });

@@ -1,21 +1,37 @@
 import { useMemo, useState } from 'react';
 import {
+  BadgeCheck,
   BriefcaseBusiness,
   CalendarDays,
   Check,
   ChevronRight,
   CircleAlert,
   Clock3,
+  GraduationCap,
   Mail,
   Phone,
   ShieldCheck,
   UserCog,
 } from 'lucide-react';
 import { ROLE_MAP, ROLE_PERMISSIONS, STATUS_LABELS } from '../../constants/accountData';
-import { AccountPageHeader } from './AccountFormParts';
+import { AccountPageHeader, FormField, INPUT_CLASS } from './AccountFormParts';
 import { avatarTone, formatDate, formatTime, initialsOf } from './accountFormat';
 
 const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
+const PROFESSIONAL_ROLES = ['DOCTOR', 'TECHNICIAN'];
+// Same rule as the backend (RoleChangeRequest): 5–50 letters, digits, "/" or "-".
+const LICENSE_PATTERN = /^[\p{L}\p{N}/-]{5,50}$/u;
+const WITH_ICON = `${INPUT_CLASS} pl-10`;
+
+/** UC-09 EF-03: client checks that mirror the backend (MSG02, MSG08, MSG05), for feedback only. */
+function professionalErrors(title, license) {
+  const errors = {};
+  if (!title.trim()) errors.title = 'Học hàm / học vị là bắt buộc.';
+  else if (title.trim().length > 50) errors.title = 'Vượt quá độ dài tối đa 50 ký tự.';
+  if (!license.trim()) errors.practiceLicenseNo = 'Số giấy phép hành nghề là bắt buộc.';
+  else if (!LICENSE_PATTERN.test(license.trim())) errors.practiceLicenseNo = 'Số giấy phép hành nghề không đúng định dạng.';
+  return errors;
+}
 
 function AccountSummary({ account }) {
   return (
@@ -53,9 +69,13 @@ function SummaryItem({ icon: Icon, label, value, positive }) {
   );
 }
 
-/** UC-9 Assign Role. Doctor/Technician roles also require the academic title and practice license. */
+/** UC-9 Assign Role. Doctor/Technician roles also require the academic title and practice license (I1-D47). */
 export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign }) {
   const [role, setRole] = useState(account.role);
+  const [title, setTitle] = useState(account.title || '');
+  const [license, setLicense] = useState(account.practiceLicenseNo || '');
+  const [touched, setTouched] = useState(false);
+  const [serverErrors, setServerErrors] = useState({});
   const permissions = useMemo(
     () => ROLE_PERMISSIONS[role] || { modules: [], actions: [] },
     [role],
@@ -63,7 +83,17 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
   const currentPermissions = ROLE_PERMISSIONS[account.role] || { modules: [], actions: [] };
   const roleChanged = role !== account.role;
   const removesRoom = roleChanged && ['DOCTOR', 'TECHNICIAN'].includes(account.role) && account.roomName;
-  const needsRoom = roleChanged && ['DOCTOR', 'TECHNICIAN'].includes(role);
+  const needsRoom = roleChanged && PROFESSIONAL_ROLES.includes(role);
+  const errors = needsRoom ? professionalErrors(title, license) : {};
+  const shownErrors = touched ? { ...serverErrors, ...errors } : {};
+  const editTitle = (value) => {
+    setTitle(value);
+    setServerErrors(({ title: _dropped, ...rest }) => rest);
+  };
+  const editLicense = (value) => {
+    setLicense(value);
+    setServerErrors(({ practiceLicenseNo: _dropped, ...rest }) => rest);
+  };
   const permissionRows = useMemo(() => {
     const all = [...new Set([...permissions.modules, ...permissions.actions])];
     return all.slice(0, 8);
@@ -72,7 +102,11 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
   const submit = async (event) => {
     event.preventDefault();
     if (!roleChanged) return;
-    await onAssign(role);
+    setTouched(true);
+    if (Object.keys(errors).length > 0) return;
+    const result = await onAssign(role, needsRoom ? { academicTitle: title.trim(), practiceLicenseNo: license.trim() } : {});
+    // UC-09 EF-03: the server's field errors (e.g. MSG07 for a license in use) are shown under the fields.
+    setServerErrors(result?.fieldErrors || {});
   };
 
   return (
@@ -119,6 +153,40 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
               </label>
             ))}
           </div>
+          {needsRoom && (
+            <div className="mt-5 pt-5 border-t border-slate-100 space-y-4">
+              <div>
+                <h3 className="text-sm! font-bold! text-[#1b2533]">Thông tin chuyên môn</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Bắt buộc đối với Bác sĩ và Kỹ thuật viên.</p>
+              </div>
+              <FormField id="role-title" label="Học hàm / học vị" required error={shownErrors.title} icon={GraduationCap}>
+                <input
+                  id="role-title"
+                  type="text"
+                  placeholder="vd: ThS.BS"
+                  maxLength={50}
+                  value={title}
+                  onChange={(e) => editTitle(e.target.value)}
+                  aria-invalid={shownErrors.title ? true : undefined}
+                  aria-describedby={shownErrors.title ? 'role-title-error' : undefined}
+                  className={WITH_ICON}
+                />
+              </FormField>
+              <FormField id="role-license" label="Số giấy phép hành nghề" required error={shownErrors.practiceLicenseNo} icon={BadgeCheck}>
+                <input
+                  id="role-license"
+                  type="text"
+                  placeholder="vd: 000123/HCM-CCHN"
+                  maxLength={50}
+                  value={license}
+                  onChange={(e) => editLicense(e.target.value)}
+                  aria-invalid={shownErrors.practiceLicenseNo ? true : undefined}
+                  aria-describedby={shownErrors.practiceLicenseNo ? 'role-license-error' : undefined}
+                  className={WITH_ICON}
+                />
+              </FormField>
+            </div>
+          )}
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs overflow-hidden">
@@ -133,7 +201,7 @@ export function AccountAssignRoleView({ account, onCancel, onGoToList, onAssign 
       </div>
 
 
-      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hãy bổ sung thông tin chuyên môn còn thiếu qua Chỉnh sửa tài khoản và phân công phòng từ màn hình chi tiết tài khoản.' : ''}</span></div>}
+      {(removesRoom || needsRoom) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800 flex gap-2"><CircleAlert className="w-5 h-5 shrink-0" /><span>{removesRoom ? `Phân công phòng ${account.roomName} hiện tại sẽ bị gỡ. ` : ''}{needsRoom ? 'Sau khi đổi vai trò, hãy phân công phòng từ màn hình chi tiết tài khoản.' : ''}</span></div>}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-4 flex justify-end gap-2.5 sticky bottom-4">
         <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Hủy</button>
         <button type="submit" disabled={!roleChanged} className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"><UserCog className="w-4 h-4" />Áp dụng vai trò<ChevronRight className="w-4 h-4" /></button>

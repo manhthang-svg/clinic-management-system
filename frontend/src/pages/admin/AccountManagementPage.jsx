@@ -27,7 +27,7 @@ import {
   AccountCreateView,
   AccountEditView,
   AccountAssignRoleView,
-  AccountResetPasswordView,
+  AccountResetPasswordModal,
   ProfileView,
   AccountStatCard,
 } from "../../components/accounts";
@@ -35,6 +35,7 @@ import { percentOf } from "../../components/accounts/accountFormat";
 import {
   REASON_LENGTH_MESSAGE,
   accountErrorMessage,
+  accountFieldErrors,
   msg47,
 } from "../../components/accounts/accountErrors";
 import { describeApiError } from "../../utils/describeApiError";
@@ -68,6 +69,15 @@ function fromApi(account) {
     practiceLicenseNo: account.practiceLicenseNo ?? "",
     failedLoginCount: account.failedLoginAttempts ?? account.failedLoginCount ?? 0,
   };
+}
+
+function isMissingAccountError(error) {
+  return error?.status === 404 ||
+    ["ACCOUNT_NOT_FOUND", "NOT_FOUND"].includes(error?.errorResponse?.code);
+}
+
+function isCanonicalUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function accountRequest(form) {
@@ -113,8 +123,6 @@ function viewFromPath(path) {
   if (matchPath(ADMIN.PROFILE, path)) return { name: "profile" };
   const assignRole = matchPath(ADMIN.ACCOUNT_ASSIGN_ROLE, path);
   if (assignRole) return { name: "assign-role", id: assignRole.params.id };
-  const resetPassword = matchPath(ADMIN.ACCOUNT_RESET_PASSWORD, path);
-  if (resetPassword) return { name: "reset-password", id: resetPassword.params.id };
   const edit = matchPath(ADMIN.ACCOUNT_EDIT, path);
   if (edit) return { name: "edit", id: edit.params.id };
 
@@ -236,18 +244,26 @@ export function AccountManagementPage({
 
   useEffect(() => {
     if (view.id === undefined) return undefined;
+    if (!isCanonicalUuid(view.id)) return undefined;
     const controller = new AbortController();
     accountApi.detail(view.id, controller.signal)
-      .then((account) => setDetails((prev) => ({ ...prev, [view.id]: fromApi(account) })))
+      .then((account) => {
+        if (!account) {
+          setMissingIds((prev) => [...new Set([...prev, view.id])]);
+          return;
+        }
+        setMissingIds((prev) => prev.filter((id) => id !== view.id));
+        setDetails((prev) => ({ ...prev, [view.id]: fromApi(account) }));
+      })
       .catch((error) => {
-        if (error.status === 404) setMissingIds((prev) => [...new Set([...prev, view.id])]);
+        if (isMissingAccountError(error)) setMissingIds((prev) => [...new Set([...prev, view.id])]);
         else if (error.name !== "AbortError") toast.error(accountErrorMessage(error));
       });
     return () => controller.abort();
   }, [accountApi, view.id]);
 
   useEffect(() => {
-    if (view.name !== "detail" || view.id === undefined) return undefined;
+    if (view.name !== "detail" || view.id === undefined || !isCanonicalUuid(view.id)) return undefined;
     const controller = new AbortController();
     Promise.all([
       accountApi.activities(view.id, 100, controller.signal),
@@ -269,7 +285,7 @@ export function AccountManagementPage({
   // UC-6: Change History is paginated; another account or a completed action starts again at page 0.
   const requestedHistoryPage = historyPage.accountId === view.id ? historyPage.page : 0;
   useEffect(() => {
-    if (view.name !== "detail" || view.id === undefined) return undefined;
+    if (view.name !== "detail" || view.id === undefined || !isCanonicalUuid(view.id)) return undefined;
     const controller = new AbortController();
     accountApi.changeHistory(view.id, requestedHistoryPage, 5, controller.signal)
       .then((history) => {
@@ -337,8 +353,6 @@ export function AccountManagementPage({
     navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }));
   const openAssignRole = (id) =>
     navigate(generatePath(ADMIN.ACCOUNT_ASSIGN_ROLE, { id }));
-  const openResetPassword = (id) =>
-    navigate(generatePath(ADMIN.ACCOUNT_RESET_PASSWORD, { id }));
   // After creating an account, replace the form with its detail page.
   const replaceWithDetail = (id) =>
     navigate(generatePath(ADMIN.ACCOUNT_DETAIL, { id }), {
@@ -385,13 +399,15 @@ export function AccountManagementPage({
   const [roomAssignment, setRoomAssignment] = useState(null);
   const [roomOptions, setRoomOptions] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
+  // UC-11 opens as a dialog over the account detail; holds the target account id.
+  const [resetPasswordFor, setResetPasswordFor] = useState(null);
 
   const requestConfirm = (options) => {
     setConfirmDialog(options);
   };
 
   // UC-9: change an account role and remove any previous room assignment.
-  const assignRole = async (account, role) => {
+  const assignRole = async (account, role, professional = {}) => {
     const hadRoom =
       account.role === "DOCTOR" || account.role === "TECHNICIAN";
     const needsRoom = role === "DOCTOR" || role === "TECHNICIAN";
@@ -401,9 +417,15 @@ export function AccountManagementPage({
       check = await accountApi.checkRoleChange(account.id, {
         newRole: role,
         expectedRole: account.role,
+        ...professional,
       });
     } catch (error) {
-      toast.error(accountErrorMessage(error));
+      // UC-09 EF-03: professional-field errors are shown under the fields of the role page.
+      const { title, practiceLicenseNo } = accountFieldErrors(error);
+      if (title || practiceLicenseNo) {
+        return { fieldErrors: { ...(title && { title }), ...(practiceLicenseNo && { practiceLicenseNo }) } };
+      }
+      toast.error(accountErrorMessage(error, { action: "đổi vai trò", fullName: account.fullName }));
       return;
     }
 
@@ -430,6 +452,7 @@ export function AccountManagementPage({
           const updated = fromApi(await accountApi.changeRole(account.id, {
             newRole: role,
             expectedRole: account.role,
+            ...professional,
           }));
           setDetails((prev) => ({ ...prev, [account.id]: updated }));
           reloadAccounts();
@@ -441,14 +464,11 @@ export function AccountManagementPage({
 
           // Room assignment is a separate UC-15 action from the account detail screen.
           if (needsRoom) {
-            if (!updated.title?.trim() || !updated.practiceLicenseNo?.trim()) {
-              toast.info('Vui lòng chọn Chỉnh sửa tài khoản để bổ sung học hàm / học vị và số giấy phép hành nghề.', { duration: 8000 });
-            }
             toast.info(`Có thể phân công phòng cho ${account.username} từ màn hình chi tiết tài khoản.`, { duration: 5000 });
           }
           openDetail(account.id);
         } catch (error) {
-          toast.error(accountErrorMessage(error));
+          toast.error(accountErrorMessage(error, { action: "đổi vai trò", fullName: account.fullName }));
         }
       },
     });
@@ -620,6 +640,17 @@ export function AccountManagementPage({
     );
   } else if (
     selected &&
+    selected.status === "LOCKED" &&
+    ["edit", "assign-role"].includes(view.name)
+  ) {
+    subPage = (
+      <Navigate
+        to={generatePath(ADMIN.ACCOUNT_DETAIL, { id: selected.id })}
+        replace
+      />
+    );
+  } else if (
+    selected &&
     view.name === "edit" &&
     (isSelf(selected) || selected.role === "ADMIN")
   ) {
@@ -649,39 +680,38 @@ export function AccountManagementPage({
         account={selected}
         onCancel={() => openDetail(selected.id)}
         onGoToList={showList}
-        onAssign={(role) => assignRole(selected, role)}
-      />
-    );
-  } else if (selected && view.name === "reset-password" && !isSelf(selected)) {
-    subPage = (
-      <AccountResetPasswordView
-        account={selected}
-        onCancel={() => openDetail(selected.id)}
-        onGoToList={showList}
-        onReset={(request) => resetPassword(selected, request)}
+        onAssign={(role, professional) => assignRole(selected, role, professional)}
       />
     );
   } else if (selected && view.name === "detail") {
     subPage = (
-      <AccountDetailView
-        account={selected}
-        loginEvents={activities}
-        changeHistory={changeHistory}
-        historyPage={historyPage.accountId === selected.id ? historyPage : null}
-        onHistoryPageChange={(page) => setHistoryPage({ ...historyPage, accountId: selected.id, page })}
-        accountNames={accountNames}
-        workInProgress={workInProgress}
-        isSelf={isSelf(selected)}
-        onBack={goBack}
-        onGoToList={showList}
-        onEdit={() => openEdit(selected)}
-        onAssignRole={() => openAssignRole(selected.id)}
-        onAssignRoom={() => openRoomAssignment(selected)}
-        onToggleLock={() => toggleLock(selected)}
-        onResetPassword={() => openResetPassword(selected.id)}
-      />
+      <>
+        <AccountDetailView
+          account={selected}
+          loginEvents={activities}
+          changeHistory={changeHistory}
+          historyPage={historyPage.accountId === selected.id ? historyPage : null}
+          onHistoryPageChange={(page) => setHistoryPage({ ...historyPage, accountId: selected.id, page })}
+          accountNames={accountNames}
+          workInProgress={workInProgress}
+          isSelf={isSelf(selected)}
+          onBack={goBack}
+          onGoToList={showList}
+          onEdit={() => openEdit(selected)}
+          onAssignRole={() => openAssignRole(selected.id)}
+          onToggleLock={() => toggleLock(selected)}
+          onResetPassword={() => setResetPasswordFor(selected.id)}
+        />
+        {resetPasswordFor === selected.id && !isSelf(selected) && selected.status !== "LOCKED" && (
+          <AccountResetPasswordModal
+            account={selected}
+            onReset={(request) => resetPassword(selected, request)}
+            onClose={() => setResetPasswordFor(null)}
+          />
+        )}
+      </>
     );
-  } else if (view.id !== undefined && !missingIds.includes(view.id)) {
+  } else if (view.id !== undefined && isCanonicalUuid(view.id) && !missingIds.includes(view.id)) {
     subPage = (
       <section role="status" className="bg-white rounded-2xl border border-slate-200/70 p-10 text-center text-sm text-slate-500">
         Đang tải thông tin tài khoản…
@@ -691,7 +721,7 @@ export function AccountManagementPage({
     subPage = (
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-10 text-center">
         <h1 className="text-xl! font-extrabold! text-[#1b2533]">
-          Không tìm thấy tài khoản
+          Không tìm thấy tài khoản.
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           Tài khoản không tồn tại hoặc đường dẫn không đúng.
