@@ -18,6 +18,14 @@ describe('accountErrors', () => {
     expect(accountErrorMessage(error)).not.toContain('raw backend message');
   });
 
+  it('shows the 18-year message when the backend rejects the date of birth (BR-62)', () => {
+    const error = apiError('REQUEST_VALIDATION_FAILED', { dateOfBirth: 'INVALID_FORMAT' }, 400);
+
+    expect(accountFieldErrors(error)).toEqual({
+      dateOfBirth: 'Ngày sinh không hợp lệ. Nhân viên phải đủ 18 tuổi.',
+    });
+  });
+
   it('uses Vietnamese messages for error codes and never the raw backend text', () => {
     expect(accountErrorMessage(apiError('UNAUTHORIZED', undefined, 401)))
       .toBe('Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.');

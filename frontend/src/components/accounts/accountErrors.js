@@ -63,13 +63,18 @@ const NETWORK_MESSAGE =
 
 function fieldMessage(field, reason) {
   const label = FIELD_LABEL[field] || field;
+  // BR-62: the backend rejects a date of birth under 18 years with INVALID_FORMAT.
+  if (field === "dateOfBirth" && reason !== "REQUIRED") return "Ngày sinh không hợp lệ. Nhân viên phải đủ 18 tuổi.";
   switch (reason) {
     case "ALREADY_EXISTS":
       return `${label} đã tồn tại trong hệ thống.`; // MSG07
     case "REQUIRED":
-      return `Vui lòng nhập ${label.toLowerCase()}.`; // MSG02
-    case "TOO_SHORT":
+      return `${label} là bắt buộc.`; // MSG02
     case "TOO_LONG":
+      if (field === "fullName") return "Vượt quá độ dài tối đa 120 ký tự."; // MSG08 (BR-59)
+      if (field === "title") return "Vượt quá độ dài tối đa 50 ký tự."; // MSG08 (BR-62)
+      return CODE_MESSAGE.PASSWORD_POLICY_VIOLATION; // MSG43
+    case "TOO_SHORT":
       return CODE_MESSAGE.PASSWORD_POLICY_VIOLATION; // MSG43
     default:
       return `${label} không đúng định dạng.`; // MSG05
