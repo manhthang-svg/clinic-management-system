@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { cn } from '../../utils/utils';
 import { Button } from './button';
 
@@ -16,7 +16,26 @@ export function ConfirmModal({
   onClose,
   children,
 }) {
+  // An async onConfirm keeps the buttons disabled until it settles, so a double click
+  // cannot send the same command twice (the second one would fail with 409).
+  const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
+
   if (!isOpen) return null;
+
+  const confirm = async (event) => {
+    if (pendingRef.current) return;
+    const result = onConfirm?.(event);
+    if (!result || typeof result.then !== 'function') return;
+    pendingRef.current = true;
+    setPending(true);
+    try {
+      await result;
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-150">
@@ -43,6 +62,7 @@ export function ConfirmModal({
               variant="outline"
               size="sm"
               onClick={onClose}
+              disabled={pending}
               className="text-xs font-semibold px-4"
             >
               {cancelText}
@@ -52,7 +72,8 @@ export function ConfirmModal({
             type="button"
             variant={variant === 'destructive' ? 'destructive' : 'mint'}
             size="sm"
-            onClick={onConfirm}
+            onClick={confirm}
+            disabled={pending}
             className="text-xs font-semibold px-4"
           >
             {confirmText}

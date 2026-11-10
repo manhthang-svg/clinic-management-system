@@ -270,6 +270,24 @@ describe('AccountManagementPage UC-10 Lock/Unlock messages', () => {
     expect(toast.success).toHaveBeenCalledWith('Đã khóa tài khoản bs.an');
   });
 
+  it('locks a staff member who signed in after the detail was opened (login bumps the version)', async () => {
+    const detail = vi.fn().mockResolvedValue(staff);
+    const api = accountApi({ detail, lock: vi.fn().mockResolvedValue({ ...staff, status: 'LOCKED', version: 4 }) });
+    const user = userEvent.setup();
+    renderPage(`/admin/accounts/${STAFF_ID}`, api);
+
+    await user.click(await screen.findByRole('button', { name: 'Khóa tài khoản' }));
+    const dialog = await screen.findByRole('dialog');
+    detail.mockResolvedValue({ ...staff, version: 3, lastLoginAt: '2026-11-11T00:25:00Z' });
+    await user.type(within(dialog).getByLabelText(/Lý do khóa/), 'Nhân viên nghỉ việc');
+    await user.click(within(dialog).getByRole('button', { name: 'Khóa tài khoản' }));
+
+    await waitFor(() => expect(api.lock).toHaveBeenCalledWith(STAFF_ID, {
+      reason: 'Nhân viên nghỉ việc', expectedStatus: 'ACTIVE', expectedVersion: 3,
+    }));
+    expect(toast.success).toHaveBeenCalledWith('Đã khóa tài khoản bs.an');
+  });
+
   it('shows MSG47 and does not open the lock dialog while work is in progress', async () => {
     const api = accountApi({
       workInProgress: vi.fn().mockResolvedValue({ visitsInProgress: 1, ordersInProgress: 2 }),

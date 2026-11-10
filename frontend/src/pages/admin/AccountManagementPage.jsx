@@ -38,9 +38,7 @@ import {
   accountFieldErrors,
   msg47,
 } from "../../components/accounts/accountErrors";
-import { describeApiError } from "../../utils/describeApiError";
 import { createAccountApi } from "../../apis/accountApi";
-import { departmentApi } from "../../apis/departmentApi";
 import { apiClient } from "../../services/session";
 import {
   PAGE_SIZE_OPTIONS,
@@ -396,9 +394,6 @@ export function AccountManagementPage({
   const [lockPrompt, setLockPrompt] = useState(null);
   const [lockReasonInput, setLockReasonInput] = useState("");
   const [lockReasonError, setLockReasonError] = useState("");
-  const [roomAssignment, setRoomAssignment] = useState(null);
-  const [roomOptions, setRoomOptions] = useState([]);
-  const [selectedRoomId, setSelectedRoomId] = useState("");
   // UC-11 opens as a dialog over the account detail; holds the target account id.
   const [resetPasswordFor, setResetPasswordFor] = useState(null);
 
@@ -508,7 +503,7 @@ export function AccountManagementPage({
         try {
           const updated = fromApi(await accountApi.unlock(account.id, {
             expectedStatus: account.status,
-            expectedVersion: account.version,
+            expectedVersion: await latestVersion(account),
           }));
           setDetails((prev) => ({ ...prev, [account.id]: updated }));
           reloadAccounts();
@@ -520,6 +515,11 @@ export function AccountManagementPage({
       },
     });
   };
+
+  // Signing in records lastLoginAt and bumps the account version, so a version loaded before the
+  // target signed in would be rejected as CONCURRENT_MODIFICATION (MSG75). Lock/unlock still guard
+  // against real conflicts through expectedStatus, which comes from what the Admin is looking at.
+  const latestVersion = async (account) => fromApi(await accountApi.detail(account.id)).version;
 
   const confirmLockAccount = async () => {
     if (!lockPrompt) return;
@@ -538,7 +538,7 @@ export function AccountManagementPage({
       const updated = fromApi(await accountApi.lock(account.id, {
         reason: trimmed,
         expectedStatus: account.status,
-        expectedVersion: account.version,
+        expectedVersion: await latestVersion(account),
       }));
       setDetails((prev) => ({ ...prev, [account.id]: updated }));
       reloadAccounts();
@@ -562,37 +562,6 @@ export function AccountManagementPage({
     setDetails((prev) => ({ ...prev, [account.id]: updated }));
     reloadAccounts();
     return result;
-  };
-
-  const openRoomAssignment = async (account) => {
-    try {
-      const items = await departmentApi.getItems();
-      const requiredType = account.role === "DOCTOR" ? "EXAMINATION" : "PARACLINICAL";
-      const eligibleRooms = items.filter((item) =>
-        item.unitType === "ROOM" && item.status === "ACTIVE" && item.type === requiredType);
-      setRoomOptions(eligibleRooms);
-      setSelectedRoomId(eligibleRooms.find((room) => room.name === account.roomName)?.id || "");
-      setRoomAssignment(account);
-    } catch (err) {
-      toast.error(describeApiError(err, "Không thể tải danh sách phòng"));
-    }
-  };
-
-  const confirmRoomAssignment = async () => {
-    if (!roomAssignment || !selectedRoomId) {
-      toast.error("Vui lòng chọn phòng làm việc");
-      return;
-    }
-    try {
-      const updated = fromApi(await accountApi.assignRoom(roomAssignment.id, { roomId: selectedRoomId }));
-      setDetails((prev) => ({ ...prev, [updated.id]: updated }));
-      reloadAccounts();
-      toast.success(`Đã phân công phòng cho ${updated.username}`);
-      setRoomAssignment(null);
-      setSelectedRoomId("");
-    } catch (error) {
-      toast.error(accountErrorMessage(error));
-    }
   };
 
   const selected = details[view.id];
@@ -816,40 +785,6 @@ export function AccountManagementPage({
         </ConfirmModal>
       )}
 
-      {roomAssignment && (
-        <ConfirmModal
-          isOpen
-          title={`Phân công phòng cho ${roomAssignment.username}`}
-          description={`${roomAssignment.fullName} — ${ROLE_LABELS[roomAssignment.role]}`}
-          confirmText="Phân công"
-          variant="mint"
-          onConfirm={confirmRoomAssignment}
-          onClose={() => {
-            setRoomAssignment(null);
-            setSelectedRoomId("");
-          }}
-        >
-          <label htmlFor="assigned-room" className="block text-xs font-semibold text-slate-700 mb-1.5">
-            Phòng làm việc <span className="text-rose-500">*</span>
-          </label>
-          <select
-            id="assigned-room"
-            value={selectedRoomId}
-            onChange={(event) => setSelectedRoomId(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#127e7a]/20"
-          >
-            <option value="">Chọn phòng làm việc</option>
-            {roomOptions.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name} — {room.departmentName}
-              </option>
-            ))}
-          </select>
-          {roomOptions.length === 0 && (
-            <p className="mt-2 text-xs text-amber-600">Không có phòng hoạt động phù hợp với vai trò này.</p>
-          )}
-        </ConfirmModal>
-      )}
     </>
   );
 
