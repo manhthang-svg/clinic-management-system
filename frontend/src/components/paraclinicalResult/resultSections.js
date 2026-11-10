@@ -1,23 +1,9 @@
 // Per-organ / per-site fields of the descriptive result forms, taken from the clinic's printed slips.
 // The fields are joined into one description text, which is what imaging_results.kqcls_mota stores.
 
-/** ULTRASOUND: abdominal ultrasound slip. `sex` limits a field to male (1) or female (2) patients. */
-const ULTRASOUND = [
-  { key: 'gan', label: 'GAN', normal: 'Kích thước bình thường, nhu mô đều, không có khối.' },
-  { key: 'mat', label: 'MẬT', normal: 'Đường mật trong và ngoài gan không giãn, không có sỏi.' },
-  { key: 'tuiMat', label: 'Túi mật', normal: 'Thành mỏng, dịch trong, không có sỏi.' },
-  { key: 'tinhMach', label: 'Tĩnh mạch trong và ngoài gan', normal: 'Không giãn, không có huyết khối.' },
-  { key: 'tuy', label: 'TỤY', normal: 'Kích thước bình thường, nhu mô đều. Ống wirsung không giãn.' },
-  { key: 'lach', label: 'LÁCH', normal: 'Kích thước bình thường, nhu mô đều.' },
-  { key: 'thanPhai', label: 'Thận phải', normal: 'Kích thước bình thường, nhu mô đều, phân biệt tuỷ vỏ rõ, đài bể thận không giãn, không có sỏi.' },
-  { key: 'nieuQuanPhai', label: 'Niệu quản phải', normal: 'Không giãn, không có sỏi.' },
-  { key: 'thanTrai', label: 'Thận trái', normal: 'Kích thước bình thường, nhu mô đều, phân biệt tuỷ vỏ rõ, đài bể thận không giãn, không có sỏi.' },
-  { key: 'nieuQuanTrai', label: 'Niệu quản trái', normal: 'Không giãn, không có sỏi.' },
-  { key: 'bangQuang', label: 'Bàng quang', normal: 'Thành mỏng, dịch trong, không có sỏi.' },
-  { key: 'tienLietTuyen', label: 'TIỀN LIỆT TUYẾN', normal: 'Kích thước bình thường, nhu mô đều.', sex: 1 },
-  { key: 'tuCung', label: 'TỬ CUNG – PHẦN PHỤ', normal: 'Tử cung và hai phần phụ không thấy bất thường.', sex: 2 },
-  { key: 'khac', label: 'NHẬN XÉT KHÁC', normal: 'Ổ bụng không có dịch, không có hạch bất thường.' },
-];
+// ULTRASOUND uses one free-text description like the X-ray slip (no per-organ fields): one fixed list of
+// abdominal organs did not fit cardiac, obstetric or vascular ultrasound. "Điền kết quả bình thường" fills the
+// description from RESULT_TEMPLATES instead.
 
 /** ENDOSCOPY: upper GI endoscopy slip. */
 const ENDOSCOPY = [
@@ -47,7 +33,7 @@ const ECG = [
   { key: 'truocTim', label: 'Chuyển đạo trước tim', normal: 'Bình thường' },
 ];
 
-const SECTIONS = { ULTRASOUND, ENDOSCOPY, ECG };
+const SECTIONS = { ENDOSCOPY, ECG };
 
 /** Fields of a descriptive form, or null when the form uses one free-text description. */
 export function sectionsFor(order) {

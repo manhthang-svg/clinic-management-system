@@ -43,7 +43,7 @@ function toRequest(form) {
     sections: form.sections ?? null,
     recommendation: form.recommendation ?? null,
     imageLink: form.imageLink?.trim() || null,
-    readingDoctor: form.readingDoctor ?? null,
+    readingDoctor: null,
     instrumentId: form.instrumentId || null,
   };
 }

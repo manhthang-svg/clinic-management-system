@@ -104,6 +104,14 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     print.mockRestore();
   });
 
+  it('shows the signer as the performer account, with no field to type another name', async () => {
+    renderPage('cls-004');
+
+    const hint = await screen.findByText('Cố định là tài khoản thực hiện dịch vụ (đang đăng nhập).');
+    expect(hint.closest('div')).toHaveTextContent('KTV Nguyễn Minh Tuấn');
+    expect(screen.queryByRole('textbox', { name: /ký phiếu/ })).not.toBeInTheDocument();
+  });
+
   it('blocks submission while required fields are empty', async () => {
     renderPage('cls-002');
     const user = userEvent.setup();
@@ -115,14 +123,14 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(screen.getByText('Bắt buộc')).toBeInTheDocument();
   });
 
-  it('fills every organ of the ultrasound with normal findings and saves them as one description', async () => {
+  it('uses one free-text description for ultrasound, like X-ray, and fills it with the normal text', async () => {
     const api = renderPage('cls-004');
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole('button', { name: 'Điền kết quả bình thường' }));
-    expect(screen.getByLabelText(/^GAN/)).toHaveValue('Kích thước bình thường, nhu mô đều, không có khối.');
-    expect(screen.getByLabelText(/^TIỀN LIỆT TUYẾN/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^TỬ CUNG/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Mô tả/).value).toContain('GAN: Kích thước bình thường');
+    expect(screen.queryByLabelText(/^GAN/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^TIỀN LIỆT TUYẾN/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lưu nháp' }));
 
     await waitFor(async () => expect((await api.get('cls-004')).result?.status).toBe('DRAFT'));
