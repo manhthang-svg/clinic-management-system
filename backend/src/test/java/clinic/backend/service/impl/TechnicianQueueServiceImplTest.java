@@ -36,6 +36,8 @@ import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicalExaminationRepository;
 import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.ImagingResultRepository;
+import clinic.backend.repository.LabResultRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
@@ -89,6 +91,10 @@ class TechnicianQueueServiceImplTest {
     private AuditLogService auditLogService;
     @Mock
     private DutyScheduleRepository dutyScheduleRepository;
+    @Mock
+    private ImagingResultRepository imagingResultRepository;
+    @Mock
+    private LabResultRepository labResultRepository;
 
     private Clock clock;
     private TechnicianQueueServiceImpl service;
@@ -108,6 +114,8 @@ class TechnicianQueueServiceImplTest {
                 medicalHistoryRepository,
                 medicalServiceRepository,
                 dutyScheduleRepository,
+                imagingResultRepository,
+                labResultRepository,
                 auditLogService,
                 clock
         );

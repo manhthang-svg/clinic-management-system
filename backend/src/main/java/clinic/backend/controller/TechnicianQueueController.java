@@ -6,6 +6,7 @@ import java.util.UUID;
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.TechnicianPendingResultResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
@@ -54,6 +55,20 @@ public class TechnicianQueueController {
     ) {
         UUID currentUserId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
         return ApiResponse.success(technicianQueueService.getQueue(roomId, search, status, doctorRoom, currentUserId));
+    }
+
+    @GetMapping({"/results", "/pending-results"})
+    @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
+    @Operation(summary = "Lấy danh sách ca chờ nhập kết quả và bản nháp cận lâm sàng")
+    public ApiResponse<TechnicianPendingResultResponse> getPendingResults(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) UUID roomId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String doctorRoom
+    ) {
+        UUID currentUserId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
+        return ApiResponse.success(technicianQueueService.getPendingResults(roomId, search, status, doctorRoom, currentUserId));
     }
 
     @GetMapping("/queue/{detailId}")

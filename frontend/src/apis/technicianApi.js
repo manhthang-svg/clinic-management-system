@@ -20,6 +20,11 @@ export const technicianApi = {
     return apiClient.request(`/technician/queue${queryString}`, { signal });
   },
 
+  async getPendingResults({ roomId, search, status, doctorRoom } = {}, signal) {
+    const queryString = buildQueueQuery({ roomId, search, status, doctorRoom });
+    return apiClient.request(`/technician/results${queryString}`, { signal });
+  },
+
   async getQueueDetail(detailId, signal) {
     return apiClient.request(`/technician/queue/${detailId}`, { signal });
   },
