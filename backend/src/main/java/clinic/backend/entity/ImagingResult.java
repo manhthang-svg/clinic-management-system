@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.enums.ImagingResultStatus;
@@ -89,4 +90,70 @@ public class ImagingResult extends VersionedEntity {
     /** Instrument name when the result was submitted, so later renames do not change the slip (V54). */
     @Column(name = "instrument_name_snapshot", length = 255)
     private String instrumentNameSnapshot;
+
+    /** The descriptive content entered by the technician (UC-67 step 3). */
+    public record Content(
+            String technique, String description, String detailsJson, String conclusion, String recommendation,
+            String imageLink, String readingDoctorName, UUID instrumentId, String instrumentName) {
+    }
+
+    private ImagingResult(UUID id, Instant now) {
+        super(id, now);
+    }
+
+    /** UC-67: the result is created on the first save, by the technician who performed the service. */
+    public static ImagingResult start(
+            UUID id, Instant now, UUID orderDetailId, UUID performerAccountId, String sophieu, String chandoan) {
+        ImagingResult result = new ImagingResult(id, now);
+        result.orderDetailId = Objects.requireNonNull(orderDetailId, "orderDetailId");
+        result.performerAccountId = Objects.requireNonNull(performerAccountId, "performerAccountId");
+        result.sophieu = Objects.requireNonNull(sophieu, "sophieu");
+        result.chandoan = chandoan;
+        result.kqclsMota = "";
+        result.kqclsKetluan = "";
+        result.status = ImagingResultStatus.DRAFT;
+        return result;
+    }
+
+    public boolean isSubmitted() {
+        return status == ImagingResultStatus.SUBMITTED;
+    }
+
+    /** UC-67 step 3 and AF-01: replaces the content while the result is a draft. */
+    public void record(Content content, Instant now) {
+        requireDraft();
+        this.kqclsKythuat = content.technique();
+        this.kqclsMota = Objects.requireNonNullElse(content.description(), "");
+        this.kqclsMotaChitiet = content.detailsJson();
+        this.kqclsKetluan = Objects.requireNonNullElse(content.conclusion(), "");
+        this.kqclsDenghi = content.recommendation();
+        this.kqclsLinkhinhanh = content.imageLink();
+        this.readingDoctorName = content.readingDoctorName();
+        this.instrumentId = content.instrumentId();
+        this.instrumentNameSnapshot = content.instrumentName();
+        touch(now);
+    }
+
+    /** UC-67 step 9: locks the result (BR-29). */
+    public void submit(Instant now) {
+        requireDraft();
+        status = ImagingResultStatus.SUBMITTED;
+        submittedAt = now;
+        touch(now);
+    }
+
+    /** UC-68: counts prints so that the second and later ones are marked as a copy. */
+    public void recordPrint(Instant now) {
+        if (!isSubmitted()) {
+            throw new IllegalStateException("Only a submitted result can be printed");
+        }
+        printCount++;
+        touch(now);
+    }
+
+    private void requireDraft() {
+        if (isSubmitted()) {
+            throw new IllegalStateException("A submitted result cannot be edited");
+        }
+    }
 }

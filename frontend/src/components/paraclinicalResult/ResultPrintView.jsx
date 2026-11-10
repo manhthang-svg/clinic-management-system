@@ -12,21 +12,24 @@ function images(form) {
 }
 
 function Header({ order, form: printForm, copy }) {
+  // Demo orders have no clinic field and print the sample header; real orders print clinic_facility (UC-77).
+  const clinic = order.clinic === undefined ? MOCK_CLINIC : order.clinic;
   return (
     <header className="flex items-start justify-between gap-4">
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 border-2 border-black flex items-center justify-center text-[10px] font-bold shrink-0">LOGO</div>
         <div className="leading-5">
-          <div className="font-bold text-red-700">{MOCK_CLINIC.parentAgency}</div>
-          <div className="font-extrabold">{MOCK_CLINIC.name}</div>
-          <div className="text-[12px]">Địa chỉ: {MOCK_CLINIC.address}</div>
-          <div className="text-[12px]">Điện thoại: {MOCK_CLINIC.phone}</div>
+          {clinic?.parentAgency && <div className="font-bold text-red-700">{clinic.parentAgency}</div>}
+          <div className="font-extrabold">{clinic?.name ?? 'CHƯA CẤU HÌNH THÔNG TIN PHÒNG KHÁM'}</div>
+          {clinic?.address && <div className="text-[12px]">Địa chỉ: {clinic.address}</div>}
+          {clinic?.phone && <div className="text-[12px]">Điện thoại: {clinic.phone}</div>}
         </div>
       </div>
       <div className="text-right">
         <div className="font-bold">MS: {printForm.formCode}</div>
         {printForm.layout === 'LAB' && <div className="text-[12px]"><strong>Mã XN:</strong> {order.orderCode}</div>}
         <Barcode value={order.orderCode} />
+        {order.registrationCode && <div className="text-[12px]"><strong>Số vào viện:</strong> {order.registrationCode}</div>}
         {copy && <div className="mt-1 font-extrabold text-red-700">BẢN SAO</div>}
       </div>
     </header>
@@ -116,6 +119,22 @@ function Signature({ date, time, title, name, className = '' }) {
       <div className="h-14" />
       <div className="font-bold">{name}</div>
     </div>
+  );
+}
+
+/** UC-68 step 2: who performed the service, on which instrument and when. */
+function PerformedBy({ order }) {
+  const instrument = order.result?.instrumentName;
+  if (!instrument && !order.performedAt) return null;
+  return (
+    <Row>
+      {order.performedAt && (
+        <Item label="Thời gian thực hiện:">
+          {new Date(order.performedAt).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}
+        </Item>
+      )}
+      {instrument && <Item label="Máy thực hiện:">{instrument}</Item>}
+    </Row>
   );
 }
 
@@ -211,6 +230,7 @@ function LabSlip({ order, form, printForm }) {
       <div><Item label="Chẩn đoán:">{order.diagnosis}</Item></div>
       <LabTable order={order} form={form} />
       {form.conclusion && <div><strong>Nhận xét:</strong> <span className="whitespace-pre-line">{form.conclusion}</span></div>}
+      <PerformedBy order={order} />
       <div className="flex justify-between">
         <Signature date={order.orderedAt} title="Bác sĩ điều trị" name={order.orderingDoctor} />
         <Signature date={done} time={formatTime(done)} title={printForm.signer} name={order.performer?.name} />
@@ -222,7 +242,8 @@ function LabSlip({ order, form, printForm }) {
 function DescriptiveSlip({ order, form, printForm }) {
   const pictures = images(form);
   const done = order.result?.submittedAt;
-  const signerName = form.readingDoctor || order.performer?.name;
+  // UC-68: always the performer, who is the signed-in technician when printing.
+  const signerName = order.performer?.name;
   const { layout } = printForm;
 
   return (
@@ -252,14 +273,27 @@ function DescriptiveSlip({ order, form, printForm }) {
       )}
 
       {layout === 'XRAY' && (
-        <table className="w-full border-collapse border border-black">
-          <tbody>
-            <tr><td className="border border-black px-2 font-bold">Mô tả kết quả chiếu/chụp</td></tr>
-            <tr><td className="border border-black px-2 whitespace-pre-line">{form.description}</td></tr>
-            <tr><td className="border border-black px-2 font-bold text-red-700">Kết luận</td></tr>
-            <tr><td className="border border-black px-2 whitespace-pre-line font-semibold">{form.conclusion}</td></tr>
-          </tbody>
-        </table>
+        <div className="grid grid-cols-[1fr_auto] gap-4">
+          <table className="w-full border-collapse border border-black">
+            <tbody>
+              <tr><td className="border border-black px-2 font-bold">Mô tả kết quả chiếu/chụp</td></tr>
+              <tr><td className="border border-black px-2 whitespace-pre-line">{form.description}</td></tr>
+              <tr><td className="border border-black px-2 font-bold text-red-700">Kết luận</td></tr>
+              <tr><td className="border border-black px-2 whitespace-pre-line font-semibold">{form.conclusion}</td></tr>
+            </tbody>
+          </table>
+          {/* Like the ultrasound slip: the first two film images beside the description. */}
+          {pictures.length > 0 && (
+            <div className="w-56 space-y-2">
+              {pictures.slice(0, 2).map((file) => (
+                <figure key={file.id} className="m-0">
+                  <img src={file.url} alt={file.caption || file.name} className="w-full aspect-[4/3] object-cover bg-black" />
+                  {file.caption && <figcaption className="text-[11px] text-center">{file.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {layout === 'CT_MRI' && (
@@ -305,6 +339,7 @@ function DescriptiveSlip({ order, form, printForm }) {
         </div>
       )}
 
+      <PerformedBy order={order} />
       <div className="flex justify-between items-end pt-2">
         <div className="w-56 text-[12px]">
           {layout === 'CT_MRI' && (

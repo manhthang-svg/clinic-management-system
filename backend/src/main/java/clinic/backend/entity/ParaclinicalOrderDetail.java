@@ -123,6 +123,14 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
     @Column(name = "prior_results")
     private String priorResults;
 
+    /** Case 1: time when patient checks in on-site at the paraclinical room (V56). */
+    @Column(name = "checked_in_at")
+    private Instant checkedInAt;
+
+    /** Case 1: staff account that performed the on-site check-in (V56). */
+    @Column(name = "checked_in_by_account_id")
+    private UUID checkedInByAccountId;
+
     public ParaclinicalOrderDetail(
             UUID id,
             Instant createdAt,
@@ -232,6 +240,20 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         }
     }
 
+    /**
+     * Case 1: patient physically arrives at the paraclinical room; technician confirms check-in and issues queue number.
+     */
+    public void checkIn(Integer queueNumber, UUID technicianAccountId, Instant when) {
+        this.queueNumber = queueNumber;
+        this.checkedInAt = when;
+        this.checkedInByAccountId = technicianAccountId;
+        touch(when);
+    }
+
+    public boolean isCheckedIn() {
+        return this.checkedInAt != null;
+    }
+
     public void accept(UUID performerAccountId, Instant when) {
         this.status = ParaclinicalOrderDetailStatus.IN_PROGRESS;
         this.acceptedAt = when;
@@ -252,10 +274,62 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
         touch(when);
     }
 
-    public void completePerformance(Instant when) {
+    /** UC-66: true when the service is In Progress and was accepted by this technician (EF-01). */
+    public boolean isPerformedBy(UUID technicianAccountId) {
+        return status == ParaclinicalOrderDetailStatus.IN_PROGRESS
+                && performerAccountId != null
+                && performerAccountId.equals(technicianAccountId);
+    }
+
+    /**
+     * UC-66 step 3: the technician who accepted the service confirms it was performed; it waits for its result
+     * (UC-64, UC-67).
+     */
+    public void completePerformance(UUID technicianAccountId, Instant when) {
+        requirePerformedBy(technicianAccountId);
         this.status = ParaclinicalOrderDetailStatus.PENDING_RESULT;
         this.performedAt = when;
         touch(when);
+    }
+
+    /**
+     * UC-66 AF-02: the service cannot be performed now, so it goes back to Waiting at its original place. The
+     * queue number is kept, so the order is not moved to the end of the list; the reason is kept in the audit log.
+     */
+    public void returnToWaiting(UUID technicianAccountId, Instant when) {
+        requirePerformedBy(technicianAccountId);
+        this.status = ParaclinicalOrderDetailStatus.WAITING;
+        this.performerAccountId = null;
+        this.acceptedAt = null;
+        touch(when);
+    }
+
+    /**
+     * UC-67: true while the technician who performed the service may record its result: Performed (UC-66), or
+     * still In Progress when the result is entered right away (UC-66 AF-01).
+     */
+    public boolean awaitsResultFrom(UUID technicianAccountId) {
+        return (status == ParaclinicalOrderDetailStatus.PENDING_RESULT || status == ParaclinicalOrderDetailStatus.IN_PROGRESS)
+                && performerAccountId != null
+                && performerAccountId.equals(technicianAccountId);
+    }
+
+    /** UC-67 step 9: the result was submitted, so the service is Completed (O10). */
+    public void completeWithResult(UUID technicianAccountId, Instant when) {
+        if (!awaitsResultFrom(technicianAccountId)) {
+            throw new IllegalStateException("Paraclinical service is not waiting for a result from this technician");
+        }
+        if (performedAt == null) {
+            performedAt = when;
+        }
+        status = ParaclinicalOrderDetailStatus.COMPLETED;
+        touch(when);
+    }
+
+    private void requirePerformedBy(UUID technicianAccountId) {
+        if (!isPerformedBy(technicianAccountId)) {
+            throw new IllegalStateException("Paraclinical service is not in progress for this technician");
+        }
     }
 
     public void cancel(String reason, UUID cancelledByAccountId, Instant when) {

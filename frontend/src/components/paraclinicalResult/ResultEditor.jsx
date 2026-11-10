@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../ui';
 import { ResultPrintView } from './ResultPrintView';
+import { ResultApiContext } from './resultContext';
+import { Field, INPUT_CLASS } from '../shared/FormFields';
 import { PRINT_FORMS } from './resultMockData';
 import {
   KIND_LABEL, MSG, formForSave, formatDateTime, resultErrorMessage, resultToForm, templateFor, validateResult,
@@ -121,12 +123,20 @@ export function ResultEditor({ order: initialOrder, api, children }) {
   };
 
   // UC-68: print, then count the print so that the next one is marked "Bản sao" (AF-01).
+  // UC-68: only the performer prints a submitted result, and the slip needs the clinic header (null = not configured).
+  const printBlocked = !order.isPerformer ? MSG.printerOnly : order.clinic === null ? MSG.clinicMissing : '';
   const print = async () => {
-    window.print();
+    try {
+      window.print();
+    } catch {
+      toast.error(MSG.printFailed);
+      return;
+    }
     try {
       setOrder(await api.recordPrint(order.id));
-    } catch {
+    } catch (error) {
       // Printing already happened; only the copy mark is missing.
+      toast.error(resultErrorMessage(error));
     }
   };
 
@@ -215,15 +225,41 @@ export function ResultEditor({ order: initialOrder, api, children }) {
         </div>
       )}
 
-      {children({ order, form, set, errors: shownErrors, readOnly, templateButton })}
+      {(order.instruments?.length > 0 || order.result?.instrumentName) && (
+        <ResultSection title="Máy thực hiện" description="Máy đã chạy mẫu hoặc thực hiện dịch vụ (in trên phiếu).">
+          <div className="max-w-sm">
+            <Field id="result-instrument" label="Máy thực hiện">
+              {readOnly ? (
+                <p id="result-instrument" className="text-sm font-semibold text-slate-800">{order.result?.instrumentName || '—'}</p>
+              ) : (
+                <select
+                  id="result-instrument"
+                  value={form.instrumentId ?? ''}
+                  onChange={(event) => set('instrumentId', event.target.value)}
+                  className={INPUT_CLASS}
+                >
+                  <option value="">-- Chọn máy --</option>
+                  {order.instruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.code} – {instrument.name}</option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          </div>
+        </ResultSection>
+      )}
+
+      <ResultApiContext.Provider value={{ supportsFiles: api?.supportsFiles !== false }}>
+        {children({ order, form, set, errors: shownErrors, readOnly, templateButton })}
+      </ResultApiContext.Provider>
 
       {(submitted || showPreview) && (
         <ResultSection
           title="Xem trước phiếu in"
           description={submitted
-            ? 'Phiếu in khổ A4 đưa cho người bệnh.'
+            ? (printBlocked || 'Phiếu in khổ A4 đưa cho người bệnh.')
             : 'Bản nháp chỉ để xem trước. Phải gửi kết quả rồi mới in được.'}
-          action={submitted && (
+          action={submitted && !printBlocked && (
             <button
               type="button"
               onClick={print}

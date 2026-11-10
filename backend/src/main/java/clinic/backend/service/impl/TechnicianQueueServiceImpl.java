@@ -21,6 +21,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
+import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
+import clinic.backend.dto.response.TechnicianPendingItemResponse;
+import clinic.backend.dto.response.TechnicianPendingResultResponse;
+import clinic.backend.dto.response.TechnicianPendingStatsResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianQueueStatsResponse;
@@ -28,6 +32,8 @@ import clinic.backend.dto.response.TechnicianRoomResponse;
 import clinic.backend.dto.response.TechnicianSiblingOrderResponse;
 import clinic.backend.entity.ClinicalExamination;
 import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.ImagingResult;
+import clinic.backend.entity.LabResult;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicalService;
@@ -49,6 +55,8 @@ import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicalExaminationRepository;
 import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.ImagingResultRepository;
+import clinic.backend.repository.LabResultRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
@@ -83,6 +91,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     private final MedicalHistoryRepository medicalHistoryRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final DutyScheduleRepository dutyScheduleRepository;
+    private final ImagingResultRepository imagingResultRepository;
+    private final LabResultRepository labResultRepository;
     private final AuditLogService auditLogService;
     private final Clock clock;
 
@@ -301,6 +311,195 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
     @Override
     @Transactional(readOnly = true)
+    public TechnicianPendingResultResponse getPendingResults(
+            UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
+        UUID targetRoomId = roomId;
+        if (targetRoomId == null) {
+            List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
+                    RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+            if (rooms.isEmpty()) {
+                return new TechnicianPendingResultResponse(
+                        new TechnicianPendingStatsResponse(0, 0, 0, 0),
+                        Collections.emptyList(),
+                        false
+                );
+            }
+            targetRoomId = rooms.getFirst().getId();
+        }
+
+        boolean canManage = canManageRoom(targetRoomId, currentUserId);
+        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
+        Instant now = clock.instant();
+
+        List<ParaclinicalOrderDetail> details = paraclinicalOrderDetailRepository.findPendingResultsByRoom(targetRoomId);
+
+        if (details.isEmpty()) {
+            return new TechnicianPendingResultResponse(
+                    new TechnicianPendingStatsResponse(0, 0, 0, 0),
+                    Collections.emptyList(),
+                    canManage
+            );
+        }
+
+        List<UUID> detailIds = details.stream().map(ParaclinicalOrderDetail::getId).toList();
+        Set<UUID> serviceIds = details.stream().map(ParaclinicalOrderDetail::getServiceId).collect(Collectors.toSet());
+        Set<UUID> recordIds = details.stream().map(d -> d.getOrder().getMedicalRecordId()).collect(Collectors.toSet());
+
+        Map<UUID, MedicalService> serviceMap = medicalServiceRepository.findAllById(serviceIds).stream()
+                .collect(Collectors.toMap(MedicalService::getId, Function.identity()));
+
+        Map<UUID, MedicalRecord> recordMap = medicalRecordRepository.findAllById(recordIds).stream()
+                .collect(Collectors.toMap(MedicalRecord::getId, Function.identity()));
+
+        Set<UUID> visitIds = recordMap.values().stream().map(MedicalRecord::getVisitId).collect(Collectors.toSet());
+        Map<UUID, Visit> visitMap = visitRepository.findAllById(visitIds).stream()
+                .collect(Collectors.toMap(Visit::getId, Function.identity()));
+
+        Set<UUID> patientIds = visitMap.values().stream().map(Visit::getPatientId).collect(Collectors.toSet());
+        Map<UUID, Patient> patientMap = patientRepository.findAllById(patientIds).stream()
+                .collect(Collectors.toMap(Patient::getId, Function.identity()));
+
+        Set<UUID> doctorAccountIds = details.stream().map(d -> d.getOrder().getDoctorAccountId()).collect(Collectors.toSet());
+        Map<UUID, StaffAccount> doctorMap = staffAccountRepository.findAllById(doctorAccountIds).stream()
+                .collect(Collectors.toMap(StaffAccount::getId, Function.identity()));
+
+        // Tra cứu bản nháp kết quả
+        Set<UUID> draftDetailIds = new java.util.HashSet<>();
+        List<ImagingResult> imagingResults = imagingResultRepository.findByOrderDetailIdIn(detailIds);
+        for (ImagingResult ir : imagingResults) {
+            if (ir.getSubmittedAt() == null) {
+                draftDetailIds.add(ir.getOrderDetailId());
+            }
+        }
+        List<LabResult> labResults = labResultRepository.findByOrderDetailIdIn(detailIds);
+        for (LabResult lr : labResults) {
+            if (lr.getSubmittedAt() == null) {
+                draftDetailIds.add(lr.getOrderDetailId());
+            }
+        }
+
+        List<TechnicianPendingItemResponse> allItems = new ArrayList<>();
+        for (ParaclinicalOrderDetail detail : details) {
+            ParaclinicalOrder order = detail.getOrder();
+            MedicalRecord record = recordMap.get(order.getMedicalRecordId());
+            Visit visit = record != null ? visitMap.get(record.getVisitId()) : null;
+            Patient patient = visit != null ? patientMap.get(visit.getPatientId()) : null;
+            MedicalService service = serviceMap.get(detail.getServiceId());
+            StaffAccount doctor = doctorMap.get(order.getDoctorAccountId());
+
+            boolean isPriority = visit != null && visit.isPriority();
+            String priority = isPriority ? "PRIORITY" : "NORMAL";
+            String priorityLabel = isPriority ? "Ưu tiên" : "Thường";
+
+            Integer birthYear = null;
+            Integer age = 0;
+            String gender = "Khác";
+            if (patient != null) {
+                if (patient.getNgaysinh() != null) {
+                    birthYear = patient.getNgaysinh().getYear();
+                    age = Period.between(patient.getNgaysinh(), today).getYears();
+                }
+                gender = switch (patient.getGioitinh()) {
+                    case 1 -> "Nam";
+                    case 2 -> "Nữ";
+                    default -> "Khác";
+                };
+            }
+
+            String insuranceType = "Viện phí";
+            if ((visit != null && visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT) || order.getDoituongbn() == 1) {
+                insuranceType = "BHYT";
+            }
+
+            String doctorName = doctor != null ? staffDisplayName(doctor.getAcademicTitle(), doctor.getFullName()) : "—";
+            Instant completedAt = detail.getPerformedAt() != null ? detail.getPerformedAt() : detail.getNgaychidinh();
+            String completedAtTime = completedAt != null ? TIME_FORMATTER.format(completedAt) : "";
+            long completedMinutesAgo = completedAt != null ? java.time.Duration.between(completedAt, now).toMinutes() : 0L;
+
+            boolean isDraft = draftDetailIds.contains(detail.getId());
+            String itemStatus = isDraft ? "DRAFT" : "PENDING";
+
+            allItems.add(new TechnicianPendingItemResponse(
+                    detail.getId(),
+                    detail.getQueueNumber(),
+                    detail.getMachidinh(),
+                    detail.getRoomId(),
+                    priority,
+                    priorityLabel,
+                    patient != null ? patient.getMabenhnhan() : "—",
+                    patient != null ? patient.getHoten() : "—",
+                    birthYear,
+                    age,
+                    gender,
+                    insuranceType,
+                    visit != null ? visit.getMabhyt() : null,
+                    patient != null ? patient.getCccdSo() : null,
+                    patient != null ? patient.getSodienthoai() : null,
+                    detail.getTenchidinh(),
+                    service != null ? service.getCode() : null,
+                    order.getChandoansobo() != null ? order.getChandoansobo() : "",
+                    doctorName,
+                    order.getNoichidinh(),
+                    completedAtTime,
+                    completedMinutesAgo,
+                    itemStatus
+            ));
+        }
+
+        // Stats calculation
+        long total = allItems.size();
+        long pending = allItems.stream().filter(i -> "PENDING".equals(i.status())).count();
+        long draft = allItems.stream().filter(i -> "DRAFT".equals(i.status())).count();
+        long overdue = allItems.stream().filter(i -> i.completedMinutesAgo() >= 30).count();
+        TechnicianPendingStatsResponse statsResponse = new TechnicianPendingStatsResponse(total, pending, draft, overdue);
+
+        // Apply filters
+        List<TechnicianPendingItemResponse> filtered = allItems.stream()
+                .filter(item -> {
+                    if (search != null && !search.isBlank()) {
+                        String q = search.trim().toLowerCase(Locale.ROOT);
+                        boolean matchName = item.patientName() != null && item.patientName().toLowerCase(Locale.ROOT).contains(q);
+                        boolean matchId = item.patientId() != null && item.patientId().toLowerCase(Locale.ROOT).contains(q);
+                        boolean matchCode = item.orderCode() != null && item.orderCode().toLowerCase(Locale.ROOT).contains(q);
+                        boolean matchCccd = item.cccd() != null && item.cccd().toLowerCase(Locale.ROOT).contains(q);
+                        boolean matchIns = item.insuranceNumber() != null && item.insuranceNumber().toLowerCase(Locale.ROOT).contains(q);
+                        boolean matchService = item.serviceName() != null && item.serviceName().toLowerCase(Locale.ROOT).contains(q);
+                        if (!matchName && !matchId && !matchCode && !matchCccd && !matchIns && !matchService) {
+                            return false;
+                        }
+                    }
+
+                    if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+                        if (!status.equalsIgnoreCase(item.status())) {
+                            return false;
+                        }
+                    }
+
+                    if (doctorRoom != null && !doctorRoom.isBlank() && !"ALL".equalsIgnoreCase(doctorRoom)) {
+                        if (!Objects.equals(item.doctorRoom(), doctorRoom)) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })
+                .sorted((a, b) -> {
+                    // Priority first
+                    if ("PRIORITY".equals(a.priority()) && !"PRIORITY".equals(b.priority())) return -1;
+                    if (!"PRIORITY".equals(a.priority()) && "PRIORITY".equals(b.priority())) return 1;
+
+                    // Then by queueNumber
+                    int qA = a.queueNumber() != null ? a.queueNumber() : Integer.MAX_VALUE;
+                    int qB = b.queueNumber() != null ? b.queueNumber() : Integer.MAX_VALUE;
+                    return Integer.compare(qA, qB);
+                })
+                .toList();
+
+        return new TechnicianPendingResultResponse(statsResponse, filtered, canManage);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public TechnicianQueueItemResponse getQueueDetail(UUID detailId) {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
@@ -416,8 +615,10 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        requireInProgressBy(detail, technicianAccountId);
 
-        detail.completePerformance(now);
+        // UC-66 step 3: Performed, waiting for its result (UC-64).
+        detail.completePerformance(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
         Map<String, Object> audit = new LinkedHashMap<>();
@@ -428,6 +629,42 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 detail.getMachidinh(), audit, now);
 
         return getQueueDetail(detailId);
+    }
+
+    @Override
+    @Transactional
+    public TechnicianQueueItemResponse returnToWaiting(
+            UUID detailId, UUID technicianAccountId, ReturnParaclinicalOrderToWaitingRequest request) {
+        Instant now = clock.instant();
+        ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+
+        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        requireInProgressBy(detail, technicianAccountId);
+
+        // UC-66 AF-02: back to Waiting at its original place; the reason is recorded in the audit log.
+        detail.returnToWaiting(technicianAccountId, now);
+        paraclinicalOrderDetailRepository.save(detail);
+
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("action", "RETURN_TO_WAITING");
+        audit.put("status", detail.getStatus().name());
+        audit.put("reason", request.reason().strip());
+        auditLogService.recordBusinessChange(
+                technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
+                detail.getMachidinh(), audit, now);
+
+        return getQueueDetail(detailId);
+    }
+
+    /** UC-66 EF-01: only the technician who accepted the service, while it is In Progress (MSG13). */
+    private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
+        if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
+            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
+        }
+        if (!detail.isPerformedBy(technicianAccountId)) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
     }
 
     @Override

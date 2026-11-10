@@ -95,7 +95,7 @@ export function ServiceDetailView({
     ['Mã dịch vụ', <span className="font-mono">{service.code}</span>],
     ['Tên dịch vụ', service.name],
     ['Loại dịch vụ', type?.label ?? service.type],
-    ['Nhóm dịch vụ', service.serviceGroupName ?? (examination ? 'Không áp dụng' : '—')],
+    ['Nhóm dịch vụ', service.serviceGroupName ?? '—'],
     ['Khoa thực hiện', service.departmentName ?? (examination ? 'Dùng chung các phòng khám' : '—')],
     ['Trạng thái', SERVICE_STATUS_LABELS[service.status] ?? service.status],
     ['Mô tả', service.description || '—'],

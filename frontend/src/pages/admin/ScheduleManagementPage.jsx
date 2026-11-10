@@ -158,13 +158,19 @@ export function ScheduleManagementPage({
                 if (a.roomId && r.id && String(a.roomId).toLowerCase() === String(r.id).toLowerCase()) return true;
                 if (a.roomCode && r.code && a.roomCode.trim().toUpperCase() === r.code.trim().toUpperCase()) return true;
                 if (a.roomName && r.name && a.roomName.trim().toLowerCase() === r.name.trim().toLowerCase()) return true;
+                if (!a.roomId && r.headPerson && typeof r.headPerson === 'string' && a.fullName) {
+                  const staffNames = r.headPerson.split(',').map((sn) => sn.trim().toLowerCase());
+                  if (staffNames.some((sn) => sn === a.fullName.trim().toLowerCase())) {
+                    return true;
+                  }
+                }
                 return false;
               });
+              const titlePrefix = a.academicTitle ? `${a.academicTitle.trim()} ` : '';
+              const individualFullName = `${titlePrefix}${a.fullName || a.name || a.username || ''}`.trim();
               return {
                 id: a.id,
-                fullName: (matchedRoom?.headPerson && matchedRoom.headPerson.includes(a.fullName))
-                  ? matchedRoom.headPerson
-                  : ((a.academicTitle ? a.academicTitle + ' ' : '') + a.fullName),
+                fullName: individualFullName,
                 role: a.role,
                 username: a.username,
                 roomId: a.roomId || matchedRoom?.id || null,
@@ -299,11 +305,20 @@ export function ScheduleManagementPage({
       const sRoomId = s.roomId ? String(s.roomId).toLowerCase() : '';
       const sCode = (s.roomCode || '').trim().toUpperCase();
       const sName = (s.roomName || '').trim().toLowerCase();
-      return (
-        (sRoomId && targetRoomId && sRoomId === targetRoomId) ||
-        (roomCode && sCode && sCode === roomCode) ||
-        (targetRoom?.name && sName && sName === targetRoom.name.trim().toLowerCase())
-      );
+      // Ràng buộc nghiêm ngặt: 1 Bác sĩ / KTV chỉ thuộc về 1 phòng.
+      // Nếu nhân viên đã có roomId và roomId đó khác targetRoomId -> tuyệt đối không gán vào phòng này
+      if (sRoomId && targetRoomId && sRoomId !== targetRoomId) {
+        return false;
+      }
+      const matchesRoomId = Boolean(sRoomId && targetRoomId && sRoomId === targetRoomId);
+      const matchesCode = Boolean(roomCode && sCode && sCode === roomCode);
+      const matchesName = Boolean(targetRoom?.name && sName && sName === targetRoom.name.trim().toLowerCase());
+      let matchesHeadPerson = false;
+      if (!sRoomId && targetRoom?.headPerson && typeof targetRoom.headPerson === 'string' && s.fullName) {
+        const names = targetRoom.headPerson.split(',').map((sn) => sn.trim().toLowerCase());
+        matchesHeadPerson = names.some((sn) => sn === s.fullName.trim().toLowerCase());
+      }
+      return matchesRoomId || matchesCode || matchesName || matchesHeadPerson;
     });
     setEditingItem({
       id: null,

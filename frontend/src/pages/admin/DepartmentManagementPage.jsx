@@ -14,6 +14,8 @@ import {
   DepartmentDetailModal,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
+import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
+import { getVietnamTodayStr } from '../../utils/vietnamTimeUtils';
 import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
 
@@ -59,10 +61,50 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     (async () => {
       try {
         setLoading(true);
-        const fetchedItems = await departmentApi.getItems();
+        const todayStr = getVietnamTodayStr();
+        const [fetchedItems, dutyData] = await Promise.all([
+          departmentApi.getItems(),
+          dutyScheduleApi.getWeeklySchedule(todayStr, todayStr).catch((scheduleErr) => {
+            console.warn('Không thể tải lịch trực hôm nay:', scheduleErr);
+            return null;
+          }),
+        ]);
         if (cancelled) return;
+
+        // Xây dựng map bác sĩ trực hôm nay theo phòng
+        const doctorDutyMap = {};
+        if (dutyData?.items && Array.isArray(dutyData.items)) {
+          dutyData.items.forEach((item) => {
+            if (item.roomId && item.workDate === todayStr && item.staffRole === 'DOCTOR') {
+              if (!doctorDutyMap[item.roomId]) {
+                doctorDutyMap[item.roomId] = [];
+              }
+              if (item.staffName && !doctorDutyMap[item.roomId].includes(item.staffName)) {
+                doctorDutyMap[item.roomId].push(item.staffName);
+              }
+            }
+          });
+        }
+
         if (Array.isArray(fetchedItems)) {
-          setItems(fetchedItems);
+          const mergedItems = fetchedItems.map((it) => {
+            if (it.unitType !== 'ROOM') return it;
+            const scheduledDoctors = doctorDutyMap[it.id];
+            const hasDoctorScheduled = Boolean(
+              it.hasDoctorOnDutyToday || (scheduledDoctors && scheduledDoctors.length > 0)
+            );
+            const doctorName =
+              it.doctorOnDutyToday ||
+              (scheduledDoctors && scheduledDoctors.length > 0
+                ? scheduledDoctors.join(', ')
+                : null);
+            return {
+              ...it,
+              hasDoctorOnDutyToday: hasDoctorScheduled,
+              doctorOnDutyToday: doctorName,
+            };
+          });
+          setItems(mergedItems);
         }
       } catch (err) {
         if (cancelled) return;
@@ -308,6 +350,15 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     }
 
     // Trường hợp là ROOM (Phòng chức năng)
+    if (isDeactivating && (item.hasDoctorOnDutyToday || item.doctorOnDutyToday)) {
+      toast.error(
+        `Không được phép tạm ngừng phòng "${item.name}" vì phòng đang có bác sĩ trực trong ngày${
+          item.doctorOnDutyToday ? ` (${item.doctorOnDutyToday})` : ''
+        }!`
+      );
+      return;
+    }
+
     setConfirmDialog({
       title: isDeactivating ? 'Tạm ngưng hoạt động phòng' : 'Kích hoạt lại phòng khám',
       description: isDeactivating
@@ -379,6 +430,19 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       } else {
         // Handle ROOM
         if (isEdit) {
+          if (
+            editingItem?.status === 'ACTIVE' &&
+            formData.status === 'INACTIVE' &&
+            (editingItem?.hasDoctorOnDutyToday || editingItem?.doctorOnDutyToday)
+          ) {
+            toast.error(
+              `Không được phép tạm ngừng phòng "${editingItem.name}" vì phòng đang có bác sĩ trực trong ngày${
+                editingItem.doctorOnDutyToday ? ` (${editingItem.doctorOnDutyToday})` : ''
+              }!`
+            );
+            return;
+          }
+
           const res = await departmentApi.updateRoom(editingItem.id, {
             roomName: formData.name,
             phongkham: formData.name,

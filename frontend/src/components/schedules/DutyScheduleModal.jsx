@@ -46,22 +46,42 @@ function categorizeStaff({ roomId, roomObj, staffList = [] }) {
   // Lọc nghiêm ngặt: Phòng khám lâm sàng/nội CHỈ LẤY BÁC SĨ (DOCTOR), phòng Cận lâm sàng CHỈ LẤY KTV (TECHNICIAN)
   const roleFilteredStaff = staffList.filter(s => s.role === requiredRole);
 
-  // CHỈ LẤY NHÂN VIÊN ĐƯỢC LIÊN KẾT VỚI PHÒNG ĐÓ TRONG DB (s.roomId === roomId hoặc mã phòng / tên phòng khớp)
+  // CHỈ LẤY NHÂN VIÊN ĐƯỢC LIÊN KẾT VỚI PHÒNG ĐÓ TRONG DB (s.roomId === roomId hoặc mã phòng / tên phòng khớp, hoặc có tên trong danh sách nhân viên phòng)
   // KHÔNG FALLBACK SANG NHÂN VIÊN NGOÀI PHÒNG
   const targetRoomId = roomId ? String(roomId).toLowerCase() : '';
   const assignedStaff = roleFilteredStaff.filter(s => {
     const sRoomId = s.roomId ? String(s.roomId).toLowerCase() : '';
     const sCode = (s.roomCode || '').trim().toUpperCase();
     const sName = (s.roomName || '').trim().toLowerCase();
-    return (
-      (sRoomId && targetRoomId && sRoomId === targetRoomId) ||
-      (roomCode && sCode && sCode === roomCode) ||
-      (roomName && sName && sName === roomName)
-    );
+    // Ràng buộc nghiêm ngặt: 1 Bác sĩ / KTV chỉ thuộc về 1 phòng.
+    // Nếu nhân viên đã có roomId và roomId đó khác targetRoomId -> tuyệt đối không hiển thị ở phòng này
+    if (sRoomId && targetRoomId && sRoomId !== targetRoomId) {
+      return false;
+    }
+
+    const matchesRoomId = Boolean(sRoomId && targetRoomId && sRoomId === targetRoomId);
+    const matchesCode = Boolean(roomCode && sCode && sCode === roomCode);
+    const matchesName = Boolean(roomName && sName && sName === roomName);
+
+    let matchesHeadPerson = false;
+    if (!sRoomId && roomObj?.headPerson && typeof roomObj.headPerson === 'string' && s.fullName) {
+      const names = roomObj.headPerson.split(',').map(n => n.trim().toLowerCase());
+      matchesHeadPerson = names.some(n => n === s.fullName.trim().toLowerCase());
+    }
+
+    return matchesRoomId || matchesCode || matchesName || matchesHeadPerson;
+  });
+
+  // Loại bỏ trùng lặp id (nếu có)
+  const seenIds = new Set();
+  const uniqueAssignedStaff = assignedStaff.filter(s => {
+    if (!s.id || seenIds.has(s.id)) return false;
+    seenIds.add(s.id);
+    return true;
   });
 
   return {
-    availableStaff: assignedStaff,
+    availableStaff: uniqueAssignedStaff,
     isPrimary: true,
     isParaclinical,
     roleName,

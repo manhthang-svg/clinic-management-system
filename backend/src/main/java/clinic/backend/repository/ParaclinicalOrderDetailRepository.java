@@ -41,4 +41,13 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
     List<ParaclinicalOrderDetail> findQueueDetails(
             @Param("roomId") UUID roomId,
             @Param("startOfDay") Instant startOfDay);
+
+    @Query("""
+            select d from ParaclinicalOrderDetail d
+            join fetch d.order o
+            where d.roomId = :roomId
+              and d.status = clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_RESULT
+            order by d.queueNumber asc, d.ngaychidinh asc
+            """)
+    List<ParaclinicalOrderDetail> findPendingResultsByRoom(@Param("roomId") UUID roomId);
 }

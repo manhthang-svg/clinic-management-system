@@ -173,12 +173,22 @@ export function RoomTable({
 
                         <button
                           type="button"
-                          title={isActive ? 'Vô hiệu hóa / Tạm ngưng' : 'Kích hoạt lại'}
+                          title={
+                            !isActive
+                              ? 'Kích hoạt lại'
+                              : room.hasDoctorOnDutyToday || room.doctorOnDutyToday
+                              ? `Không thể tạm ngưng: phòng đang có bác sĩ trực trong ngày${
+                                  room.doctorOnDutyToday ? ` (${room.doctorOnDutyToday})` : ''
+                                }`
+                              : 'Vô hiệu hóa / Tạm ngưng'
+                          }
                           aria-label={`Đổi trạng thái ${room.name}`}
                           onClick={() => onToggleStatus(room)}
                           className={`${ACTION_CLASS} ${
                             isActive
-                              ? 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
+                              ? room.hasDoctorOnDutyToday || room.doctorOnDutyToday
+                                ? 'text-amber-500 hover:bg-amber-50 hover:text-amber-600'
+                                : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
                               : 'text-emerald-600 hover:bg-emerald-50'
                           }`}
                         >

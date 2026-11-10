@@ -33,7 +33,9 @@ export function PriceInput({ id, value, onChange, error, disabled, placeholder =
   );
 }
 
-/** Dialog shell with a form body and Hủy / submit buttons; Escape closes it unless saving. */
+/**
+ * Dialog shell with a form body and Hủy / submit buttons (or a custom footer); Escape closes it unless saving.
+ */
 export function ServiceFormModal({
   id,
   icon: Icon,
@@ -46,6 +48,7 @@ export function ServiceFormModal({
   onSubmit,
   onClose,
   maxWidthClass = 'max-w-xl',
+  footer,
   children,
 }) {
   const dialogRef = useRef(null);
@@ -122,21 +125,25 @@ export function ServiceFormModal({
         </div>
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50/60 rounded-b-2xl">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
-          >
-            Hủy
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || submitDisabled}
-            className="px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Đang lưu…' : submitLabel}
-          </button>
+          {footer ?? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || submitDisabled}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Đang lưu…' : submitLabel}
+              </button>
+            </>
+          )}
         </div>
       </form>
     </div>

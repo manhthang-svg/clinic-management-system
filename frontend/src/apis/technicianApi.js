@@ -20,6 +20,11 @@ export const technicianApi = {
     return apiClient.request(`/technician/queue${queryString}`, { signal });
   },
 
+  async getPendingResults({ roomId, search, status, doctorRoom } = {}, signal) {
+    const queryString = buildQueueQuery({ roomId, search, status, doctorRoom });
+    return apiClient.request(`/technician/results${queryString}`, { signal });
+  },
+
   async getQueueDetail(detailId, signal) {
     return apiClient.request(`/technician/queue/${detailId}`, { signal });
   },
@@ -45,6 +50,14 @@ export const technicianApi = {
   async completeOrder(detailId) {
     return apiClient.request(`/technician/queue/${detailId}/complete`, {
       method: 'POST',
+    });
+  },
+
+  /** UC-66 AF-02: back to the waiting list at its original place, with a reason. */
+  async returnToWaiting(detailId, reason) {
+    return apiClient.request(`/technician/queue/${detailId}/return-to-waiting`, {
+      method: 'POST',
+      body: { reason },
     });
   },
 

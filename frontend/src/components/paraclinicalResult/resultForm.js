@@ -17,6 +17,10 @@ export const MSG = {
   saved: 'Đã lưu kết quả và gửi cho bác sĩ chỉ định.', // MSG29
   draftSaved: 'Đã lưu nháp kết quả.', // MSG03
   fixFields: 'Vui lòng sửa các ô được đánh dấu.',
+  // UC-68 EF-02. ASSUMPTION: the SRS catalog text of MSG52 belongs to another use case, so this wording is ours.
+  printFailed: 'Không thể in phiếu kết quả. Vui lòng kiểm tra máy in và thử lại.',
+  clinicMissing: 'Chưa cấu hình thông tin phòng khám (UC-77) nên chưa in được phiếu kết quả.',
+  printerOnly: 'Chỉ người thực hiện dịch vụ mới in phiếu kết quả.',
 };
 
 export const KIND_LABEL = { LAB: 'Xét nghiệm', IMAGING: 'Chẩn đoán hình ảnh', FUNCTIONAL: 'Thăm dò chức năng' };
@@ -78,6 +82,7 @@ export function interpret(parameter, value) {
 export function emptyLabResult(order) {
   return {
     receivedAt: '',
+    instrumentId: '',
     values: Object.fromEntries(order.parameters.map((p) => [p.code, ''])),
     conclusion: '',
     note: '',
@@ -87,6 +92,7 @@ export function emptyLabResult(order) {
 export function emptyDescriptiveResult() {
   return {
     technique: '', description: '', conclusion: '', recommendation: '', imageLink: '', readingDoctor: '', files: [],
+    instrumentId: '',
   };
 }
 
@@ -189,6 +195,10 @@ export function formatDateTime(iso) {
 
 const ERROR_MESSAGE = {
   NOT_FOUND: 'Không tìm thấy chỉ định.',
+  REQUEST_VALIDATION_FAILED: MSG.fixFields,
+  RESULT_NOT_EDITABLE: 'Chỉ định chưa được xác nhận thực hiện nên chưa thể nhập kết quả.',
+  CLINIC_FACILITY_NOT_CONFIGURED: MSG.clinicMissing,
+  INSTRUMENT_UNAVAILABLE: 'Máy thực hiện đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.', // MSG40
   NOT_PERFORMER: MSG.notPerformer,
   RESULT_ALREADY_SUBMITTED: MSG.submitted,
 };

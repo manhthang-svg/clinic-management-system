@@ -1,6 +1,8 @@
 // Field blocks shared by the per-service result pages.
 import { Field, INPUT_CLASS } from '../shared/FormFields';
+import { useContext } from 'react';
 import { ResultFiles } from './ResultFiles';
+import { ResultApiContext } from './resultContext';
 import { ResultSection } from './ResultEditor';
 import { sectionsFor } from './resultSections';
 
@@ -91,18 +93,14 @@ export function RecommendationField({ form, set, readOnly }) {
   );
 }
 
-export function SignerField({ order, form, set, readOnly, label = 'Bác sĩ chuyên khoa ký phiếu' }) {
+/**
+ * UC-68: the slip is signed by the account that performed the service. Only that account records and prints the
+ * result (BR-29), so it is the signed-in technician; the name cannot be typed in.
+ */
+export function SignerField({ order, label = 'Người ký phiếu' }) {
   return (
-    <Field id="result-readingDoctor" label={label} hint="Để trống thì in tên người thực hiện.">
-      <input
-        id="result-readingDoctor"
-        value={form.readingDoctor ?? ''}
-        onChange={(event) => set('readingDoctor', event.target.value)}
-        disabled={readOnly}
-        maxLength={255}
-        placeholder={order.performer?.name}
-        className={INPUT_CLASS}
-      />
+    <Field id="result-signer" label={label} hint="Cố định là tài khoản thực hiện dịch vụ (đang đăng nhập).">
+      <p id="result-signer" className="text-sm font-semibold text-slate-800">{order.performer?.name ?? '—'}</p>
     </Field>
   );
 }
@@ -124,9 +122,14 @@ export function ImageLinkField({ form, set, errors, readOnly }) {
 }
 
 export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description }) {
+  const { supportsFiles } = useContext(ResultApiContext);
   return (
     <ResultSection title={title} description={description}>
-      <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
+      {supportsFiles ? (
+        <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
+      ) : (
+        <p className="text-sm text-slate-500">Chức năng tải ảnh kết quả chưa được hỗ trợ.</p>
+      )}
     </ResultSection>
   );
 }

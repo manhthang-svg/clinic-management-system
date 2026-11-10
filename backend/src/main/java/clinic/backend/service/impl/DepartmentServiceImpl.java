@@ -1,6 +1,8 @@
 package clinic.backend.service.impl;
 
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,6 +20,7 @@ import clinic.backend.dto.response.DepartmentRoomItemResponse;
 import clinic.backend.dto.response.DepartmentStatsResponse;
 import clinic.backend.dto.response.RoomServiceItemResponse;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.ServiceGroup;
@@ -25,12 +28,14 @@ import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.Role;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.RoomType;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
@@ -61,6 +66,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final StaffAccountRepository staffAccountRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    private final DutyScheduleRepository dutyScheduleRepository;
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
 
@@ -93,6 +100,33 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Map<UUID, String> roomStaffMap = new HashMap<>();
         roomStaffNamesMap.forEach((roomId, names) -> roomStaffMap.put(roomId, String.join(", ", names)));
+
+        LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        List<DutySchedule> todayDutySchedules = dutyScheduleRepository
+                .findByWorkDateBetweenOrderByWorkDateAscShiftAsc(today, today);
+        Set<UUID> dutyStaffIds = todayDutySchedules.stream()
+                .map(DutySchedule::getStaffAccountId)
+                .collect(Collectors.toSet());
+        Map<UUID, StaffAccount> dutyStaffMap = dutyStaffIds.isEmpty()
+                ? Map.of()
+                : staffAccountRepository.findAllById(dutyStaffIds).stream()
+                        .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
+
+        Map<UUID, List<String>> roomDutyDoctorNames = new HashMap<>();
+        for (DutySchedule ds : todayDutySchedules) {
+            if (ds.getRoomId() == null) continue;
+            StaffAccount staff = dutyStaffMap.get(ds.getStaffAccountId());
+            if (staff != null && staff.getRole() == Role.DOCTOR) {
+                String title = staff.getAcademicTitle() != null && !staff.getAcademicTitle().isBlank()
+                        ? staff.getAcademicTitle().strip() + " "
+                        : "";
+                roomDutyDoctorNames.computeIfAbsent(ds.getRoomId(), k -> new ArrayList<>())
+                        .add(title + staff.getFullName());
+            }
+        }
+        Map<UUID, String> roomDutyDoctorMap = new HashMap<>();
+        roomDutyDoctorNames.forEach((roomId, names) ->
+                roomDutyDoctorMap.put(roomId, String.join(", ", names.stream().distinct().toList())));
 
         Map<UUID, Department> departmentMap = departments.stream()
                 .collect(Collectors.toMap(Department::getId, d -> d, (d1, d2) -> d1));
@@ -192,6 +226,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .headPerson(staffName)
                     .status(room.getStatus() != null ? room.getStatus().name() : "ACTIVE")
                     .assignedServices(roomServices)
+                    .hasDoctorOnDutyToday(roomDutyDoctorMap.containsKey(room.getId()))
+                    .doctorOnDutyToday(roomDutyDoctorMap.get(room.getId()))
                     .createdAt(room.getCreatedAt())
                     .updatedAt(room.getUpdatedAt())
                     .version(room.getVersion())
@@ -313,6 +349,8 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Department saved = departmentRepository.save(department);
 
+
+
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
                 .unitType("DEPARTMENT")
@@ -377,6 +415,8 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department saved = departmentRepository.save(department);
         int roomCount = roomRepository.findByDepartmentId(id).size();
 
+
+
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
                 .unitType("DEPARTMENT")
@@ -407,6 +447,8 @@ public class DepartmentServiceImpl implements DepartmentService {
         department.setActive(!department.isActive(), now);
         Department saved = departmentRepository.save(department);
         int roomCount = roomRepository.findByDepartmentId(id).size();
+
+
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -511,6 +553,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         UUID id = uuidV7Generator.next();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : ActivationStatus.ACTIVE;
 
+        String dutyDoctor = null;
         Room room = new Room(
                 id,
                 now,
@@ -531,6 +574,9 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
+
+
+
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
                 .unitType("ROOM")
@@ -545,6 +591,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .headPerson(resolveStaffNamesForRoom(saved.getId()))
                 .status(saved.getStatus().name())
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
+                .hasDoctorOnDutyToday(dutyDoctor != null)
+                .doctorOnDutyToday(dutyDoctor)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -633,6 +681,9 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Instant now = clock.instant();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : room.getStatus();
+        if (room.getStatus() == ActivationStatus.ACTIVE && status == ActivationStatus.INACTIVE) {
+            checkNoDoctorOnDutyToday(room.getId());
+        }
 
         room.update(
                 room.getDepartmentId(),
@@ -652,7 +703,14 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
+
+
         String staffName = resolveStaffNamesForRoom(saved.getId());
+        String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
+
+
+
+
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -668,6 +726,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .headPerson(staffName)
                 .status(saved.getStatus().name())
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
+                .hasDoctorOnDutyToday(dutyDoctor != null)
+                .doctorOnDutyToday(dutyDoctor)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -683,6 +743,10 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .orElse(null);
 
         Instant now = clock.instant();
+        if (room.getStatus() == ActivationStatus.ACTIVE) {
+            checkNoDoctorOnDutyToday(room.getId());
+        }
+
         ActivationStatus nextStatus = room.getStatus() == ActivationStatus.ACTIVE
                 ? ActivationStatus.INACTIVE
                 : ActivationStatus.ACTIVE;
@@ -705,7 +769,14 @@ public class DepartmentServiceImpl implements DepartmentService {
                         .orElse(null)
                 : null;
 
+
+
         String staffName = resolveStaffNamesForRoom(saved.getId());
+        String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
+
+
+
+
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -721,6 +792,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .headPerson(staffName)
                 .status(saved.getStatus().name())
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
+                .hasDoctorOnDutyToday(dutyDoctor != null)
+                .doctorOnDutyToday(dutyDoctor)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -784,5 +857,34 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .toList();
         }
         return List.of();
+    }
+
+    private void checkNoDoctorOnDutyToday(UUID roomId) {
+        String dutyDoctor = resolveDutyDoctorForRoomToday(roomId);
+        if (dutyDoctor != null) {
+            throw new AppException(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY,
+                    "Không thể tạm ngưng phòng đang có bác sĩ trực trong ngày: " + dutyDoctor,
+                    Map.of("roomId", "Không thể tạm ngưng phòng đang có bác sĩ trực trong ngày"));
+        }
+    }
+
+    private String resolveDutyDoctorForRoomToday(UUID roomId) {
+        LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        List<DutySchedule> todaySchedules = dutyScheduleRepository
+                .findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today);
+        if (todaySchedules.isEmpty()) {
+            return null;
+        }
+        Set<UUID> staffIds = todaySchedules.stream()
+                .map(DutySchedule::getStaffAccountId)
+                .collect(Collectors.toSet());
+        List<String> names = staffAccountRepository.findAllById(staffIds).stream()
+                .filter(staff -> staff.getRole() == Role.DOCTOR)
+                .map(staff -> (staff.getAcademicTitle() != null && !staff.getAcademicTitle().isBlank()
+                        ? staff.getAcademicTitle().strip() + " "
+                        : "") + staff.getFullName())
+                .distinct()
+                .toList();
+        return names.isEmpty() ? null : String.join(", ", names);
     }
 }

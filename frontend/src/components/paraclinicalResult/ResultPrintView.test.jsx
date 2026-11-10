@@ -72,10 +72,55 @@ describe('ResultPrintView', () => {
     expect(slip).toHaveTextContent(slipOrder.patient.name);
   });
 
-  it('marks a reprint as a copy and prints the reading doctor', () => {
+  it('marks a reprint as a copy and is signed by the performer, never a typed name', () => {
     const { order: slipOrder, form } = descriptive('cls-004', { readingDoctor: 'BS Nguyễn Thị Nhàn' });
     render(<ResultPrintView order={{ ...slipOrder, printCount: 1 }} form={form} />);
     expect(screen.getByText('BẢN SAO')).toBeInTheDocument();
-    expect(screen.getByText('BS Nguyễn Thị Nhàn')).toBeInTheDocument();
+    expect(screen.getByText(slipOrder.performer.name)).toBeInTheDocument();
+    expect(screen.queryByText('BS Nguyễn Thị Nhàn')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResultPrintView – UC-68 header and performer', () => {
+  it('prints the configured clinic, the registration code, the instrument and the performed time', () => {
+    const { order: base, form } = descriptive('cls-008');
+    render(<ResultPrintView
+      order={{
+        ...base,
+        clinic: { name: 'Phòng khám Đa khoa Thử', address: '1 Đường Số 1', phone: '0281234567' },
+        registrationCode: 'DK0000000123',
+        performedAt: '2026-11-01T09:00:00Z',
+        result: { ...base.result, instrumentName: 'Máy X-quang DR' },
+      }}
+      form={form}
+    />);
+
+    expect(screen.getByText('Phòng khám Đa khoa Thử')).toBeInTheDocument();
+    expect(screen.queryByText('PHÒNG KHÁM ĐA KHOA METPH')).not.toBeInTheDocument();
+    expect(screen.getByText('DK0000000123')).toBeInTheDocument();
+    expect(screen.getByText('Máy X-quang DR')).toBeInTheDocument();
+    expect(screen.getByText('Thời gian thực hiện:')).toBeInTheDocument();
+  });
+
+  it('shows that the clinic is not configured instead of the sample header', () => {
+    const { order: base, form } = descriptive('cls-008');
+    render(<ResultPrintView order={{ ...base, clinic: null }} form={form} />);
+
+    expect(screen.getByText('CHƯA CẤU HÌNH THÔNG TIN PHÒNG KHÁM')).toBeInTheDocument();
+  });
+});
+
+describe('ResultPrintView – X-ray images', () => {
+  it('prints the first two film images beside the X-ray description, like the ultrasound slip', () => {
+    const { order: base, form } = descriptive('cls-008', {
+      files: [1, 2, 3].map((n) => ({
+        id: `x${n}`, name: `phim-${n}.jpg`, type: 'image/jpeg', size: 1, url: `blob:x${n}`, caption: `Phim ${n}`,
+      })),
+    });
+    render(<ResultPrintView order={base} form={form} />);
+
+    const films = screen.getAllByRole('img', { name: /^Phim / });
+    expect(films.map((image) => image.getAttribute('alt'))).toEqual(['Phim 1', 'Phim 2']);
+    expect(screen.getByText('Mô tả kết quả chiếu/chụp')).toBeInTheDocument();
   });
 });

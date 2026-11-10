@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { FormAlert } from '../../components/shared/FormFields';
 import { resultMockApi } from '../../components/paraclinicalResult';
+import { resultApiFor } from '../../apis/paraclinicalResultApi';
 import { ResultBreadcrumb } from '../../components/paraclinicalResult/ResultEditor';
 import { resultErrorMessage } from '../../components/paraclinicalResult/resultForm';
 import {
@@ -25,9 +26,10 @@ const PAGES = {
   ECG: EcgResultPage,
 };
 
-/** UC-67 entry: loads the order and opens the result page of its service. Demo data until the API exists. */
-export function ParaclinicalResultPage({ api = resultMockApi }) {
+/** UC-67 entry: loads the order and opens the result page of its service. */
+export function ParaclinicalResultPage({ api: injectedApi }) {
   const { orderId } = useParams();
+  const api = injectedApi ?? resultApiFor(orderId, resultMockApi);
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
 

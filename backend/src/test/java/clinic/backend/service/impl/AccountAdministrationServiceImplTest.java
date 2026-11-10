@@ -103,10 +103,79 @@ class AccountAdministrationServiceImplTest {
 
         assertThatThrownBy(() -> service.changeRole(
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(),
-                new RoleChangeRequest(Role.DOCTOR, Role.RECEPTIONIST)))
+                new RoleChangeRequest(Role.DOCTOR, Role.RECEPTIONIST, "ThS.BS", "000123/HCM-CCHN")))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.WORK_IN_PROGRESS));
+    }
+
+    @Test
+    void roleChangeToDoctorRequiresTheAcademicTitleAndPracticeLicense() {
+        StaffAccount target = account(Role.RECEPTIONIST);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.changeRole(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(),
+                new RoleChangeRequest(Role.DOCTOR, Role.RECEPTIONIST, "  ", "000123/HCM-CCHN")))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).containsEntry("academicTitle", "REQUIRED");
+                });
+        assertThatThrownBy(() -> service.checkRoleChange(
+                target.getId(), new RoleChangeRequest(Role.TECHNICIAN, Role.RECEPTIONIST, "KTV", null)))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("practiceLicenseNo", "REQUIRED"));
+        assertThat(target.getRole()).isEqualTo(Role.RECEPTIONIST);
+        verifyNoInteractions(sessionRepository, auditLogService);
+    }
+
+    @Test
+    void roleChangeToDoctorRejectsALicenseUsedByAnotherAccount() {
+        StaffAccount target = account(Role.RECEPTIONIST);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(accountRepository.existsByPracticeLicenseNoAndIdNot("000123/HCM-CCHN", target.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.changeRole(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(),
+                new RoleChangeRequest(Role.DOCTOR, Role.RECEPTIONIST, "ThS.BS", " 000123/HCM-CCHN ")))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("practiceLicenseNo", "ALREADY_EXISTS"));
+        assertThat(target.getRole()).isEqualTo(Role.RECEPTIONIST);
+        verifyNoInteractions(sessionRepository, auditLogService);
+    }
+
+    @Test
+    void roleChangeToDoctorSavesTheProfessionalInformationWithTheRole() {
+        StaffAccount target = account(Role.RECEPTIONIST);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.changeRole(admin, target.getId(),
+                new RoleChangeRequest(Role.DOCTOR, Role.RECEPTIONIST, " ThS.BS ", "000123/HCM-CCHN"));
+
+        assertThat(target.getRole()).isEqualTo(Role.DOCTOR);
+        assertThat(target.getAcademicTitle()).isEqualTo("ThS.BS");
+        assertThat(target.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
+        var newValues = org.mockito.ArgumentCaptor.forClass(java.util.Map.class);
+        verify(auditLogService).recordAccountChange(
+                eq(admin.accountId()), eq(target.getId()), any(), anyMap(), newValues.capture(), any(Instant.class));
+        assertThat(newValues.getValue()).containsEntry("role", Role.DOCTOR)
+                .containsEntry("academicTitle", "ThS.BS")
+                .containsEntry("practiceLicenseNo", "000123/HCM-CCHN");
+    }
+
+    @Test
+    void roleChangeToCashierIgnoresProfessionalInformation() {
+        StaffAccount target = account(Role.RECEPTIONIST);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.changeRole(new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(),
+                new RoleChangeRequest(Role.CASHIER, Role.RECEPTIONIST, null, null));
+
+        assertThat(target.getRole()).isEqualTo(Role.CASHIER);
+        assertThat(target.getPracticeLicenseNo()).isNull();
     }
 
     @org.junit.jupiter.params.ParameterizedTest

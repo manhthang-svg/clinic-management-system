@@ -2632,7 +2632,7 @@ tables:
         - (queue_number IS NOT NULL OR status IN ('WAITING_FEE_PAYMENT', 'CANCELLED'))
         proposal: keep
         standard: Không
-        description: Số thứ tự trong phòng theo ngày; lượt khám phải trả phí khám chỉ có số khi đã thanh toán (I1-D48, V56)
+        description: Số thứ tự trong phòng theo ngày; lượt khám phải trả phí khám chỉ có số khi đã thanh toán (I1-D48, V57)
       status:
         field: status
         sql_type: varchar(30)

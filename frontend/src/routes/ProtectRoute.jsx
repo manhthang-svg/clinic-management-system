@@ -1,5 +1,6 @@
 
 import { Navigate, Outlet } from 'react-router';
+import Forbidden from '../pages/Forbidden.jsx';
 
 export default function ProtectRoute({ session, requiredRole }) {
     if (session.status === 'restoring') {
@@ -15,7 +16,7 @@ export default function ProtectRoute({ session, requiredRole }) {
     }
 
     if (requiredRole && session.account.role !== requiredRole) {
-        return <Navigate to="/404" replace />;
+        return <Forbidden />;
     }
 
     return <Outlet />;

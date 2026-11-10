@@ -142,6 +142,43 @@ describe('App', () => {
         expect(screen.getByRole('button', { name: 'Dịch vụ' })).toHaveAttribute('aria-current', 'page');
         expect(screen.queryByRole('heading', { name: 'Quản lý tài khoản' })).not.toBeInTheDocument();
     });
+    it.each(['/admin/accounts', '/admin/accounts/real-account-id'])(
+        'shows MSG13 instead of 404 when a cashier opens %s directly',
+        async (path) => {
+            const sessionManager = manager({
+                refresh: vi.fn().mockResolvedValue({
+                    accessToken: 'cashier-token',
+                    tokenType: 'Bearer',
+                    expiresAt: '2026-10-14T08:15:00Z',
+                    passwordChangeRequired: false,
+                    account: {
+                        id: 'cashier-1',
+                        username: 'tn.vuthiyen',
+                        fullName: 'Vũ Thị Yến',
+                        role: 'CASHIER',
+                    },
+                }),
+            });
+            const accountApi = {
+                list: vi.fn(),
+                detail: vi.fn(),
+            };
+
+            render(
+                <MemoryRouter initialEntries={[path]}>
+                    <App sessionManager={sessionManager} accountApi={accountApi} />
+                </MemoryRouter>,
+            );
+
+            expect(await screen.findByRole('heading', { name: '403' })).toBeInTheDocument();
+            expect(screen.getByRole('alert')).toHaveTextContent(
+                'Bạn không có quyền thực hiện thao tác này.',
+            );
+            expect(screen.queryByText('404 - Không tìm thấy trang')).not.toBeInTheDocument();
+            expect(accountApi.list).not.toHaveBeenCalled();
+            expect(accountApi.detail).not.toHaveBeenCalled();
+        },
+    );
     it('ends the session and returns to the login page on logout', async () => {
         const sessionManager = manager({
             refresh: vi.fn().mockResolvedValue({

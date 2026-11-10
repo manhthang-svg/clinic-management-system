@@ -26,6 +26,14 @@ public class ServiceLabParameter extends VersionedEntity {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    /** Section printed on the slip, for example XÉT NGHIỆM HUYẾT HỌC. */
+    @Column(name = "section_name", length = 100)
+    private String sectionName;
+
+    /** Parent group, for example Tổng phân tích tế bào máu ngoại vi. */
+    @Column(name = "group_name", length = 100)
+    private String groupName;
+
     @Column(name = "is_required", nullable = false)
     private boolean required;
 

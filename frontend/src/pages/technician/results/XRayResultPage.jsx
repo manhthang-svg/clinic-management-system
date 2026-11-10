@@ -3,7 +3,7 @@ import {
   ConclusionSection, FilesSection, RecommendationField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu chiếu/chụp X-quang (MS 09/BV2): description and conclusion boxes. */
+/** UC-67 Phiếu chiếu/chụp X-quang (MS 09/BV2): description, images like the ultrasound slip, conclusion. */
 export function XRayResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>
@@ -22,13 +22,18 @@ export function XRayResultPage({ order, api }) {
               error={errors.description}
             />
           </ResultSection>
+          <FilesSection
+            form={form}
+            set={set}
+            readOnly={readOnly}
+            description="Ảnh phim X-quang. Hai ảnh đầu tiên được in bên phải phần mô tả."
+          />
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RecommendationField form={form} set={set} readOnly={readOnly} />
               <SignerField order={order} form={form} set={set} readOnly={readOnly} label="BS CN Hình ảnh ký phiếu" />
             </div>
           </ConclusionSection>
-          <FilesSection form={form} set={set} readOnly={readOnly} title="File đính kèm" description="Ảnh phim (nếu có). Không in lên phiếu X-quang." />
         </>
       )}
     </ResultEditor>

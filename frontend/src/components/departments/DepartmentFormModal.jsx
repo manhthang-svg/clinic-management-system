@@ -358,6 +358,14 @@ function DepartmentFormModalContent({
       } else if (location.length < 2 || location.length > 255) {
         newErrors.location = 'Vị trí buồng phải từ 2 đến 255 ký tự';
       }
+      if (
+        isEdit &&
+        initialData?.status === 'ACTIVE' &&
+        formData.status === 'INACTIVE' &&
+        (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
+      ) {
+        newErrors.status = 'Không được phép tạm ngừng phòng nếu phòng đó đang có bác sĩ trực trong ngày';
+      }
     } else {
       // BR-70 (Mô tả khoa: tối đa 500 ký tự)
       if (formData.description && formData.description.length > 500) {
@@ -642,8 +650,26 @@ function DepartmentFormModalContent({
                       className={SELECT_CLASS}
                     >
                       <option value="ACTIVE">Đang hoạt động</option>
-                      <option value="INACTIVE">Tạm ngưng</option>
+                      <option
+                        value="INACTIVE"
+                        disabled={Boolean(
+                          isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
+                        )}
+                      >
+                        Tạm ngưng
+                        {isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
+                          ? ' (Có BS trực hôm nay)'
+                          : ''}
+                      </option>
                     </select>
+                    {isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday) && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        Phòng đang có bác sĩ trực trong ngày
+                        {initialData?.doctorOnDutyToday ? ` (${initialData.doctorOnDutyToday})` : ''}.
+                        Không thể tạm ngưng.
+                      </p>
+                    )}
+                    {errors.status && <p className="text-[11px] text-rose-500 mt-1">{errors.status}</p>}
                   </div>
                 </div>
               </>

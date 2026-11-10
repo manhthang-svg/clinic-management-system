@@ -59,6 +59,59 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect((await api.get('cls-002')).result).toMatchObject({ status: 'SUBMITTED', values: { GLU: '11,4' } });
   });
 
+  it('sends the chosen instrument and hides image upload when the API cannot store images', async () => {
+    const demo = createMockResultApi({ latency: 0 });
+    const order = { ...(await demo.get('cls-004')), instruments: [{ id: 'm-1', code: 'SA-01', name: 'Máy siêu âm' }] };
+    const api = {
+      supportsFiles: false,
+      get: vi.fn().mockResolvedValue(order),
+      saveDraft: vi.fn().mockResolvedValue({ ...order, result: { status: 'DRAFT', savedAt: '2026-11-10T02:00:00Z', instrumentId: 'm-1' } }),
+      submit: vi.fn(),
+      recordPrint: vi.fn(),
+    };
+    renderPage('cls-004', api);
+    const user = userEvent.setup();
+
+    await user.selectOptions(await screen.findByLabelText('Máy thực hiện'), 'm-1');
+    expect(screen.getByText('Chức năng tải ảnh kết quả chưa được hỗ trợ.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+
+    expect(api.saveDraft).toHaveBeenCalledWith('cls-004', expect.objectContaining({ instrumentId: 'm-1' }));
+  });
+
+  it.each([
+    [{ clinic: null }, 'Chưa cấu hình thông tin phòng khám (UC-77) nên chưa in được phiếu kết quả.'],
+    [{ isPerformer: false }, 'Chỉ người thực hiện dịch vụ mới in phiếu kết quả.'],
+  ])('does not offer printing when %o', async (patch, message) => {
+    const demo = createMockResultApi({ latency: 0 });
+    const order = { ...(await demo.get('cls-008')), ...patch };
+    renderPage('cls-008', { ...demo, get: vi.fn().mockResolvedValue(order) });
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^In (phiếu kết quả|lại)/ })).not.toBeInTheDocument();
+  });
+
+  it('prints a submitted result and marks the next print as a copy', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    renderPage('cls-008');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'In phiếu kết quả' }));
+
+    expect(print).toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'In lại (bản sao)' })).toBeInTheDocument();
+    expect(screen.getByText('BẢN SAO')).toBeInTheDocument();
+    print.mockRestore();
+  });
+
+  it('shows the signer as the performer account, with no field to type another name', async () => {
+    renderPage('cls-004');
+
+    const hint = await screen.findByText('Cố định là tài khoản thực hiện dịch vụ (đang đăng nhập).');
+    expect(hint.closest('div')).toHaveTextContent('KTV Nguyễn Minh Tuấn');
+    expect(screen.queryByRole('textbox', { name: /ký phiếu/ })).not.toBeInTheDocument();
+  });
+
   it('blocks submission while required fields are empty', async () => {
     renderPage('cls-002');
     const user = userEvent.setup();
@@ -70,14 +123,14 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(screen.getByText('Bắt buộc')).toBeInTheDocument();
   });
 
-  it('fills every organ of the ultrasound with normal findings and saves them as one description', async () => {
+  it('uses one free-text description for ultrasound, like X-ray, and fills it with the normal text', async () => {
     const api = renderPage('cls-004');
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole('button', { name: 'Điền kết quả bình thường' }));
-    expect(screen.getByLabelText(/^GAN/)).toHaveValue('Kích thước bình thường, nhu mô đều, không có khối.');
-    expect(screen.getByLabelText(/^TIỀN LIỆT TUYẾN/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^TỬ CUNG/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Mô tả/).value).toContain('GAN: Kích thước bình thường');
+    expect(screen.queryByLabelText(/^GAN/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^TIỀN LIỆT TUYẾN/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lưu nháp' }));
 
     await waitFor(async () => expect((await api.get('cls-004')).result?.status).toBe('DRAFT'));

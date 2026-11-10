@@ -776,10 +776,18 @@ p[role='alert']:not(.banner) {
     break-after: auto;
   }
 
+  /* fixed, not absolute: the result page sits inside a scrolled `main` of an h-screen layout, which clips an
+     absolutely positioned slip once the page is scrolled down to the Print button (blank print). */
+  /* The slip fills the printable width of the page; the page margins already give the white border, so the
+     on-screen 210 mm width and 12 mm padding would push the right side off the paper. */
   .paraclinical-result-print {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 210mm;
+    position: fixed;
+    inset: 0 0 auto 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box;
+    width: auto !important;
+    padding: 0 !important;
     min-height: 0 !important;
     color: #000 !important;
     print-color-adjust: exact;
