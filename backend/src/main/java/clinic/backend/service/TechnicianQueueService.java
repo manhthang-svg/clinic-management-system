@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
+import clinic.backend.dto.response.TechnicianPendingResultResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
@@ -21,6 +22,14 @@ public interface TechnicianQueueService {
 
     default TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom) {
         return getQueue(roomId, search, status, doctorRoom, null);
+    }
+
+    TechnicianPendingResultResponse getPendingResults(
+            UUID roomId, String search, String status, String doctorRoom, UUID currentUserId);
+
+    default TechnicianPendingResultResponse getPendingResults(
+            UUID roomId, String search, String status, String doctorRoom) {
+        return getPendingResults(roomId, search, status, doctorRoom, null);
     }
 
     TechnicianQueueItemResponse getQueueDetail(UUID detailId);

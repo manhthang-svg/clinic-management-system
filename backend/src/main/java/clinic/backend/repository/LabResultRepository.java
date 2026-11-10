@@ -1,5 +1,7 @@
 package clinic.backend.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,4 +12,6 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
     /** UC-67: the result of one ordered lab service (one result per order item). */
     Optional<LabResult> findByOrderDetailId(UUID orderDetailId);
+
+    List<LabResult> findByOrderDetailIdIn(Collection<UUID> orderDetailIds);
 }

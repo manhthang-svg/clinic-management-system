@@ -769,9 +769,6 @@ export function TechnicianQueuePage() {
                         <Clock className="w-3 h-3 text-slate-400" />
                         <span>{order.orderTime || '--:--'}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 block font-mono">
-                        {order.orderCode}
-                      </span>
                     </td>
 
                     {/* Trạng thái tiếp nhận */}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Search,
@@ -15,115 +15,198 @@ import {
   FileText,
   PrinterCheck,
   X,
+  Eye,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { MetricCard } from '../../components/shared/MetricCard';
-import { TECHNICIAN_ROOM_LIST } from '../../constants/technicianQueueData';
-import { INITIAL_PARACLINICAL_RESULTS } from '../../constants/technicianResultData';
+import { technicianApi } from '../../apis/technicianApi';
 
 /**
  * Màn hình Nhập kết quả & Quản lý kết luận CLS (ParaclinicalResultListPage)
- * Bố cục chuẩn theo thiết kế hệ thống y tế:
- * - Sub-Header thông tin phòng máy & bộ chuyển phòng phụ trách
- * - 4 thẻ thống kê tổng quan (Summary Metric Cards)
- * - Thanh tìm kiếm và bộ lọc nhanh (Filter Bar)
+ * Dữ liệu 100% kết nối backend qua technicianApi, không dùng mock data:
+ * - Sub-Header thông tin phòng máy & bộ chuyển phòng phụ trách (tải từ backend)
+ * - 4 thẻ thống kê tổng quan (Summary Metric Cards: Tổng chờ nhập, Chưa nhập, Đang lưu nháp, Quá hạn)
+ * - Thanh tìm kiếm và bộ lọc nhanh (Filter Bar: Tìm kiếm, Trạng thái, Phòng gửi, Đặt lại, Làm mới)
  * - Bảng danh sách chờ kết quả 9 cột chuẩn đặc tả
+ * - Hiển thị trạng thái rỗng ("chưa có") khi chưa có ca cận lâm sàng nào
  */
 export function ParaclinicalResultListPage() {
   const navigate = useNavigate();
 
-  // 1. Quản lý phòng máy hiện tại (Mặc định: P.105 - Phòng Siêu âm & X-quang 01)
-  const [currentRoomId, setCurrentRoomId] = useState(TECHNICIAN_ROOM_LIST[0].id);
+  // 1. Quản lý danh sách phòng máy cận lâm sàng từ backend
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [currentRoomId, setCurrentRoomId] = useState(null);
 
-  // 2. Nguồn dữ liệu danh sách ca chờ nhập & bản nháp CLS
-  const [results] = useState(INITIAL_PARACLINICAL_RESULTS);
+  // 2. Nguồn dữ liệu ca chờ nhập & bản nháp CLS từ backend
+  const [resultsData, setResultsData] = useState({
+    stats: null,
+    items: [],
+    canManage: null,
+  });
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 3. Trạng thái tìm kiếm & bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'DRAFT'
   const [doctorRoomFilter, setDoctorRoomFilter] = useState('ALL');
+  const [doctorRoomsList, setDoctorRoomsList] = useState([]);
 
   // 4. Modal in phiếu chỉ định nhanh
   const [printModalOrder, setPrintModalOrder] = useState(null);
 
-  // Chi tiết phòng máy hiện tại
-  const currentRoom = useMemo(() => {
-    return (
-      TECHNICIAN_ROOM_LIST.find((r) => r.id === currentRoomId) ||
-      TECHNICIAN_ROOM_LIST[0]
-    );
-  }, [currentRoomId]);
+  // Debounce ô tìm kiếm 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
-  // Danh sách ca theo phạm vi phòng máy được chọn
-  const roomOrders = useMemo(() => {
-    return results.filter((item) => item.roomId === currentRoomId);
-  }, [results, currentRoomId]);
-
-  // 4 Thẻ chỉ số thống kê nhanh
-  const stats = useMemo(() => {
-    const total = roomOrders.length;
-    const pending = roomOrders.filter((o) => o.status === 'PENDING').length;
-    const draft = roomOrders.filter((o) => o.status === 'DRAFT').length;
-    const overdue = roomOrders.filter((o) => (o.completedMinutesAgo ?? 0) >= 30).length;
-
-    return { total, pending, draft, overdue };
-  }, [roomOrders]);
-
-  // Danh sách các phòng gửi chỉ định (phục vụ dropdown lọc)
-  const doctorRoomsList = useMemo(() => {
-    const set = new Set();
-    roomOrders.forEach((o) => {
-      if (o.doctorRoom) set.add(o.doctorRoom);
-    });
-    return Array.from(set);
-  }, [roomOrders]);
-
-  // Danh sách ca hiển thị sau khi lọc và sắp xếp
-  const filteredOrders = useMemo(() => {
-    return roomOrders
-      .filter((order) => {
-        // Tìm kiếm theo Mã BN, Mã phiếu, Họ tên, số CCCD hoặc BHYT
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const matchName = order.patientName.toLowerCase().includes(q);
-          const matchCode = order.orderCode.toLowerCase().includes(q);
-          const matchId = order.patientId.toLowerCase().includes(q);
-          const matchCccd = order.cccd?.toLowerCase().includes(q) || false;
-          const matchInsurance = order.insuranceNumber?.toLowerCase().includes(q) || false;
-
-          if (!matchName && !matchCode && !matchId && !matchCccd && !matchInsurance) {
-            return false;
+  // Tải danh sách phòng máy khi khởi tạo trang
+  useEffect(() => {
+    let mounted = true;
+    const fetchRooms = async () => {
+      try {
+        setRoomsLoading(true);
+        const roomList = await technicianApi.getRooms();
+        if (mounted) {
+          const validRooms = Array.isArray(roomList) ? roomList : [];
+          setRooms(validRooms);
+          if (validRooms.length > 0) {
+            const assignedRoom = validRooms.find((r) => r.isAssigned);
+            const defaultRoom = assignedRoom || validRooms[0];
+            setCurrentRoomId((prev) =>
+              prev && validRooms.some((r) => r.id === prev) ? prev : defaultRoom.id
+            );
           }
         }
-
-        // Lọc trạng thái: Chờ nhập kết quả (PENDING) | Đang lưu nháp (DRAFT)
-        if (statusFilter !== 'ALL' && order.status !== statusFilter) {
-          return false;
+      } catch (err) {
+        if (mounted) {
+          toast.error(err?.message || 'Không thể tải danh sách phòng máy cận lâm sàng.');
         }
+      } finally {
+        if (mounted) setRoomsLoading(false);
+      }
+    };
 
-        // Lọc phòng gửi chỉ định
-        if (doctorRoomFilter !== 'ALL' && order.doctorRoom !== doctorRoomFilter) {
-          return false;
+    fetchRooms();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Chi tiết phòng máy hiện tại
+  const currentRoom = useMemo(() => {
+    return rooms.find((r) => r.id === currentRoomId) || rooms[0] || null;
+  }, [rooms, currentRoomId]);
+
+  // Quyền thao tác tại phòng hiện tại
+  const canManage =
+    typeof resultsData?.canManage === 'boolean'
+      ? resultsData.canManage
+      : Boolean(currentRoom?.isAssigned);
+
+  // Ref theo dõi cờ in-flight tránh gọi request trùng lặp
+  const inFlightRef = useRef(false);
+
+  // Hàm tải dữ liệu danh sách ca chờ nhập kết quả từ backend
+  const loadResults = useCallback(
+    async (roomId, options = {}) => {
+      if (!roomId) return;
+      if (inFlightRef.current && options.silent) return;
+      const { signal, silent = false } = options;
+      inFlightRef.current = true;
+      if (!silent) {
+        Promise.resolve().then(() => setLoading(true));
+      }
+      try {
+        const response = await technicianApi.getPendingResults(
+          {
+            roomId,
+            search: debouncedSearch,
+            status: statusFilter,
+            doctorRoom: doctorRoomFilter,
+          },
+          signal
+        );
+
+        const items = Array.isArray(response?.items) ? response.items : [];
+        const stats = response?.stats || { total: 0, pending: 0, draft: 0, overdue: 0 };
+        const canManageFlag =
+          typeof response?.canManage === 'boolean' ? response.canManage : false;
+
+        setResultsData({ stats, items, canManage: canManageFlag });
+
+        // Tự động thu thập danh sách phòng khám gửi chỉ định vào bộ lọc
+        if (items.length > 0) {
+          setDoctorRoomsList((prev) => {
+            const set = new Set(prev);
+            items.forEach((item) => {
+              if (item.doctorRoom) set.add(item.doctorRoom);
+            });
+            return Array.from(set);
+          });
         }
+      } catch (err) {
+        if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED') return;
+        toast.error(err?.message || 'Không thể tải danh sách kết quả cận lâm sàng.');
+      } finally {
+        inFlightRef.current = false;
+        if (!silent) setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [debouncedSearch, statusFilter, doctorRoomFilter]
+  );
 
-        return true;
-      })
-      .sort((a, b) => {
-        // Ca "Ưu tiên" được đẩy lên đầu bảng
-        if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
-        if (b.priority === 'PRIORITY' && a.priority !== 'PRIORITY') return 1;
-        // Sắp xếp tiếp theo thứ tự thời gian hoàn thành (queueNumber)
-        return (a.queueNumber ?? 0) - (b.queueNumber ?? 0);
-      });
-  }, [roomOrders, searchQuery, statusFilter, doctorRoomFilter]);
+  // Kích hoạt tải dữ liệu khi phòng hoặc bộ lọc thay đổi
+  useEffect(() => {
+    if (!currentRoomId) return;
+    const controller = new AbortController();
+
+    const firstTimer = window.setTimeout(() => {
+      void loadResults(currentRoomId, { signal: controller.signal });
+    }, 0);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(firstTimer);
+    };
+  }, [currentRoomId, loadResults]);
+
+  // Xử lý chuyển phòng thủ công
+  const handleRoomSelect = (roomId) => {
+    setCurrentRoomId(roomId);
+    const selectedRoom = rooms.find((r) => r.id === roomId);
+    setResultsData((prev) => ({
+      ...prev,
+      canManage: selectedRoom ? selectedRoom.isAssigned : null,
+    }));
+    if (selectedRoom) {
+      toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom.code} – ${selectedRoom.name}`);
+    }
+  };
 
   // Đặt lại bộ lọc về mặc định
   const handleResetFilters = () => {
     setSearchQuery('');
+    setDebouncedSearch('');
     setStatusFilter('ALL');
     setDoctorRoomFilter('ALL');
     toast.info('Đã đặt lại toàn bộ bộ lọc danh sách kết quả.');
+  };
+
+  // Làm mới thủ công
+  const handleRefresh = () => {
+    if (!currentRoomId) return;
+    setRefreshing(true);
+    loadResults(currentRoomId, { silent: false });
   };
 
   // Điều hướng đến màn hình nhập kết quả UC-67
@@ -147,6 +230,9 @@ export function ParaclinicalResultListPage() {
     }
   };
 
+  const stats = resultsData.stats || { total: 0, pending: 0, draft: 0, overdue: 0 };
+  const items = resultsData.items || [];
+
   return (
     <div className="space-y-6 w-full pb-10">
       {/* 2. THANH THÔNG TIN PHÒNG MÁY (SUB-HEADER) */}
@@ -158,23 +244,23 @@ export function ParaclinicalResultListPage() {
               Nhập kết quả & Quản lý kết luận CLS
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/80">
-              Phòng máy: {currentRoom.code}
+              Phòng máy: {currentRoom ? currentRoom.code : '...'}
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium">
             <span className="flex items-center gap-1.5 text-slate-800 font-bold">
               <Building2 className="w-4 h-4 text-[#0d9488]" />
-              <span>{currentRoom.name}</span>
+              <span>{currentRoom ? currentRoom.name : roomsLoading ? 'Đang tải...' : 'Chưa chọn phòng'}</span>
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span>{currentRoom.location}</span>
+              <span>{currentRoom ? currentRoom.location : '...'}</span>
             </span>
             <span>•</span>
             <span className="text-slate-600">
-              Phụ trách: <strong>{currentRoom.activeTech}</strong>
+              Phụ trách: <strong>{currentRoom ? currentRoom.activeTech : '...'}</strong>
             </span>
           </div>
         </div>
@@ -186,22 +272,20 @@ export function ParaclinicalResultListPage() {
               Chuyển đổi phòng phụ trách:
             </span>
             <span className="block text-xs font-bold text-slate-700">
-              {currentRoom.code} – {currentRoom.name}
+              {currentRoom ? `${currentRoom.code} – ${currentRoom.name}` : '...'}
             </span>
           </div>
 
           <div className="relative">
             <select
-              value={currentRoomId}
-              onChange={(e) => {
-                setCurrentRoomId(e.target.value);
-                toast.info(`Đã chuyển phạm vi làm việc sang: ${e.target.options[e.target.selectedIndex].text}`);
-              }}
-              className="h-11 px-4 pr-10 bg-teal-50/70 border border-teal-200/90 rounded-xl text-xs font-bold text-[#0d9488] focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs hover:bg-teal-50 transition-all appearance-none"
+              value={currentRoomId || ''}
+              onChange={(e) => handleRoomSelect(e.target.value)}
+              disabled={roomsLoading || rooms.length === 0}
+              className="h-11 px-4 pr-10 bg-teal-50/70 border border-teal-200/90 rounded-xl text-xs font-bold text-[#0d9488] focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs hover:bg-teal-50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {TECHNICIAN_ROOM_LIST.map((room) => (
+              {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
-                  {room.code} – {room.name}
+                  {room.code} – {room.name} {room.isAssigned ? '(Đang phụ trách)' : ''}
                 </option>
               ))}
             </select>
@@ -209,6 +293,16 @@ export function ParaclinicalResultListPage() {
           </div>
         </div>
       </div>
+
+      {/* Thông báo chế độ chỉ xem nếu không phụ trách phòng hiện tại */}
+      {!canManage && !roomsLoading && (
+        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
+          <Eye className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>Chế độ chỉ xem:</strong> Bạn không được phân công quản lý phòng máy này trong ca trực. Bạn có thể tra cứu và theo dõi trạng thái các ca cận lâm sàng nhưng không thể nhập hoặc chỉnh sửa kết quả.
+          </span>
+        </div>
+      )}
 
       {/* 3. KHUNG THẺ THỐNG KÊ NHANH (SUMMARY METRIC CARDS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -222,7 +316,7 @@ export function ParaclinicalResultListPage() {
           subtitle="Ca đã thực hiện kỹ thuật"
           dotColor="bg-teal-500"
           footerLabel="Phạm vi"
-          footerValue={currentRoom.code}
+          footerValue={currentRoom ? currentRoom.code : '---'}
           footerValueColor="text-teal-700"
         />
 
@@ -281,7 +375,7 @@ export function ParaclinicalResultListPage() {
       {/* 4. THANH CÔNG CỤ TÌM KIẾM VÀ BỘ LỌC (FILTER BAR) */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-          {/* 4.1. Ô tìm kiếm chính (Chiếm ~50% chiều ngang) */}
+          {/* 4.1. Ô tìm kiếm chính */}
           <div className="relative flex-1 lg:max-w-2xl">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -333,7 +427,19 @@ export function ParaclinicalResultListPage() {
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          {/* 4.4. Nút Đặt lại (Reset) */}
+          {/* 4.4. Nút Làm mới (Refresh) */}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+            className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs shrink-0 disabled:opacity-50"
+            title="Làm mới danh sách kết quả"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Làm mới</span>
+          </button>
+
+          {/* 4.5. Nút Đặt lại (Reset) */}
           <button
             type="button"
             onClick={handleResetFilters}
@@ -364,22 +470,35 @@ export function ParaclinicalResultListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredOrders.length === 0 ? (
+              {loading && items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="w-7 h-7 text-teal-600 animate-spin" />
+                      <p className="text-sm font-semibold text-slate-600">
+                        Đang tải danh sách kết quả từ hệ thống...
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileText className="w-8 h-8 text-slate-300" />
                       <p className="text-sm font-semibold text-slate-600">
-                        Không tìm thấy ca cận lâm sàng phù hợp với bộ lọc.
+                        Chưa có ca cận lâm sàng nào cần nhập kết quả.
                       </p>
                       <p className="text-xs text-slate-400">
-                        Vui lòng thử tìm từ khóa khác hoặc bấm nút &quot;Đặt lại&quot;.
+                        {searchQuery || statusFilter !== 'ALL' || doctorRoomFilter !== 'ALL'
+                          ? 'Không tìm thấy ca phù hợp với bộ lọc hiện tại. Vui lòng bấm "Đặt lại" để tải lại.'
+                          : 'Các ca chỉ định sau khi kỹ thuật viên thực hiện xong sẽ tự động hiển thị tại đây.'}
                       </p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => {
+                items.map((order) => {
                   const isOverdue = (order.completedMinutesAgo ?? 0) >= 30;
 
                   return (
@@ -390,7 +509,7 @@ export function ParaclinicalResultListPage() {
                       {/* Cột 1 – STT / Mã phiếu */}
                       <td className="py-2 px-2 text-left whitespace-nowrap">
                         <div className="font-mono font-bold text-slate-800 text-xs">
-                          #{order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber}
+                          #{order.queueNumber != null ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber) : '—'}
                         </div>
                         <div className="text-[10.5px] text-slate-400 font-mono mt-0.5">
                           {order.orderCode}
@@ -463,11 +582,10 @@ export function ParaclinicalResultListPage() {
                             isOverdue ? 'text-rose-600' : 'text-slate-800'
                           }`}
                         >
-                          {order.completedAtTime}
                         </span>
                       </td>
 
-                      {/* Cột 8 – Trạng thái (Đồng bộ kích thước & thẳng hàng dấu chấm) */}
+                      {/* Cột 8 – Trạng thái */}
                       <td className="py-2 px-1.5 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center">
                           {order.status === 'PENDING' ? (
@@ -484,10 +602,20 @@ export function ParaclinicalResultListPage() {
                         </div>
                       </td>
 
-                      {/* Cột 9 – Thao tác nhanh (Đồng bộ kích thước & thẳng hàng dấu +) */}
+                      {/* Cột 9 – Thao tác */}
                       <td className="py-2 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {order.status === 'PENDING' ? (
+                          {!canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenResultForm(order)}
+                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-[0.98] inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
+                              title="Xem kết quả cận lâm sàng (chế độ chỉ xem)"
+                            >
+                              <Eye className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                              <span>Xem kết quả</span>
+                            </button>
+                          ) : order.status === 'PENDING' ? (
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
@@ -531,8 +659,7 @@ export function ParaclinicalResultListPage() {
         <div className="p-4 bg-slate-50/70 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div>
             Đang hiển thị:{' '}
-            <strong className="text-slate-800">{filteredOrders.length}</strong> /{' '}
-            {roomOrders.length} ca cận lâm sàng
+            <strong className="text-slate-800">{items.length}</strong> ca cận lâm sàng
           </div>
           <div className="text-[11px] text-slate-400 italic">
             * Ca chờ từ 30 phút trở lên có mốc thời gian hiển thị màu đỏ để cảnh báo quá hạn. Các ca ưu tiên được tự động đẩy lên đầu danh sách.
@@ -565,11 +692,15 @@ export function ParaclinicalResultListPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Bệnh nhân:</span>
-                <span className="font-bold text-slate-800">{printModalOrder.patientName} ({printModalOrder.patientId})</span>
+                <span className="font-bold text-slate-800">
+                  {printModalOrder.patientName} ({printModalOrder.patientId})
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Dịch vụ:</span>
-                <span className="font-medium text-slate-800 text-right max-w-[220px]">{printModalOrder.serviceName}</span>
+                <span className="font-medium text-slate-800 text-right max-w-[220px]">
+                  {printModalOrder.serviceName}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Phòng khám gửi:</span>

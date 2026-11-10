@@ -21,6 +21,8 @@ import clinic.backend.enums.Role;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicalExaminationRepository;
 import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.ImagingResultRepository;
+import clinic.backend.repository.LabResultRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
@@ -72,6 +74,8 @@ class TechnicianQueuePerformOrderTest {
     @Mock MedicalHistoryRepository medicalHistoryRepository;
     @Mock MedicalServiceRepository medicalServiceRepository;
     @Mock DutyScheduleRepository dutyScheduleRepository;
+    @Mock ImagingResultRepository imagingResultRepository;
+    @Mock LabResultRepository labResultRepository;
     @Mock AuditLogService auditLogService;
 
     private TechnicianQueueServiceImpl service;
@@ -83,7 +87,8 @@ class TechnicianQueuePerformOrderTest {
                 roomRepository, staffAccountRepository, staffRoomAssignmentRepository,
                 paraclinicalOrderDetailRepository, medicalRecordRepository, visitRepository, patientRepository,
                 clinicalExaminationRepository, medicalHistoryRepository, medicalServiceRepository,
-                dutyScheduleRepository, auditLogService, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
+                dutyScheduleRepository, imagingResultRepository, labResultRepository,
+                auditLogService, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
         detail = acceptedDetail();
         when(paraclinicalOrderDetailRepository.findById(detail.getId())).thenReturn(Optional.of(detail));
         assignToRoom(PERFORMER_ID);
