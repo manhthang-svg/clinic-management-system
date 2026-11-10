@@ -15,12 +15,11 @@ import {
 } from 'lucide-react';
 import { ROLE_MAP, ROLE_PERMISSIONS, STATUS_LABELS } from '../../constants/accountData';
 import { AccountPageHeader, FormField, INPUT_CLASS } from './AccountFormParts';
+import { ACADEMIC_TITLE_PATTERN, PRACTICE_LICENSE_PATTERN } from './accountForm';
 import { avatarTone, formatDate, formatTime, initialsOf } from './accountFormat';
 
 const ASSIGNABLE_ROLES = Object.entries(ROLE_MAP).filter(([role]) => role !== 'ADMIN');
 const PROFESSIONAL_ROLES = ['DOCTOR', 'TECHNICIAN'];
-// Same rule as the backend (RoleChangeRequest): 5–50 letters, digits, "/" or "-".
-const LICENSE_PATTERN = /^[\p{L}\p{N}/-]{5,50}$/u;
 const WITH_ICON = `${INPUT_CLASS} pl-10`;
 
 /** UC-09 EF-03: client checks that mirror the backend (MSG02, MSG08, MSG05), for feedback only. */
@@ -28,8 +27,9 @@ function professionalErrors(title, license) {
   const errors = {};
   if (!title.trim()) errors.title = 'Học hàm / học vị là bắt buộc.';
   else if (title.trim().length > 50) errors.title = 'Vượt quá độ dài tối đa 50 ký tự.';
+  else if (!ACADEMIC_TITLE_PATTERN.test(title.trim())) errors.title = 'Học hàm / học vị không đúng định dạng.';
   if (!license.trim()) errors.practiceLicenseNo = 'Số giấy phép hành nghề là bắt buộc.';
-  else if (!LICENSE_PATTERN.test(license.trim())) errors.practiceLicenseNo = 'Số giấy phép hành nghề không đúng định dạng.';
+  else if (!PRACTICE_LICENSE_PATTERN.test(license.trim())) errors.practiceLicenseNo = 'Số giấy phép hành nghề không đúng định dạng.';
   return errors;
 }
 

@@ -23,7 +23,7 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
   return (
     <div className={`grid grid-cols-1 ${gridClass} gap-x-5 gap-y-4`}>
       <FormField id="account-fullName" label="Họ và tên" required={canEdit('fullName')} error={errors.fullName} icon={User}>
-        <input type="text" placeholder="vd: Nguyễn Văn A" maxLength={100} className={WITH_ICON} {...props('fullName')} />
+        <input type="text" placeholder="vd: Nguyễn Văn A" maxLength={255} className={WITH_ICON} {...props('fullName')} />
       </FormField>
 
       {showUsername && (

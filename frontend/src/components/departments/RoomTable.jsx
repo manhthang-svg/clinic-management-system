@@ -1,4 +1,4 @@
-import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, MapPin, UserCheck, DoorOpen } from 'lucide-react';
+import { Eye, Pencil, Power, ChevronsLeft, ChevronsRight, Building2, MapPin, UserRoundPlus, DoorOpen } from 'lucide-react';
 
 const ACTION_CLASS =
   'w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center transition-colors cursor-pointer';
@@ -24,6 +24,7 @@ export function RoomTable({
   onPageSizeChange,
   onView,
   onEdit,
+  onAssignRoom,
   onToggleStatus,
 }) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -151,6 +152,23 @@ export function RoomTable({
                     {/* Thao tác */}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          title={
+                            room.type === 'ADMINISTRATIVE'
+                              ? 'Phòng hành chính không áp dụng phân phòng nhân sự'
+                              : !isActive
+                                ? 'Kích hoạt phòng trước khi phân phòng'
+                                : 'Phân phòng'
+                          }
+                          aria-label={`Phân phòng ${room.name}`}
+                          disabled={!isActive || room.type === 'ADMINISTRATIVE'}
+                          onClick={() => onAssignRoom(room)}
+                          className={`${ACTION_CLASS} text-[#127e7a] hover:bg-teal-50 disabled:text-slate-300 disabled:bg-slate-50 disabled:cursor-not-allowed`}
+                        >
+                          <UserRoundPlus className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           type="button"
                           title="Xem chi tiết"

@@ -14,14 +14,18 @@ import {
   DepartmentDetailModal,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
+import { createAccountApi } from '../../apis/accountApi';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
+import { apiClient } from '../../services/session';
 import { getVietnamTodayStr } from '../../utils/vietnamTimeUtils';
 import { describeApiError } from '../../utils/describeApiError';
 import { Building2, DoorOpen, ChevronRight, House } from 'lucide-react';
 
 const { ADMIN } = ROUTES;
+const defaultAccountApi = createAccountApi(apiClient);
+const STAFF_PAGE_SIZE = 50;
 
-export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassword }) {
+export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassword, accountApi = defaultAccountApi }) {
   const navigate = useNavigate();
 
   // Active Tab: 'rooms' (Mặc định) | 'departments'
@@ -54,6 +58,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const [viewingItem, setViewingItem] = useState(null);
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [roomAssignment, setRoomAssignment] = useState(null);
+  const [staffOptions, setStaffOptions] = useState([]);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [staffLoading, setStaffLoading] = useState(false);
 
   // Fetch data từ backend (setState chỉ chạy sau await, không đồng bộ trong effect)
   useEffect(() => {
@@ -270,6 +278,45 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const handleOpenView = (item) => {
     setViewingItem(item);
     setDetailModalOpen(true);
+  };
+
+  const handleOpenRoomAssignment = async (room) => {
+    const role = room.type === 'EXAMINATION' ? 'DOCTOR' : 'TECHNICIAN';
+    setRoomAssignment(room);
+    setSelectedStaffId('');
+    setStaffOptions([]);
+    setStaffLoading(true);
+    try {
+      const accounts = [];
+      for (let page = 0; ; page += 1) {
+        const result = await accountApi.list({ role, status: 'ACTIVE', page, size: STAFF_PAGE_SIZE });
+        accounts.push(...(result.content || []));
+        if (page + 1 >= (result.page?.totalPages || 1)) break;
+      }
+      setStaffOptions(accounts);
+    } catch (err) {
+      setRoomAssignment(null);
+      toast.error(describeApiError(err, 'Không thể tải danh sách nhân sự'));
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleConfirmRoomAssignment = async () => {
+    if (!roomAssignment || !selectedStaffId) {
+      toast.error('Vui lòng chọn nhân sự cần phân phòng');
+      return;
+    }
+    const staff = staffOptions.find((option) => option.id === selectedStaffId);
+    try {
+      await accountApi.assignRoom(selectedStaffId, { roomId: roomAssignment.id });
+      toast.success(`Đã phân ${staff?.fullName || staff?.username || 'nhân sự'} vào phòng "${roomAssignment.name}"`);
+      setRoomAssignment(null);
+      setSelectedStaffId('');
+      setStaffOptions([]);
+    } catch (err) {
+      toast.error(describeApiError(err, 'Không thể phân phòng'));
+    }
   };
 
   // Tạm ngưng / Kích hoạt lại (Soft delete)
@@ -647,6 +694,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                 }}
                 onView={handleOpenView}
                 onEdit={handleOpenEdit}
+                onAssignRoom={handleOpenRoomAssignment}
                 onToggleStatus={handleToggleStatus}
               />
             </div>
@@ -725,6 +773,46 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           onConfirm={confirmDialog.onConfirm}
           onClose={() => setConfirmDialog(null)}
         />
+      )}
+
+      {roomAssignment && (
+        <ConfirmModal
+          isOpen
+          title={`Phân phòng: ${roomAssignment.name}`}
+          description={`${roomAssignment.code} — ${roomAssignment.departmentName || 'Chưa xác định khoa'}`}
+          confirmText="Phân phòng"
+          variant="mint"
+          onConfirm={handleConfirmRoomAssignment}
+          onClose={() => {
+            setRoomAssignment(null);
+            setSelectedStaffId('');
+            setStaffOptions([]);
+          }}
+        >
+          <label htmlFor="room-staff" className="block text-xs font-semibold text-slate-700 mb-1.5">
+            {roomAssignment.type === 'EXAMINATION' ? 'Bác sĩ' : 'Kỹ thuật viên'} <span className="text-rose-500">*</span>
+          </label>
+          <select
+            id="room-staff"
+            value={selectedStaffId}
+            disabled={staffLoading}
+            onChange={(event) => setSelectedStaffId(event.target.value)}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#127e7a]/20 disabled:bg-slate-50"
+          >
+            <option value="">{staffLoading ? 'Đang tải danh sách…' : 'Chọn nhân sự'}</option>
+            {staffOptions.map((staff) => (
+              <option key={staff.id} value={staff.id}>
+                {staff.fullName} ({staff.username}){staff.roomName ? ` — hiện tại: ${staff.roomName}` : ''}
+              </option>
+            ))}
+          </select>
+          {!staffLoading && staffOptions.length === 0 && (
+            <p className="mt-2 text-xs text-amber-600">Không có nhân sự đang hoạt động phù hợp với loại phòng này.</p>
+          )}
+          <p className="mt-2 text-[11px] text-slate-500">
+            Nếu nhân sự đang thuộc phòng khác, hệ thống sẽ chuyển họ sang phòng này.
+          </p>
+        </ConfirmModal>
       )}
     </AdminLayout>
   );

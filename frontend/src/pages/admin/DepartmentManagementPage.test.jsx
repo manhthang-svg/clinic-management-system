@@ -169,4 +169,51 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
       expect(departmentApi.toggleRoomStatus).toHaveBeenCalledWith('room-2');
     });
   });
+
+  it('phân bác sĩ vào phòng khám từ nút Phân phòng', async () => {
+    const accountApi = {
+      list: vi.fn().mockResolvedValue({
+        content: [
+          { id: 'doctor-1', username: 'doctor01', fullName: 'Nguyễn Văn B', role: 'DOCTOR', status: 'ACTIVE' },
+        ],
+        page: { totalPages: 1 },
+      }),
+      assignRoom: vi.fn().mockResolvedValue({ id: 'doctor-1', roomId: 'room-2' }),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+                accountApi={accountApi}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Ngoại 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Phân phòng Phòng khám Ngoại 1' }));
+
+    expect(accountApi.list).toHaveBeenCalledWith({
+      role: 'DOCTOR', status: 'ACTIVE', page: 0, size: 50,
+    });
+    await user.selectOptions(await screen.findByLabelText('Bác sĩ *'), 'doctor-1');
+    await user.click(screen.getByRole('button', { name: 'Phân phòng' }));
+
+    await waitFor(() => {
+      expect(accountApi.assignRoom).toHaveBeenCalledWith('doctor-1', { roomId: 'room-2' });
+    });
+    expect(toast.success).toHaveBeenCalledWith(
+      'Đã phân Nguyễn Văn B vào phòng "Phòng khám Ngoại 1"'
+    );
+  });
 });
