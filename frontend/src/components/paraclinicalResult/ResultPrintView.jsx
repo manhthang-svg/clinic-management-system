@@ -242,7 +242,8 @@ function LabSlip({ order, form, printForm }) {
 function DescriptiveSlip({ order, form, printForm }) {
   const pictures = images(form);
   const done = order.result?.submittedAt;
-  const signerName = form.readingDoctor || order.performer?.name;
+  // UC-68: always the performer, who is the signed-in technician when printing.
+  const signerName = order.performer?.name;
   const { layout } = printForm;
 
   return (
@@ -272,14 +273,27 @@ function DescriptiveSlip({ order, form, printForm }) {
       )}
 
       {layout === 'XRAY' && (
-        <table className="w-full border-collapse border border-black">
-          <tbody>
-            <tr><td className="border border-black px-2 font-bold">Mô tả kết quả chiếu/chụp</td></tr>
-            <tr><td className="border border-black px-2 whitespace-pre-line">{form.description}</td></tr>
-            <tr><td className="border border-black px-2 font-bold text-red-700">Kết luận</td></tr>
-            <tr><td className="border border-black px-2 whitespace-pre-line font-semibold">{form.conclusion}</td></tr>
-          </tbody>
-        </table>
+        <div className="grid grid-cols-[1fr_auto] gap-4">
+          <table className="w-full border-collapse border border-black">
+            <tbody>
+              <tr><td className="border border-black px-2 font-bold">Mô tả kết quả chiếu/chụp</td></tr>
+              <tr><td className="border border-black px-2 whitespace-pre-line">{form.description}</td></tr>
+              <tr><td className="border border-black px-2 font-bold text-red-700">Kết luận</td></tr>
+              <tr><td className="border border-black px-2 whitespace-pre-line font-semibold">{form.conclusion}</td></tr>
+            </tbody>
+          </table>
+          {/* Like the ultrasound slip: the first two film images beside the description. */}
+          {pictures.length > 0 && (
+            <div className="w-56 space-y-2">
+              {pictures.slice(0, 2).map((file) => (
+                <figure key={file.id} className="m-0">
+                  <img src={file.url} alt={file.caption || file.name} className="w-full aspect-[4/3] object-cover bg-black" />
+                  {file.caption && <figcaption className="text-[11px] text-center">{file.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {layout === 'CT_MRI' && (

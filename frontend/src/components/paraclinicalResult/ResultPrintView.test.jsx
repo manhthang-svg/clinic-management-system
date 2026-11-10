@@ -72,11 +72,12 @@ describe('ResultPrintView', () => {
     expect(slip).toHaveTextContent(slipOrder.patient.name);
   });
 
-  it('marks a reprint as a copy and prints the reading doctor', () => {
+  it('marks a reprint as a copy and is signed by the performer, never a typed name', () => {
     const { order: slipOrder, form } = descriptive('cls-004', { readingDoctor: 'BS Nguyễn Thị Nhàn' });
     render(<ResultPrintView order={{ ...slipOrder, printCount: 1 }} form={form} />);
     expect(screen.getByText('BẢN SAO')).toBeInTheDocument();
-    expect(screen.getByText('BS Nguyễn Thị Nhàn')).toBeInTheDocument();
+    expect(screen.getByText(slipOrder.performer.name)).toBeInTheDocument();
+    expect(screen.queryByText('BS Nguyễn Thị Nhàn')).not.toBeInTheDocument();
   });
 });
 
@@ -106,5 +107,20 @@ describe('ResultPrintView – UC-68 header and performer', () => {
     render(<ResultPrintView order={{ ...base, clinic: null }} form={form} />);
 
     expect(screen.getByText('CHƯA CẤU HÌNH THÔNG TIN PHÒNG KHÁM')).toBeInTheDocument();
+  });
+});
+
+describe('ResultPrintView – X-ray images', () => {
+  it('prints the first two film images beside the X-ray description, like the ultrasound slip', () => {
+    const { order: base, form } = descriptive('cls-008', {
+      files: [1, 2, 3].map((n) => ({
+        id: `x${n}`, name: `phim-${n}.jpg`, type: 'image/jpeg', size: 1, url: `blob:x${n}`, caption: `Phim ${n}`,
+      })),
+    });
+    render(<ResultPrintView order={base} form={form} />);
+
+    const films = screen.getAllByRole('img', { name: /^Phim / });
+    expect(films.map((image) => image.getAttribute('alt'))).toEqual(['Phim 1', 'Phim 2']);
+    expect(screen.getByText('Mô tả kết quả chiếu/chụp')).toBeInTheDocument();
   });
 });

@@ -1,16 +1,26 @@
 import { ResultEditor, ResultSection } from '../../../components/paraclinicalResult/ResultEditor';
 import {
-  ConclusionSection, FilesSection, RecommendationField, SectionFields, SignerField,
+  ConclusionSection, FilesSection, RecommendationField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu siêu âm (MS 11/BV-02): one line per organ, two images beside the text. */
+/** UC-67 Phiếu siêu âm (MS 11/BV-02): one free-text description like the X-ray slip, two images beside it. */
 export function UltrasoundResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>
       {({ form, set, errors, readOnly, templateButton }) => (
         <>
-          <ResultSection title="Kết quả siêu âm" description="Mô tả từng cơ quan." action={templateButton}>
-            <SectionFields order={order} form={form} set={set} errors={errors} readOnly={readOnly} />
+          <ResultSection title="Kết quả siêu âm" description="Mỗi ý một dòng, bắt đầu bằng dấu “-”." action={templateButton}>
+            <TextAreaField
+              id="result-description"
+              label="Mô tả"
+              required
+              rows={8}
+              mono
+              value={form.description}
+              onChange={(value) => set('description', value)}
+              readOnly={readOnly}
+              error={errors.description}
+            />
           </ResultSection>
           <FilesSection
             form={form}
