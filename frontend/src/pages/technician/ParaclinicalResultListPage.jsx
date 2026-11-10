@@ -509,7 +509,7 @@ export function ParaclinicalResultListPage() {
                       {/* Cột 1 – STT / Mã phiếu */}
                       <td className="py-2 px-2 text-left whitespace-nowrap">
                         <div className="font-mono font-bold text-slate-800 text-xs">
-                          #{order.queueNumber != null ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber) : '—'}
+                          #{order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber}
                         </div>
                         <div className="text-[10.5px] text-slate-400 font-mono mt-0.5">
                           {order.orderCode}
@@ -582,6 +582,7 @@ export function ParaclinicalResultListPage() {
                             isOverdue ? 'text-rose-600' : 'text-slate-800'
                           }`}
                         >
+                          {order.completedAtTime}
                         </span>
                       </td>
 
