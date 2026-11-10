@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle2, Clipboard, Eye, EyeOff, KeyRound, Printer } from 'lucide-react';
-import { FormField, INPUT_CLASS } from './AccountFormParts';
+import { CheckCircle2, Clipboard, KeyRound, Printer } from 'lucide-react';
+import { PasswordField } from './AccountFormParts';
 import { ServiceFormModal } from '../services/ServiceFormParts';
 import { ConfirmModal } from '../ui';
 import { accountErrorMessage } from './accountErrors';
@@ -40,33 +40,6 @@ function ModeOption({ value, mode, onChange, title, description }) {
         <span className="block text-xs text-slate-500 mt-0.5">{description}</span>
       </span>
     </label>
-  );
-}
-
-function PasswordInput({ id, label, value, onChange }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <FormField id={id} label={label} required>
-      <div className="relative">
-        <input
-          id={id}
-          type={visible ? 'text' : 'password'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={INPUT_CLASS + ' pr-10'}
-          autoComplete="new-password"
-        />
-        <button
-          type="button"
-          onClick={() => setVisible((v) => !v)}
-          className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
-          tabIndex={-1}
-          aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-        >
-          {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-        </button>
-      </div>
-    </FormField>
   );
 }
 
@@ -184,8 +157,8 @@ export function AccountResetPasswordModal({ account, onReset, onClose }) {
             />
             {mode === 'MANUAL' && (
               <div className="grid sm:grid-cols-2 gap-4 pt-1">
-                <PasswordInput id="reset-password" label="Mật khẩu chính thức" value={password} onChange={setPassword} />
-                <PasswordInput id="reset-confirm" label="Xác nhận mật khẩu" value={confirmPassword} onChange={setConfirmPassword} />
+                <PasswordField id="reset-password" label="Mật khẩu chính thức" value={password} onChange={setPassword} />
+                <PasswordField id="reset-confirm" label="Xác nhận mật khẩu" value={confirmPassword} onChange={setConfirmPassword} />
               </div>
             )}
           </div>

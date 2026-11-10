@@ -16,7 +16,7 @@ import {
 import { ROLE_MAP, ROLE_PERMISSIONS } from '../../constants/accountData';
 import { AccountPersonalFields } from './AccountPersonalFields';
 import { EMPTY_ACCOUNT_FORM, validateAccountForm } from './accountForm';
-import { INPUT_CLASS, FormField, FormSection, AccountPageHeader } from './AccountFormParts';
+import { INPUT_CLASS, FormField, FormSection, AccountPageHeader, PasswordField } from './AccountFormParts';
 
 const CREATE_FIELDS = [
   'username', 'fullName', 'title', 'practiceLicenseNo', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
@@ -233,12 +233,8 @@ export function AccountCreateView({ accounts, onCreate, onCancel, onGoToList, on
               <label className="flex items-center gap-3"><input type="radio" name="create-password-mode" checked={mode === 'GENERATE'} onChange={() => { setMode('GENERATE'); setPassword(''); setConfirmation(''); setSubmitError(''); }} />Hệ thống tự sinh</label>
               <label className="flex items-center gap-3"><input type="radio" name="create-password-mode" checked={mode === 'MANUAL'} onChange={() => { setMode('MANUAL'); setSubmitError(''); }} />Admin nhập thủ công</label>
               {mode === 'MANUAL' && <div className="grid md:grid-cols-2 gap-4">
-                <FormField id="create-password" label="Mật khẩu chính thức" required>
-                  <input id="create-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS} />
-                </FormField>
-                <FormField id="create-password-confirm" label="Xác nhận mật khẩu" required>
-                  <input id="create-password-confirm" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} className={INPUT_CLASS} />
-                </FormField>
+                <PasswordField id="create-password" label="Mật khẩu chính thức" value={password} onChange={setPassword} />
+                <PasswordField id="create-password-confirm" label="Xác nhận mật khẩu" value={confirmation} onChange={setConfirmation} />
                 <p className="text-xs text-slate-500">Mật khẩu dài 8–64 ký tự, tối đa 72 byte UTF-8.</p>
               </div>}
             </div>

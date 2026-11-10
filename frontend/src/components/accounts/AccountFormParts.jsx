@@ -1,5 +1,6 @@
 // Layout pieces shared by the account forms (UC-4, UC-7, UC-8).
-import { House, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { House, ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 export const INPUT_CLASS =
   'w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 ' +
@@ -70,5 +71,33 @@ export function AccountPageHeader({ title, description, crumbs }) {
         <p className="text-sm text-slate-500 mt-1">{description}</p>
       </div>
     </div>
+  );
+}
+
+/** Password input with a show/hide toggle, used where an Admin types a password (UC-7, UC-11). */
+export function PasswordField({ id, label, value, onChange }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <FormField id={id} label={label} required>
+      <div className="relative">
+        <input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={INPUT_CLASS + ' pr-10'}
+          autoComplete="new-password"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+          tabIndex={-1}
+          aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+        >
+          {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </FormField>
   );
 }
