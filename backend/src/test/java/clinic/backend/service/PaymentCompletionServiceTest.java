@@ -181,6 +181,47 @@ class PaymentCompletionServiceTest {
         assertThat(detail.getRoomId()).isEqualTo(room.getId());
     }
 
+    @Test
+    void sendsAPaidServiceToTheRoomTheDoctorChoseEvenWhenAnotherIsLessBusy() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room chosen = room(groupId, "CLS01");
+        ParaclinicalOrderDetail detail = detail(order, chosen.getId());
+        order.addDetail(detail);
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_PARACLINICAL)));
+        when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+        when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
+        when(queueCounterRepository.takeNext(chosen.getId(), LocalDate.of(2026, 10, 28))).thenReturn(5);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        // I1-D47, BR-50-02: the chosen room keeps the service; the queue number is taken now.
+        assertThat(detail.getRoomId()).isEqualTo(chosen.getId());
+        assertThat(detail.getQueueNumber()).isEqualTo(5);
+        verify(roomRepository, never()).findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(any(), any());
+    }
+
+    @Test
+    void fallsBackToTheLeastBusyRoomWhenTheChosenRoomWasDeactivated() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room closed = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), groupId, "CLS01", "Phòng CLS01", "Tầng 2",
+                RoomType.PARACLINICAL, ActivationStatus.INACTIVE);
+        Room open = room(groupId, "CLS02");
+        ParaclinicalOrderDetail detail = detail(order, closed.getId());
+        order.addDetail(detail);
+        stubParaclinical(payment, order, groupId, List.of(open));
+        when(roomRepository.findById(closed.getId())).thenReturn(Optional.of(closed));
+        when(queueCounterRepository.takeNext(open.getId(), LocalDate.of(2026, 10, 28))).thenReturn(2);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getRoomId()).isEqualTo(open.getId());
+        assertThat(detail.getQueueNumber()).isEqualTo(2);
+    }
+
     private void stubParaclinical(Payment payment, ParaclinicalOrder order, UUID groupId, List<Room> rooms) {
         MedicalService medicalService = mock(MedicalService.class);
         when(medicalService.getServiceGroupId()).thenReturn(groupId);
@@ -207,10 +248,14 @@ class PaymentCompletionServiceTest {
     }
 
     private static ParaclinicalOrderDetail detail(ParaclinicalOrder order) {
+        return detail(order, null);
+    }
+
+    private static ParaclinicalOrderDetail detail(ParaclinicalOrder order, UUID chosenRoomId) {
         return new ParaclinicalOrderDetail(
                 UUID.randomUUID(), NOW, order, SERVICE_ID, "CD2-01", NOW, "Siêu âm ổ bụng", null, null,
                 BigDecimal.ONE, BigDecimal.valueOf(200000), BigDecimal.valueOf(200000), BigDecimal.ZERO,
-                BigDecimal.valueOf(200000), null, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+                BigDecimal.valueOf(200000), chosenRoomId, ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
     }
 
     private static Room room(UUID groupId, String code) {

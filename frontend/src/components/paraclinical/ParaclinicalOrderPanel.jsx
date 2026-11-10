@@ -5,13 +5,17 @@ import visitApi from '../../apis/visitApi';
 import {
     MSG,
     TYPE_LABEL,
+    defaultRoomId,
     estimate,
     filterServices,
     formatAmount,
     groupOptions,
     orderErrorMessage,
+    orderItems,
+    roomOptionLabel,
     toServiceList,
 } from './paraclinicalOrder';
+import { PrintOrderButton } from './ParaclinicalOrderSlip';
 
 const controlClass = 'h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 const thClass = 'whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500';
@@ -19,9 +23,49 @@ const moneyThClass = `${thClass} text-right`;
 const tdClass = 'px-3 py-2.5 align-middle';
 const moneyTdClass = `${tdClass} whitespace-nowrap text-right tabular-nums`;
 
+/** I1-D47, BR-50-01: the performing room of one selected service, the least busy one preselected. */
+function RoomChoice({ line, value, onChange }) {
+    const rooms = line.rooms ?? [];
+    if (rooms.length === 0) return <span className="text-slate-400">Chưa có phòng hoạt động</span>;
+    if (rooms.length === 1) return <span>{roomOptionLabel(rooms[0])}</span>;
+    return (
+        <select
+            aria-label={`Phòng thực hiện ${line.name}`}
+            value={value ?? ''}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-8 max-w-56 rounded-md border border-slate-200 bg-white px-2 text-[11px] outline-none focus:border-teal-500"
+        >
+            {rooms.map((room) => <option key={room.roomId} value={room.roomId}>{roomOptionLabel(room)}</option>)}
+        </select>
+    );
+}
+
+/** UC-49 step 10 and UC-50 AF-01: the order is created; the Doctor prints the slip before leaving. */
+function OrderCreated({ order, api, onDone }) {
+    return (
+        <section aria-labelledby="cls-created-title" className="space-y-3 rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+            <h2 id="cls-created-title" className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                <CheckCircle2 aria-hidden="true" className="h-4 w-4" />Đã tạo chỉ định cận lâm sàng {order.sophieu}.
+            </h2>
+            <p className="text-xs text-slate-600">In phiếu chỉ định để bệnh nhân mang đến các phòng cận lâm sàng.</p>
+            <PrintOrderButton orderId={order.id} api={api} />
+            <div className="flex justify-end">
+                <button
+                    type="button"
+                    onClick={onDone}
+                    className="min-h-11 rounded-lg bg-teal-700 px-6 py-2.5 text-xs font-semibold text-white hover:bg-teal-800"
+                >
+                    Về danh sách chờ
+                </button>
+            </div>
+        </section>
+    );
+}
+
 /**
  * UC-49 Order Paraclinical Services, shown inline in the clinical examination: the service catalogue on the left,
- * the selection with its estimated cost on the right.
+ * the selection with its estimated cost and performing room on the right. UC-50: the slip is printed once the order
+ * exists.
  */
 export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api = visitApi, onCancel, onCreated }) {
     const searchId = useId();
@@ -34,6 +78,8 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
     const [type, setType] = useState('');
     const [group, setGroup] = useState('');
     const [selectedIds, setSelectedIds] = useState([]);
+    const [roomChoices, setRoomChoices] = useState({});
+    const [created, setCreated] = useState(null);
     const [diagnosis, setDiagnosis] = useState(preliminaryDiagnosis || visit.lydovaovien || '');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -93,11 +139,23 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
             const order = await api.orderParaclinical({
                 visitId: visit.id,
                 chandoansobo: diagnosis.trim() || undefined,
-                serviceIds: selectedIds,
+                items: orderItems(services, selectedIds, roomChoices),
             });
-            onCreated(order);
+            setCreated(order);
         } catch (err) {
             setError(orderErrorMessage(err));
+            // I1-D47: phòng đã chọn vừa ngừng hoạt động: bỏ lựa chọn đó và tải lại danh sách phòng
+            const rejectedServiceId = err?.errorResponse?.code === 'PARACLINICAL_ROOM_NOT_ELIGIBLE'
+                ? err.errorResponse.details?.serviceId
+                : null;
+            if (rejectedServiceId) {
+                setRoomChoices((current) => {
+                    const next = { ...current };
+                    delete next[rejectedServiceId];
+                    return next;
+                });
+                reloadServices();
+            }
             // EF-02: bỏ dịch vụ vừa ngừng hoạt động khỏi lựa chọn và tải lại danh mục
             const inactiveId = err?.errorResponse?.code === 'SERVICE_INACTIVE'
                 ? err.errorResponse.details?.serviceId
@@ -110,6 +168,10 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
             setSubmitting(false);
         }
     };
+
+    if (created) {
+        return <OrderCreated order={created} api={api} onDone={() => onCreated(created)} />;
+    }
 
     return (
         <form noValidate onSubmit={handleSubmit} className="space-y-3">
@@ -196,10 +258,11 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                     <h2 id="cls-selected-title" className="text-sm font-bold">Dịch vụ đã chọn ({cost.lines.length})</h2>
 
                     <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                        <table className="w-full min-w-[480px] text-xs">
+                        <table className="w-full min-w-[640px] text-xs">
                             <thead className="bg-slate-50">
                                 <tr>
                                     <th scope="col" className={thClass}>Dịch vụ</th>
+                                    <th scope="col" className={thClass}>Phòng thực hiện</th>
                                     <th scope="col" className={moneyThClass}>Giá viện phí</th>
                                     <th scope="col" className={moneyThClass}>Giá BHYT</th>
                                     {insured ? (
@@ -213,11 +276,18 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {cost.lines.length === 0 && (
-                                    <tr><td colSpan={insured ? 6 : 5} className="p-6 text-center text-slate-500">Chưa chọn dịch vụ nào.</td></tr>
+                                    <tr><td colSpan={insured ? 7 : 6} className="p-6 text-center text-slate-500">Chưa chọn dịch vụ nào.</td></tr>
                                 )}
                                 {cost.lines.map((line) => (
                                     <tr key={line.id}>
                                         <td className={`${tdClass} text-slate-800`}><span className="font-mono text-[11px] text-slate-500">{line.code}</span> – {line.name}</td>
+                                        <td className={tdClass}>
+                                            <RoomChoice
+                                                line={line}
+                                                value={roomChoices[line.id] ?? defaultRoomId(line)}
+                                                onChange={(roomId) => setRoomChoices((current) => ({ ...current, [line.id]: roomId }))}
+                                            />
+                                        </td>
                                         <td className={moneyTdClass}>{formatAmount(line.clinicPrice)}</td>
                                         <td className={moneyTdClass}>
                                             {line.insurancePrice == null
@@ -246,6 +316,7 @@ export function ParaclinicalOrderPanel({ visit, preliminaryDiagnosis = '', api =
                             <tfoot className="border-t border-slate-200 bg-slate-50 font-bold">
                                 <tr>
                                     <th scope="row" className={`${tdClass} text-left`}>Tổng cộng</th>
+                                    <td />
                                     <td className={moneyTdClass}>{formatAmount(cost.clinicTotal)}</td>
                                     <td className={moneyTdClass}>{formatAmount(cost.insuranceTotal)}</td>
                                     {insured ? (

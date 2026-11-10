@@ -16,6 +16,8 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
 
     long countByRoomIdAndStatus(UUID roomId, ParaclinicalOrderDetailStatus status);
 
+    boolean existsByRoomIdAndStatusIn(UUID roomId, Collection<ParaclinicalOrderDetailStatus> statuses);
+
     long countByServiceIdAndStatusIn(
             UUID serviceId, Collection<ParaclinicalOrderDetailStatus> statuses);
 

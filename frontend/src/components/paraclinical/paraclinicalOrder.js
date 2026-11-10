@@ -108,6 +108,30 @@ export function createdMessage(order, insured = false) {
         : message;
 }
 
+export const PRINT_MSG = {
+    NOT_PRINTABLE: 'Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.',
+    NOT_FOUND: 'Không tìm thấy phiếu chỉ định.',
+    FACILITY_MISSING: 'Chưa có thông tin cơ sở khám bệnh, chữa bệnh. Vui lòng liên hệ quản trị viên.',
+    PRINTER: 'Không thể in. Vui lòng kiểm tra máy in và thử lại.',
+};
+
+/** UC-50 EF-01 to EF-06: MSG97, MSG39, MSG13, MSG12, MSG80; never the raw backend message. */
+export function printErrorMessage(error) {
+    const code = error?.errorResponse?.code;
+    if (code === 'PARACLINICAL_ORDER_NOT_PRINTABLE') return PRINT_MSG.NOT_PRINTABLE;
+    if (code === 'PARACLINICAL_ORDER_NOT_FOUND') return PRINT_MSG.NOT_FOUND;
+    if (code === 'CLINIC_FACILITY_NOT_CONFIGURED') return PRINT_MSG.FACILITY_MISSING;
+    if (error?.status === 401) return MSG.SESSION_EXPIRED;
+    if (error?.status === 403) return MSG.FORBIDDEN;
+    return MSG.SYSTEM_ERROR;
+}
+
+/** An order can be printed while it is not cancelled and still has a service to perform (BR-50-05). */
+export function isPrintable(order) {
+    if (!order || order.status === 'CANCELLED') return false;
+    return (order.details ?? []).some((detail) => detail.status !== 'CANCELLED' && detail.status !== 'ABANDONED');
+}
+
 /** MSG70 after a refused service is cancelled; BR-41 when no service is left to perform. */
 export function cancelledMessage(result) {
     const message = `Đã hủy dịch vụ ${result?.serviceName}. Khoản thu đã được tính lại.`;
@@ -126,9 +150,37 @@ export function cancelErrorMessage(error) {
     return orderErrorMessage(error);
 }
 
-/** MSG42 / MSG12 / MSG99; never the raw backend message. */
+/**
+ * I1-D47, BR-50-01: the room preselected for a service, the least busy Active room of its group. `null` when no
+ * Active room performs it; the server then leaves the line without a room (UC-71 AF-02).
+ */
+export function defaultRoomId(service) {
+    if (!service) return null;
+    if (service.suggestedRoomId) return service.suggestedRoomId;
+    return service.rooms?.[0]?.roomId ?? null;
+}
+
+/** Room choice label: name, location and waiting count, so the Doctor can tell the patient where to go. */
+export function roomOptionLabel(room) {
+    const location = room.location ? ` – ${room.location}` : '';
+    return `${room.roomName}${location} (đang chờ: ${room.waitingCount ?? 0})`;
+}
+
+/** Request lines: each selected service with its chosen room, or the default one. */
+export function orderItems(services, selectedIds, roomChoices = {}) {
+    return selectedIds.map((serviceId) => ({
+        serviceId,
+        roomId: roomChoices[serviceId] ?? defaultRoomId(services.find((service) => service.id === serviceId)),
+    }));
+}
+
+/** MSG42 / MSG40 / MSG12 / MSG99; never the raw backend message. */
 export function orderErrorMessage(error) {
     const code = error?.errorResponse?.code;
+    if (code === 'PARACLINICAL_ROOM_NOT_ELIGIBLE') {
+        const name = error.errorResponse.details?.roomName || 'Phòng thực hiện';
+        return `${name} đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.`;
+    }
     if (code === 'SERVICE_INACTIVE') {
         const name = error.errorResponse.details?.serviceName || 'dịch vụ đã chọn';
         return `Dịch vụ ${name} không còn hoạt động. Vui lòng chọn dịch vụ khác.`;
