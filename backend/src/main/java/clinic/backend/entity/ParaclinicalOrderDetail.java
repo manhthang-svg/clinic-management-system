@@ -123,6 +123,14 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
     @Column(name = "prior_results")
     private String priorResults;
 
+    /** Case 1: time when patient checks in on-site at the paraclinical room (V56). */
+    @Column(name = "checked_in_at")
+    private Instant checkedInAt;
+
+    /** Case 1: staff account that performed the on-site check-in (V56). */
+    @Column(name = "checked_in_by_account_id")
+    private UUID checkedInByAccountId;
+
     public ParaclinicalOrderDetail(
             UUID id,
             Instant createdAt,
@@ -230,6 +238,20 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
             this.status = ParaclinicalOrderDetailStatus.WAITING;
             this.releasedAt = when;
         }
+    }
+
+    /**
+     * Case 1: patient physically arrives at the paraclinical room; technician confirms check-in and issues queue number.
+     */
+    public void checkIn(Integer queueNumber, UUID technicianAccountId, Instant when) {
+        this.queueNumber = queueNumber;
+        this.checkedInAt = when;
+        this.checkedInByAccountId = technicianAccountId;
+        touch(when);
+    }
+
+    public boolean isCheckedIn() {
+        return this.checkedInAt != null;
     }
 
     public void accept(UUID performerAccountId, Instant when) {
