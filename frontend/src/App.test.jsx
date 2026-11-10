@@ -170,7 +170,7 @@ describe('App', () => {
                 </MemoryRouter>,
             );
 
-            expect(await screen.findByRole('heading', { name: '403' })).toBeInTheDocument();
+            expect(await screen.findByRole('heading', { name: 'Không có quyền truy cập' })).toBeInTheDocument();
             expect(screen.getByRole('alert')).toHaveTextContent(
                 'Bạn không có quyền thực hiện thao tác này.',
             );
