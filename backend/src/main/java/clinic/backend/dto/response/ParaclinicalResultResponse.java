@@ -50,8 +50,20 @@ public record ParaclinicalResultResponse(
         int printCount,
         List<Instrument> instruments,
         String registrationCode,
-        Clinic clinic
+        Clinic clinic,
+        List<SiblingService> siblingServices
 ) {
+
+    public record SiblingService(
+            UUID id,
+            String orderCode,
+            String serviceName,
+            String serviceCode,
+            ResultForm printForm,
+            String status,
+            UUID roomId,
+            boolean isCurrentRoom
+    ) {}
 
     /** TBD: the parent agency ("Sở Y tế …") is not a facility field yet, so it is not printed. */
     public record Clinic(String name, String address, String phone) {
