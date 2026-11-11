@@ -22,6 +22,10 @@ public record UpdateAccountRequest(
         @Size(min = 5, max = 50, message = "INVALID_FORMAT")
         @Pattern(regexp = "^[\\p{L}\\p{N}/-]+$", message = "INVALID_FORMAT")
         String practiceLicenseNo,
+        // BR-49, BR-65: prescriber link code from the national prescription system; Doctor only, optional.
+        @Size(max = 50, message = "TOO_LONG")
+        @Pattern(regexp = "^[A-Za-z0-9]*$", message = "INVALID_FORMAT")
+        String maLienthongBacsi,
         @Past LocalDate dateOfBirth,
         Gender gender,
         @NotBlank @Pattern(regexp = "^(?:03[2-9]|05[2689]|07[06789]|08[1-689]|09[0-46-9])[0-9]{7}$")

@@ -6,6 +6,7 @@ export const EMPTY_ACCOUNT_FORM = {
   fullName: '',
   title: '',
   practiceLicenseNo: '',
+  maLienthongBacsi: '',
   dateOfBirth: '',
   gender: '',
   phone: '',
@@ -22,6 +23,9 @@ const FULL_NAME_MIN = 2;
 // BR-62: academic title has letters, spaces, dots and commas, at most 50 characters.
 // BR-64: practice licence has 5–50 letters, digits, slashes or hyphens (the backend checks uniqueness).
 export const PRACTICE_LICENSE_PATTERN = /^[\p{L}\p{N}/-]{5,50}$/u;
+// BR-49, BR-65: prescriber link code from the national prescription system, letters and digits only (V55).
+export const MA_LIENTHONG_BACSI_PATTERN = /^[A-Za-z0-9]+$/;
+const MA_LIENTHONG_BACSI_MAX = 50;
 export const ACADEMIC_TITLE_PATTERN = /^[\p{L}\p{M} .,]+$/u;
 const FULL_NAME_MAX = 120;
 const PHONE_PATTERN = /^(?:03[2-9]|05[2689]|07[06789]|08[1-689]|09[0-46-9])\d{7}$/;
@@ -57,6 +61,7 @@ export function accountToForm(account) {
     fullName: account.fullName || '',
     title: account.title || '',
     practiceLicenseNo: account.practiceLicenseNo || '',
+    maLienthongBacsi: account.maLienthongBacsi || '',
     dateOfBirth: account.dateOfBirth || '',
     gender: account.gender || '',
     phone: account.phone || '',
@@ -114,6 +119,11 @@ export function validateAccountForm(form, { accounts = [], exceptId, fields, tod
     ? msg02('Số giấy phép hành nghề')
     : form.practiceLicenseNo.trim() && !PRACTICE_LICENSE_PATTERN.test(form.practiceLicenseNo.trim())
       ? msg05('Số giấy phép hành nghề') : null);
+  // Optional and only for a Doctor; the backend checks uniqueness.
+  const maLienthongBacsi = (form.maLienthongBacsi || '').trim();
+  check('maLienthongBacsi', !maLienthongBacsi || form.role !== 'DOCTOR' ? null
+    : maLienthongBacsi.length > MA_LIENTHONG_BACSI_MAX ? msg08(MA_LIENTHONG_BACSI_MAX)
+      : !MA_LIENTHONG_BACSI_PATTERN.test(maLienthongBacsi) ? msg05('Mã liên thông bác sĩ') : null);
   // BR-62: staff must be at least 18 years old (the backend applies the same rule).
   check('dateOfBirth', form.dateOfBirth && form.dateOfBirth > latestAdultBirthDate(today) ? UNDERAGE_MESSAGE : null);
   check('address', form.address.trim().length > 255 ? msg08(255) : null);

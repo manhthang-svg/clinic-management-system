@@ -383,6 +383,12 @@ public class StaffAccount {
         updatedAt = Objects.requireNonNull(now, "now");
     }
 
+    /** BR-49, BR-65: sets or clears the prescriber link code issued by the national prescription system. */
+    public void updateMaLienthongBacsi(String newMaLienthongBacsi, Instant now) {
+        maLienthongBacsi = normalizeOptional(newMaLienthongBacsi);
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
     /** I1-D47: the professional information a Doctor or Technician role requires, set with the role change. */
     public void updateProfessionalInformation(String newAcademicTitle, String newPracticeLicenseNo, Instant now) {
         academicTitle = requireText(newAcademicTitle, "academicTitle").strip();

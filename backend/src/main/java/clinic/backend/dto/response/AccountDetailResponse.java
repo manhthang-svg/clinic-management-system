@@ -18,6 +18,7 @@ public record AccountDetailResponse(
         String fullName,
         String academicTitle,
         String practiceLicenseNo,
+        String maLienthongBacsi,
         LocalDate dateOfBirth,
         Gender gender,
         String phoneNumber,

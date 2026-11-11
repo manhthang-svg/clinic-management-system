@@ -93,6 +93,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
 
     boolean existsByPracticeLicenseNoAndIdNot(String practiceLicenseNo, UUID id);
 
+    boolean existsByMaLienthongBacsiAndIdNot(String maLienthongBacsi, UUID id);
+
     Optional<StaffAccount> findByCreationSubmissionId(UUID creationSubmissionId);
 
     /**

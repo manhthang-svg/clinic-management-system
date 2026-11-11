@@ -237,6 +237,34 @@ describe('AccountManagementPage UC-09 professional information (I1-D47)', () => 
   });
 });
 
+describe('AccountManagementPage prescriber link code (BR-49, BR-65)', () => {
+  const doctor = { ...staff, practiceLicenseNo: '000123/HCM-CCHN', maLienthongBacsi: null };
+
+  it("lets the Admin enter a Doctor's prescriber link code and sends it with the update", async () => {
+    const api = accountApi({
+      detail: vi.fn().mockResolvedValue(doctor),
+      update: vi.fn().mockResolvedValue({ ...doctor, maLienthongBacsi: 'BS0001', version: 3 }),
+    });
+    const user = userEvent.setup();
+    renderPage(`/admin/accounts/${STAFF_ID}/edit`, api);
+
+    await user.type(await screen.findByLabelText(/Mã liên thông bác sĩ/), ' BS0001 ');
+    await user.click(screen.getByRole('button', { name: /Lưu/ }));
+
+    await waitFor(() => expect(api.update).toHaveBeenCalledWith(STAFF_ID, expect.objectContaining({
+      maLienthongBacsi: 'BS0001', version: 2,
+    })));
+  });
+
+  it('does not show the field for a role that does not prescribe', async () => {
+    const api = accountApi({ detail: vi.fn().mockResolvedValue({ ...staff, role: 'CASHIER', roomName: null }) });
+    renderPage(`/admin/accounts/${STAFF_ID}/edit`, api);
+
+    expect(await screen.findByLabelText(/Họ và tên/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Mã liên thông bác sĩ/)).not.toBeInTheDocument();
+  });
+});
+
 describe('AccountManagementPage UC-10 Lock/Unlock messages', () => {
   it('shows MSG31 and the BR-97 length message under the lock reason without calling the API', async () => {
     const api = accountApi({ lock: vi.fn() });

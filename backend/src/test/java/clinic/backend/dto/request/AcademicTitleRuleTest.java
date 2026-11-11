@@ -38,7 +38,7 @@ class AcademicTitleRuleTest {
 
     private static Set<ConstraintViolation<UpdateAccountRequest>> updateViolations(String title) {
         return VALIDATOR.validateProperty(
-                new UpdateAccountRequest("Nguyễn Văn An", title, null, null, null, "0901234567", null, null, 0L),
+                new UpdateAccountRequest("Nguyễn Văn An", title, null, null, null, null, "0901234567", null, null, 0L),
                 "academicTitle");
     }
 

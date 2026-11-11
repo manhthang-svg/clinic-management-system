@@ -1,4 +1,4 @@
-import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users, BadgeCheck } from 'lucide-react';
+import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users, BadgeCheck, Link2 } from 'lucide-react';
 import { GENDER_LABELS } from '../../constants/accountData';
 import { FormField, INPUT_CLASS } from './AccountFormParts';
 
@@ -99,6 +99,18 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
           {...props('practiceLicenseNo')}
         />
       </FormField>
+
+      {canEdit('maLienthongBacsi') && form.role === 'DOCTOR' && (
+        <FormField
+          id="account-maLienthongBacsi"
+          label="Mã liên thông bác sĩ"
+          error={errors.maLienthongBacsi}
+          hint="Do Hệ thống đơn thuốc quốc gia cấp; cần có để kê đơn. Chỉ gồm chữ và số."
+          icon={Link2}
+        >
+          <input type="text" maxLength={50} autoComplete="off" className={WITH_ICON} {...props('maLienthongBacsi')} />
+        </FormField>
+      )}
 
       <FormField
         id="account-address"

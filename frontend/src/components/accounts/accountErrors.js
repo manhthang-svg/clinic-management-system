@@ -7,6 +7,7 @@ const FORM_FIELD = {
   fullName: "fullName",
   academicTitle: "title",
   practiceLicenseNo: "practiceLicenseNo",
+  maLienthongBacsi: "maLienthongBacsi",
   dateOfBirth: "dateOfBirth",
   gender: "gender",
   phoneNumber: "phone",
@@ -21,6 +22,7 @@ const FIELD_LABEL = {
   fullName: "Họ và tên",
   title: "Học hàm / học vị",
   practiceLicenseNo: "Số giấy phép hành nghề",
+  maLienthongBacsi: "Mã liên thông bác sĩ",
   dateOfBirth: "Ngày sinh",
   gender: "Giới tính",
   phone: "Số điện thoại",
@@ -73,7 +75,10 @@ function fieldMessage(field, reason) {
     case "TOO_LONG":
       if (field === "fullName") return "Vượt quá độ dài tối đa 120 ký tự."; // MSG08 (BR-59)
       if (field === "title") return "Vượt quá độ dài tối đa 50 ký tự."; // MSG08 (BR-62)
+      if (field === "maLienthongBacsi") return "Vượt quá độ dài tối đa 50 ký tự."; // MSG08
       return CODE_MESSAGE.PASSWORD_POLICY_VIOLATION; // MSG43
+    case "NOT_APPLICABLE":
+      return `${label} chỉ áp dụng cho tài khoản Bác sĩ.`;
     case "TOO_SHORT":
       return CODE_MESSAGE.PASSWORD_POLICY_VIOLATION; // MSG43
     default:

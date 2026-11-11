@@ -82,6 +82,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     private static final Pattern PRACTICE_LICENSE_FORMAT =
             Pattern.compile("^[\\p{L}\\p{N}/-]{5,50}$");
 
+    /** Mirrors ck_staff_accounts_ma_lienthong_bacsi (V55). */
+    private static final Pattern MA_LIENTHONG_BACSI_FORMAT = Pattern.compile("^[A-Za-z0-9]{1,50}$");
+
     /** BR-59: a staff full name has 2–120 characters after trimming and collapsing repeated spaces. */
     private static final int FULL_NAME_MIN_LENGTH = 2;
     private static final int FULL_NAME_MAX_LENGTH = 120;
@@ -194,7 +197,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         requireValidStaffInformation(request.dateOfBirth(), request.practiceLicenseNo());
         String email = normalizeEmail(request.email());
         String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
-        checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo);
+        String maLienthongBacsi = normalizeOptional(request.maLienthongBacsi());
+        requireValidMaLienthongBacsi(account.getRole(), maLienthongBacsi);
+        checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo, maLienthongBacsi);
 
         Map<String, Object> oldValues = editableValues(account);
         Map<String, Object> newValues = editableValues(request, email);
@@ -206,6 +211,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         account.updatePersonalInformation(
                 normalizeFullName(request.fullName()), normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(),
                 request.gender(), request.phoneNumber(), email, normalizeOptional(request.address()), now);
+        account.updateMaLienthongBacsi(maLienthongBacsi, now);
         try {
             accountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException exception) {
@@ -565,7 +571,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
     }
 
     private void checkUniqueForUpdate(
-            StaffAccount account, String phone, String email, String practiceLicenseNo) {
+            StaffAccount account, String phone, String email, String practiceLicenseNo, String maLienthongBacsi) {
         Map<String, String> conflicts = new LinkedHashMap<>();
         if (accountRepository.existsByPhoneNumberAndIdNot(phone, account.getId())) {
             conflicts.put("phoneNumber", "ALREADY_EXISTS");
@@ -577,7 +583,24 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 && accountRepository.existsByPracticeLicenseNoAndIdNot(practiceLicenseNo, account.getId())) {
             conflicts.put("practiceLicenseNo", "ALREADY_EXISTS");
         }
+        if (maLienthongBacsi != null
+                && accountRepository.existsByMaLienthongBacsiAndIdNot(maLienthongBacsi, account.getId())) {
+            conflicts.put("maLienthongBacsi", "ALREADY_EXISTS");
+        }
         if (!conflicts.isEmpty()) throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, conflicts);
+    }
+
+    /** BR-49, BR-65: only a Doctor prescribes, so only a Doctor account holds a prescriber link code. */
+    private void requireValidMaLienthongBacsi(Role role, String maLienthongBacsi) {
+        if (maLienthongBacsi == null) return;
+        if (role != Role.DOCTOR) {
+            throw new AppException(
+                    ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("maLienthongBacsi", "NOT_APPLICABLE"));
+        }
+        if (!MA_LIENTHONG_BACSI_FORMAT.matcher(maLienthongBacsi).matches()) {
+            throw new AppException(
+                    ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("maLienthongBacsi", "INVALID_FORMAT"));
+        }
     }
 
     private AppException uniquenessConflict() {
@@ -651,6 +674,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         values.put("fullName", account.getFullName());
         values.put("academicTitle", account.getAcademicTitle());
         values.put("practiceLicenseNo", account.getPracticeLicenseNo());
+        values.put("maLienthongBacsi", account.getMaLienthongBacsi());
         values.put("dateOfBirth", account.getDateOfBirth());
         values.put("gender", account.getGender());
         values.put("phoneNumber", account.getPhoneNumber());
@@ -664,6 +688,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         values.put("fullName", normalizeFullName(request.fullName()));
         values.put("academicTitle", normalizeOptional(request.academicTitle()));
         values.put("practiceLicenseNo", normalizeOptional(request.practiceLicenseNo()));
+        values.put("maLienthongBacsi", normalizeOptional(request.maLienthongBacsi()));
         values.put("dateOfBirth", request.dateOfBirth());
         values.put("gender", request.gender());
         values.put("phoneNumber", request.phoneNumber());

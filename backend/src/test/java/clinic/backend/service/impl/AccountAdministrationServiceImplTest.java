@@ -318,7 +318,7 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Updated User", null, null, null, null, "0909876543", null, null, target.getVersion()));
+                "Updated User", null, null, null, null, null, "0909876543", null, null, target.getVersion()));
 
         verify(auditLogService, times(2)).recordAccountChange(
                 any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
@@ -332,12 +332,70 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, null,
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, null, null,
                 "0901234567", null, null, target.getVersion()));
 
         assertThat(target.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
         verify(auditLogService, times(2)).recordAccountChange(
                 any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
+    }
+
+    @Test
+    void doctorPrescriberLinkCodeIsSavedAndWrittenToHistory() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", " BS0001 ", null, null,
+                "0901234567", null, null, target.getVersion()));
+
+        assertThat(target.getMaLienthongBacsi()).isEqualTo("BS0001");
+        verify(auditLogService, times(3)).recordAccountChange(
+                any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
+    }
+
+    @Test
+    void prescriberLinkCodeIsRejectedForANonDoctor() {
+        StaffAccount target = account(Role.TECHNICIAN);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "KTV", "000123/HCM-CCHN", "BS0001", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "NOT_APPLICABLE"));
+        assertThat(target.getMaLienthongBacsi()).isNull();
+    }
+
+    @Test
+    void prescriberLinkCodeUsedByAnotherAccountIsRejected() {
+        StaffAccount target = account(Role.DOCTOR);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(accountRepository.existsByMaLienthongBacsiAndIdNot("BS0001", target.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS0001", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "ALREADY_EXISTS"));
+        assertThat(target.getMaLienthongBacsi()).isNull();
+    }
+
+    @Test
+    void prescriberLinkCodeWithSymbolsIsRejected() {
+        StaffAccount target = account(Role.DOCTOR);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS-0001", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "INVALID_FORMAT"));
     }
 
     @Test
