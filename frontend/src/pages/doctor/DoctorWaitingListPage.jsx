@@ -17,7 +17,7 @@ import { createAccountApi } from '../../apis/accountApi';
 import { apiClient } from '../../services/session';
 import { PRIORITY_REASON_LABELS } from '../../constants/visitData';
 import { ApiError } from '../../apis/apiError';
-import { ROUTES } from '../../routes/routes';
+import { clinicalExaminationPath } from '../../routes/routes';
 
 const REFRESH_MS = 10_000;
 const PAGE_SIZES = [10, 20, 50];
@@ -268,7 +268,7 @@ export default function DoctorWaitingListPage({
                 ? `Bệnh nhân ${visit.patientName} đã có mặt, chuyển sang bước kết luận.`
                 : `Bệnh nhân ${visit.patientName} đã có mặt, bắt đầu khám.`);
             navigate(
-                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : ROUTES.DOCTOR.CLINICAL_EXAMINATION,
+                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : clinicalExaminationPath(visit.id),
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab } },
             );
         } catch (error) {
@@ -305,7 +305,7 @@ export default function DoctorWaitingListPage({
             await visitApi.acceptSkippedVisit(visit.id);
             toast.success(`Đã tiếp nhận lại bệnh nhân ${visit.patientName}.`);
             navigate(
-                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : ROUTES.DOCTOR.CLINICAL_EXAMINATION,
+                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : clinicalExaminationPath(visit.id),
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, acceptedFromSkipped: true, returnTab: activeTab } },
             );
         } catch (error) {
@@ -319,7 +319,7 @@ export default function DoctorWaitingListPage({
 
     const openClinicalExamination = useCallback((visit) => {
         if (!canOpenExamination(visit)) return;
-        navigate(ROUTES.DOCTOR.CLINICAL_EXAMINATION, {
+        navigate(clinicalExaminationPath(visit.id), {
             state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab },
         });
     }, [activeTab, navigate, queueInfo]);

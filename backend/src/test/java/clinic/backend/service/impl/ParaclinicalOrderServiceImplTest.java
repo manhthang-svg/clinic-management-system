@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.config.properties.InsuranceBillingProperties;
@@ -84,6 +85,7 @@ class ParaclinicalOrderServiceImplTest {
     @Mock private AuditLogService auditLogService;
     @Mock private PaymentCompletionService paymentCompletionService;
     @Mock private ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    @Mock private ParaclinicalRoomDuty roomDuty;
 
     private ParaclinicalOrderServiceImpl service;
 
@@ -99,7 +101,8 @@ class ParaclinicalOrderServiceImplTest {
                         paymentRepository, paraclinicalOrderRepository, auditLogService, clock),
                 new ParaclinicalProgressServiceImpl(
                         medicalRecordRepository, paraclinicalOrderRepository, visitRepository, auditLogService, clock),
-                new UuidV7Generator(clock, new SecureRandom()), clock);
+                roomDuty, new UuidV7Generator(clock, new SecureRandom()), clock);
+        lenient().when(roomDuty.staffedRooms(any())).thenReturn(Set.of());
     }
 
     @Test
@@ -368,17 +371,26 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     @Test
-    void preselectsTheLeastBusyRoomWhenTheDoctorChoseNone() {
+    void assignsTheRoomItselfWhenNoneIsSentPreferringAStaffedRoom() {
         Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
-        Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
+        Room emptyFree = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA1",
+                "Phòng siêu âm 1", "Tầng 2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        Room staffedBusy = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA2",
+                "Phòng siêu âm 2", "Tầng 3", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
         stubOrder(visit, List.of(ultrasound));
-        when(paymentCompletionService.leastBusyRoom(ultrasound.getServiceGroupId())).thenReturn(Optional.of(room));
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.PARACLINICAL, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(emptyFree, staffedBusy));
+        when(paraclinicalOrderDetailRepository.countByRoomIdsAndStatus(
+                List.of(emptyFree.getId(), staffedBusy.getId()), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(List.of(roomCount(staffedBusy.getId(), 3)));
+        when(roomDuty.staffedRooms(any())).thenReturn(Set.of(staffedBusy.getId()));
 
         var response = service.createOrder(DOCTOR_ID, request(ultrasound.getId()));
 
+        // SA1 has nobody waiting but nobody on duty, so the staffed SA2 is used.
         assertThat(response.details()).singleElement()
-                .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(room.getId()));
+                .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(staffedBusy.getId()));
     }
 
     @Test
@@ -411,6 +423,35 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     @Test
+    void preselectsAStaffedRoomThenTheLeastBusyThenTheLowerRoomCode() {
+        MedicalService blood = service("XN-CTM", "Tổng phân tích máu", MedicalServiceType.LAB, 90000);
+        when(medicalServiceRepository.findAllByStatusAndTypeInOrderByTenchidinhAsc(
+                ActivationStatus.ACTIVE,
+                List.of(MedicalServiceType.LAB, MedicalServiceType.IMAGING, MedicalServiceType.FUNCTIONAL)))
+                .thenReturn(List.of(blood));
+        Room emptyFree = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), blood.getServiceGroupId(), "HH1",
+                "Phòng Huyết học 1", "Tầng 1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        Room staffedBusy = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), blood.getServiceGroupId(), "HH2",
+                "Phòng Huyết học 2", "Tầng 1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        Room staffedSame = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), blood.getServiceGroupId(), "HH3",
+                "Phòng Huyết học 3", "Tầng 1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.PARACLINICAL, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(emptyFree, staffedBusy, staffedSame));
+        when(paraclinicalOrderDetailRepository.countByRoomIdsAndStatus(
+                List.of(emptyFree.getId(), staffedBusy.getId(), staffedSame.getId()), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(List.of(roomCount(staffedBusy.getId(), 2), roomCount(staffedSame.getId(), 2)));
+        when(roomDuty.staffedRooms(any())).thenReturn(Set.of(staffedBusy.getId(), staffedSame.getId()));
+
+        assertThat(service.listOrderableServices())
+                .singleElement()
+                .satisfies(option -> {
+                    // HH1 has nobody waiting but nobody on duty; HH2 and HH3 tie on waiting, HH2 has the lower code.
+                    assertThat(option.suggestedRoomId()).isEqualTo(staffedBusy.getId());
+                    assertThat(option.rooms()).extracting(r -> r.onDuty()).containsExactly(false, true, true);
+                });
+    }
+
+    @Test
     void listsTheActiveRoomsOfEachServiceWithTheLeastBusyPreselected() {
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         when(medicalServiceRepository.findAllByStatusAndTypeInOrderByTenchidinhAsc(
@@ -421,12 +462,15 @@ class ParaclinicalOrderServiceImplTest {
                 "Phòng siêu âm 1", "Tầng 2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
         Room free = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA2",
                 "Phòng siêu âm 2", "Tầng 3", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
-        when(roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(
-                ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE)).thenReturn(List.of(busy, free));
-        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(busy.getId(), ParaclinicalOrderDetailStatus.WAITING))
-                .thenReturn(4L);
-        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(free.getId(), ParaclinicalOrderDetailStatus.WAITING))
-                .thenReturn(1L);
+        // A room of another group is listed only with its own services.
+        Room otherGroup = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), UUID.randomUUID(), "XN1",
+                "Phòng xét nghiệm 1", "Tầng 1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.PARACLINICAL, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(busy, free, otherGroup));
+        // Every waiting count comes from one query; a room without waiting services has no row.
+        when(paraclinicalOrderDetailRepository.countByRoomIdsAndStatus(
+                List.of(busy.getId(), free.getId(), otherGroup.getId()), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(List.of(roomCount(busy.getId(), 4), roomCount(free.getId(), 1)));
 
         assertThat(service.listOrderableServices())
                 .singleElement()
@@ -630,6 +674,20 @@ class ParaclinicalOrderServiceImplTest {
     private static CreateParaclinicalOrderRequest requestWithRoom(UUID serviceId, UUID roomId) {
         return new CreateParaclinicalOrderRequest(VISIT_ID, "Theo dõi đau bụng", null,
                 List.of(new CreateParaclinicalOrderRequest.Item(serviceId, roomId)));
+    }
+
+    private static ParaclinicalOrderDetailRepository.RoomCount roomCount(UUID roomId, long total) {
+        return new ParaclinicalOrderDetailRepository.RoomCount() {
+            @Override
+            public UUID getRoomId() {
+                return roomId;
+            }
+
+            @Override
+            public long getTotal() {
+                return total;
+            }
+        };
     }
 
     private static Room paraclinicalRoom(UUID serviceGroupId, ActivationStatus status) {

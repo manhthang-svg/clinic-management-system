@@ -229,7 +229,7 @@ export function Sidebar({ user, onNavigate, onLogout }) {
 
   const isActive = (path) => {
     const currentPath = location.pathname;
-    const activePath = currentPath === '/doctor/clinical-examination'
+    const activePath = currentPath.startsWith('/doctor/clinical-examination')
       ? '/doctor/appointments'
       : currentPath;
     const navigableItems = items.flatMap((item) => item.children ?? [item]);

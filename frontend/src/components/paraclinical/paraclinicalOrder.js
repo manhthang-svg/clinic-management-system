@@ -160,18 +160,19 @@ export function defaultRoomId(service) {
     return service.rooms?.[0]?.roomId ?? null;
 }
 
-/** Room choice label: name, location and waiting count, so the Doctor can tell the patient where to go. */
+/**
+ * Room choice label: name, location and waiting count, so the Doctor can tell the patient where to go; a room with
+ * nobody on duty in the current shift says so (it stays selectable).
+ */
 export function roomOptionLabel(room) {
     const location = room.location ? ` – ${room.location}` : '';
-    return `${room.roomName}${location} (đang chờ: ${room.waitingCount ?? 0})`;
+    const duty = room.onDuty === false ? ' · chưa có người trực' : '';
+    return `${room.roomName}${location} (đang chờ: ${room.waitingCount ?? 0}${duty})`;
 }
 
-/** Request lines: each selected service with its chosen room, or the default one. */
-export function orderItems(services, selectedIds, roomChoices = {}) {
-    return selectedIds.map((serviceId) => ({
-        serviceId,
-        roomId: roomChoices[serviceId] ?? defaultRoomId(services.find((service) => service.id === serviceId)),
-    }));
+/** Request lines: the selected services; the backend assigns each room when the order is created. */
+export function orderItems(selectedIds) {
+    return selectedIds.map((serviceId) => ({ serviceId, roomId: null }));
 }
 
 /** MSG42 / MSG40 / MSG12 / MSG99; never the raw backend message. */

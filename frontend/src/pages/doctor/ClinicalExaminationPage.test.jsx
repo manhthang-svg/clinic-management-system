@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ClinicalExaminationPage from './ClinicalExaminationPage';
@@ -40,6 +40,7 @@ function renderPage(state = { visitId: visit.id, visit, queueInfo: { roomName: '
         <MemoryRouter initialEntries={[{ pathname: '/doctor/clinical-examination', state }]}>
             <Routes>
                 <Route path="/doctor/clinical-examination" element={<ClinicalExaminationPage />} />
+                <Route path="/doctor/clinical-examination/:visitId/:section?" element={<ClinicalExaminationPage />} />
                 <Route path="/doctor/appointments" element={<p>Danh sách chờ khám</p>} />
             </Routes>
         </MemoryRouter>,
@@ -51,6 +52,7 @@ describe('ClinicalExaminationPage', () => {
         vi.spyOn(visitApi, 'openClinicalExamination').mockResolvedValue(clinicalData);
         vi.spyOn(visitApi, 'searchIcd10').mockResolvedValue([]);
         vi.spyOn(visitApi, 'saveClinicalExamination').mockResolvedValue(clinicalData);
+        vi.spyOn(visitApi, 'getParaclinicalServices').mockResolvedValue([]);
         vi.spyOn(visitApi, 'getMedicalHistory').mockResolvedValue({
             visitId: visit.id, editable: true, readOnlyReason: null, history: [],
             allergies: [{ drug: 'Penicillin', reaction: null, severity: 'SEVERE' }],
@@ -78,6 +80,24 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByRole('heading', { name: 'Khám bệnh' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Lịch sử khám bệnh' })).toBeInTheDocument();
         expect(screen.getByText('Viêm họng cấp')).toBeInTheDocument();
+    });
+
+    it('opens the visit from its own link, e.g. after a reload, and gives each tab its own link', async () => {
+        render(
+            <MemoryRouter initialEntries={['/doctor/clinical-examination/visit-1']}>
+                <Routes>
+                    <Route path="/doctor/clinical-examination/:visitId/:section?" element={<ClinicalExaminationPage />} />
+                </Routes>
+            </MemoryRouter>,
+        );
+
+        expect(await screen.findByText('Nguyễn Văn Nam')).toBeInTheDocument();
+        expect(visitApi.openClinicalExamination).toHaveBeenCalledWith('visit-1', expect.anything());
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chuyển phòng' }));
+        expect(await screen.findByRole('heading', { name: 'Chuyển phòng khám' })).toBeInTheDocument();
+        // Switching tabs keeps the page: the record is not opened again.
+        expect(visitApi.openClinicalExamination).toHaveBeenCalledTimes(1);
     });
 
     it('shows the examination read-only with the ordered services while waiting for paraclinical', async () => {
@@ -239,6 +259,46 @@ describe('ClinicalExaminationPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Chỉ định cận lâm sàng' }));
         expect(screen.getByLabelText(/Chẩn đoán ban đầu/)).toHaveAttribute('aria-invalid', 'true');
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
+    });
+
+    describe('opening the paraclinical order tab', () => {
+        const readyRecord = {
+            ...clinicalData,
+            vitalSigns: { pulse: 72 },
+            preliminaryDiagnoses: [{ code: 'J03', name: 'Viêm amidan cấp' }],
+        };
+
+        it('opens at once with the list loaded with the page, and orders only once the save is done', async () => {
+            visitApi.openClinicalExamination.mockResolvedValue(readyRecord);
+            let finishSave;
+            visitApi.saveClinicalExamination.mockReturnValue(new Promise((resolve) => { finishSave = resolve; }));
+            renderPage();
+            await screen.findByText('Viêm amidan cấp');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Chỉ định cận lâm sàng' }));
+
+            expect(await screen.findByRole('region', { name: 'Danh sách dịch vụ' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Đang lưu hồ sơ khám…' })).toBeDisabled();
+            await act(async () => finishSave(readyRecord));
+            expect(screen.getByRole('button', { name: 'Xác nhận chỉ định' })).toBeInTheDocument();
+            // The list request started with the page is reused.
+            expect(visitApi.getParaclinicalServices).toHaveBeenCalledTimes(1);
+        });
+
+        it('goes back to the examination with the message when the save fails', async () => {
+            visitApi.openClinicalExamination.mockResolvedValue(readyRecord);
+            visitApi.saveClinicalExamination.mockRejectedValue(new ApiError('Doctor is not on duty.', {
+                status: 403, errorResponse: { code: 'DOCTOR_OFF_DUTY', message: 'Doctor is not on duty.' },
+            }));
+            renderPage();
+            await screen.findByText('Viêm amidan cấp');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Chỉ định cận lâm sàng' }));
+
+            expect(await screen.findByRole('alert')).not.toHaveTextContent('Doctor is not on duty.');
+            expect(await screen.findByLabelText(/Mạch/)).toBeInTheDocument();
+            expect(screen.queryByRole('region', { name: 'Danh sách dịch vụ' })).not.toBeInTheDocument();
+        });
     });
 
     it('shows a Vietnamese message instead of the raw backend message', async () => {

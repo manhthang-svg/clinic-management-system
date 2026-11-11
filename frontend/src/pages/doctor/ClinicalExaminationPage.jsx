@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import {
     Activity, ArrowRightLeft, CalendarDays, ClipboardPlus, FileCheck2, HeartPulse, Info as InfoIcon,
     LoaderCircle, Pill, Save, Send, Stethoscope, UserRound, X,
@@ -12,7 +12,7 @@ import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/Me
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
-import { ROUTES } from '../../routes/routes';
+import { EXAMINATION_SECTIONS, ROUTES, clinicalExaminationPath } from '../../routes/routes';
 import visitApi from '../../apis/visitApi';
 import {
     MSG, ORGAN_FIELDS, VITAL_RULES, examinationErrorMessage, fieldErrorsFromApi, notesKey,
@@ -119,6 +119,15 @@ function Info({ label, children }) {
     return <div className="min-w-0"><p className="text-[10px] text-slate-400">{label}</p><p className="mt-1 truncate text-xs font-semibold text-slate-700">{children || '—'}</p></div>;
 }
 
+const SERVICES_MAX_AGE_MS = 60_000;
+
+/** Starts loading the paraclinical service list; the order panel shows a failure itself. */
+function startServicesRequest() {
+    const promise = visitApi.getParaclinicalServices();
+    promise.catch(() => {});
+    return { promise, at: Date.now() };
+}
+
 /** UC-47 Perform Clinical Examination. */
 export default function ClinicalExaminationPage() {
     const location = useLocation();
@@ -126,7 +135,14 @@ export default function ClinicalExaminationPage() {
     const navigationVisit = location.state?.visit ?? null;
     const navigationQueueInfo = location.state?.queueInfo ?? null;
     const returnTab = location.state?.returnTab;
-    const visitId = location.state?.visitId ?? navigationVisit?.id ?? null;
+    // The visit and the open tab are in the link (/doctor/clinical-examination/{visitId}/{tab}), so a reload or a
+    // shared link opens the same visit and tab. Older links carry the visit only in the navigation state.
+    const { visitId: routeVisitId, section: routeSection } = useParams();
+    const visitId = routeVisitId ?? location.state?.visitId ?? navigationVisit?.id ?? null;
+    const activeSection = EXAMINATION_SECTIONS.includes(routeSection) ? routeSection : 'clinical';
+    const setActiveSection = (section, { replace = false } = {}) => {
+        if (visitId) navigate(clinicalExaminationPath(visitId, section), { replace, state: location.state });
+    };
     const initialForm = { ...EMPTY_FORM, reason: navigationVisit?.lydovaovien ?? '' };
     const [form, setForm] = useState(initialForm);
     const [savedForm, setSavedForm] = useState(initialForm);
@@ -141,7 +157,15 @@ export default function ClinicalExaminationPage() {
     const [icdOptions, setIcdOptions] = useState([]);
     const [icdQuery, setIcdQuery] = useState('');
     const [medicalHistory, setMedicalHistory] = useState(null);
-    const [activeSection, setActiveSection] = useState('clinical');
+    // The paraclinical service list starts loading with the page, so the order tab usually opens with it ready.
+    const [servicesRequest, setServicesRequest] = useState(() => (visitId ? startServicesRequest() : null));
+
+    // An older link without the visit id moves to the visit's own link.
+    useEffect(() => {
+        if (!routeVisitId && visitId) {
+            navigate(clinicalExaminationPath(visitId), { replace: true, state: location.state });
+        }
+    }, [location.state, navigate, routeVisitId, visitId]);
     const set = (key) => (value) => {
         const next = { ...form, [key]: value };
         setForm(next);
@@ -288,12 +312,14 @@ export default function ClinicalExaminationPage() {
             setClinicalData(saved);
             setForm(savedValues);
             setSavedForm(savedValues);
-            toast.success('Cập nhật hồ sơ khám lâm sàng thành công.'); // MSG03
-            if (nextStep === 'PARACLINICAL') setActiveSection('paraclinical');
+            // MSG03 for an explicit save; opening the order tab saves quietly, the tab itself shows it worked.
+            if (nextStep !== 'PARACLINICAL') toast.success('Cập nhật hồ sơ khám lâm sàng thành công.');
             if (nextStep === 'CONCLUSION') toast.info('Hồ sơ đã sẵn sàng để thực hiện kết luận khám (UC-56).');
         } catch (error) {
             setFieldErrors(fieldErrorsFromApi(error));
             setPageError(examinationErrorMessage(error));
+            // The order tab opened before the save finished: go back so the Doctor sees what to fix.
+            if (nextStep === 'PARACLINICAL') setActiveSection('clinical', { replace: true });
         } finally {
             setSaving(false);
         }
@@ -337,11 +363,26 @@ export default function ClinicalExaminationPage() {
     // While waiting for paraclinical services the Doctor can only review the examination and the orders.
     const readOnly = visit.status === 'WAITING_PARACLINICAL';
     const transferable = clinicalData?.version === 0 && !loadError && !readOnly;
+    // The transfer tab is open only while the visit can still be transferred (e.g. after a reload of its link).
+    const shownSection = activeSection === 'transfer' && !transferable ? 'clinical' : activeSection;
     const openParaclinical = () => {
         if (activeSection === 'paraclinical') return;
-        if (readOnly) setActiveSection('paraclinical');
-        // AF-04: the examination is saved (diagnosis required) before the order screen opens.
-        else save('CONTINUE', 'PARACLINICAL');
+        if (readOnly) {
+            setActiveSection('paraclinical');
+            return;
+        }
+        // AF-04: the examination must be valid (diagnosis required); otherwise the errors show and the tab stays.
+        if (Object.keys(validateExamination(form, 'CONTINUE')).length) {
+            save('CONTINUE', 'PARACLINICAL');
+            return;
+        }
+        // The list was loaded when the page opened; load it again only if it is getting old.
+        if (!servicesRequest || Date.now() - servicesRequest.at > SERVICES_MAX_AGE_MS) {
+            setServicesRequest(startServicesRequest());
+        }
+        // Open the order tab at once and save in the background; ordering waits for the save (see `blocked`).
+        setActiveSection('paraclinical');
+        save('CONTINUE', 'PARACLINICAL');
     };
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
@@ -388,12 +429,12 @@ export default function ClinicalExaminationPage() {
             </section>
 
             <nav className="flex gap-2 overflow-x-auto" aria-label="Các bước khám bệnh">
-                {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || saving} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${activeSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
+                {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || saving} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${shownSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
             </nav>
 
-            {activeSection === 'transfer' ? (
+            {shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
-            ) : activeSection === 'paraclinical' && readOnly ? (
+            ) : shownSection === 'paraclinical' && readOnly ? (
                 <ParaclinicalOrderList
                     visitId={visit.id}
                     onCancelled={(result) => {
@@ -404,9 +445,9 @@ export default function ClinicalExaminationPage() {
                         }
                     }}
                 />
-            ) : activeSection === 'paraclinical' ? (
+            ) : shownSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
-                <ParaclinicalOrderPanel visit={visit} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
+                <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <fieldset disabled={readOnly} className="min-w-0 space-y-3">
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>

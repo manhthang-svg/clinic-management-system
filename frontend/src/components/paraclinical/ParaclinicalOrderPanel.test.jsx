@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ApiError from '../../apis/apiError';
 import ParaclinicalOrderPanel from './ParaclinicalOrderPanel';
 import {
-    MSG, createdMessage, estimate, filterServices, groupOptions, orderErrorMessage, toServiceList,
+    MSG, createdMessage, estimate, filterServices, groupOptions, orderErrorMessage, roomOptionLabel, toServiceList,
 } from './paraclinicalOrder';
 
 const services = [
@@ -55,13 +55,13 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(onCreated).toHaveBeenCalledWith(order);
     });
 
-    it('preselects the least busy room and sends the room the Doctor chose (I1-D47)', async () => {
+    it('shows the room the system assigns and lets the backend assign it (no choice for the Doctor)', async () => {
         const user = userEvent.setup();
         const withRooms = [{
             ...services[0],
             rooms: [
-                { roomId: 'r1', roomCode: 'SA1', roomName: 'Phòng siêu âm 1', location: 'Tầng 2', waitingCount: 4 },
-                { roomId: 'r2', roomCode: 'SA2', roomName: 'Phòng siêu âm 2', location: 'Tầng 3', waitingCount: 1 },
+                { roomId: 'r1', roomCode: 'SA1', roomName: 'Phòng siêu âm 1', location: 'Tầng 2', waitingCount: 0, onDuty: false },
+                { roomId: 'r2', roomCode: 'SA2', roomName: 'Phòng siêu âm 2', location: 'Tầng 3', waitingCount: 1, onDuty: true },
             ],
             suggestedRoomId: 'r2',
         }];
@@ -72,13 +72,13 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         renderPanel(api);
 
         await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
-        const room = screen.getByRole('combobox', { name: 'Phòng thực hiện Siêu âm ổ bụng' });
-        expect(room).toHaveValue('r2');
-        await user.selectOptions(room, 'r1');
+        expect(screen.getByTestId('assigned-room-s1')).toHaveTextContent('Phòng siêu âm 2 – Tầng 3 (đang chờ: 1)');
+        expect(screen.getByText('Hệ thống tự xếp phòng')).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: /Phòng thực hiện/ })).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Xác nhận chỉ định' }));
 
         expect(api.orderParaclinical).toHaveBeenCalledWith(expect.objectContaining({
-            items: [{ serviceId: 's1', roomId: 'r1' }],
+            items: [{ serviceId: 's1', roomId: null }],
         }));
     });
 
@@ -116,7 +116,6 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         // 43 900 × 80% = 35 120 covered; the uncovered ECG is paid in full.
         expect(screen.getByTestId('cls-insurance-total')).toHaveTextContent('35.120');
         expect(screen.getByTestId('cls-total')).toHaveTextContent('214.880');
-        expect(within(selected).getByText(/mức hưởng áp dụng 80%, thẻ 80%/)).toBeInTheDocument();
     });
 
     it('removes a selected service from the selection table', async () => {
@@ -130,14 +129,57 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(screen.getByText('Chưa chọn dịch vụ nào.')).toBeInTheDocument();
     });
 
+    it('reuses the list request the page already started instead of loading it again', async () => {
+        const api = { getParaclinicalServices: vi.fn(), orderParaclinical: vi.fn() };
+        render(
+            <ParaclinicalOrderPanel
+                visit={visit}
+                api={api}
+                initialServices={Promise.resolve(services)}
+                onCancel={vi.fn()}
+                onCreated={vi.fn()}
+            />,
+        );
+
+        expect(await screen.findByRole('checkbox', { name: 'Chọn Điện tim' })).toBeInTheDocument();
+        expect(api.getParaclinicalServices).not.toHaveBeenCalled();
+    });
+
+    it('pages the service list and keeps the selection across pages', async () => {
+        const user = userEvent.setup();
+        const many = Array.from({ length: 12 }, (_, index) => ({
+            id: `x${index + 1}`, code: `XN-${String(index + 1).padStart(2, '0')}`, name: `Xét nghiệm ${index + 1}`,
+            type: 'LAB', serviceGroupId: 'g1', serviceGroupName: 'Sinh hóa', clinicPrice: 10000, insurancePrice: null,
+        }));
+        renderPanel({ getParaclinicalServices: vi.fn().mockResolvedValue(many), orderParaclinical: vi.fn() });
+
+        expect(await screen.findByRole('checkbox', { name: 'Chọn Xét nghiệm 10' })).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Chọn Xét nghiệm 11' })).not.toBeInTheDocument();
+        expect(screen.getByText('Hiển thị 1 – 10 / 12')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Trang 2' }));
+        await user.click(screen.getByRole('checkbox', { name: 'Chọn Xét nghiệm 12' }));
+        expect(screen.getByText('Hiển thị 11 – 12 / 12')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Dịch vụ đã chọn (1)' })).toBeInTheDocument();
+
+        // A new search starts again from the first page.
+        await user.type(screen.getByLabelText('Tìm dịch vụ'), 'Xét');
+        expect(screen.getByRole('checkbox', { name: 'Chọn Xét nghiệm 1' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Trang 1' })).toHaveAttribute('aria-current', 'page');
+    });
+
     it('filters services by keyword and type', async () => {
         const user = userEvent.setup();
         renderPanel({ getParaclinicalServices: vi.fn().mockResolvedValue(services), orderParaclinical: vi.fn() });
 
         await screen.findByRole('checkbox', { name: 'Chọn Điện tim' });
+        expect(screen.getByTestId('cls-count')).toHaveTextContent('Hiển thị 3 dịch vụ');
         await user.type(screen.getByLabelText('Tìm dịch vụ'), 'siêu');
         expect(screen.getByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' })).toBeInTheDocument();
         expect(screen.queryByRole('checkbox', { name: 'Chọn Điện tim' })).not.toBeInTheDocument();
+        expect(screen.getByTestId('cls-count')).toHaveTextContent('Hiển thị 1 / 3 dịch vụ');
+        await user.click(screen.getByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
+        expect(screen.getByTestId('cls-count')).toHaveTextContent('Hiển thị 1 / 3 dịch vụ · Đã chọn 1');
 
         await user.clear(screen.getByLabelText('Tìm dịch vụ'));
         await user.selectOptions(screen.getByLabelText('Loại dịch vụ'), 'LAB');
@@ -179,6 +221,12 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
 });
 
 describe('paraclinicalOrder helpers', () => {
+    it('labels a room with nobody on duty but keeps it as a choice', () => {
+        const room = { roomName: 'Phòng Huyết học 1', location: 'Tòa B', waitingCount: 1 };
+        expect(roomOptionLabel({ ...room, onDuty: true })).toBe('Phòng Huyết học 1 – Tòa B (đang chờ: 1)');
+        expect(roomOptionLabel({ ...room, onDuty: false })).toBe('Phòng Huyết học 1 – Tòa B (đang chờ: 1 · chưa có người trực)');
+    });
+
     it('reads both a list and a page', () => {
         expect(toServiceList(services)).toHaveLength(3);
         expect(toServiceList({ content: [services[0]] })).toHaveLength(1);

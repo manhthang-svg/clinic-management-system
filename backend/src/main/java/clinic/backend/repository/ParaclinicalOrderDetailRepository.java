@@ -16,6 +16,22 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
 
     long countByRoomIdAndStatus(UUID roomId, ParaclinicalOrderDetailStatus status);
 
+    /** Number of services per room in a status, for many rooms in one query. */
+    interface RoomCount {
+        UUID getRoomId();
+
+        long getTotal();
+    }
+
+    @Query("""
+            select d.roomId as roomId, count(d) as total from ParaclinicalOrderDetail d
+            where d.status = :status and d.roomId in :roomIds
+            group by d.roomId
+            """)
+    List<RoomCount> countByRoomIdsAndStatus(
+            @Param("roomIds") Collection<UUID> roomIds,
+            @Param("status") ParaclinicalOrderDetailStatus status);
+
     boolean existsByRoomIdAndStatusIn(UUID roomId, Collection<ParaclinicalOrderDetailStatus> statuses);
 
     long countByServiceIdAndStatusIn(
