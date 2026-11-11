@@ -4,6 +4,8 @@ import java.time.LocalDate;
 
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.VisitStatisticsResponse;
+import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.service.StatisticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,5 +31,14 @@ public class StatisticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.success(statisticsService.getDashboard(from, to));
+    }
+
+    @Operation(summary = "UC-27 Thống kê lượt khám theo ngày hoặc tháng, kết quả, đối tượng, tái khám, ưu tiên")
+    @GetMapping("/visits")
+    public ApiResponse<VisitStatisticsResponse> getVisitStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) StatisticsGroupBy groupBy) {
+        return ApiResponse.success(statisticsService.getVisitStatistics(from, to, groupBy));
     }
 }

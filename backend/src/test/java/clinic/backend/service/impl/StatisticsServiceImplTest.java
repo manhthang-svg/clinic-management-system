@@ -9,9 +9,12 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.VisitStatisticsResponse;
+import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
@@ -32,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard. */
+/** UC-26 View Statistics Dashboard and UC-27 View Patient Visit Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -56,6 +59,9 @@ class StatisticsServiceImplTest {
 
     record Revenue(long getPaymentCount, BigDecimal getTotalAmount, BigDecimal getInsuranceAmount,
             BigDecimal getPatientAmount) implements StatisticsRepository.RevenueTotals { }
+
+    record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
+            long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
 
     @BeforeEach
     void setUp() {
@@ -190,5 +196,68 @@ class StatisticsServiceImplTest {
                 service.getDashboard(LocalDate.of(2028, 1, 1), LocalDate.of(2028, 12, 31));
 
         assertThat(result.dailyVisits()).hasSize(366);
+    }
+
+    // ---- UC-27 View Patient Visit Statistics ----
+
+    @Test
+    void visitStatisticsDefaultToCurrentMonthByDay() {
+        when(repository.visitBreakdown(any(), any())).thenReturn(List.of());
+
+        VisitStatisticsResponse result = service.getVisitStatistics(null, null, null);
+
+        assertThat(result.groupBy()).isEqualTo(StatisticsGroupBy.DAY);
+        assertThat(result.from()).isEqualTo(LocalDate.of(2026, 11, 1));
+        assertThat(result.to()).isEqualTo(LocalDate.of(2026, 11, 11));
+        assertThat(result.series()).hasSize(11).allSatisfy(p -> assertThat(p.counts().total()).isZero());
+        assertThat(result.summary()).isEqualTo(new VisitCounts(0, 0, 0, 0, 0, 0, 0, 0, 0));
+    }
+
+    @Test
+    void visitStatisticsCountOutcomesPatientTypesFollowUpsAndPriority() {
+        LocalDate day1 = LocalDate.of(2026, 11, 2);
+        LocalDate day2 = LocalDate.of(2026, 11, 3);
+        when(repository.visitBreakdown(day1, day2)).thenReturn(List.of(
+                new Breakdown(day1, VisitStatus.COMPLETED, VisitDoituongbnLoai.BHYT, false, 5, 2),
+                new Breakdown(day1, VisitStatus.COMPLETED, VisitDoituongbnLoai.DV, true, 1, 0),
+                new Breakdown(day1, VisitStatus.WAITING_PARACLINICAL, VisitDoituongbnLoai.DV, false, 2, 1),
+                new Breakdown(day2, VisitStatus.CANCELLED, VisitDoituongbnLoai.DV, false, 3, 0),
+                new Breakdown(day2, VisitStatus.ABANDONED, VisitDoituongbnLoai.BHYT, true, 4, 1)));
+
+        VisitStatisticsResponse result = service.getVisitStatistics(day1, day2, StatisticsGroupBy.DAY);
+
+        assertThat(result.summary()).isEqualTo(new VisitCounts(15, 6, 2, 3, 4, 9, 6, 4, 5));
+        assertThat(result.series()).containsExactly(
+                new VisitStatisticsResponse.VisitPeriod(day1, new VisitCounts(8, 6, 2, 0, 0, 5, 3, 3, 1)),
+                new VisitStatisticsResponse.VisitPeriod(day2, new VisitCounts(7, 0, 0, 3, 4, 4, 3, 1, 4)));
+    }
+
+    @Test
+    void visitStatisticsByMonthKeyEachBucketByItsFirstDay() {
+        LocalDate from = LocalDate.of(2026, 9, 15);
+        LocalDate to = LocalDate.of(2026, 11, 11);
+        when(repository.visitBreakdown(from, to)).thenReturn(List.of(
+                new Breakdown(LocalDate.of(2026, 9, 20), VisitStatus.COMPLETED, VisitDoituongbnLoai.DV, false, 2, 0),
+                new Breakdown(LocalDate.of(2026, 9, 30), VisitStatus.COMPLETED, VisitDoituongbnLoai.DV, false, 3, 0),
+                new Breakdown(LocalDate.of(2026, 11, 1), VisitStatus.WAITING, VisitDoituongbnLoai.BHYT, false, 4, 0)));
+
+        VisitStatisticsResponse result = service.getVisitStatistics(from, to, StatisticsGroupBy.MONTH);
+
+        assertThat(result.series()).extracting(VisitStatisticsResponse.VisitPeriod::period).containsExactly(
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1));
+        assertThat(result.series()).extracting(p -> p.counts().total()).containsExactly(5L, 0L, 4L);
+        assertThat(result.summary().total()).isEqualTo(9);
+    }
+
+    @Test
+    void visitStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getVisitStatistics(
+                LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1), StatisticsGroupBy.DAY))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        assertThatThrownBy(() -> service.getVisitStatistics(
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2), StatisticsGroupBy.MONTH))
+                .isInstanceOf(AppException.class);
+        verifyNoInteractions(repository);
     }
 }
