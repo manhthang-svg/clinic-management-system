@@ -510,6 +510,22 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 result = imagingResult(imaging.get());
             }
         }
+        List<ParaclinicalResultResponse.SiblingService> siblingServices = orderDetailRepository.findByOrderId(order.getId()).stream()
+                .filter(d -> Objects.equals(detail.getRoomId(), d.getRoomId()))
+                .map(d -> {
+                    MedicalService s = medicalServiceRepository.findById(d.getServiceId()).orElse(null);
+                    return new ParaclinicalResultResponse.SiblingService(
+                            d.getId(),
+                            order.getSophieu(),
+                            d.getTenchidinh(),
+                            s != null ? s.getCode() : null,
+                            s != null ? resultFormOf(s) : null,
+                            statusOf(d),
+                            d.getRoomId(),
+                            true
+                    );
+                })
+                .toList();
         return new ParaclinicalResultResponse(
                 detail.getId(), order.getSophieu(), context.form(), context.service().getType().name(),
                 sectionOf(context, rows), context.service().getCode(), detail.getTenchidinh(),
@@ -530,7 +546,8 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 clinicFacilityRepository.findCurrent()
                         .map(facility -> new ParaclinicalResultResponse.Clinic(
                                 facility.getTenCskcb(), facility.getDiachi(), facility.getSodienthoai()))
-                        .orElse(null));
+                        .orElse(null),
+                siblingServices);
     }
 
     private ParaclinicalResultResponse.Result labResult(LabResult lab) {
