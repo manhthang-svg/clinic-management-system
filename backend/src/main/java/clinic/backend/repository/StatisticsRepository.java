@@ -67,6 +67,30 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         BigDecimal getPatientAmount();
     }
 
+    /** UC-27: one row per (day, status, patient type, priority); {@code followUps} counts follow-up visits. */
+    interface VisitBreakdown {
+        LocalDate getDay();
+
+        VisitStatus getStatus();
+
+        VisitDoituongbnLoai getPatientType();
+
+        boolean getPriority();
+
+        long getTotal();
+
+        long getFollowUps();
+    }
+
+    @Query("""
+            select v.queueDate as day, v.status as status, v.doituongbnLoai as patientType,
+                   v.isPriority as priority, count(v) as total, count(v.followupAppointmentId) as followUps
+            from Visit v
+            where v.queueDate between :from and :to
+            group by v.queueDate, v.status, v.doituongbnLoai, v.isPriority
+            """)
+    List<VisitBreakdown> visitBreakdown(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
     @Query("""
             select v.status as status, count(v) as total
             from Visit v

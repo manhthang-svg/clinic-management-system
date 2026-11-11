@@ -1,6 +1,7 @@
 package clinic.backend.controller;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import clinic.backend.dto.request.LoginRequest;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -24,17 +27,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** UC-26 View Statistics Dashboard through the HTTP API; runs every aggregate query on PostgreSQL. */
+/** UC-26 and UC-27 statistics through the HTTP API; runs every aggregate query on PostgreSQL. */
+@Sql("/db/iteration1-schema-fixture.sql")
 class StatisticsApiIT extends PostgresIntegrationTest {
 
     private static final String PASSWORD = "statistics-api-password";
     private static final String DASHBOARD = "/api/v1/statistics/dashboard";
+    private static final String VISITS = "/api/v1/statistics/visits";
+    private static final UUID RECEPTIONIST = UUID.fromString("0192a000-0005-7000-8000-000000000007");
+    private static final UUID ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000004");
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired StaffAccountRepository accounts;
     @Autowired PasswordHasher passwordHasher;
     @Autowired UuidV7Generator ids;
+    @Autowired JdbcTemplate jdbc;
+
+    private int queueNumber;
 
     @Test
     void adminSeesAnEmptyPeriodWithEveryDayListed() throws Exception {
@@ -86,6 +96,58 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                     .andExpect(status().isForbidden());
         }
         mockMvc.perform(get(DASHBOARD)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void visitStatisticsGroupByDayAndMonthOnPostgres() throws Exception {
+        visit("BN00000003", LocalDate.of(2003, 3, 30), "COMPLETED");
+        visit("BN00000004", LocalDate.of(2003, 3, 30), "CANCELLED");
+        visit("BN00000008", LocalDate.of(2003, 3, 31), "ABANDONED");
+        visit("BN00000003", LocalDate.of(2003, 4, 2), "WAITING");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(VISITS).param("from", "2003-03-30").param("to", "2003-04-02")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groupBy").value("DAY"))
+                .andExpect(jsonPath("$.data.summary.total").value(4))
+                .andExpect(jsonPath("$.data.summary.completed").value(1))
+                .andExpect(jsonPath("$.data.summary.cancelled").value(1))
+                .andExpect(jsonPath("$.data.summary.abandoned").value(1))
+                .andExpect(jsonPath("$.data.summary.inProgress").value(1))
+                .andExpect(jsonPath("$.data.summary.selfPay").value(4))
+                .andExpect(jsonPath("$.data.summary.followUp").value(0))
+                .andExpect(jsonPath("$.data.series", hasSize(4)))
+                .andExpect(jsonPath("$.data.series[0].period").value("2003-03-30"))
+                .andExpect(jsonPath("$.data.series[0].counts.total").value(2))
+                .andExpect(jsonPath("$.data.series[2].period").value("2003-04-01"))
+                .andExpect(jsonPath("$.data.series[2].counts.total").value(0));
+
+        mockMvc.perform(get(VISITS).param("from", "2003-03-30").param("to", "2003-04-02").param("groupBy", "MONTH")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.series", hasSize(2)))
+                .andExpect(jsonPath("$.data.series[0].period").value("2003-03-01"))
+                .andExpect(jsonPath("$.data.series[0].counts.total").value(3))
+                .andExpect(jsonPath("$.data.series[1].period").value("2003-04-01"))
+                .andExpect(jsonPath("$.data.series[1].counts.inProgress").value(1));
+
+        mockMvc.perform(get(VISITS).param("groupBy", "WEEK").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(VISITS).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.DOCTOR))))
+                .andExpect(status().isForbidden());
+    }
+
+    private void visit(String mabenhnhan, LocalDate queueDate, String status) {
+        UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
+                    doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
+                    status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, ?, now(), now(), 0)
+                """, id, "VV-" + id.toString().substring(0, 12), patient, ROOM, RECEPTIONIST, queueDate,
+                ++queueNumber, status);
     }
 
     private StaffAccount account(Role role) {

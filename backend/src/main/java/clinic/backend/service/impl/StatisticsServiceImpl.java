@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,7 +19,11 @@ import clinic.backend.dto.response.DashboardStatisticsResponse.DiagnosisCount;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RevenueSummary;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RoomVisits;
 import clinic.backend.dto.response.DashboardStatisticsResponse.VisitSummary;
+import clinic.backend.dto.response.VisitStatisticsResponse;
+import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
+import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
@@ -54,9 +59,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     @Transactional(readOnly = true)
     public DashboardStatisticsResponse getDashboard(LocalDate from, LocalDate to) {
-        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
-        LocalDate start = from != null ? from : today.withDayOfMonth(1);
-        LocalDate end = to != null ? to : today;
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
         validatePeriod(start, end);
 
         Instant startInstant = start.atStartOfDay(CLINIC_ZONE).toInstant();
@@ -78,6 +82,93 @@ public class StatisticsServiceImpl implements StatisticsService {
                 statisticsRepository.topDiagnoses(startInstant, endInstant, top).stream()
                         .map(d -> new DiagnosisCount(d.getCode(), d.getName(), d.getTotal()))
                         .toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VisitStatisticsResponse getVisitStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+        StatisticsGroupBy bucket = groupBy != null ? groupBy : StatisticsGroupBy.DAY;
+
+        Map<LocalDate, VisitCounter> byPeriod = new LinkedHashMap<>();
+        for (LocalDate key = bucketOf(start, bucket); !key.isAfter(end); key = next(key, bucket)) {
+            byPeriod.put(key, new VisitCounter());
+        }
+        VisitCounter summary = new VisitCounter();
+        for (StatisticsRepository.VisitBreakdown row : statisticsRepository.visitBreakdown(start, end)) {
+            summary.add(row);
+            VisitCounter counter = byPeriod.get(bucketOf(row.getDay(), bucket));
+            if (counter != null) {
+                counter.add(row);
+            }
+        }
+
+        List<VisitPeriod> series = new ArrayList<>(byPeriod.size());
+        byPeriod.forEach((period, counter) -> series.add(new VisitPeriod(period, counter.toCounts())));
+        return new VisitStatisticsResponse(start, end, bucket, summary.toCounts(), series);
+    }
+
+    private LocalDate resolveFrom(LocalDate from) {
+        return from != null ? from : today().withDayOfMonth(1);
+    }
+
+    private LocalDate resolveTo(LocalDate to) {
+        return to != null ? to : today();
+    }
+
+    private LocalDate today() {
+        return LocalDate.now(clock.withZone(CLINIC_ZONE));
+    }
+
+    private static LocalDate bucketOf(LocalDate day, StatisticsGroupBy groupBy) {
+        return groupBy == StatisticsGroupBy.MONTH ? day.withDayOfMonth(1) : day;
+    }
+
+    private static LocalDate next(LocalDate key, StatisticsGroupBy groupBy) {
+        return groupBy == StatisticsGroupBy.MONTH ? key.plusMonths(1) : key.plusDays(1);
+    }
+
+    /** Running totals for one bucket of UC-27. */
+    private static final class VisitCounter {
+        private long total;
+        private long completed;
+        private long inProgress;
+        private long cancelled;
+        private long abandoned;
+        private long insurance;
+        private long selfPay;
+        private long followUp;
+        private long priority;
+
+        void add(StatisticsRepository.VisitBreakdown row) {
+            long n = row.getTotal();
+            total += n;
+            if (row.getStatus() == VisitStatus.COMPLETED) {
+                completed += n;
+            } else if (row.getStatus() == VisitStatus.CANCELLED) {
+                cancelled += n;
+            } else if (row.getStatus() == VisitStatus.ABANDONED) {
+                abandoned += n;
+            } else if (IN_PROGRESS.contains(row.getStatus())) {
+                inProgress += n;
+            }
+            if (row.getPatientType() == VisitDoituongbnLoai.BHYT) {
+                insurance += n;
+            } else if (row.getPatientType() == VisitDoituongbnLoai.DV) {
+                selfPay += n;
+            }
+            if (row.getPriority()) {
+                priority += n;
+            }
+            followUp += row.getFollowUps();
+        }
+
+        VisitCounts toCounts() {
+            return new VisitCounts(total, completed, inProgress, cancelled, abandoned, insurance, selfPay,
+                    followUp, priority);
+        }
     }
 
     private static void validatePeriod(LocalDate start, LocalDate end) {
