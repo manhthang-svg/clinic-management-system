@@ -1,6 +1,6 @@
 import { CheckCircle2, Printer, Users } from 'lucide-react';
 import { PRIORITY_REASON_LABELS, VISIT_STATUS_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
-import { formatDateTime, formatMoney } from './visitFormat';
+import { ageText, formatDate, formatDateTime, formatMoney } from './visitFormat';
 
 function Row({ label, children }) {
   return (
@@ -35,24 +35,33 @@ export function VisitTicket({
   const guidance = ticketGuidance(ticket, loading);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
-      <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-6 space-y-4">
-        <div className="flex items-start gap-3">
+    <div className="space-y-5">
+      {/* While this screen is open, the browser prints on one A5 page. */}
+      <style>{'@media print { @page { size: A5 portrait; margin: 8mm; } }'}</style>
+
+      <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
           <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg! leading-7! font-bold! text-[#1b2533]">{title}</h2>
             <p className="text-sm text-slate-500 mt-0.5">
               Lượt khám <span className="font-mono font-semibold text-slate-700">{visit.sovaovien}</span> ở trạng thái{' '}
               <span className="font-semibold text-slate-700">{VISIT_STATUS_LABELS[visit.status] ?? visit.status}</span>.
             </p>
+            <p className="text-sm text-slate-600 mt-2">{guidance}</p>
           </div>
         </div>
-        <p className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-600">
-          {guidance}
-        </p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onDone}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
+          >
+            <Users className="w-4 h-4" />
+            Về danh sách bệnh nhân
+          </button>
           <button
             type="button"
             onClick={onPrint}
@@ -62,25 +71,161 @@ export function VisitTicket({
             <Printer className="w-4 h-4" />
             In phiếu khám
           </button>
-          <button
-            type="button"
-            onClick={onDone}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
-          >
-            <Users className="w-4 h-4" />
-            Về danh sách bệnh nhân
-          </button>
         </div>
         {error && (
-          <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700">
+          <div role="alert" className="basis-full p-3 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700">
             {error}{' '}
             <button type="button" className="font-semibold underline cursor-pointer" onClick={onReload}>Tải lại phiếu</button>
           </div>
         )}
       </section>
 
-      {ticket && <VisitTicketSheet ticket={ticket} />}
+      {ticket && (
+        <div className="flex justify-center rounded-2xl bg-slate-100 px-2 py-6 sm:px-6 sm:py-8">
+          <VisitTicketA5 ticket={ticket} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function A5Row({ label, wide = false, labelWidth = 'w-28', children }) {
+  return (
+    <div className={`flex gap-2 py-1 ${wide ? 'sm:col-span-2 print:col-span-2' : ''}`}>
+      <dt className={`${labelWidth} shrink-0 whitespace-nowrap text-slate-500`}>{label}:</dt>
+      <dd className="min-w-0 flex-1 font-semibold text-slate-900 break-words">{children}</dd>
+    </div>
+  );
+}
+
+/** Full date of birth; the birth year alone when the date is not sent. */
+function birthText(ticket) {
+  return ticket.dateOfBirth ? formatDate(ticket.dateOfBirth) : (ticket.birthYear ?? '—');
+}
+
+function cardValidity(ticket) {
+  if (!ticket.insuranceValidFrom && !ticket.insuranceValidTo) return '—';
+  return `${ticket.insuranceValidFrom ? formatDate(ticket.insuranceValidFrom) : '…'} – ${
+    ticket.insuranceValidTo ? formatDate(ticket.insuranceValidTo) : '…'}`;
+}
+
+function PaymentNote({ ticket }) {
+  const payable = typeof ticket?.patientAmount === 'number' ? ticket.patientAmount : null;
+  // BR-16: only a self-paid ticket shows the fee to pay before waiting.
+  if (ticket.visitType === 'BHYT') {
+    return <p className="font-semibold text-emerald-700">Mời đến khu chờ – thanh toán sau khi có kết luận</p>;
+  }
+  if (payable === 0) return <p className="font-semibold text-emerald-700">Phí khám đã được chi trả toàn bộ – mời đến khu chờ</p>;
+  if (ticket.queueNumber != null) return <p className="font-semibold text-emerald-700">Đã thanh toán phí khám – mời đến khu chờ</p>;
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-slate-700">Thanh toán tại quầy thu ngân trước khi vào khu chờ</p>
+        {payable !== null && <p className="text-lg font-extrabold text-slate-900">{formatMoney(payable)}</p>}
+      </div>
+      {/* I1-D48: the queue number is issued with the payment. */}
+      <p className="text-[12px] italic text-slate-500">Sau khi thanh toán sẽ nhận số thứ tự khám tại quầy thu ngân.</p>
+    </div>
+  );
+}
+
+/** UC-41 examination ticket on an A5 sheet (148 × 210 mm), as handed to the patient. */
+export function VisitTicketA5({ ticket }) {
+  const registeredAt = ticket.registeredAt ? new Date(ticket.registeredAt) : null;
+  const visitTypeText = `${VISIT_TYPE_LABELS[ticket.visitType] ?? '—'}${
+    ticket.visitType === 'BHYT' && ticket.coverageRate != null ? ` · Mức hưởng ${ticket.coverageRate}%` : ''}`;
+
+  return (
+    <article
+      aria-label="Phiếu khám bệnh"
+      className="visit-ticket-a5-print relative flex w-full max-w-[148mm] flex-col bg-white text-[13px] leading-5 text-slate-800 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 p-[9mm] sm:aspect-[148/210]"
+    >
+      <header className="flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-3">
+        <div className="min-w-0">
+          <p className="font-bold uppercase leading-tight text-slate-900">{ticket.facilityName}</p>
+          {ticket.facilityAddress && <p className="mt-0.5 text-[11px] text-slate-500">{ticket.facilityAddress}</p>}
+        </div>
+        <div className="shrink-0 text-right text-[11px] text-slate-600">
+          <p>Mã lượt khám</p>
+          <p className="font-mono text-[13px] font-bold text-slate-900">{ticket.registrationCode}</p>
+        </div>
+      </header>
+
+      <div className="mt-4 text-center">
+        <h3 className="text-xl! font-extrabold! uppercase tracking-wide text-slate-900">Phiếu khám bệnh</h3>
+        {ticket.reprint && (
+          <p className="mt-1 inline-block rounded border-2 border-rose-600 px-2 text-xs font-extrabold text-rose-700">IN LẠI</p>
+        )}
+      </div>
+
+      {/* I1-D48: a visit that must pay first gets its number with the receipt, so its ticket shows none. */}
+      {(ticket.queueNumber != null || ticket.priority) && (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          {ticket.queueNumber != null && (
+            <div className="min-w-36 rounded-xl border-2 border-[#127e7a] px-6 py-2 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#127e7a]">Số thứ tự</p>
+              <p className="text-6xl font-extrabold leading-none text-[#127e7a]">{ticket.queueNumber}</p>
+            </div>
+          )}
+          {ticket.priority && (
+            <span className="rounded-md border border-rose-300 bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">
+              ƯU TIÊN · {PRIORITY_REASON_LABELS[ticket.priorityReason] ?? ''}
+            </span>
+          )}
+        </div>
+      )}
+
+      <section className="mt-5">
+        <h4 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">I. Thông tin bệnh nhân</h4>
+        <dl className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 print:grid-cols-2">
+          <A5Row label="Họ và tên" wide><span className="uppercase">{ticket.patientName}</span></A5Row>
+          <A5Row label="Mã bệnh nhân"><span className="font-mono">{ticket.patientCode}</span></A5Row>
+          <A5Row label="Giới tính">{ticket.gender ?? '—'}</A5Row>
+          <A5Row label="Ngày sinh">{birthText(ticket)}</A5Row>
+          <A5Row label="Tuổi">
+            {ageText(ticket.dateOfBirth, ticket.registeredAt ? new Date(ticket.registeredAt) : new Date())}
+          </A5Row>
+          <A5Row label="Điện thoại">{ticket.phone || '—'}</A5Row>
+          <A5Row label="Dân tộc">{ticket.ethnicity || '—'}</A5Row>
+          <A5Row label="Nghề nghiệp" wide>{ticket.occupation || '—'}</A5Row>
+          <A5Row label="Địa chỉ" wide>{ticket.address || '—'}</A5Row>
+          <A5Row label="Đối tượng" wide>{visitTypeText}</A5Row>
+          {ticket.visitType === 'BHYT' && (
+            <>
+              <A5Row label="Số thẻ BHYT"><span className="font-mono">{ticket.insuranceCardNumber || '—'}</span></A5Row>
+              <A5Row label="Hạn thẻ">{cardValidity(ticket)}</A5Row>
+            </>
+          )}
+        </dl>
+      </section>
+
+      <section className="mt-4">
+        <h4 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">II. Nơi khám</h4>
+        <dl>
+          <A5Row labelWidth="w-36" label="Phòng khám">{ticket.roomName ?? '—'}</A5Row>
+          <A5Row labelWidth="w-36" label="Vị trí">{ticket.roomLocation || '—'}</A5Row>
+          <A5Row labelWidth="w-36" label="Bác sĩ">{ticket.doctorNames?.join(', ') || 'Chưa phân công'}</A5Row>
+          <A5Row labelWidth="w-36" label="Thời điểm đăng ký">{formatDateTime(ticket.registeredAt)}</A5Row>
+          {ticket.reasonForVisit && <A5Row labelWidth="w-36" label="Lý do khám">{ticket.reasonForVisit}</A5Row>}
+        </dl>
+      </section>
+
+      <div className="mt-4 rounded-lg border border-dashed border-slate-400 px-3 py-2.5">
+        <PaymentNote ticket={ticket} />
+      </div>
+
+      <footer className="mt-auto flex justify-end pt-6">
+        <div className="w-48 text-center text-[12px]">
+          <p className="italic text-slate-600">
+            {registeredAt
+              ? `Ngày ${registeredAt.getDate()} tháng ${registeredAt.getMonth() + 1} năm ${registeredAt.getFullYear()}`
+              : 'Ngày … tháng … năm …'}
+          </p>
+          <p className="mt-1 font-bold uppercase text-slate-800">Người tiếp đón</p>
+          <p className="mt-2 font-semibold text-slate-900">{ticket.registeredByName || '—'}</p>
+        </div>
+      </footer>
+    </article>
   );
 }
 

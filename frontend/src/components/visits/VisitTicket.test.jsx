@@ -28,6 +28,40 @@ const ticket = {
 };
 
 describe('VisitTicket', () => {
+  it('prints the patient details of the ticket', () => {
+    render(
+      <VisitTicket
+        visit={visit}
+        ticket={{
+          ...ticket,
+          dateOfBirth: '1990-05-18',
+          phone: '0901234567',
+          address: '12 Đường Số 1, Phường Bến Thành, TP. Hồ Chí Minh',
+          occupation: 'Giáo viên',
+          ethnicity: 'Kinh',
+          insuranceCardNumber: 'HS4010120878811',
+          insuranceValidFrom: '2026-01-01',
+          insuranceValidTo: '2026-12-31',
+          reasonForVisit: 'Đau đầu',
+          registeredByName: 'Nguyễn Thị Lan',
+          facilityAddress: '78 Giải Phóng, Đống Đa, Hà Nội',
+        }}
+        onPrint={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('18/5/1990')).toBeInTheDocument();
+    expect(screen.getByText('36 tuổi 5 tháng')).toBeInTheDocument();
+    expect(screen.getByText('0901234567')).toBeInTheDocument();
+    expect(screen.getByText('12 Đường Số 1, Phường Bến Thành, TP. Hồ Chí Minh')).toBeInTheDocument();
+    expect(screen.getByText('HS4010120878811')).toBeInTheDocument();
+    expect(screen.getByText('1/1/2026 – 31/12/2026')).toBeInTheDocument();
+    expect(screen.getByText('Đau đầu')).toBeInTheDocument();
+    expect(screen.getByText('Nguyễn Thị Lan')).toBeInTheDocument();
+    expect(screen.getByText('78 Giải Phóng, Đống Đa, Hà Nội')).toBeInTheDocument();
+  });
+
   it('sends an insured patient to the waiting area and to the cashier after the conclusion (BR-15)', () => {
     render(<VisitTicket visit={visit} ticket={ticket} onPrint={vi.fn()} onDone={vi.fn()} />);
 
@@ -48,6 +82,7 @@ describe('VisitTicket', () => {
 
     expect(screen.getByText('150.000 đ')).toBeInTheDocument();
     expect(screen.getByText('Thanh toán tại quầy thu ngân trước khi vào khu chờ')).toBeInTheDocument();
+    expect(screen.getByText('Sau khi thanh toán sẽ nhận số thứ tự khám tại quầy thu ngân.')).toBeInTheDocument();
     // I1-D48: the queue number is issued with the payment.
     expect(screen.queryByText('Số thứ tự')).toBeNull();
   });

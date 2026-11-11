@@ -749,6 +749,8 @@ p[role='alert']:not(.banner) {
 
   .visit-ticket-print,
   .visit-ticket-print *,
+  .visit-ticket-a5-print,
+  .visit-ticket-a5-print *,
   .checkin-ticket-print,
   .checkin-ticket-print *,
   .payment-receipt-print,
@@ -803,6 +805,24 @@ p[role='alert']:not(.banner) {
     border: 0 !important;
     box-shadow: none !important;
     color: #000 !important;
+  }
+
+  /* UC-41: the A5 examination ticket fills the printable area of the A5 page set by the ticket screen. */
+  .visit-ticket-a5-print {
+    position: fixed;
+    inset: 0 0 auto 0;
+    box-sizing: border-box;
+    width: auto !important;
+    max-width: none !important;
+    height: 194mm;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .visit-ticket-print {
