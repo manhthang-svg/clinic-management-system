@@ -45,6 +45,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
   const { collapsed, setCollapsed, toggleCollapsed } = useResponsiveSidebar();
 
   const paths = {
+    dashboard: '/admin/dashboard',
     accounts: '/admin/accounts',
     departments: '/admin/departments',
     rooms: '/admin/rooms',
