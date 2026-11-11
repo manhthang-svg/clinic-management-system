@@ -49,11 +49,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -78,6 +78,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
     private final PaymentCompletionService paymentCompletionService;
     private final InsuranceCoverageService insuranceCoverageService;
     private final ParaclinicalProgressService paraclinicalProgressService;
+    private final ParaclinicalRoomDuty paraclinicalRoomDuty;
     private final UuidV7Generator uuidV7Generator;
     private final Clock clock;
 
@@ -87,15 +88,16 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         // UC-49 bước 2: chỉ dịch vụ CLS đang hoạt động, kèm giá dịch vụ và giá BHYT (BR-08, BR-10)
         Map<UUID, String> groupNames = serviceGroupRepository.findAll().stream()
                 .collect(Collectors.toMap(ServiceGroup::getId, ServiceGroup::getServiceGroupName));
-        // I1-D47: các phòng đang hoạt động của nhóm dịch vụ, chọn sẵn phòng ít người chờ nhất (BR-50-01)
-        Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = new HashMap<>();
+        // I1-D47: các phòng đang hoạt động của nhóm dịch vụ, chọn sẵn phòng ít người chờ nhất (BR-50-01).
+        // Số truy vấn cố định (không phụ thuộc số phòng, số nhóm) để màn hình chỉ định mở nhanh.
+        Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = activeRoomOptions();
         return medicalServiceRepository
                 .findAllByStatusAndTypeInOrderByTenchidinhAsc(ActivationStatus.ACTIVE, PARACLINICAL_TYPES)
                 .stream()
                 .map(service -> {
                     List<ParaclinicalServiceOptionResponse.RoomOption> rooms = service.getServiceGroupId() == null
                             ? List.of()
-                            : roomsByGroup.computeIfAbsent(service.getServiceGroupId(), this::roomOptions);
+                            : roomsByGroup.getOrDefault(service.getServiceGroupId(), List.of());
                     return new ParaclinicalServiceOptionResponse(
                             service.getId(),
                             service.getCode(),
@@ -111,21 +113,46 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 .toList();
     }
 
-    private List<ParaclinicalServiceOptionResponse.RoomOption> roomOptions(UUID serviceGroupId) {
-        return roomRepository
-                .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(serviceGroupId, ActivationStatus.ACTIVE)
+    /**
+     * Active paraclinical rooms by service group, in room-code order, with their waiting counts: two queries in
+     * all instead of one per group and one per room.
+     */
+    private Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> activeRoomOptions() {
+        List<Room> rooms = roomRepository
+                .findByTypeAndStatusOrderByRoomCodeAsc(RoomType.PARACLINICAL, ActivationStatus.ACTIVE)
                 .stream()
-                .map(room -> new ParaclinicalServiceOptionResponse.RoomOption(
-                        room.getId(), room.getRoomCode(), room.getRoomName(), room.getLocation(),
-                        paraclinicalOrderDetailRepository.countByRoomIdAndStatus(
-                                room.getId(), ParaclinicalOrderDetailStatus.WAITING)))
+                .filter(room -> room.getServiceGroupId() != null)
                 .toList();
+        if (rooms.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Long> waiting = paraclinicalOrderDetailRepository
+                .countByRoomIdsAndStatus(rooms.stream().map(Room::getId).toList(), ParaclinicalOrderDetailStatus.WAITING)
+                .stream()
+                .collect(Collectors.toMap(
+                        ParaclinicalOrderDetailRepository.RoomCount::getRoomId,
+                        ParaclinicalOrderDetailRepository.RoomCount::getTotal));
+        Set<UUID> staffed = paraclinicalRoomDuty.staffedRooms(clock.instant());
+        return rooms.stream().collect(Collectors.groupingBy(
+                Room::getServiceGroupId,
+                LinkedHashMap::new,
+                Collectors.mapping(room -> new ParaclinicalServiceOptionResponse.RoomOption(
+                        room.getId(), room.getRoomCode(), room.getRoomName(), room.getLocation(),
+                        waiting.getOrDefault(room.getId(), 0L), staffed.contains(room.getId())),
+                        Collectors.toList())));
     }
 
-    /** Same choice as {@link PaymentCompletionService#leastBusyRoom}: fewest waiting, then lower room code. */
+    /**
+     * The preselected room: one with staff on duty now first, then the fewest waiting, then the lower room code.
+     * Without any staffed room the same order applies to all rooms ({@link PaymentCompletionService#leastBusyRoom}).
+     */
     private static UUID leastBusy(List<ParaclinicalServiceOptionResponse.RoomOption> rooms) {
         return rooms.stream()
-                .min(Comparator.comparingLong(ParaclinicalServiceOptionResponse.RoomOption::waitingCount))
+                .min(Comparator
+                        .comparing((ParaclinicalServiceOptionResponse.RoomOption room) -> !room.onDuty())
+                        .thenComparingLong(ParaclinicalServiceOptionResponse.RoomOption::waitingCount)
+                        .thenComparing(ParaclinicalServiceOptionResponse.RoomOption::roomCode,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(ParaclinicalServiceOptionResponse.RoomOption::roomId)
                 .orElse(null);
     }
@@ -149,9 +176,18 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         List<MedicalService> services = requireOrderableServices(request.items().stream()
                 .map(CreateParaclinicalOrderRequest.Item::serviceId)
                 .toList());
+        // Phòng thực hiện được hệ thống tự xếp lúc tạo chỉ định: phòng có người trực ca hiện tại, ít người chờ
+        // nhất, rồi mã phòng nhỏ hơn. Danh sách phòng được tính một lần cho cả phiếu.
+        Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = null;
         List<UUID> roomIds = new ArrayList<>();
         for (int i = 0; i < services.size(); i++) {
-            roomIds.add(chosenRoom(services.get(i), request.items().get(i).roomId()));
+            UUID requestedRoom = request.items().get(i).roomId();
+            if (requestedRoom == null && roomsByGroup == null) {
+                roomsByGroup = activeRoomOptions();
+            }
+            roomIds.add(requestedRoom == null
+                    ? autoRoom(services.get(i), roomsByGroup)
+                    : chosenRoom(services.get(i), requestedRoom));
         }
 
         // 3. Bệnh án đang mở; chưa có thì mở bệnh án ngoại trú (từ đây không chuyển phòng được nữa, BR-24)
@@ -265,14 +301,23 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
     }
 
     /**
-     * I1-D47, BR-50-01: the room the Doctor chose, which must be an Active paraclinical room of the service's group.
-     * Without a choice the least busy Active room is used; {@code null} when no Active room performs the service, and
-     * the release then reports it as unrouted (UC-71 AF-02).
+     * The room the system assigns: a room of the service's group with staff on duty now, then the fewest waiting,
+     * then the lower room code ({@link #leastBusy}); {@code null} when no Active room performs the service, and the
+     * release then reports it as unrouted (UC-71 AF-02).
+     */
+    private static UUID autoRoom(
+            MedicalService service, Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup) {
+        if (service.getServiceGroupId() == null) {
+            return null;
+        }
+        return leastBusy(roomsByGroup.getOrDefault(service.getServiceGroupId(), List.of()));
+    }
+
+    /**
+     * I1-D47, BR-50-01: a room sent by the client (older clients), which must be an Active paraclinical room of the
+     * service's group.
      */
     private UUID chosenRoom(MedicalService service, UUID roomId) {
-        if (roomId == null) {
-            return paymentCompletionService.leastBusyRoom(service.getServiceGroupId()).map(Room::getId).orElse(null);
-        }
         Room room = roomRepository.findById(roomId).orElse(null);
         boolean eligible = room != null
                 && room.getStatus() == ActivationStatus.ACTIVE

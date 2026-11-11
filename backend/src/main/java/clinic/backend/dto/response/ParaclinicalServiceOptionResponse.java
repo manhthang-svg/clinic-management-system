@@ -29,7 +29,9 @@ public record ParaclinicalServiceOptionResponse(
             String roomCode,
             String roomName,
             String location,
-            long waitingCount
+            long waitingCount,
+            /** A staff member is on duty in the room in the current shift. */
+            boolean onDuty
     ) {
     }
 }

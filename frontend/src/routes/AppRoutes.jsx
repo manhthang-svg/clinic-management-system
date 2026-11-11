@@ -320,6 +320,8 @@ export function AppRoutes({
           <Route path="conclusion" element={<DoctorWaitingListPage initialTab="conclusion" />} />
           <Route path="postponed" element={<DoctorWaitingListPage initialTab="skipped" />} />
           <Route path="clinical-examination" element={<ClinicalExaminationPage />} />
+          {/* One element for every tab, so switching tabs does not reload the page. */}
+          <Route path="clinical-examination/:visitId/:section?" element={<ClinicalExaminationPage />} />
           <Route path="paraclinical-orders" element={<Navigate to="../appointments" replace />} />
           <Route path="room-transfers" element={<Navigate to="../appointments" replace />} />
           <Route

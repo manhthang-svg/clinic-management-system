@@ -291,7 +291,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             <MemoryRouter initialEntries={['/doctor/appointments']}>
                 <Routes>
                     <Route path="/doctor/appointments" element={<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} />} />
-                    <Route path="/doctor/clinical-examination" element={<LocationProbe />} />
+                    <Route path="/doctor/clinical-examination/:visitId/:section?" element={<LocationProbe />} />
                 </Routes>
             </MemoryRouter>,
         );
@@ -300,7 +300,7 @@ describe('DoctorWaitingListPage backend integration', () => {
         fireEvent.click(patientName.closest('tr'));
 
         expect(await screen.findByTestId('location')).toHaveTextContent(
-            '/doctor/clinical-examination|visit-in-examination|Nguyễn Minh Khôi',
+            '/doctor/clinical-examination/visit-in-examination|visit-in-examination|Nguyễn Minh Khôi',
         );
         expect(visitApi.startExamination).not.toHaveBeenCalled();
     });
@@ -328,7 +328,7 @@ describe('DoctorWaitingListPage backend integration', () => {
             <MemoryRouter initialEntries={['/doctor/appointments']}>
                 <Routes>
                     <Route path="/doctor/appointments" element={<DoctorWaitingListPage visitApi={visitApi} loadProfile={vi.fn().mockResolvedValue({})} />} />
-                    <Route path="/doctor/clinical-examination" element={<LocationProbe />} />
+                    <Route path="/doctor/clinical-examination/:visitId/:section?" element={<LocationProbe />} />
                 </Routes>
             </MemoryRouter>,
         );
@@ -339,7 +339,7 @@ describe('DoctorWaitingListPage backend integration', () => {
         fireEvent.click(row);
 
         expect(await screen.findByTestId('location')).toHaveTextContent(
-            '/doctor/clinical-examination|visit-paraclinical|Trần Văn CLS',
+            '/doctor/clinical-examination/visit-paraclinical|visit-paraclinical|Trần Văn CLS',
         );
     });
 });

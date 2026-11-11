@@ -28,6 +28,9 @@ public interface DutyScheduleRepository extends JpaRepository<DutySchedule, UUID
     // kiem tra 1 phong chi 1 nguoi truc
     Optional<DutySchedule> findByRoomIdAndWorkDateAndShift(UUID roomId, LocalDate workDate, DutyShift shift);
 
+    // Lịch trực của mọi phòng trong một ca (một truy vấn thay vì một truy vấn mỗi phòng)
+    List<DutySchedule> findByWorkDateAndShift(LocalDate workDate, DutyShift shift);
+
     // Kiểm tra trùng lịch nhân viên
     boolean existsByWorkDateAndShiftAndStaffAccountIdAndIdNot(LocalDate workDate, DutyShift shift, UUID staffAccountId, UUID id);
 
