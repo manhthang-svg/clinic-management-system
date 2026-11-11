@@ -18,7 +18,9 @@ function FeeItem({ label, value }) {
   return (
     <div className="p-3 rounded-xl bg-white border border-slate-100">
       <dt className="text-[11px] text-slate-500">{label}</dt>
-      <dd className="text-sm font-bold text-slate-800 mt-0.5">{formatMoney(value)}</dd>
+      <dd className="text-sm font-bold text-slate-800 mt-0.5">
+        {value === null ? 'Không thuộc BHYT' : value === undefined ? '—' : formatMoney(value)}
+      </dd>
     </div>
   );
 }
@@ -29,23 +31,25 @@ function FeeSummary({ fee, loading, insured }) {
   if (!fee) {
     return <p role="alert" className="text-sm text-rose-600">Không tải được phí khám. Vui lòng quay lại và thử lại.</p>;
   }
-  if (insured) {
-    return (
-      <dl className="grid grid-cols-2 gap-3">
-        <FeeItem label="Giá viện phí" value={fee.clinicPrice} />
-        <FeeItem label="Giá BHYT" value={fee.appliedPrice} />
-      </dl>
-    );
-  }
-  return (
-    <dl className="grid grid-cols-3 gap-3">
+  const prices = (
+    <dl className="grid grid-cols-2 gap-3">
       <FeeItem label="Giá viện phí" value={fee.clinicPrice} />
-      <FeeItem label="BHYT chi trả" value={fee.insuranceAmount ?? 0} />
-      <div className="p-3 rounded-xl bg-[#e6f5f3] border border-[#bfe0dc]">
-        <dt className="text-[11px] text-[#127e7a]">Bệnh nhân trả</dt>
-        <dd className="text-base font-extrabold text-[#127e7a] mt-0.5">{formatMoney(fee.patientAmount)}</dd>
-      </div>
+      <FeeItem label="Giá BHYT" value={fee.insurancePrice} />
     </dl>
+  );
+  if (insured) return prices;
+  // A self-paid visit pays the clinic price in full.
+  return (
+    <div className="space-y-3">
+      {prices}
+      <dl className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#e6f5f3] border border-[#bfe0dc]">
+        <dt className="text-sm font-semibold text-[#127e7a]">
+          Bệnh nhân phải trả
+          <span className="block text-[11px] font-normal text-[#127e7a]/80">Khám dịch vụ · tính theo giá viện phí</span>
+        </dt>
+        <dd className="text-lg font-extrabold text-[#127e7a]">{formatMoney(fee.clinicPrice)}</dd>
+      </dl>
+    </div>
   );
 }
 
@@ -125,6 +129,7 @@ export function VisitConfirmModal({
               {roomLabel(room)}
               {room?.location && <div className="text-xs text-slate-500 font-normal">{room.location}</div>}
             </Row>
+            <Row label="Bác sĩ khám">{room?.doctorName || '—'}</Row>
             <Row label="Lý do khám">{form.reason.trim()}</Row>
           </dl>
 

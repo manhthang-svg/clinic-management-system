@@ -196,7 +196,7 @@ public class VisitServiceImpl implements VisitService {
                 : resolveInsurance(patient, insuranceCardNumber);
         FeeCalculation fee = calculateFee(service, insurance);
         return new VisitFeePreviewResponse(
-                service.getTenchidinh(), service.getClinicPrice(), fee.appliedPrice(),
+                service.getTenchidinh(), service.getClinicPrice(), service.getInsurancePrice(), fee.appliedPrice(),
                 fee.insuranceAmount(), fee.patientAmount());
     }
 
