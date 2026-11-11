@@ -167,7 +167,9 @@ public class PaymentCompletionService {
         if (room == null) {
             detail.releaseTo(null, null, now);
         } else {
-            detail.releaseTo(room.getId(), queueCounterRepository.takeNext(room.getId(), today), now);
+            // Case 1 (Check-in tại phòng): Chỉ phân bổ phòng, không cấp số thứ tự ngay.
+            // Bệnh nhân sẽ được cấp STT khi KTV bấm xác nhận có mặt tại phòng.
+            detail.releaseTo(room.getId(), null, now);
         }
         paraclinicalOrderDetailRepository.save(detail);
         return room != null;

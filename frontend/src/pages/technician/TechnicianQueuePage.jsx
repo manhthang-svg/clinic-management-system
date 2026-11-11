@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Loader2,
   Eye,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
@@ -246,7 +247,120 @@ export function TechnicianQueuePage() {
 
   const isInitialLoading = roomsLoading || !currentRoomId || queueData.stats === null;
   const stats = queueData.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
-  const orders = queueData.items || [];
+  // Chỉ hiển thị những ca đã thanh toán (loại bỏ PENDING_PAYMENT)
+  const orders = useMemo(() => {
+    return (queueData.items || []).filter((item) => item.status !== 'PENDING_PAYMENT');
+  }, [queueData.items]);
+
+  // Gom nhóm danh sách chờ: Mỗi bệnh nhân / lượt khám hiển thị 1 dòng duy nhất trong danh sách chờ của phòng
+  const groupedOrders = useMemo(() => {
+    const groups = new Map();
+
+    for (const item of orders) {
+      const isItemCheckedIn = Boolean(
+        item.isCheckedIn || (item.queueNumber != null && item.queueNumber > 0) || item.status === 'IN_PROGRESS' || item.status === 'COMPLETED'
+      );
+      // Nhóm theo lượt chỉ định của bệnh nhân tại phòng
+      const groupKey = item.orderId || item.patientId || item.id;
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          ...item,
+          isCheckedIn: isItemCheckedIn,
+          roomServices: [item],
+        });
+      } else {
+        const existing = groups.get(groupKey);
+        existing.roomServices.push(item);
+        if (item.priority === 'PRIORITY') {
+          existing.priority = 'PRIORITY';
+          existing.priorityLabel = item.priorityLabel || 'Ưu tiên';
+        }
+        if (existing.queueNumber == null && item.queueNumber != null) {
+          existing.queueNumber = item.queueNumber;
+        }
+        if (!existing.isCheckedIn && isItemCheckedIn) {
+          existing.isCheckedIn = true;
+          existing.checkedInAtTime = item.checkedInAtTime;
+        }
+      }
+    }
+
+    return Array.from(groups.values()).map((group) => {
+      const svcs = group.roomServices;
+      const anyInProgress = svcs.some((s) => s.status === 'IN_PROGRESS');
+      const allCompleted = svcs.every((s) => s.status === 'COMPLETED');
+      const allCancelled = svcs.every((s) => s.status === 'CANCELLED');
+      const anySkipped = svcs.some((s) => s.isSkipped || s.status === 'SKIPPED');
+      const anyCheckedIn = svcs.some(
+        (s) => Boolean(s.isCheckedIn) || (s.queueNumber != null && s.queueNumber > 0) || s.status === 'IN_PROGRESS' || s.status === 'COMPLETED'
+      );
+
+      let groupStatus = 'WAITING';
+      if (anyInProgress) {
+        groupStatus = 'IN_PROGRESS';
+      } else if (allCompleted) {
+        groupStatus = 'COMPLETED';
+      } else if (allCancelled) {
+        groupStatus = 'CANCELLED';
+      } else if (anySkipped) {
+        groupStatus = 'SKIPPED';
+      } else if (anyCheckedIn) {
+        groupStatus = 'WAITING';
+      }
+
+      return {
+        ...group,
+        status: groupStatus,
+        isCheckedIn: anyCheckedIn,
+        isSkipped: anySkipped,
+      };
+    });
+  }, [orders]);
+
+  // Quản lý 2 Tab: 'waiting_unconfirmed' (Chờ tiếp nhận / Chưa đến) & 'active_queue' (Hàng đợi vào phòng)
+  const [activeTab, setActiveTab] = useState('waiting_unconfirmed');
+  const tabInitializedRef = useRef(false);
+
+  // Tab 1: Bệnh nhân chưa có mặt (chưa check-in, chưa có STT) - Sắp xếp theo ưu tiên và thời gian chỉ định
+  const unconfirmedList = useMemo(() => {
+    return groupedOrders
+      .filter((o) => !o.isCheckedIn)
+      .sort((a, b) => {
+        if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
+        if (a.priority !== 'PRIORITY' && b.priority === 'PRIORITY') return 1;
+        return (a.orderTime || '').localeCompare(b.orderTime || '');
+      });
+  }, [groupedOrders]);
+
+  // Tab 2: Bệnh nhân đã có mặt ngoài sảnh và đã được cấp số thứ tự - SẮP XẾP SỐ THỨ TỰ TĂNG DẦN (thấp lên trước, cao ở sau: 01, 02, 03...)
+  const activeQueueList = useMemo(() => {
+    return groupedOrders
+      .filter((o) => o.isCheckedIn)
+      .sort((a, b) => {
+        if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
+        if (a.priority !== 'PRIORITY' && b.priority === 'PRIORITY') return 1;
+        const qA = a.queueNumber != null ? a.queueNumber : Infinity;
+        const qB = b.queueNumber != null ? b.queueNumber : Infinity;
+        if (qA !== qB) return qA - qB;
+        return (a.orderTime || '').localeCompare(b.orderTime || '');
+      });
+  }, [groupedOrders]);
+
+  // Khởi tạo tab linh hoạt: nếu không có ca chưa đến nhưng có ca đang ở active queue (như trong ca trực đang làm hoặc test) thì mở active queue
+  useEffect(() => {
+    if (!tabInitializedRef.current && queueData.items.length > 0) {
+      tabInitializedRef.current = true;
+      const isItemCheckedIn = (i) => Boolean(i?.isCheckedIn || (i?.queueNumber != null && i?.queueNumber > 0) || i?.status === 'IN_PROGRESS' || i?.status === 'COMPLETED');
+      const hasUnconfirmed = queueData.items.some((i) => !isItemCheckedIn(i));
+      const hasActive = queueData.items.some((i) => isItemCheckedIn(i));
+      if (!hasUnconfirmed && hasActive) {
+        setActiveTab('active_queue');
+      }
+    }
+  }, [queueData.items]);
+
+  // Danh sách hiển thị theo tab hiện tại
+  const displayedOrders = activeTab === 'waiting_unconfirmed' ? unconfirmedList : activeQueueList;
 
   // Đặt lại bộ lọc
   const handleResetFilters = () => {
@@ -269,11 +383,45 @@ export function TechnicianQueuePage() {
     setIsDrawerOpen(true);
   };
 
+  // Thao tác: KTV xác nhận bệnh nhân có mặt tại phòng (Check-in cấp STT cho toàn bộ lượt khám)
+  const handleCheckInOrder = async (order, e) => {
+    e?.stopPropagation();
+    try {
+      setActionLoadingId(order.id);
+      const targetId = order.roomServices?.[0]?.id || order.id;
+      const updated = await technicianApi.checkInOrder(targetId);
+      playChimeSound();
+      const numStr = updated?.queueNumber
+        ? (updated.queueNumber < 10 ? `0${updated.queueNumber}` : updated.queueNumber)
+        : '';
+      toast.success(
+        `✓ Đã xác nhận bệnh nhân ${order.patientName} có mặt! Cấp số thứ tự #${numStr}`,
+        { duration: 4500 }
+      );
+      if (selectedOrder?.id === order.id || order.roomServices?.some((s) => s.id === selectedOrder?.id)) {
+        setSelectedOrder(updated);
+      }
+      await loadQueue(currentRoomId, { silent: true });
+      // Bệnh nhân được cấp STT => tự động chuyển sang Tab 2 (Hàng đợi vào phòng)
+      setActiveTab('active_queue');
+    } catch (err) {
+      if (err?.errorResponse?.code === 'PARACLINICAL_ORDER_NOT_PAID') {
+        toast.error('Bệnh nhân chưa thanh toán dịch vụ này tại quầy thu ngân.');
+      } else {
+        toast.error(err?.message || 'Không thể xác nhận có mặt.');
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   // Thao tác: Phát loa gọi số bệnh nhân
   const handleCallQueue = (order, e) => {
     e?.stopPropagation();
     playChimeSound();
-    const numStr = order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber;
+    const numStr = order.queueNumber
+      ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber)
+      : '---';
     const roomName = currentRoom?.name || 'phòng máy';
     toast.success(
       `🔔 Đang gọi số #${numStr}: Bệnh nhân ${order.patientName} vào ${roomName}!`,
@@ -582,372 +730,506 @@ export function TechnicianQueuePage() {
         />
       </div>
 
-      {/* 3. TOOLBAR LỌC & TÌM KIẾM */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Input Tìm kiếm */}
-        <div className="relative w-full md:flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm theo Mã bệnh nhân (Patient ID), Mã phiếu, Họ tên, số CCCD hoặc BHYT..."
-            className="w-full h-10 pl-10 pr-4 bg-slate-50/70 border border-slate-200/80 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:bg-white transition-all"
-          />
-        </div>
-
-        {/* Dropdowns lọc */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Bộ lọc trạng thái */}
-          <div className="relative min-w-[145px]">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="WAITING">Chờ tiếp nhận</option>
-              <option value="SKIPPED">Đã bỏ qua (Vắng)</option>
-              <option value="IN_PROGRESS">Đang thực hiện</option>
-              <option value="CANCELLED">Đã từ chối</option>
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {/* Bộ lọc phòng khám chỉ định */}
-          <div className="relative min-w-[170px]">
-            <select
-              value={doctorRoomFilter}
-              onChange={(e) => setDoctorRoomFilter(e.target.value)}
-              className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
-            >
-              <option value="ALL">Tất cả phòng gửi chỉ định</option>
-              {doctorRoomsList.map((roomName) => (
-                <option key={roomName} value={roomName}>
-                  {roomName}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {/* Nút Đặt lại bộ lọc */}
+      {/* 3. BẢNG DANH SÁCH CHỜ CẬN LÂM SÀNG VỚI 2 TABS PHÂN TÁCH (THEO DEPARTMENTMANAGEMENTPAGE) */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
+        {/* Tabs phân tách ở ngay trên bảng dữ liệu */}
+        <div className="flex items-center gap-2 border-b border-slate-200/80 pb-0">
+          {/* Tab 1: Chờ tiếp nhận / Chưa đến (Chưa có STT) */}
           <button
             type="button"
-            onClick={handleResetFilters}
-            className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-all cursor-pointer shadow-2xs"
-            title="Xóa nhanh tất cả bộ lọc"
+            onClick={() => setActiveTab('waiting_unconfirmed')}
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'waiting_unconfirmed'
+                ? 'border-[#0d9488] text-[#0d9488]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
           >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Đặt lại</span>
+            <Clock className="w-4 h-4" />
+            <span>Chờ tiếp nhận / Chưa đến</span>
+            <span
+              className={`ml-1 px-2 py-0.5 text-[11px] rounded-full font-semibold ${
+                activeTab === 'waiting_unconfirmed'
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {unconfirmedList.length}
+            </span>
+          </button>
+
+          {/* Tab 2: Hàng đợi vào phòng (Đã có STT - Active Queue) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('active_queue')}
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'active_queue'
+                ? 'border-[#0d9488] text-[#0d9488]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ListOrdered className="w-4 h-4" />
+            <span>Hàng đợi vào phòng</span>
+            <span
+              className={`ml-1 px-2 py-0.5 text-[11px] rounded-full font-semibold ${
+                activeTab === 'active_queue'
+                  ? 'bg-teal-50 text-[#0d9488] border border-teal-200/60'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {activeQueueList.length}
+            </span>
           </button>
         </div>
-      </div>
 
-      {/* 4. BẢNG DANH SÁCH CHỜ CẬN LÂM SÀNG */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-3 px-3.5 whitespace-nowrap">STT / Mã phiếu</th>
-                <th className="py-3 px-2.5 whitespace-nowrap text-center">Ưu tiên</th>
-                <th className="py-3 px-3 whitespace-nowrap">Bệnh nhân</th>
-                <th className="py-3 px-2.5 whitespace-nowrap">Mã BN</th>
-                <th className="py-3 px-2.5 whitespace-nowrap text-center">Đối tượng</th>
-                <th className="py-3 px-3 min-w-[200px]">Dịch vụ</th>
-                <th className="py-3 px-3 whitespace-nowrap">Bác sĩ & Phòng</th>
-                <th className="py-3 px-2.5 whitespace-nowrap text-center">Thời gian</th>
-                <th className="py-3 px-2.5 whitespace-nowrap text-center">Trạng thái</th>
-                <th className="py-3 px-3.5 whitespace-nowrap text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {queueLoading && orders.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-8 h-8 text-[#0d9488] animate-spin mx-auto mb-2" />
-                    <p className="text-xs font-semibold">Đang cập nhật danh sách...</p>
-                  </td>
+        {/* Toolbar lọc & tìm kiếm */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-1">
+          {/* Input Tìm kiếm */}
+          <div className="relative w-full md:flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                activeTab === 'waiting_unconfirmed'
+                  ? 'Tìm theo Mã bệnh nhân (Patient ID), Mã phiếu, Họ tên, CCCD để xác nhận có mặt...'
+                  : 'Tìm theo Mã bệnh nhân (Patient ID), STT, Mã phiếu, Họ tên, CCCD...'
+              }
+              className="w-full h-10 pl-10 pr-4 bg-slate-50/70 border border-slate-200/80 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:bg-white transition-all"
+            />
+          </div>
+
+          {/* Dropdowns lọc */}
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Bộ lọc trạng thái (chỉ áp dụng ở Tab 2 vì Tab 1 toàn bộ là ca chưa đến) */}
+            {activeTab === 'active_queue' && (
+              <div className="relative min-w-[145px]">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="WAITING">Chờ tiếp nhận</option>
+                  <option value="SKIPPED">Đã bỏ qua (Vắng)</option>
+                  <option value="IN_PROGRESS">Đang thực hiện</option>
+                  <option value="CANCELLED">Đã từ chối</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+
+            {/* Bộ lọc phòng khám chỉ định */}
+            <div className="relative min-w-[170px]">
+              <select
+                value={doctorRoomFilter}
+                onChange={(e) => setDoctorRoomFilter(e.target.value)}
+                className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
+              >
+                <option value="ALL">Tất cả phòng gửi chỉ định</option>
+                {doctorRoomsList.map((roomName) => (
+                  <option key={roomName} value={roomName}>
+                    {roomName}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Nút Đặt lại bộ lọc */}
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-all cursor-pointer shadow-2xs"
+              title="Xóa nhanh tất cả bộ lọc"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Đặt lại</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Bảng danh sách */}
+        <div className="rounded-xl border border-slate-200/80 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-3.5 whitespace-nowrap">STT / Mã phiếu</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Ưu tiên</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Bệnh nhân</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap">Mã BN</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Đối tượng</th>
+                  <th className="py-3 px-3 min-w-[200px]">Dịch vụ</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Bác sĩ & Phòng</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Thời gian</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Trạng thái</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap text-right">Thao tác</th>
                 </tr>
-              ) : orders.map((order) => {
-                const isPriority = order.priority === 'PRIORITY';
-                const isWaiting = order.status === 'WAITING';
-                const isSkipped = order.isSkipped || order.status === 'SKIPPED';
-                const isInProgress = order.status === 'IN_PROGRESS';
-                const isCompleted = order.status === 'COMPLETED';
-                const isCancelled = order.status === 'CANCELLED';
-                const isRowBusy = actionLoadingId === order.id;
-
-                return (
-                  <tr
-                    key={order.id}
-                    onClick={() => handleOpenDetail(order)}
-                    className={`hover:bg-slate-50/80 transition-colors cursor-pointer group ${
-                      isSkipped ? 'bg-slate-50/40 text-slate-400' : ''
-                    } ${isRowBusy ? 'opacity-50 pointer-events-none' : ''}`}
-                  >
-                    {/* STT & Mã phiếu */}
-                    <td className="py-3 px-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-slate-900 text-xs tracking-tight">
-                          #{order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 block font-mono">
-                        {order.orderCode}
-                      </span>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {queueLoading && displayedOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                      <Loader2 className="w-8 h-8 text-[#0d9488] animate-spin mx-auto mb-2" />
+                      <p className="text-xs font-semibold">Đang cập nhật danh sách...</p>
                     </td>
+                  </tr>
+                ) : displayedOrders.map((order) => {
+                  const isPriority = order.priority === 'PRIORITY';
+                  const isWaiting = order.status === 'WAITING';
+                  const isSkipped = order.isSkipped || order.status === 'SKIPPED';
+                  const isInProgress = order.status === 'IN_PROGRESS';
+                  const isCompleted = order.status === 'COMPLETED';
+                  const isCancelled = order.status === 'CANCELLED';
+                  const isRowBusy = actionLoadingId === order.id;
 
-                    {/* Mức ưu tiên */}
-                    <td className="py-3 px-2.5 whitespace-nowrap text-center">
-                      {isPriority ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                          Ưu tiên
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-slate-100 text-slate-600">
-                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-                          Thường
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Bệnh nhân (Họ tên, tuổi, giới tính) */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <div className="font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors">
-                        {order.patientName}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        {order.age ? `${order.age}t` : ''} • {order.gender || '---'}
-                      </div>
-                    </td>
-
-                    {/* Mã bệnh nhân (Patient ID) */}
-                    <td className="py-3 px-2.5 whitespace-nowrap font-mono text-slate-600 font-semibold text-[11px]">
-                      {order.patientId}
-                    </td>
-
-                    {/* Đối tượng BHYT / Viện phí */}
-                    <td className="py-3 px-2.5 whitespace-nowrap text-center">
-                      {order.insuranceType === 'BHYT' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                          BHYT
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/70">
-                          Viện phí
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Dịch vụ thực hiện */}
-                    <td className="py-3 px-3">
-                      <div className="font-bold text-slate-900 line-clamp-1">
-                        {order.serviceName}
-                      </div>
-                      <div className="text-[11px] text-slate-400 line-clamp-1 italic">
-                        {order.clinicalDiagnosis || order.chiefComplaint || 'Không có ghi chú lâm sàng'}
-                      </div>
-                    </td>
-
-                    {/* Bác sĩ & Phòng chỉ định */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <div className="font-semibold text-slate-800">
-                        {order.doctorName || 'Chưa ghi nhận'}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        {order.doctorRoom || 'Phòng khám'}
-                      </div>
-                    </td>
-
-                    {/* Thời gian gửi chỉ định */}
-                    <td className="py-3 px-2.5 whitespace-nowrap text-center text-slate-600 font-medium">
-                      <div className="flex items-center justify-center gap-1 text-[11px]">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        <span>{order.orderTime || '--:--'}</span>
-                      </div>
-                    </td>
-
-                    {/* Trạng thái tiếp nhận */}
-                    <td className="py-3 px-2.5 whitespace-nowrap text-center">
-                      {isSkipped && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          Đã bỏ qua
-                        </span>
-                      )}
-                      {isWaiting && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                          Chờ tiếp nhận
-                        </span>
-                      )}
-                      {isInProgress && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                          Đang thực hiện
-                        </span>
-                      )}
-                      {isCompleted && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          Đã hoàn thành
-                        </span>
-                      )}
-                      {isCancelled && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                          Đã từ chối
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Thao tác */}
-                    <td className="py-3 px-3.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                      {!canManage ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDetail(order)}
-                          className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
-                          title="Xem chi tiết lâm sàng & y lệnh"
-                        >
-                          <Eye className="w-3 h-3 text-slate-500 shrink-0" />
-                          <span>Chi tiết</span>
-                        </button>
-                      ) : (
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Nút Gọi số / Gọi lại */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleCallQueue(order, e)}
-                            className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                            title={isSkipped ? 'Phát loa gọi lại bệnh nhân vào phòng' : 'Phát loa gọi số bệnh nhân vào phòng'}
-                          >
-                            <Megaphone className="w-3 h-3 text-amber-600 shrink-0" />
-                            <span>{isSkipped ? 'Gọi lại' : 'Gọi số'}</span>
-                          </button>
-
-                          {/* Nút Tiếp nhận (nếu WAITING) */}
-                          {isWaiting && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleStartOrder(order, e)}
-                              className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                              title="Tiếp nhận bệnh nhân"
-                            >
-                              <Play className="w-3 h-3 fill-current shrink-0" />
-                              <span>Tiếp nhận</span>
-                            </button>
-                          )}
-
-                          {/* Nút Bỏ qua (chỉ hiển thị khi WAITING) */}
-                          {isWaiting && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleSkipOrder(order, e)}
-                              className="h-7 inline-flex items-center gap-1 px-1.5 text-[10.5px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/90 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                              title="Bỏ qua lượt bệnh nhân vắng mặt"
-                            >
-                              <SkipForward className="w-3 h-3 text-slate-500 shrink-0" />
-                              <span>Bỏ qua</span>
-                            </button>
-                          )}
-
-                          {/* Nút Tiếp nhận lại (khi SKIPPED) */}
-                          {isSkipped && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleUnskipOrder(order, e)}
-                              className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                              title="Khôi phục bệnh nhân về hàng đợi"
-                            >
-                              <Play className="w-3 h-3 fill-current shrink-0" />
-                              <span>Nhận lại</span>
-                            </button>
-                          )}
-
-                          {/* UC-66: Đã thực hiện / Nhập KQ ngay (AF-01) / Trả về hàng chờ (AF-02) khi IN_PROGRESS */}
-                          {isInProgress && (
-                            <>
-                              <button
-                                type="button"
-                                disabled={actionLoadingId === order.id}
-                                onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
-                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                title="Xác nhận đã thực hiện xong dịch vụ"
-                              >
-                                <span>Đã thực hiện</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={actionLoadingId === order.id}
-                                onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order, { openResultNow: true }); }}
-                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                title="Xác nhận đã thực hiện và nhập kết quả ngay"
-                              >
-                                <span>Nhập KQ</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={actionLoadingId === order.id}
-                                onClick={(e) => { e.stopPropagation(); setOrderToReturn(order); }}
-                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                title="Không thực hiện được: trả về hàng chờ kèm lý do"
-                              >
-                                <RotateCcw className="w-3 h-3 shrink-0" />
-                                <span>Trả về</span>
-                              </button>
-                            </>
+                  return (
+                    <tr
+                      key={order.id}
+                      onClick={() => handleOpenDetail(order)}
+                      className={`hover:bg-slate-50/80 transition-colors cursor-pointer group ${
+                        isSkipped ? 'bg-slate-50/40 text-slate-400' : ''
+                      } ${isRowBusy ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {/* STT & Mã phiếu */}
+                      <td className="py-3 px-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          {activeTab === 'waiting_unconfirmed' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 select-none">
+                              Chờ có mặt
+                            </span>
+                          ) : (
+                            <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-xs tracking-tight">
+                              #{order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber}
+                            </span>
                           )}
                         </div>
+                        <span className="text-[10px] text-slate-400 block font-mono">
+                          {order.orderCode?.replace(/-\d+$/, '') || order.orderCode}
+                        </span>
+                      </td>
+
+                      {/* Mức ưu tiên */}
+                      <td className="py-3 px-2.5 whitespace-nowrap text-center">
+                        {isPriority ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Ưu tiên
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-slate-100 text-slate-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                            Thường
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Bệnh nhân (Họ tên, tuổi, giới tính) */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors">
+                          {order.patientName}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {order.age ? `${order.age}t` : ''} • {order.gender || '---'}
+                        </div>
+                      </td>
+
+                      {/* Mã bệnh nhân (Patient ID) */}
+                      <td className="py-3 px-2.5 whitespace-nowrap font-mono text-slate-600 font-semibold text-[11px]">
+                        {order.patientId}
+                      </td>
+
+                      {/* Đối tượng BHYT / Viện phí */}
+                      <td className="py-3 px-2.5 whitespace-nowrap text-center">
+                        {order.insuranceType === 'BHYT' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                            BHYT
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/70">
+                            Viện phí
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Dịch vụ thực hiện */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 line-clamp-1">
+                            {order.roomServices?.[0]?.serviceName || order.serviceName}
+                          </span>
+                          {order.roomServices && order.roomServices.length > 1 && (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-50 text-teal-700 border border-teal-200/90 whitespace-nowrap shadow-2xs"
+                              title={order.roomServices.slice(1).map((s) => s.serviceName).join(', ')}
+                            >
+                              +{order.roomServices.length - 1} dịch vụ khác
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400 line-clamp-1 italic mt-0.5">
+                          {order.clinicalDiagnosis || order.chiefComplaint || 'Không có ghi chú lâm sàng'}
+                        </div>
+                      </td>
+
+                      {/* Bác sĩ & Phòng chỉ định */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800">
+                          {order.doctorName || 'Chưa ghi nhận'}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {order.doctorRoom || 'Phòng khám'}
+                        </div>
+                      </td>
+
+                      {/* Thời gian gửi chỉ định */}
+                      <td className="py-3 px-2.5 whitespace-nowrap text-center text-slate-600 font-medium">
+                        <div className="flex items-center justify-center gap-1 text-[11px]">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{order.orderTime || '--:--'}</span>
+                        </div>
+                      </td>
+
+                      {/* Trạng thái tiếp nhận */}
+                      <td className="py-3 px-2.5 whitespace-nowrap text-center">
+                        {activeTab === 'waiting_unconfirmed' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/80">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            Chưa đến
+                          </span>
+                        ) : (
+                          <>
+                            {isSkipped && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                Đã bỏ qua
+                              </span>
+                            )}
+                            {isWaiting && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                Chờ tiếp nhận
+                              </span>
+                            )}
+                            {isInProgress && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                Đang thực hiện
+                              </span>
+                            )}
+                            {isCompleted && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Đã hoàn thành
+                              </span>
+                            )}
+                            {isCancelled && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                Đã từ chối
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+
+                      {/* Thao tác */}
+                      <td className="py-3 px-3.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                        {!canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDetail(order)}
+                            className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
+                            title="Xem chi tiết lâm sàng & y lệnh"
+                          >
+                            <Eye className="w-3 h-3 text-slate-500 shrink-0" />
+                            <span>Chi tiết</span>
+                          </button>
+                        ) : activeTab === 'waiting_unconfirmed' ? (
+                          /* Thao tác Tab 1: Xác nhận có mặt */
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => handleCheckInOrder(order, e)}
+                              className="h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                              title="Bệnh nhân đã đến cửa phòng: Bấm xác nhận có mặt để cấp số thứ tự và chuyển sang hàng đợi"
+                            >
+                              <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                              <span>Xác nhận có mặt</span>
+                            </button>
+                          </div>
+                        ) : (
+                          /* Thao tác Tab 2: Gọi số, Tiếp nhận, Bỏ qua / Nhận lại / Đã thực hiện */
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Nút Gọi số / Gọi lại */}
+                            {(isWaiting || isSkipped) && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleCallQueue(order, e)}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                title={isSkipped ? 'Phát loa gọi lại bệnh nhân vào phòng' : 'Phát loa gọi số bệnh nhân vào phòng'}
+                              >
+                                <Megaphone className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>{isSkipped ? 'Gọi lại' : 'Gọi số'}</span>
+                              </button>
+                            )}
+
+                            {/* Nút Tiếp nhận (khi WAITING) */}
+                            {isWaiting && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleStartOrder(order, e)}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-[#0d9488] hover:bg-[#0f766e] rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                title="Tiếp nhận bệnh nhân vào phòng máy"
+                              >
+                                <Play className="w-3 h-3 fill-current shrink-0" />
+                                <span>Tiếp nhận</span>
+                              </button>
+                            )}
+
+                            {/* Nút Bỏ qua (khi WAITING) */}
+                            {isWaiting && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleSkipOrder(order, e)}
+                                className="h-7 inline-flex items-center gap-1 px-1.5 text-[10.5px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/90 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                title="Bỏ qua lượt bệnh nhân vắng mặt"
+                              >
+                                <SkipForward className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>Bỏ qua</span>
+                              </button>
+                            )}
+
+                            {/* Nút Nhận lại (khi SKIPPED) */}
+                            {isSkipped && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleUnskipOrder(order, e)}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                title="Khôi phục bệnh nhân về hàng đợi"
+                              >
+                                <Play className="w-3 h-3 fill-current shrink-0" />
+                                <span>Nhận lại</span>
+                              </button>
+                            )}
+
+                            {/* UC-66: Đã thực hiện / Nhập KQ ngay / Trả về khi IN_PROGRESS */}
+                            {isInProgress && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={actionLoadingId === order.id}
+                                  onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
+                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                  title="Xác nhận đã thực hiện xong dịch vụ"
+                                >
+                                  <span>Đã thực hiện</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={actionLoadingId === order.id}
+                                  onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order, { openResultNow: true }); }}
+                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                  title="Xác nhận đã thực hiện và nhập kết quả ngay"
+                                >
+                                  <span>Nhập KQ</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={actionLoadingId === order.id}
+                                  onClick={(e) => { e.stopPropagation(); setOrderToReturn(order); }}
+                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                  title="Không thực hiện được: trả về hàng chờ kèm lý do"
+                                >
+                                  <RotateCcw className="w-3 h-3 shrink-0" />
+                                  <span>Trả về</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!queueLoading && displayedOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="py-12 text-center text-slate-400 space-y-2">
+                      {activeTab === 'waiting_unconfirmed' ? (
+                        <>
+                          <Clock className="w-8 h-8 text-slate-300 mx-auto" />
+                          <p className="text-sm font-semibold">
+                            {searchQuery
+                              ? 'Không tìm thấy bệnh nhân nào phù hợp với từ khóa tìm kiếm.'
+                              : `Hiện không có bệnh nhân nào đang chờ tiếp nhận / chưa đến tại ${currentRoom?.name || 'phòng'}.`}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            Tất cả các ca chỉ định đến phòng máy này đã được xác nhận có mặt.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <ListOrdered className="w-8 h-8 text-slate-300 mx-auto" />
+                          <p className="text-sm font-semibold">
+                            {searchQuery || statusFilter !== 'ALL'
+                              ? 'Không có chỉ định nào phù hợp với bộ lọc trong hàng đợi.'
+                              : 'Hàng đợi vào phòng hiện đang trống.'}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            Chưa có bệnh nhân nào có mặt ngoài cửa phòng. Chuyển sang tab &quot;Chờ tiếp nhận / Chưa đến&quot; để bấm xác nhận khi bệnh nhân tới.
+                          </p>
+                          {unconfirmedList.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('waiting_unconfirmed')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-all cursor-pointer shadow-2xs mt-1"
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Xem danh sách chờ tiếp nhận ({unconfirmedList.length})</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={handleResetFilters}
+                          className="text-xs text-[#0d9488] font-bold hover:underline cursor-pointer block mx-auto mt-2"
+                        >
+                          Đặt lại bộ lọc tìm kiếm
+                        </button>
                       )}
                     </td>
                   </tr>
-                );
-              })}
+                )}
+              </tbody>
+            </table>
+          </div>
 
-              {!queueLoading && orders.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400 space-y-2">
-                    <Microscope className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-sm font-semibold">
-                      Không có chỉ định nào phù hợp với bộ lọc tại {currentRoom?.name}.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleResetFilters}
-                      className="text-xs text-[#0d9488] font-bold hover:underline cursor-pointer"
-                    >
-                      Đặt lại bộ lọc tìm kiếm
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer thống kê số lượng đang hiển thị */}
-        <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-medium">
-          <div className="flex items-center gap-2">
-            <span>
-              Đang hiển thị: <strong className="text-slate-900">{orders.length}</strong> / {stats.total} ca cận lâm sàng
-            </span>
-            {(searchQuery || statusFilter !== 'ALL' || doctorRoomFilter !== 'ALL') && (
-              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-semibold border border-amber-200/60 text-[11px]">
-                Đang áp dụng bộ lọc tùy chỉnh
+          {/* Footer thống kê số lượng đang hiển thị */}
+          <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-medium">
+            <div className="flex items-center gap-2">
+              <span>
+                Đang hiển thị:{' '}
+                <strong className="text-slate-900">{displayedOrders.length}</strong> bệnh nhân
+                {activeTab === 'waiting_unconfirmed' ? ' (chưa đến phòng)' : ' (trong hàng đợi)'}
               </span>
-            )}
-          </div>
+              {(searchQuery || (activeTab === 'active_queue' && statusFilter !== 'ALL') || doctorRoomFilter !== 'ALL') && (
+                <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-semibold border border-amber-200/60 text-[11px]">
+                  Đang áp dụng bộ lọc tùy chỉnh
+                </span>
+              )}
+            </div>
 
-          <div className="text-[11px] text-slate-400">
-            * Nhấn trực tiếp vào dòng bệnh nhân để mở Drawer chi tiết lâm sàng & y lệnh
+            <div className="text-[11px] text-slate-400">
+              * Nhấn trực tiếp vào dòng bệnh nhân để mở Drawer chi tiết lâm sàng & y lệnh
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* 5. NGĂN KÉO CHI TIẾT BỆNH NHÂN & Y LỆNH (PATIENT & CLINICAL DRAWER) */}
       <PatientClinicalDrawer
@@ -955,6 +1237,7 @@ export function TechnicianQueuePage() {
         onClose={() => setIsDrawerOpen(false)}
         order={selectedOrder}
         canManage={canManage}
+        onCheckInOrder={(order) => handleCheckInOrder(order)}
         onStartOrder={(order) => handleStartOrder(order)}
         onSkipOrder={(order) => handleSkipOrder(order)}
         onCompleteOrder={(order) => handleCompleteOrder(order)}

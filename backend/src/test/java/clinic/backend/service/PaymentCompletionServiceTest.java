@@ -124,15 +124,15 @@ class PaymentCompletionServiceTest {
                 .thenReturn(3L);
         when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(free.getId(), ParaclinicalOrderDetailStatus.WAITING))
                 .thenReturn(1L);
-        when(queueCounterRepository.takeNext(free.getId(), LocalDate.of(2026, 10, 28))).thenReturn(7);
 
         service.completePaidReceipt(payment, UUID.randomUUID());
 
         assertThat(order.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
         assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
         assertThat(detail.getRoomId()).isEqualTo(free.getId());
-        assertThat(detail.getQueueNumber()).isEqualTo(7);
+        assertThat(detail.getQueueNumber()).isNull();
         assertThat(detail.getReleasedAt()).isEqualTo(NOW);
+        verify(queueCounterRepository, never()).takeNext(any(), any());
     }
 
     @Test
@@ -191,7 +191,6 @@ class PaymentCompletionServiceTest {
         when(medicalServiceRepository.findById(SERVICE_ID)).thenReturn(Optional.of(medicalService));
         when(roomRepository.findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(groupId, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room));
-        when(queueCounterRepository.takeNext(room.getId(), LocalDate.of(2026, 10, 28))).thenReturn(1);
 
         List<String> unrouted = service.releaseOrder(order);
 
@@ -199,6 +198,7 @@ class PaymentCompletionServiceTest {
         assertThat(order.getStatus()).isEqualTo(ParaclinicalOrderStatus.RELEASED);
         assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
         assertThat(detail.getRoomId()).isEqualTo(room.getId());
+        assertThat(detail.getQueueNumber()).isNull();
     }
 
     @Test
@@ -212,13 +212,12 @@ class PaymentCompletionServiceTest {
         when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_PARACLINICAL)));
         when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
         when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
-        when(queueCounterRepository.takeNext(chosen.getId(), LocalDate.of(2026, 10, 28))).thenReturn(5);
 
         service.completePaidReceipt(payment, UUID.randomUUID());
 
-        // I1-D47, BR-50-02: the chosen room keeps the service; the queue number is taken now.
+        // Case 1: the chosen room keeps the service; queue number is null until on-site check-in.
         assertThat(detail.getRoomId()).isEqualTo(chosen.getId());
-        assertThat(detail.getQueueNumber()).isEqualTo(5);
+        assertThat(detail.getQueueNumber()).isNull();
         verify(roomRepository, never()).findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(any(), any());
     }
 
@@ -234,12 +233,11 @@ class PaymentCompletionServiceTest {
         order.addDetail(detail);
         stubParaclinical(payment, order, groupId, List.of(open));
         when(roomRepository.findById(closed.getId())).thenReturn(Optional.of(closed));
-        when(queueCounterRepository.takeNext(open.getId(), LocalDate.of(2026, 10, 28))).thenReturn(2);
 
         service.completePaidReceipt(payment, UUID.randomUUID());
 
         assertThat(detail.getRoomId()).isEqualTo(open.getId());
-        assertThat(detail.getQueueNumber()).isEqualTo(2);
+        assertThat(detail.getQueueNumber()).isNull();
     }
 
     private void stubParaclinical(Payment payment, ParaclinicalOrder order, UUID groupId, List<Room> rooms) {

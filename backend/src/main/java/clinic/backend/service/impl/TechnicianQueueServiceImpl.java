@@ -62,6 +62,7 @@ import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
@@ -81,6 +82,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     private static final String AUDIT_ENTITY = "paraclinical_order_details";
 
     private final RoomRepository roomRepository;
+    private final RoomQueueCounterRepository roomQueueCounterRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
@@ -295,14 +297,30 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                     return true;
                 })
                 .sorted((a, b) -> {
-                    // Priority first
+                    // 1. Ưu tiên trước
                     if ("PRIORITY".equals(a.priority()) && !"PRIORITY".equals(b.priority())) return -1;
                     if (!"PRIORITY".equals(a.priority()) && "PRIORITY".equals(b.priority())) return 1;
 
-                    // Then by queueNumber
-                    int qA = a.queueNumber() != null ? a.queueNumber() : Integer.MAX_VALUE;
-                    int qB = b.queueNumber() != null ? b.queueNumber() : Integer.MAX_VALUE;
-                    return Integer.compare(qA, qB);
+                    // 2. Đã có mặt (Check-in / có STT) trước người chưa có mặt
+                    boolean aIn = a.isCheckedIn() || (a.queueNumber() != null && a.queueNumber() > 0);
+                    boolean bIn = b.isCheckedIn() || (b.queueNumber() != null && b.queueNumber() > 0);
+                    if (aIn && !bIn) return -1;
+                    if (!aIn && bIn) return 1;
+
+                    // 3. Đã check-in: sắp xếp theo số thứ tự tăng dần (thấp lên trước, cao ở sau: #01, #02, #03...)
+                    if (aIn && bIn) {
+                        int qA = a.queueNumber() != null ? a.queueNumber() : Integer.MAX_VALUE;
+                        int qB = b.queueNumber() != null ? b.queueNumber() : Integer.MAX_VALUE;
+                        if (qA != qB) return Integer.compare(qA, qB);
+                    }
+
+                    // 4. Chưa check-in hoặc bằng nhau: sắp xếp theo thời gian chỉ định
+                    String tA = a.orderTime() != null ? a.orderTime() : "";
+                    String tB = b.orderTime() != null ? b.orderTime() : "";
+                    int cmpTime = tA.compareTo(tB);
+                    if (cmpTime != 0) return cmpTime;
+
+                    return a.id().compareTo(b.id());
                 })
                 .toList();
 
@@ -543,6 +561,69 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
     @Override
     @Transactional
+    public TechnicianQueueItemResponse checkInOrder(UUID detailId, UUID technicianAccountId) {
+        Instant now = clock.instant();
+        ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+
+        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+
+        if (detail.isCheckedIn()) {
+            throw new AppException(ErrorCode.ORDER_ALREADY_CHECKED_IN);
+        }
+
+        if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_PAYMENT) {
+            throw new AppException(ErrorCode.PARACLINICAL_ORDER_NOT_PAID);
+        }
+
+        if (detail.getStatus() != ParaclinicalOrderDetailStatus.WAITING) {
+            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
+        }
+
+        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
+        Instant startOfDay = today.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        int nextQueueNumber = roomQueueCounterRepository.takeNextParaclinical(
+                detail.getRoomId(), today, startOfDay, endOfDay);
+
+        detail.checkIn(nextQueueNumber, technicianAccountId, now);
+        paraclinicalOrderDetailRepository.save(detail);
+
+        // Check in all sibling details of the same order in the same room that are WAITING
+        List<ParaclinicalOrderDetail> checkInSiblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : checkInSiblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && !sib.isCheckedIn()) {
+                sib.checkIn(nextQueueNumber, technicianAccountId, now);
+                paraclinicalOrderDetailRepository.save(sib);
+
+                Map<String, Object> sibAudit = new LinkedHashMap<>();
+                sibAudit.put("action", "CHECK_IN");
+                sibAudit.put("queueNumber", nextQueueNumber);
+                sibAudit.put("checkedInAt", now.toString());
+                auditLogService.recordBusinessChange(
+                        technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, sib.getId(),
+                        sib.getMachidinh(), sibAudit, now);
+            }
+        }
+
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("action", "CHECK_IN");
+        audit.put("queueNumber", nextQueueNumber);
+        audit.put("checkedInAt", now.toString());
+        auditLogService.recordBusinessChange(
+                technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
+                detail.getMachidinh(), audit, now);
+
+        return getQueueDetail(detailId);
+    }
+
+    @Override
+    @Transactional
     public TechnicianQueueItemResponse acceptOrder(UUID detailId, UUID technicianAccountId) {
         Instant now = clock.instant();
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
@@ -550,8 +631,32 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
 
+        if (!detail.isCheckedIn()) {
+            throw new AppException(ErrorCode.ORDER_NOT_CHECKED_IN);
+        }
+
         detail.accept(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
+
+        // Accept all sibling details of the same order in the same room that are WAITING & checked in
+        List<ParaclinicalOrderDetail> acceptSiblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : acceptSiblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && sib.isCheckedIn()) {
+                sib.accept(technicianAccountId, now);
+                paraclinicalOrderDetailRepository.save(sib);
+
+                Map<String, Object> sibAudit = new LinkedHashMap<>();
+                sibAudit.put("action", "ACCEPT");
+                sibAudit.put("status", sib.getStatus().name());
+                auditLogService.recordBusinessChange(
+                        technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, sib.getId(),
+                        sib.getMachidinh(), sibAudit, now);
+            }
+        }
 
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("action", "ACCEPT");
@@ -575,6 +680,17 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         detail.skip(now);
         paraclinicalOrderDetailRepository.save(detail);
 
+        List<ParaclinicalOrderDetail> skipSiblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : skipSiblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING) {
+                sib.skip(now);
+                paraclinicalOrderDetailRepository.save(sib);
+            }
+        }
+
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("action", "SKIP");
         audit.put("isSkipped", true);
@@ -596,6 +712,17 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
         detail.unskip(now);
         paraclinicalOrderDetailRepository.save(detail);
+
+        List<ParaclinicalOrderDetail> unskipSiblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : unskipSiblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.isSkipped()) {
+                sib.unskip(now);
+                paraclinicalOrderDetailRepository.save(sib);
+            }
+        }
 
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("action", "UNSKIP");
@@ -620,6 +747,25 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         // UC-66 step 3: Performed, waiting for its result (UC-64).
         detail.completePerformance(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
+
+        List<ParaclinicalOrderDetail> completeSiblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : completeSiblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS
+                    && Objects.equals(sib.getPerformerAccountId(), technicianAccountId)) {
+                sib.completePerformance(technicianAccountId, now);
+                paraclinicalOrderDetailRepository.save(sib);
+
+                Map<String, Object> sibAudit = new LinkedHashMap<>();
+                sibAudit.put("action", "COMPLETE_PERFORMANCE");
+                sibAudit.put("status", sib.getStatus().name());
+                auditLogService.recordBusinessChange(
+                        technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, sib.getId(),
+                        sib.getMachidinh(), sibAudit, now);
+            }
+        }
 
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("action", "COMPLETE_PERFORMANCE");
@@ -888,7 +1034,9 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 allergies,
                 hasAllergyAlert,
                 detail.getCancelReason(),
-                allOrdersToday
+                allOrdersToday,
+                detail.isCheckedIn(),
+                detail.getCheckedInAt() != null ? TIME_FORMATTER.format(detail.getCheckedInAt()) : null
         );
     }
 

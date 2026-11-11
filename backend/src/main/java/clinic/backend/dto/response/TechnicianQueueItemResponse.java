@@ -35,6 +35,7 @@ public record TechnicianQueueItemResponse(
         String allergies,
         boolean hasAllergyAlert,
         String rejectReason,
-        List<TechnicianSiblingOrderResponse> allOrdersToday
+        List<TechnicianSiblingOrderResponse> allOrdersToday,
+        boolean isCheckedIn,
+        String checkedInAtTime
 ) {}
-

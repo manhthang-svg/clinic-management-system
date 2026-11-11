@@ -43,6 +43,7 @@ import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
@@ -69,6 +70,8 @@ class TechnicianQueueServiceImplTest {
 
     @Mock
     private RoomRepository roomRepository;
+    @Mock
+    private RoomQueueCounterRepository roomQueueCounterRepository;
     @Mock
     private StaffAccountRepository staffAccountRepository;
     @Mock
@@ -104,6 +107,7 @@ class TechnicianQueueServiceImplTest {
         clock = Clock.fixed(NOW, CLINIC_ZONE);
         service = new TechnicianQueueServiceImpl(
                 roomRepository,
+                roomQueueCounterRepository,
                 staffAccountRepository,
                 staffRoomAssignmentRepository,
                 paraclinicalOrderDetailRepository,
@@ -167,6 +171,7 @@ class TechnicianQueueServiceImplTest {
                 BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
                 BigDecimal.valueOf(100000), UUID.randomUUID(), ParaclinicalOrderDetailStatus.WAITING
         );
+        detail.checkIn(1, technicianId, NOW);
 
         when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
         StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
@@ -298,4 +303,106 @@ class TechnicianQueueServiceImplTest {
                 })
                 .hasMessageContaining("Bạn không được phân công phụ trách phòng máy này");
     }
+    @Test
+    void checkInOrder_assignsQueueNumberAndAudits() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000005", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000005-01", NOW, "Siêu âm", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), roomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
+        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
+        StaffRoomAssignment assignment = new StaffRoomAssignment(UUID.randomUUID(), technicianId, roomId, NOW, null, null, null, 0L);
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId)).thenReturn(Optional.of(assignment));
+
+        when(roomQueueCounterRepository.takeNextParaclinical(eq(roomId), any(), any(), any())).thenReturn(5);
+
+        service.checkInOrder(detailId, technicianId);
+
+        assertThat(detail.getQueueNumber()).isEqualTo(5);
+        assertThat(detail.getCheckedInAt()).isEqualTo(NOW);
+        assertThat(detail.getCheckedInByAccountId()).isEqualTo(technicianId);
+        assertThat(detail.isCheckedIn()).isTrue();
+
+        verify(paraclinicalOrderDetailRepository).save(detail);
+        verify(auditLogService).recordBusinessChange(
+                eq(technicianId), eq(AuditLogAction.UPDATE), eq("paraclinical_order_details"),
+                eq(detailId), eq("CD0000000005-01"), any(), eq(NOW)
+        );
+    }
+
+    @Test
+    void checkInOrder_whenAlreadyCheckedIn_throwsConflict() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000006", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000006-01", NOW, "Siêu âm", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), roomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+        detail.checkIn(1, technicianId, NOW);
+
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
+        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
+        StaffRoomAssignment assignment = new StaffRoomAssignment(UUID.randomUUID(), technicianId, roomId, NOW, null, null, null, 0L);
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId)).thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.checkInOrder(detailId, technicianId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.ORDER_ALREADY_CHECKED_IN));
+    }
+
+    @Test
+    void acceptOrder_whenNotCheckedIn_throwsConflict() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000007", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000007-01", NOW, "Siêu âm", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), roomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
+        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
+        StaffRoomAssignment assignment = new StaffRoomAssignment(UUID.randomUUID(), technicianId, roomId, NOW, null, null, null, 0L);
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId)).thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.acceptOrder(detailId, technicianId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_CHECKED_IN));
+    }
+
 }

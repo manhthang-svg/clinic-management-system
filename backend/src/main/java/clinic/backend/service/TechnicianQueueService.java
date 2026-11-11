@@ -34,6 +34,9 @@ public interface TechnicianQueueService {
 
     TechnicianQueueItemResponse getQueueDetail(UUID detailId);
 
+    /** Case 1: Confirms the patient's physical arrival at the paraclinical room and assigns daily queue number. */
+    TechnicianQueueItemResponse checkInOrder(UUID detailId, UUID technicianAccountId);
+
     TechnicianQueueItemResponse acceptOrder(UUID detailId, UUID technicianAccountId);
 
     TechnicianQueueItemResponse skipOrder(UUID detailId, UUID technicianAccountId);
@@ -49,4 +52,3 @@ public interface TechnicianQueueService {
 
     TechnicianQueueItemResponse rejectOrder(UUID detailId, UUID technicianAccountId, RejectParaclinicalOrderRequest request);
 }
-
