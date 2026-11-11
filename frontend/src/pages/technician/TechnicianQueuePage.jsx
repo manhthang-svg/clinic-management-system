@@ -27,6 +27,7 @@ import { MetricCard } from '../../components/shared/MetricCard';
 import technicianApi from '../../apis/technicianApi';
 
 import {
+  CheckInTicketModal,
   PatientClinicalDrawer,
   RejectOrderModal,
   ReturnToWaitingDialog,
@@ -102,6 +103,8 @@ export function TechnicianQueuePage() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [orderToReject, setOrderToReject] = useState(null);
   const [orderToReturn, setOrderToReturn] = useState(null);
+  const [ticketModalData, setTicketModalData] = useState(null);
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const navigate = useNavigate();
 
   // Debounce tìm kiếm (300ms)
@@ -421,6 +424,15 @@ export function TechnicianQueuePage() {
       await loadQueue(currentRoomId, { silent: true });
       // Bệnh nhân được cấp STT => tự động chuyển sang Tab 2 (Hàng đợi vào phòng)
       setActiveTab('active_queue');
+
+      // Mở Pop-up phiếu số thứ tự (Ticket Modal)
+      setTicketModalData({
+        queueNumber: updated?.queueNumber,
+        order,
+        room: currentRoom,
+        issuedAt: new Date(),
+      });
+      setIsTicketModalOpen(true);
     } catch (err) {
       if (err?.errorResponse?.code === 'PARACLINICAL_ORDER_NOT_PAID') {
         toast.error('Bệnh nhân chưa thanh toán dịch vụ này tại quầy thu ngân.');
@@ -1275,6 +1287,13 @@ export function TechnicianQueuePage() {
         onClose={() => setRejectModalOpen(false)}
         order={orderToReject}
         onConfirmReject={handleConfirmReject}
+      />
+
+      {/* 7. POP-UP PHIẾU SỐ THỨ TỰ SAU KHI XÁC NHẬN CÓ MẶT */}
+      <CheckInTicketModal
+        isOpen={isTicketModalOpen}
+        onClose={() => setIsTicketModalOpen(false)}
+        ticketData={ticketModalData}
       />
     </div>
   );

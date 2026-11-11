@@ -177,6 +177,15 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(technicianApi.checkInOrder).toHaveBeenCalledWith('detail-unconf-1');
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('#05'), expect.anything());
 
+    // Pop-up Phiếu số thứ tự xuất hiện
+    expect(screen.getByRole('dialog', { name: 'Đã cấp số thứ tự thành công' })).toBeInTheDocument();
+    expect(screen.getByText('PHIẾU SỐ THỨ TỰ CẬN LÂM SÀNG')).toBeInTheDocument();
+    expect(screen.getByText('LÊ VĂN DŨNG')).toBeInTheDocument();
+
+    // Đóng popup
+    await user.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(screen.queryByRole('dialog', { name: 'Đã cấp số thứ tự thành công' })).not.toBeInTheDocument();
+
     // Automatically switched to Tab 2 "Hàng đợi vào phòng"
     const activeTabButton = screen.getByRole('button', { name: /Hàng đợi vào phòng/i });
     expect(activeTabButton).toHaveClass('text-[#0d9488]');
