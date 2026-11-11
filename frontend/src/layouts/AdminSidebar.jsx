@@ -46,6 +46,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
 
   const paths = {
     dashboard: '/admin/dashboard',
+    reports: '/admin/reports',
     accounts: '/admin/accounts',
     departments: '/admin/departments',
     rooms: '/admin/rooms',

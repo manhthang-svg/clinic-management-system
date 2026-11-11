@@ -1,4 +1,5 @@
 export { AdminDashboardPage } from './AdminDashboardPage';
+export { VisitStatisticsPage } from './VisitStatisticsPage';
 export { AccountManagementPage } from './AccountManagementPage';
 export { DepartmentManagementPage } from './DepartmentManagementPage';
 export { ServiceManagementPage } from './ServiceManagementPage';
