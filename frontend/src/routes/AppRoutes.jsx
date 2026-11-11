@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from "react-router";
 import { ROUTES } from "./routes.js";
 
 import {
+  AdminDashboardPage,
   AccountManagementPage,
   DepartmentManagementPage,
   ServiceManagementPage,
@@ -59,6 +60,17 @@ export function AppRoutes({
           <Route
             index
             element={<Navigate to={ROUTES.ADMIN.ACCOUNTS} replace />}
+          />
+
+          <Route
+            path="dashboard"
+            element={
+              <AdminDashboardPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
           />
 
           <Route
