@@ -357,6 +357,25 @@ export function TechnicianQueuePage() {
       });
   }, [groupedOrders]);
 
+  // Thống kê chính xác theo lượt bệnh nhân đồng bộ với 2 Tab
+  const patientStats = useMemo(() => {
+    const totalPatients = groupedOrders.length;
+    const totalServices = orders.length;
+    const activeQueueCount = activeQueueList.length;
+    const priority = groupedOrders.filter((o) => o.priority === 'PRIORITY' && o.status !== 'CANCELLED').length;
+    const skipped = groupedOrders.filter((o) => o.isSkipped || o.status === 'SKIPPED').length;
+    const unconfirmed = unconfirmedList.length;
+
+    return {
+      totalPatients,
+      totalServices,
+      activeQueueCount,
+      priority,
+      skipped,
+      unconfirmed,
+    };
+  }, [groupedOrders, orders.length, activeQueueList.length, unconfirmedList.length]);
+
   // Danh sách hiển thị theo tab hiện tại
   const displayedOrders = activeTab === 'waiting_unconfirmed' ? unconfirmedList : activeQueueList;
 
@@ -676,34 +695,34 @@ export function TechnicianQueuePage() {
       {/* 2. 4 THẺ THỐNG KÊ THEO PHÒNG HIỆN TẠI (REUSING METRICCARD WITH ADMIN PALETTE) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          title="Tổng chỉ định"
-          value={stats.total}
+          title="Tổng bệnh nhân"
+          value={patientStats.totalPatients}
           icon={ListOrdered}
           iconBg="bg-teal-50 text-[#0d9488]"
           valueColor="text-slate-900"
-          subtitle={`Tổng số ca gửi đến ${currentRoom?.code || ''} trong ca trực`}
+          subtitle={`Gồm ${patientStats.totalServices} dịch vụ tại ${currentRoom?.code || ''}`}
           dotColor="bg-teal-500"
-          footerLabel="Phạm vi"
-          footerValue={currentRoom?.code || '---'}
+          footerLabel="Tổng dịch vụ"
+          footerValue={`${patientStats.totalServices} dịch vụ`}
           footerValueColor="text-teal-700"
         />
 
         <MetricCard
-          title="Chờ tiếp nhận"
-          value={stats.waiting}
+          title="Hàng đợi vào phòng"
+          value={patientStats.activeQueueCount}
           icon={Clock}
           iconBg="bg-sky-50 text-sky-700"
           valueColor="text-sky-800"
-          subtitle="Số ca đang đợi gọi vào phòng máy"
+          subtitle="Bệnh nhân đã có STT đang chờ gọi"
           dotColor="bg-sky-500"
-          footerLabel="Trạng thái"
-          footerValue="Đang chờ gọi"
-          footerValueColor="text-sky-700"
+          footerLabel="Chờ tiếp nhận"
+          footerValue={`${patientStats.unconfirmed} ca chưa đến`}
+          footerValueColor={patientStats.unconfirmed > 0 ? 'text-amber-700 font-bold' : 'text-slate-600'}
         />
 
         <MetricCard
           title="Ưu tiên"
-          value={stats.priority}
+          value={patientStats.priority}
           icon={AlertTriangle}
           iconBg="bg-amber-50 text-amber-700"
           valueColor="text-amber-800"
@@ -716,11 +735,11 @@ export function TechnicianQueuePage() {
 
         <MetricCard
           title="Đã bỏ qua"
-          value={stats.skipped}
+          value={patientStats.skipped}
           icon={SkipForward}
           iconBg="bg-slate-100 text-slate-700"
           valueColor="text-slate-800"
-          subtitle="Số ca tạm thời bỏ qua do chưa có mặt"
+          subtitle="Bệnh nhân tạm thời bỏ qua do vắng mặt"
           dotColor="bg-slate-400"
           footerLabel="Trạng thái"
           footerValue="Vắng mặt"
