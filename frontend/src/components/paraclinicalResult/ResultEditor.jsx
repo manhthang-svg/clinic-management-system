@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import {
   ChevronRight, ClipboardList, Eye, FileText, House, Lock, Printer, Save, Send, ShieldAlert, Sparkles, UserRound,
@@ -62,7 +62,22 @@ export function ResultBreadcrumb({ title }) {
  */
 export function ResultEditor({ order: initialOrder, api, children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [order, setOrder] = useState(initialOrder);
+
+  // Danh sách dịch vụ cùng đợt của bệnh nhân (ưu tiên từ order.siblingServices, sau đó từ location.state)
+  const siblingServices = (order.siblingServices && order.siblingServices.length > 0)
+    ? order.siblingServices
+    : (location.state?.siblingServices || []);
+
+  const handleSwitchTab = (targetId) => {
+    if (targetId === order.id) return;
+    navigate(`/technician/results/${targetId}`, {
+      state: {
+        siblingServices,
+      },
+    });
+  };
   const [form, setForm] = useState(() => resultToForm(initialOrder));
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState('');
@@ -177,6 +192,55 @@ export function ResultEditor({ order: initialOrder, api, children }) {
   return (
     <div className="space-y-6 pb-10">
       <ResultBreadcrumb title={title} />
+
+      {/* Tab chuyển đổi giữa các dịch vụ của bệnh nhân */}
+      {siblingServices.length > 1 && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between text-xs px-1">
+            <div className="flex items-center gap-2 font-bold text-slate-800">
+              <span className="w-2 h-2 rounded-full bg-teal-500" />
+              <span>Dịch vụ chỉ định cùng đợt ({siblingServices.length} dịch vụ):</span>
+            </div>
+            <span className="text-[11px] text-slate-400">Chọn tab để chuyển form nhập từng dịch vụ</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+            {siblingServices.map((svc) => {
+              const isActive = svc.id === order.id;
+              const isSubmitted = svc.status === 'COMPLETED' || svc.status === 'SUBMITTED';
+              const isDraft = svc.status === 'DRAFT';
+
+              return (
+                <button
+                  key={svc.id}
+                  type="button"
+                  onClick={() => handleSwitchTab(svc.id)}
+                  className={`group relative px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2.5 cursor-pointer border ${
+                    isActive
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-sm ring-2 ring-teal-600/20'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <span className="truncate max-w-[280px]">{svc.serviceName}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                      isActive
+                        ? 'bg-teal-700 text-teal-50'
+                        : isSubmitted
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : isDraft
+                        ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
+                  >
+                    {isSubmitted ? 'Đã gửi' : isDraft ? 'Bản nháp' : 'Chờ nhập'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

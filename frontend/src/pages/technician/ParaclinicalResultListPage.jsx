@@ -209,9 +209,17 @@ export function ParaclinicalResultListPage() {
     loadResults(currentRoomId, { silent: false });
   };
 
-  // Điều hướng đến màn hình nhập kết quả UC-67
+  // Điều hướng đến màn hình nhập kết quả UC-67 (mở thẳng form, chuyển dịch vụ bằng Tab trên form)
   const handleOpenResultForm = (order) => {
-    navigate(`/technician/results/${order.id}`);
+    // Ưu tiên mở dịch vụ đang lưu nháp trước, nếu không có thì mở dịch vụ đầu tiên
+    const targetService = order.services?.find((s) => s.status === 'DRAFT') || order.services?.[0] || order;
+    navigate(`/technician/results/${targetService.id}`, {
+      state: {
+        siblingServices: order.services || [targetService],
+        patientId: order.patientId,
+        baseOrderCode: order.baseOrderCode || order.orderCode,
+      },
+    });
   };
 
   // Thao tác in phiếu chỉ định
@@ -231,7 +239,88 @@ export function ParaclinicalResultListPage() {
   };
 
   const stats = resultsData.stats || { total: 0, pending: 0, draft: 0, overdue: 0 };
-  const items = resultsData.items || [];
+  const items = useMemo(() => resultsData.items || [], [resultsData.items]);
+
+  // 5. Gom nhóm danh sách chờ kết quả: Mỗi bệnh nhân / đợt chỉ định chỉ hiển thị 1 dòng và 1 STT duy nhất
+  const groupedResults = useMemo(() => {
+    if (!items.length) return [];
+
+    const groups = new Map();
+
+    for (const item of items) {
+      const baseOrderCode = item.orderCode?.replace(/-\d+$/, '') || item.orderCode || '';
+      const groupKey = `${item.patientId || ''}_${baseOrderCode || item.id}`;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          ...item,
+          baseOrderCode,
+          services: [item],
+        });
+      } else {
+        const existing = groups.get(groupKey);
+        existing.services.push(item);
+        if (item.priority === 'PRIORITY') {
+          existing.priority = 'PRIORITY';
+          existing.priorityLabel = item.priorityLabel || 'Ưu tiên';
+        }
+        if (existing.queueNumber == null && item.queueNumber != null) {
+          existing.queueNumber = item.queueNumber;
+        } else if (item.queueNumber != null && existing.queueNumber != null) {
+          // Lấy STT nhỏ nhất của bệnh nhân được cấp khi check-in
+          existing.queueNumber = Math.min(existing.queueNumber, item.queueNumber);
+        }
+      }
+    }
+
+    const list = Array.from(groups.values()).map((group) => {
+      const svcs = group.services;
+      const draftCount = svcs.filter((s) => s.status === 'DRAFT').length;
+      const totalCount = svcs.length;
+      const isAllDraft = draftCount === totalCount;
+      const hasDraft = draftCount > 0;
+      const anyOverdue = svcs.some((s) => (s.completedMinutesAgo ?? 0) >= 30);
+      const completedAtTime = group.completedAtTime || svcs[0]?.completedAtTime || '';
+
+      return {
+        ...group,
+        draftCount,
+        totalCount,
+        isAllDraft,
+        hasDraft,
+        anyOverdue,
+        completedAtTime,
+      };
+    });
+
+    // Sắp xếp: Ưu tiên trước, STT thấp lên trước (tăng dần 01, 04, 05...), sau đó theo thời gian hoàn thành
+    list.sort((a, b) => {
+      if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
+      if (a.priority !== 'PRIORITY' && b.priority === 'PRIORITY') return 1;
+
+      const numA = a.queueNumber != null ? Number(a.queueNumber) : 999999;
+      const numB = b.queueNumber != null ? Number(b.queueNumber) : 999999;
+      if (numA !== numB) return numA - numB;
+
+      return (b.completedMinutesAgo ?? 0) - (a.completedMinutesAgo ?? 0);
+    });
+
+    return list;
+  }, [items]);
+
+  // Thống kê đồng bộ theo số bệnh nhân (và tổng số dịch vụ)
+  const groupedStats = useMemo(() => {
+    const totalPatients = groupedResults.length;
+    const pendingPatients = groupedResults.filter((g) => !g.isAllDraft).length;
+    const draftPatients = groupedResults.filter((g) => g.hasDraft).length;
+    const overduePatients = groupedResults.filter((g) => g.anyOverdue).length;
+    return {
+      total: totalPatients,
+      pending: pendingPatients,
+      draft: draftPatients,
+      overdue: overduePatients,
+    };
+  }, [groupedResults]);
 
   return (
     <div className="space-y-6 w-full pb-10">
@@ -309,11 +398,11 @@ export function ParaclinicalResultListPage() {
         {/* Thẻ 1 – TỔNG CHỜ NHẬP */}
         <MetricCard
           title="TỔNG CHỜ NHẬP"
-          value={stats.total}
+          value={groupedStats.total}
           icon={ListOrdered}
           iconBg="bg-teal-50 text-[#0d9488]"
           valueColor="text-slate-900"
-          subtitle="Ca đã thực hiện kỹ thuật"
+          subtitle={`Gồm ${items.length} dịch vụ đã làm`}
           dotColor="bg-teal-500"
           footerLabel="Phạm vi"
           footerValue={currentRoom ? currentRoom.code : '---'}
@@ -323,7 +412,7 @@ export function ParaclinicalResultListPage() {
         {/* Thẻ 2 – CHƯA NHẬP */}
         <MetricCard
           title="CHƯA NHẬP"
-          value={stats.pending}
+          value={groupedStats.pending}
           icon={Clock}
           iconBg="bg-blue-50 text-blue-600"
           valueColor="text-blue-700"
@@ -340,7 +429,7 @@ export function ParaclinicalResultListPage() {
         {/* Thẻ 3 – ĐANG LƯU NHÁP */}
         <MetricCard
           title="ĐANG LƯU NHÁP"
-          value={stats.draft}
+          value={groupedStats.draft}
           icon={FileEdit}
           iconBg="bg-slate-100 text-slate-700"
           valueColor="text-slate-800"
@@ -357,7 +446,7 @@ export function ParaclinicalResultListPage() {
         {/* Thẻ 4 – QUÁ HẠN CHỜ */}
         <MetricCard
           title="QUÁ HẠN CHỜ"
-          value={stats.overdue}
+          value={groupedStats.overdue}
           icon={AlertTriangle}
           iconBg="bg-rose-50 text-rose-600"
           valueColor="text-rose-700"
@@ -498,8 +587,13 @@ export function ParaclinicalResultListPage() {
                   </td>
                 </tr>
               ) : (
-                items.map((order) => {
-                  const isOverdue = (order.completedMinutesAgo ?? 0) >= 30;
+                groupedResults.map((order) => {
+                  const isOverdue = order.anyOverdue;
+                  const queueNumStr = order.queueNumber != null
+                    ? (order.queueNumber < 10 ? `0${order.queueNumber}` : `${order.queueNumber}`)
+                    : '—';
+                  const baseCode = order.baseOrderCode || order.orderCode;
+                  const hasMultiple = order.services && order.services.length > 1;
 
                   return (
                     <tr
@@ -507,17 +601,17 @@ export function ParaclinicalResultListPage() {
                       className="hover:bg-slate-50/70 transition-colors group"
                     >
                       {/* Cột 1 – STT / Mã phiếu */}
-                      <td className="py-2 px-2 text-left whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 text-left whitespace-nowrap">
                         <div className="font-mono font-bold text-slate-800 text-xs">
-                          #{order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber}
+                          #{queueNumStr}
                         </div>
                         <div className="text-[10.5px] text-slate-400 font-mono mt-0.5">
-                          {order.orderCode}
+                          {baseCode}
                         </div>
                       </td>
 
                       {/* Cột 2 – Mức độ ưu tiên */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-1.5 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center">
                           {order.priority === 'PRIORITY' ? (
                             <span className="w-[74px] h-6 px-1.5 rounded-full text-[10.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 inline-flex items-center justify-start gap-1">
@@ -534,24 +628,24 @@ export function ParaclinicalResultListPage() {
                       </td>
 
                       {/* Cột 3 – Bệnh nhân */}
-                      <td className="py-2 px-2 text-left whitespace-nowrap">
-                        <div className="font-bold text-slate-900 text-xs">
+                      <td className="py-2.5 px-2 text-left whitespace-nowrap">
+                        <div className="font-bold text-slate-900 text-xs group-hover:text-teal-700 transition-colors">
                           {order.patientName}
                         </div>
                         <div className="text-[10.5px] text-slate-500 font-medium mt-0.5">
-                          {order.birthYear} • {order.age}t • {order.gender}
+                          {order.birthYear ? `${order.birthYear} • ` : ''}{order.age ? `${order.age}t` : ''} • {order.gender}
                         </div>
                       </td>
 
                       {/* Cột 4 – Mã BN */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-1.5 whitespace-nowrap text-center">
                         <span className="font-mono font-bold text-slate-700 text-xs">
                           {order.patientId}
                         </span>
                       </td>
 
                       {/* Cột 5 – Đối tượng */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-1.5 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center">
                           {order.insuranceType === 'BHYT' ? (
                             <span className="w-[54px] h-5.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 inline-flex items-center justify-center">
@@ -566,20 +660,30 @@ export function ParaclinicalResultListPage() {
                       </td>
 
                       {/* Cột 6 – Dịch vụ đã làm */}
-                      <td className="py-2 px-2 text-left min-w-[140px] max-w-[200px]">
-                        <div className="font-bold text-slate-900 text-xs truncate" title={order.serviceName}>
-                          {order.serviceName}
+                      <td className="py-2.5 px-2 text-left min-w-[160px] max-w-[240px]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 line-clamp-1" title={order.services?.[0]?.serviceName || order.serviceName}>
+                            {order.services?.[0]?.serviceName || order.serviceName}
+                          </span>
+                          {hasMultiple && (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-50 text-teal-700 border border-teal-200/90 whitespace-nowrap shadow-2xs cursor-help"
+                              title={order.services.slice(1).map((s) => s.serviceName).join(', ')}
+                            >
+                              +{order.services.length - 1} dịch vụ khác
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10.5px] text-slate-500 italic mt-0.5 truncate" title={order.clinicalDiagnosis}>
-                          {order.clinicalDiagnosis}
+                          {order.clinicalDiagnosis || 'Không có ghi chú lâm sàng'}
                         </div>
                       </td>
 
                       {/* Cột 7 – Thời gian thực hiện */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-1.5 whitespace-nowrap text-center">
                         <span
                           className={`font-mono font-bold text-xs ${
-                            isOverdue ? 'text-rose-600' : 'text-slate-800'
+                            isOverdue ? 'text-rose-600 font-extrabold' : 'text-slate-800'
                           }`}
                         >
                           {order.completedAtTime}
@@ -587,24 +691,32 @@ export function ParaclinicalResultListPage() {
                       </td>
 
                       {/* Cột 8 – Trạng thái */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-1.5 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center">
-                          {order.status === 'PENDING' ? (
-                            <span className="w-[122px] h-6.5 px-2 rounded-full text-[10.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 inline-flex items-center justify-start gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                              <span>Chờ nhập kết quả</span>
-                            </span>
-                          ) : (
+                          {order.isAllDraft ? (
                             <span className="w-[122px] h-6.5 px-2 rounded-full text-[10.5px] font-semibold bg-sky-50 text-sky-700 border border-sky-200/80 inline-flex items-center justify-start gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
                               <span>Đang lưu nháp</span>
+                            </span>
+                          ) : order.hasDraft ? (
+                            <span
+                              className="w-[122px] h-6.5 px-2 rounded-full text-[10.5px] font-semibold bg-sky-50 text-sky-700 border border-sky-200/80 inline-flex items-center justify-start gap-1.5"
+                              title={`${order.draftCount}/${order.totalCount} dịch vụ đã lưu nháp`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                              <span>Lưu nháp ({order.draftCount}/{order.totalCount})</span>
+                            </span>
+                          ) : (
+                            <span className="w-[122px] h-6.5 px-2 rounded-full text-[10.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 inline-flex items-center justify-start gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                              <span>Chờ nhập kết quả</span>
                             </span>
                           )}
                         </div>
                       </td>
 
                       {/* Cột 9 – Thao tác */}
-                      <td className="py-2 px-2 whitespace-nowrap text-center">
+                      <td className="py-2.5 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {!canManage ? (
                             <button
@@ -616,23 +728,25 @@ export function ParaclinicalResultListPage() {
                               <Eye className="w-3.5 h-3.5 shrink-0 text-slate-500" />
                               <span>Xem kết quả</span>
                             </button>
-                          ) : order.status === 'PENDING' ? (
+                          ) : order.hasDraft ? (
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#dbe8fd] hover:bg-[#c9ddfc] text-[#2558c4] border border-[#b8d2fa] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#f1e6d8] hover:bg-[#e6d8c7] text-[#714b28] border border-[#e2d2be] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              title="Tiếp tục nhập kết quả cho bệnh nhân này"
                             >
                               <Plus className="w-3.5 h-3.5 shrink-0" />
-                              <span>Nhập kết quả</span>
+                              <span>Nhập tiếp</span>
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#f1e6d8] hover:bg-[#e6d8c7] text-[#714b28] border border-[#e2d2be] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-[#dbe8fd] hover:bg-[#c9ddfc] text-[#2558c4] border border-[#b8d2fa] active:scale-[0.98] inline-flex items-center justify-start gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs shrink-0"
+                              title="Nhập kết quả cho bệnh nhân này"
                             >
                               <Plus className="w-3.5 h-3.5 shrink-0" />
-                              <span>Nhập tiếp</span>
+                              <span>Nhập kết quả</span>
                             </button>
                           )}
 
@@ -660,7 +774,7 @@ export function ParaclinicalResultListPage() {
         <div className="p-4 bg-slate-50/70 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div>
             Đang hiển thị:{' '}
-            <strong className="text-slate-800">{items.length}</strong> ca cận lâm sàng
+            <strong className="text-slate-800">{groupedResults.length}</strong> bệnh nhân ({items.length} dịch vụ cận lâm sàng)
           </div>
           <div className="text-[11px] text-slate-400 italic">
             * Ca chờ từ 30 phút trở lên có mốc thời gian hiển thị màu đỏ để cảnh báo quá hạn. Các ca ưu tiên được tự động đẩy lên đầu danh sách.
@@ -689,7 +803,7 @@ export function ParaclinicalResultListPage() {
             <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-xs text-slate-600 border border-slate-200/70">
               <div className="flex justify-between">
                 <span className="text-slate-500">Mã phiếu:</span>
-                <span className="font-mono font-bold text-slate-800">{printModalOrder.orderCode}</span>
+                <span className="font-mono font-bold text-slate-800">{printModalOrder.baseOrderCode || printModalOrder.orderCode}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Bệnh nhân:</span>
@@ -698,9 +812,9 @@ export function ParaclinicalResultListPage() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Dịch vụ:</span>
-                <span className="font-medium text-slate-800 text-right max-w-[220px]">
-                  {printModalOrder.serviceName}
+                <span className="text-slate-500">Dịch vụ ({printModalOrder.services?.length || 1}):</span>
+                <span className="font-medium text-slate-800 text-right max-w-[240px]">
+                  {printModalOrder.services?.map((s) => s.serviceName).join(', ') || printModalOrder.serviceName}
                 </span>
               </div>
               <div className="flex justify-between">
