@@ -2,6 +2,7 @@ package clinic.backend.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +29,21 @@ public record VisitTicketResponse(
         Instant registeredAt,
         BigDecimal patientAmount,
         VisitStatus visitStatus,
-        boolean reprint
+        boolean reprint,
+        LocalDate dateOfBirth,
+        String phone,
+        /** Street, ward and province joined; null when none is recorded. */
+        String address,
+        String occupation,
+        String ethnicity,
+        /** Insurance card of the visit; null for a self-paid visit. */
+        String insuranceCardNumber,
+        LocalDate insuranceValidFrom,
+        LocalDate insuranceValidTo,
+        String reasonForVisit,
+        /** Full name of the Receptionist who registered the visit. */
+        String registeredByName,
+        /** Address of the clinic facility, printed under its name. */
+        String facilityAddress
 ) {
 }

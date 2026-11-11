@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
@@ -26,6 +27,7 @@ import clinic.backend.dto.response.PageResponse;
 import clinic.backend.dto.response.VisitFeePreviewResponse;
 import clinic.backend.dto.response.VisitResponse;
 import clinic.backend.dto.response.VisitTicketResponse;
+import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Department;
@@ -797,14 +799,34 @@ public class VisitServiceImpl implements VisitService {
         Payment payment = paymentRepository.findByVisitIdAndType(visit.getId(), PaymentType.EXAMINATION_FEE)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
         List<String> doctorNames = activeDoctorNames(room.getId());
-        String facilityName = requireFacilityName();
+        ClinicFacility facility = clinicFacilityRepository.findCurrent()
+                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
         return new VisitTicketResponse(
-                visit.getId(), facilityName, visit.getSovaovien(), patient.getMabenhnhan(),
+                visit.getId(), facility.getTenCskcb(), visit.getSovaovien(), patient.getMabenhnhan(),
                 patient.getHoten(), patient.getNgaysinh().getYear(), patientGender(patient), visit.getQueueNumber(),
                 room.getRoomName(), room.getLocation(), doctorNames, visit.getDoituongbnLoai(),
                 visit.getInsuranceCoverageRate(), visit.isPriority(),
                 visit.getPriorityReason() == null ? null : visit.getPriorityReason().name(),
-                visit.getThoigianvaovien(), payment.getPatientTotalAmount(), visit.getStatus(), reprint);
+                visit.getThoigianvaovien(), payment.getPatientTotalAmount(), visit.getStatus(), reprint,
+                patient.getNgaysinh(), patient.getSodienthoai(), joinAddress(patient), patient.getNghenghiep(),
+                patient.getDantoc(), visit.getMabhyt(), visit.getTungaybhyt(), visit.getDenngaybhyt(),
+                visit.getLydovaovien(), registrarName(visit), facility.getDiachi());
+    }
+
+    /** The Receptionist who registered the visit, named on the ticket. */
+    private String registrarName(Visit visit) {
+        return visit.getRegisteredByAccountId() == null ? null
+                : staffAccountRepository.findById(visit.getRegisteredByAccountId())
+                        .map(StaffAccount::getFullName)
+                        .orElse(null);
+    }
+
+    private static String joinAddress(Patient patient) {
+        String address = Stream.of(patient.getDiachi(), patient.getXaphuong(), patient.getTinhthanh())
+                .map(VisitServiceImpl::normalize)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(", "));
+        return address.isEmpty() ? null : address;
     }
 
     /**
@@ -829,12 +851,6 @@ public class VisitServiceImpl implements VisitService {
                 .map(account -> staffDisplayName(account.getAcademicTitle(), account.getFullName()))
                 .sorted()
                 .toList();
-    }
-
-    private String requireFacilityName() {
-        return clinicFacilityRepository.findCurrent()
-                .map(facility -> facility.getTenCskcb())
-                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
     }
 
     private static String staffDisplayName(String academicTitle, String fullName) {

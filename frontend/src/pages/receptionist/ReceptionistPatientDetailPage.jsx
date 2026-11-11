@@ -66,7 +66,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
     }, [load]);
 
     // AF-02 / UC-41 AF-02: reprint the ticket of the active visit.
-    const openReprint = async (activeVisit) => {
+    const openReprint = useCallback(async (activeVisit) => {
         const visit = { id: activeVisit.visitId, sovaovien: activeVisit.registrationCode, status: activeVisit.status };
         setReprint({ visit, ticket: null, loading: true, error: null });
         try {
@@ -75,7 +75,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
         } catch (error) {
             setReprint((current) => current && { ...current, loading: false, error: loadErrorMessage(error) });
         }
-    };
+    }, [visitApi]);
 
     const printTicket = async () => {
         if (!reprint?.ticket) return;

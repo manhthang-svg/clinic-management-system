@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, DoorOpen, FileText, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, DoorOpen, FileText, Printer, RefreshCw, X } from 'lucide-react';
 import defaultPatientApi from '../../apis/patientApi';
 import defaultVisitApi from '../../apis/visitApi';
 import { AccountPageHeader, FormSection } from '../../components/accounts/AccountFormParts';
@@ -55,7 +55,7 @@ function countByRoom(visits) {
   return counts;
 }
 
-function StatusCard({ title, message, actionLabel, onAction }) {
+function StatusCard({ title, message, actionLabel, onAction, secondaryLabel, onSecondary }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-10 text-center">
       <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -63,13 +63,25 @@ function StatusCard({ title, message, actionLabel, onAction }) {
       </div>
       <h2 className="text-lg! font-bold! text-[#1b2533] mt-4">{title}</h2>
       <p role="alert" className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">{message}</p>
-      <button
-        type="button"
-        onClick={onAction}
-        className="mt-5 px-4 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer"
-      >
-        {actionLabel}
-      </button>
+      <div className="mt-5 flex flex-wrap justify-center gap-3">
+        {secondaryLabel && (
+          <button
+            type="button"
+            onClick={onSecondary}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            {secondaryLabel}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onAction}
+          className="px-4 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl cursor-pointer"
+        >
+          {actionLabel}
+        </button>
+      </div>
     </section>
   );
 }
@@ -351,6 +363,22 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     }
   };
 
+  // UC-41 AF-02: the patient already has an open visit, e.g. the Receptionist left the ticket screen; show its
+  // ticket again so it can be reprinted.
+  const openActiveTicket = async () => {
+    if (!activeVisit) return;
+    const visit = { id: activeVisit.id, sovaovien: activeVisit.sovaovien, status: activeVisit.status };
+    setCreated({ visit, ticket: null, loading: true, error: null, reprint: true });
+    try {
+      const ticket = await visitApi.getTicket(visit.id);
+      setCreated((current) => current?.visit.id === visit.id ? { ...current, ticket, loading: false } : current);
+    } catch (error) {
+      setCreated((current) => current?.visit.id === visit.id
+        ? { ...current, loading: false, error: ticketErrorMessage(error) }
+        : current);
+    }
+  };
+
   const reloadTicket = async () => {
     if (!created) return;
     setCreated((current) => ({ ...current, loading: true, error: null }));
@@ -386,6 +414,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   if (created) {
     content = (
       <VisitTicket
+        title={created.reprint ? 'In lại phiếu khám' : undefined}
         visit={created.visit}
         ticket={created.ticket}
         loading={created.loading}
@@ -415,6 +444,8 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         message={msg22(activeVisit, VISIT_STATUS_LABELS[activeVisit.status] ?? activeVisit.status)}
         actionLabel="Về danh sách bệnh nhân"
         onAction={goToPatients}
+        secondaryLabel="In lại phiếu khám"
+        onSecondary={() => void openActiveTicket()}
       />
     );
   } else {

@@ -32,3 +32,19 @@ export function roomLabel(room) {
   if (!room) return '—';
   return [room.code, room.name].filter(Boolean).join(' – ');
 }
+
+/**
+ * Age on the registration day in whole years and months: "9 tháng" under one year, "2 tuổi 8 tháng" (or
+ * "2 tuổi") from one year.
+ */
+export function ageText(dateOfBirth, at = new Date()) {
+  if (!dateOfBirth) return '—';
+  const birth = new Date(`${dateOfBirth}T00:00:00`);
+  if (Number.isNaN(birth.getTime()) || at < birth) return '—';
+  let months = (at.getFullYear() - birth.getFullYear()) * 12 + at.getMonth() - birth.getMonth();
+  if (at.getDate() < birth.getDate()) months -= 1;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  if (years === 0) return `${rest} tháng`;
+  return rest === 0 ? `${years} tuổi` : `${years} tuổi ${rest} tháng`;
+}
