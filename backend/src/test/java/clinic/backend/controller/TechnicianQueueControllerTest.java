@@ -69,6 +69,23 @@ class TechnicianQueueControllerTest {
     }
 
     @Test
+    void checkInOrder_delegatesToServiceWithPrincipalId() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getSubject()).thenReturn(technicianId.toString());
+        when(jwt.getClaimAsString("sid")).thenReturn(UUID.randomUUID().toString());
+
+        TechnicianQueueItemResponse item = mock(TechnicianQueueItemResponse.class);
+        when(technicianQueueService.checkInOrder(detailId, technicianId)).thenReturn(item);
+
+        ApiResponse<TechnicianQueueItemResponse> response = controller.checkInOrder(jwt, detailId);
+
+        assertThat(response.getData()).isEqualTo(item);
+        verify(technicianQueueService).checkInOrder(detailId, technicianId);
+    }
+
+    @Test
     void acceptOrder_delegatesToServiceWithPrincipalId() {
         UUID detailId = UUID.randomUUID();
         UUID technicianId = UUID.randomUUID();

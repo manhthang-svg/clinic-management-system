@@ -78,6 +78,17 @@ public class TechnicianQueueController {
         return ApiResponse.success(technicianQueueService.getQueueDetail(detailId));
     }
 
+    @PostMapping("/queue/{detailId}/check-in")
+    @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
+    @Operation(summary = "Xác nhận bệnh nhân có mặt tại phòng cận lâm sàng (cấp số thứ tự hàng đợi)")
+    public ApiResponse<TechnicianQueueItemResponse> checkInOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID detailId
+    ) {
+        UUID technicianId = StaffPrincipal.from(jwt).accountId();
+        return ApiResponse.success(technicianQueueService.checkInOrder(detailId, technicianId));
+    }
+
     @PostMapping("/queue/{detailId}/accept")
     @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
     @Operation(summary = "Tiếp nhận bệnh nhân vào phòng máy")

@@ -29,6 +29,12 @@ export const technicianApi = {
     return apiClient.request(`/technician/queue/${detailId}`, { signal });
   },
 
+  async checkInOrder(detailId) {
+    return apiClient.request(`/technician/queue/${detailId}/check-in`, {
+      method: 'POST',
+    });
+  },
+
   async acceptOrder(detailId) {
     return apiClient.request(`/technician/queue/${detailId}/accept`, {
       method: 'POST',

@@ -28,6 +28,7 @@ import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicalServiceRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.PatientRepository;
+import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
@@ -64,6 +65,7 @@ class TechnicianQueuePerformOrderTest {
     private static final UUID COLLEAGUE_ID = UUID.randomUUID();
 
     @Mock RoomRepository roomRepository;
+    @Mock RoomQueueCounterRepository roomQueueCounterRepository;
     @Mock StaffAccountRepository staffAccountRepository;
     @Mock StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     @Mock ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
@@ -84,7 +86,7 @@ class TechnicianQueuePerformOrderTest {
     @BeforeEach
     void setUp() {
         service = new TechnicianQueueServiceImpl(
-                roomRepository, staffAccountRepository, staffRoomAssignmentRepository,
+                roomRepository, roomQueueCounterRepository, staffAccountRepository, staffRoomAssignmentRepository,
                 paraclinicalOrderDetailRepository, medicalRecordRepository, visitRepository, patientRepository,
                 clinicalExaminationRepository, medicalHistoryRepository, medicalServiceRepository,
                 dutyScheduleRepository, imagingResultRepository, labResultRepository,

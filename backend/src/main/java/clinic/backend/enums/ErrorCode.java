@@ -183,6 +183,12 @@ public enum ErrorCode {
             HttpStatus.UNPROCESSABLE_ENTITY),
     PASSWORD_POLICY_VIOLATION("PASSWORD_POLICY_VIOLATION", "The new password does not satisfy the password policy.",
             HttpStatus.UNPROCESSABLE_ENTITY),
+    ORDER_NOT_CHECKED_IN("ORDER_NOT_CHECKED_IN",
+            "Bệnh nhân chưa được xác nhận có mặt tại phòng.", HttpStatus.CONFLICT),
+    ORDER_ALREADY_CHECKED_IN("ORDER_ALREADY_CHECKED_IN",
+            "Bệnh nhân đã được xác nhận có mặt.", HttpStatus.CONFLICT),
+    PARACLINICAL_ORDER_NOT_PAID("PARACLINICAL_ORDER_NOT_PAID",
+            "Chỉ định cận lâm sàng chưa được thanh toán viện phí.", HttpStatus.CONFLICT),
     INTERNAL_SERVER_ERROR("INTERNAL_SERVER_ERROR", "An unexpected error occurred.",
             HttpStatus.INTERNAL_SERVER_ERROR);
 

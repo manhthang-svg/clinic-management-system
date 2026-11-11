@@ -251,7 +251,7 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
     }
 
     public boolean isCheckedIn() {
-        return this.checkedInAt != null;
+        return this.checkedInAt != null || (this.queueNumber != null && this.queueNumber > 0);
     }
 
     public void accept(UUID performerAccountId, Instant when) {

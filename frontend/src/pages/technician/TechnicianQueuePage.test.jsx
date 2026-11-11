@@ -14,6 +14,8 @@ vi.mock('../../apis/technicianApi', () => ({
   default: {
     getRooms: vi.fn(),
     getQueue: vi.fn(),
+    checkInOrder: vi.fn(),
+    callQueue: vi.fn(),
     acceptOrder: vi.fn(),
     skipOrder: vi.fn(),
     unskipOrder: vi.fn(),
@@ -27,7 +29,7 @@ const inProgress = {
   id: 'detail-1', orderId: 'order-1', queueNumber: 7, orderCode: 'CD0000000009', roomId: 'room-1',
   priority: 'NORMAL', priorityLabel: 'Thường', patientId: 'BN-0001', patientName: 'Nguyễn Văn Bình', age: 45,
   gender: 'Nam', serviceName: 'Siêu âm ổ bụng tổng quát', serviceCode: 'SA-01', doctorName: 'BS An',
-  doctorRoom: 'PK Nội 1', orderTime: '08:00', status: 'IN_PROGRESS', isSkipped: false, allOrdersToday: [],
+  doctorRoom: 'PK Nội 1', orderTime: '08:00', status: 'IN_PROGRESS', isSkipped: false, isCheckedIn: true, allOrdersToday: [],
 };
 
 function renderPage() {
@@ -122,5 +124,157 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     const row = await rowOf('Nguyễn Văn Bình');
     expect(within(row).queryByRole('button', { name: 'Đã thực hiện' })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: 'Trả về' })).not.toBeInTheDocument();
+  });
+
+  it('renders unconfirmed patient in Tab 1 with dash STT, and switches to Tab 2 on check-in', async () => {
+    const user = userEvent.setup();
+    const unconfirmedPatient = {
+      ...inProgress,
+      id: 'detail-unconf-1',
+      orderId: 'order-unconf-1',
+      patientName: 'Lê Văn Dũng',
+      patientId: 'BN00000003',
+      queueNumber: null,
+      isCheckedIn: false,
+      status: 'WAITING',
+    };
+    const checkedInPatient = {
+      ...unconfirmedPatient,
+      queueNumber: 5,
+      isCheckedIn: true,
+    };
+
+    technicianApi.getQueue
+      .mockResolvedValueOnce({
+        items: [unconfirmedPatient],
+        stats: { total: 1, waiting: 1, priority: 0, skipped: 0 },
+        canManage: true,
+      })
+      .mockResolvedValue({
+        items: [checkedInPatient],
+        stats: { total: 1, waiting: 1, priority: 0, skipped: 0 },
+        canManage: true,
+      });
+
+    technicianApi.checkInOrder.mockResolvedValue({
+      orderDetailId: 'detail-unconf-1',
+      queueNumber: 5,
+      checkedInAt: '10:45',
+      roomServices: [checkedInPatient],
+    });
+
+    renderPage();
+
+    // Tab 1 contains Lê Văn Dũng with status "Chờ có mặt"
+    const row = await rowOf('Lê Văn Dũng');
+    expect(within(row).getByText('Chờ có mặt')).toBeInTheDocument();
+    const checkInBtn = within(row).getByRole('button', { name: 'Xác nhận có mặt' });
+    expect(checkInBtn).toBeInTheDocument();
+
+    // Click "Xác nhận có mặt"
+    await user.click(checkInBtn);
+
+    expect(technicianApi.checkInOrder).toHaveBeenCalledWith('detail-unconf-1');
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('#05'), expect.anything());
+
+    // Automatically switched to Tab 2 "Hàng đợi vào phòng"
+    const activeTabButton = screen.getByRole('button', { name: /Hàng đợi vào phòng/i });
+    expect(activeTabButton).toHaveClass('text-[#0d9488]');
+
+    // In Tab 2, Lê Văn Dũng displays STT #05
+    const rowTab2 = await rowOf('Lê Văn Dũng');
+    expect(within(rowTab2).getByText('#05')).toBeInTheDocument();
+    expect(within(rowTab2).getByRole('button', { name: 'Gọi số' })).toBeInTheDocument();
+    expect(within(rowTab2).getByRole('button', { name: 'Tiếp nhận' })).toBeInTheDocument();
+  });
+
+  it('groups multiple services for the same patient into 1 row with badge +X dịch vụ khác', async () => {
+    const svc1 = {
+      ...inProgress,
+      id: 'detail-svc-1',
+      orderId: 'order-multi',
+      patientName: 'Nguyễn jafogawg hảgh',
+      patientId: 'BN1062602',
+      serviceName: 'Bộ đường huyết (Glucose, HbA1c)',
+      status: 'WAITING',
+      queueNumber: null,
+      isCheckedIn: false,
+    };
+    const svc2 = {
+      ...inProgress,
+      id: 'detail-svc-2',
+      orderId: 'order-multi',
+      patientName: 'Nguyễn jafogawg hảgh',
+      patientId: 'BN1062602',
+      serviceName: 'Tổng phân tích nước tiểu',
+      status: 'WAITING',
+      queueNumber: null,
+      isCheckedIn: false,
+    };
+    const svc3 = {
+      ...inProgress,
+      id: 'detail-svc-3',
+      orderId: 'order-multi',
+      patientName: 'Nguyễn jafogawg hảgh',
+      patientId: 'BN1062602',
+      serviceName: 'Bộ mỡ máu',
+      status: 'WAITING',
+      queueNumber: null,
+      isCheckedIn: false,
+    };
+
+    technicianApi.getQueue.mockResolvedValue({
+      items: [svc1, svc2, svc3],
+      stats: { total: 3, waiting: 3, priority: 0, skipped: 0 },
+      canManage: true,
+    });
+
+    renderPage();
+
+    const row = await rowOf('Nguyễn jafogawg hảgh');
+    // Only 1 row for Nguyễn jafogawg hảgh
+    expect(screen.getAllByText('Nguyễn jafogawg hảgh')).toHaveLength(1);
+    // Shows primary service name
+    expect(within(row).getByText('Bộ đường huyết (Glucose, HbA1c)')).toBeInTheDocument();
+    // Shows badge +2 dịch vụ khác
+    expect(within(row).getByText('+2 dịch vụ khác')).toBeInTheDocument();
+  });
+
+  it('sorts Tab 2 Active Queue in ascending order of queueNumber (lower numbers first)', async () => {
+    const patient4 = {
+      ...inProgress,
+      id: 'detail-p4',
+      orderId: 'order-p4',
+      patientName: 'Mai Thanh Hoàng',
+      queueNumber: 4,
+      isCheckedIn: true,
+      status: 'WAITING',
+    };
+    const patient2 = {
+      ...inProgress,
+      id: 'detail-p2',
+      orderId: 'order-p2',
+      patientName: 'Nguyễn jafogawg hảgh',
+      queueNumber: 2,
+      isCheckedIn: true,
+      status: 'WAITING',
+    };
+
+    // Even if backend sends patient4 first
+    technicianApi.getQueue.mockResolvedValue({
+      items: [patient4, patient2],
+      stats: { total: 2, waiting: 2, priority: 0, skipped: 0 },
+      canManage: true,
+    });
+
+    renderPage();
+
+    await screen.findByText('Mai Thanh Hoàng');
+    const rows = screen.getAllByRole('row').slice(1); // exclude header
+    // Row 0 should be patient2 (#02), Row 1 should be patient4 (#04)
+    expect(within(rows[0]).getByText('#02')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Nguyễn jafogawg hảgh')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('#04')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Mai Thanh Hoàng')).toBeInTheDocument();
   });
 });

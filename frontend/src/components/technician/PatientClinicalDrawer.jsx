@@ -14,6 +14,7 @@ import {
   SkipForward,
   Ban,
   Eye,
+  UserCheck,
 } from 'lucide-react';
 
 const FALLBACK_ORDER = {
@@ -49,6 +50,7 @@ export function PatientClinicalDrawer({
   onClose,
   order,
   canManage = true,
+  onCheckInOrder,
   onStartOrder,
   onSkipOrder,
   onCompleteOrder,
@@ -404,7 +406,18 @@ export function PatientClinicalDrawer({
                 </button>
 
                 <div className="flex items-center gap-3">
-                  {isCurrentRoomWaiting && (
+                  {isCurrentRoomWaiting && !currentOrder.isCheckedIn && onCheckInOrder && (
+                    <button
+                      type="button"
+                      onClick={() => onCheckInOrder(currentOrder)}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-extrabold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm hover:shadow transition-all cursor-pointer active:scale-95"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>Xác nhận có mặt</span>
+                    </button>
+                  )}
+
+                  {isCurrentRoomWaiting && currentOrder.isCheckedIn && (
                     <>
                       <button
                         type="button"
