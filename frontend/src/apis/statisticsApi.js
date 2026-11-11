@@ -1,15 +1,24 @@
 import { apiClient } from '../services/session';
 
-/** UC-26 View Statistics Dashboard (GET /statistics/dashboard). Dates are YYYY-MM-DD, both inclusive. */
+function withQuery(path, values) {
+  const params = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+/** Admin statistics endpoints. Dates are YYYY-MM-DD, both inclusive. */
 export function createStatisticsApi(client = apiClient) {
   return {
-    getDashboard: ({ from, to } = {}, signal) => {
-      const params = new URLSearchParams();
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      const query = params.toString();
-      return client.request(`/statistics/dashboard${query ? `?${query}` : ''}`, { signal });
-    },
+    /** UC-26 View Statistics Dashboard. */
+    getDashboard: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/dashboard', { from, to }), { signal }),
+
+    /** UC-27 View Patient Visit Statistics; groupBy is DAY or MONTH. */
+    getVisits: ({ from, to, groupBy } = {}, signal) =>
+      client.request(withQuery('/statistics/visits', { from, to, groupBy }), { signal }),
   };
 }
 
