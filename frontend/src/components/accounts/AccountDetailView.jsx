@@ -242,6 +242,7 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
     ['Họ và tên', account.fullName],
     ['Học hàm / học vị', account.title || '—'],
     ['Số giấy phép hành nghề', account.practiceLicenseNo || '—'],
+    ...(account.role === 'DOCTOR' ? [['Mã liên thông bác sĩ', account.maLienthongBacsi || '—']] : []),
     ['Tên đăng nhập', account.username],
     ['Ngày sinh', account.dateOfBirth ? `${formatDate(account.dateOfBirth)} (${ageOf(account.dateOfBirth)} tuổi)` : '—'],
     ['Giới tính', GENDER_LABELS[account.gender] || '—'],

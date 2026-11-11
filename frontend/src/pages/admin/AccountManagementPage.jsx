@@ -65,6 +65,7 @@ function fromApi(account) {
     phone: account.phoneNumber ?? account.phone ?? "",
     title: account.academicTitle ?? account.title,
     practiceLicenseNo: account.practiceLicenseNo ?? "",
+    maLienthongBacsi: account.maLienthongBacsi ?? "",
     failedLoginCount: account.failedLoginAttempts ?? account.failedLoginCount ?? 0,
   };
 }
@@ -382,6 +383,8 @@ export function AccountManagementPage({
   const saveAccount = async (account, form) => {
     const updated = fromApi(await accountApi.update(account.id, {
       ...accountRequest(form),
+      // Only a Doctor holds a prescriber link code; other roles always send none.
+      maLienthongBacsi: account.role === "DOCTOR" ? form.maLienthongBacsi.trim() || null : null,
       version: account.version,
     }));
     setDetails((prev) => ({ ...prev, [account.id]: updated }));

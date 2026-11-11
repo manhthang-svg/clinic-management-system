@@ -20,7 +20,7 @@ import { INPUT_CLASS, FormField, AccountPageHeader } from './AccountFormParts';
 
 // UC-8 edits exactly these seven fields; username, role and status have their own use cases.
 const EDIT_FIELDS = [
-  'fullName', 'title', 'practiceLicenseNo', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
+  'fullName', 'title', 'practiceLicenseNo', 'maLienthongBacsi', 'dateOfBirth', 'gender', 'phone', 'email', 'address',
 ];
 const DIRTY_FIELDS = EDIT_FIELDS;
 function dateTime(iso) {

@@ -87,6 +87,14 @@ describe('validateAccountForm messages (SRS message templates)', () => {
     expect(validateAccountForm({ ...doctor, practiceLicenseNo }, {}).practiceLicenseNo).toBeUndefined();
   });
 
+  it.each(['BS-0001', 'mã 01', 'a'.repeat(51)])('rejects the prescriber link code %j for a Doctor', (maLienthongBacsi) => {
+    expect(validateAccountForm({ ...doctor, maLienthongBacsi }, {}).maLienthongBacsi).toBeTruthy();
+  });
+
+  it.each(['', 'BS0001', 'a'.repeat(50)])('accepts the prescriber link code %j for a Doctor', (maLienthongBacsi) => {
+    expect(validateAccountForm({ ...doctor, maLienthongBacsi }, {}).maLienthongBacsi).toBeUndefined();
+  });
+
   it('uses MSG07 for a username or email already in use', () => {
     const accounts = [{ id: 'other', username: 'lt.hong', email: 'lt.hong@clinic.test' }];
     const errors = validateAccountForm(
