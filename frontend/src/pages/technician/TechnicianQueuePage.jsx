@@ -85,6 +85,10 @@ export function TechnicianQueuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
+  // Quản lý 2 Tab: 'waiting_unconfirmed' (Chờ tiếp nhận / Chưa đến) & 'active_queue' (Hàng đợi vào phòng)
+  const [activeTab, setActiveTab] = useState('waiting_unconfirmed');
+  const tabInitializedRef = useRef(false);
+
   // 3. Toolbar & Filters states
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -173,6 +177,17 @@ export function TechnicianQueuePage() {
         const canManage = typeof response?.canManage === 'boolean' ? response.canManage : false;
 
         setQueueData({ stats, items, canManage });
+
+        // Khởi tạo tab linh hoạt khi mới tải dữ liệu: nếu không có ca chưa đến nhưng có ca trong active queue thì mở active queue
+        if (!tabInitializedRef.current && items.length > 0) {
+          tabInitializedRef.current = true;
+          const isItemCheckedIn = (i) => Boolean(i?.isCheckedIn || (i?.queueNumber != null && i?.queueNumber > 0) || i?.status === 'IN_PROGRESS' || i?.status === 'COMPLETED');
+          const hasUnconfirmed = items.some((i) => !isItemCheckedIn(i));
+          const hasActive = items.some((i) => isItemCheckedIn(i));
+          if (!hasUnconfirmed && hasActive) {
+            setActiveTab('active_queue');
+          }
+        }
 
         // Tự động thu thập danh sách phòng khám gửi chỉ định vào bộ lọc
         if (items.length > 0) {
@@ -317,10 +332,6 @@ export function TechnicianQueuePage() {
     });
   }, [orders]);
 
-  // Quản lý 2 Tab: 'waiting_unconfirmed' (Chờ tiếp nhận / Chưa đến) & 'active_queue' (Hàng đợi vào phòng)
-  const [activeTab, setActiveTab] = useState('waiting_unconfirmed');
-  const tabInitializedRef = useRef(false);
-
   // Tab 1: Bệnh nhân chưa có mặt (chưa check-in, chưa có STT) - Sắp xếp theo ưu tiên và thời gian chỉ định
   const unconfirmedList = useMemo(() => {
     return groupedOrders
@@ -345,19 +356,6 @@ export function TechnicianQueuePage() {
         return (a.orderTime || '').localeCompare(b.orderTime || '');
       });
   }, [groupedOrders]);
-
-  // Khởi tạo tab linh hoạt: nếu không có ca chưa đến nhưng có ca đang ở active queue (như trong ca trực đang làm hoặc test) thì mở active queue
-  useEffect(() => {
-    if (!tabInitializedRef.current && queueData.items.length > 0) {
-      tabInitializedRef.current = true;
-      const isItemCheckedIn = (i) => Boolean(i?.isCheckedIn || (i?.queueNumber != null && i?.queueNumber > 0) || i?.status === 'IN_PROGRESS' || i?.status === 'COMPLETED');
-      const hasUnconfirmed = queueData.items.some((i) => !isItemCheckedIn(i));
-      const hasActive = queueData.items.some((i) => isItemCheckedIn(i));
-      if (!hasUnconfirmed && hasActive) {
-        setActiveTab('active_queue');
-      }
-    }
-  }, [queueData.items]);
 
   // Danh sách hiển thị theo tab hiện tại
   const displayedOrders = activeTab === 'waiting_unconfirmed' ? unconfirmedList : activeQueueList;
