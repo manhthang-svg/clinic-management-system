@@ -201,4 +201,53 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(screen.getByRole('article', { name: 'Phiếu kết quả in' })).toHaveTextContent('PHIẾU NỘI SOI');
     expect(screen.queryByRole('button', { name: 'In phiếu kết quả' })).not.toBeInTheDocument();
   });
+
+  describe('tabs of the services ordered together', () => {
+    function siblingApi() {
+      const labs = MOCK_RESULT_ORDERS.filter((entry) => entry.printForm === 'LAB').slice(0, 2);
+      const tabs = labs.map((entry) => ({ id: entry.id, serviceName: entry.serviceName, status: 'PERFORMED' }));
+      const api = createMockResultApi({ orders: labs.map((entry) => ({ ...entry, siblingServices: tabs })), latency: 0 });
+      vi.spyOn(api, 'get');
+      // Like the backend, a saved draft comes back with the tab statuses (DRAFT for the saved service).
+      const saveDraft = api.saveDraft.bind(api);
+      vi.spyOn(api, 'saveDraft').mockImplementation(async (id, form) => ({
+        ...(await saveDraft(id, form)),
+        siblingServices: tabs.map((tab) => (tab.id === id ? { ...tab, status: 'DRAFT' } : tab)),
+      }));
+      return { api, labs };
+    }
+
+    it('preloads the other tabs and switches without loading again', async () => {
+      const { api, labs } = siblingApi();
+      renderPage(labs[0].id, api);
+      await screen.findByRole('button', { name: 'Gửi kết quả' });
+
+      await waitFor(() => expect(api.get).toHaveBeenCalledWith(labs[1].id));
+      const calls = api.get.mock.calls.length;
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: new RegExp(labs[1].serviceName.slice(0, 12)) }));
+
+      expect(await screen.findByText(labs[1].orderCode)).toBeInTheDocument();
+      expect(api.get).toHaveBeenCalledTimes(calls);
+    });
+
+    it('shows the saved draft and its tab status after coming back to a tab', async () => {
+      const { api, labs } = siblingApi();
+      const user = userEvent.setup();
+      renderPage(labs[0].id, api);
+      const firstTab = () => screen.getByRole('button', { name: new RegExp(labs[0].serviceName.slice(0, 12)) });
+      const secondTab = () => screen.getByRole('button', { name: new RegExp(labs[1].serviceName.slice(0, 12)) });
+
+      await screen.findByRole('button', { name: 'Gửi kết quả' });
+      await user.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+      await waitFor(() => expect(api.saveDraft).toHaveBeenCalled());
+      await user.click(secondTab());
+      await screen.findByText(labs[1].orderCode);
+      await user.click(firstTab());
+
+      expect(await screen.findByText(labs[0].orderCode)).toBeInTheDocument();
+      expect(screen.getByText(/Lưu nháp lúc/)).toBeInTheDocument();
+      expect(firstTab()).toHaveTextContent('Bản nháp');
+    });
+  });
 });
