@@ -6,10 +6,11 @@ import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
 
-/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics, UC-29 department and room statistics, UC-30 paraclinical service statistics. */
+/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics, UC-29 department and room statistics, UC-30 paraclinical service statistics, UC-31 revenue statistics. */
 public interface StatisticsService {
 
     /**
@@ -32,4 +33,10 @@ public interface StatisticsService {
 
     /** UC-30 View Paraclinical Service Statistics for {@code [from, to]}; missing dates default as in {@link #getDashboard}. */
     ParaclinicalStatisticsResponse getParaclinicalStatistics(LocalDate from, LocalDate to);
+
+    /**
+     * UC-31 View Revenue Statistics for {@code [from, to]}, by day or month (default day); missing dates default as
+     * in {@link #getDashboard}.
+     */
+    RevenueStatisticsResponse getRevenueStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy);
 }

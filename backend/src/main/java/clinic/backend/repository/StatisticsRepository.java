@@ -73,6 +73,41 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         BigDecimal getPatientAmount();
     }
 
+    /** UC-31: paid receipts of one clinic day (YYYY-MM-DD), receipt type and payment method. */
+    interface RevenueRow {
+        String getDay();
+
+        String getType();
+
+        String getMethod();
+
+        long getPayments();
+
+        BigDecimal getTotalAmount();
+
+        BigDecimal getInsuranceAmount();
+
+        BigDecimal getPatientAmount();
+    }
+
+    /**
+     * Receipts paid in {@code [start, end)}, grouped by the clinic-time day they were paid, their type and payment
+     * method. Native because the day must be taken in the clinic time zone, not in UTC.
+     */
+    @Query(value = """
+            select to_char(p.paid_at at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') as day,
+                   p.type as type,
+                   p.payment_method as method,
+                   count(*) as payments,
+                   coalesce(sum(p.total_amount), 0) as totalAmount,
+                   coalesce(sum(p.insurance_total_amount), 0) as insuranceAmount,
+                   coalesce(sum(p.patient_total_amount), 0) as patientAmount
+            from payments p
+            where p.status = 'PAID' and p.paid_at >= :start and p.paid_at < :end
+            group by 1, 2, 3
+            """, nativeQuery = true)
+    List<RevenueRow> revenueByDayTypeAndMethod(@Param("start") Instant start, @Param("end") Instant end);
+
     /** UC-30: performed services of one service in one room, by status (awaiting result or with result). */
     interface PerformedServiceCount {
         UUID getServiceId();

@@ -37,6 +37,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String DOCTORS = "/api/v1/statistics/doctors";
     private static final String DEPARTMENTS = "/api/v1/statistics/departments";
     private static final String PARACLINICAL = "/api/v1/statistics/paraclinical";
+    private static final String REVENUE = "/api/v1/statistics/revenue";
     private static final UUID LAB_DEPARTMENT = UUID.fromString("0192a000-0001-7000-8000-000000000003");
     private static final UUID BIOCHEMISTRY = UUID.fromString("0192a000-0002-7000-8000-000000000002");
     private static final UUID LAB_ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000008");
@@ -295,11 +296,61 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 performedAt == null ? null : java.sql.Timestamp.from(performedAt));
     }
 
+    @Test
+    void revenueStatisticsCountPaidReceiptsByClinicDayOnPostgres() throws Exception {
+        UUID first = visit("BN00000003", LocalDate.of(2003, 9, 1), "COMPLETED", null);
+        UUID second = visit("BN00000004", LocalDate.of(2003, 9, 1), "COMPLETED", null);
+        UUID later = visit("BN00000008", LocalDate.of(2003, 10, 5), "COMPLETED", null);
+        payment(first, "EXAMINATION_FEE", "PAID", "CASH", 100000, 50000, Instant.parse("2003-09-01T02:00:00Z"));
+        // 00:30 on 2 September in the clinic, still 1 September in UTC.
+        payment(first, "PARACLINICAL_FEE", "PAID", "BANK_TRANSFER", 0, 200000, Instant.parse("2003-09-01T17:30:00Z"));
+        payment(second, "EXAMINATION_FEE", "PENDING", null, 0, 150000, null);
+        payment(later, "EXAMINATION_FEE", "PAID", "CASH", 0, 150000, Instant.parse("2003-10-05T02:00:00Z"));
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(REVENUE).param("from", "2003-09-01").param("to", "2003-09-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary.payments").value(2))
+                .andExpect(jsonPath("$.data.summary.totalAmount").value(350000))
+                .andExpect(jsonPath("$.data.summary.insuranceAmount").value(100000))
+                .andExpect(jsonPath("$.data.summary.patientAmount").value(250000))
+                .andExpect(jsonPath("$.data.series", hasSize(30)))
+                .andExpect(jsonPath("$.data.series[0].amounts.totalAmount").value(150000))
+                .andExpect(jsonPath("$.data.series[1].period").value("2003-09-02"))
+                .andExpect(jsonPath("$.data.series[1].amounts.totalAmount").value(200000))
+                .andExpect(jsonPath("$.data.byMethod[0].method").value("BANK_TRANSFER"))
+                .andExpect(jsonPath("$.data.byMethod[1].method").value("CASH"))
+                .andExpect(jsonPath("$.data.byType", hasSize(2)));
+
+        mockMvc.perform(get(REVENUE).param("from", "2003-09-01").param("to", "2003-10-31").param("groupBy", "MONTH")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.series", hasSize(2)))
+                .andExpect(jsonPath("$.data.series[1].amounts.patientAmount").value(150000));
+
+        mockMvc.perform(get(REVENUE)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
+    }
+
+    private void payment(UUID visit, String type, String status, String method, long insurance, long patient,
+            Instant paidAt) {
+        UUID id = UUID.randomUUID();
+        String suffix = id.toString().substring(0, 8);
+        jdbc.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount, insurance_total_amount,
+                    patient_total_amount, payment_method, receipt_number, paid_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now(), 0)
+                """, id, "HD-" + suffix, visit, type, status, insurance + patient, insurance, patient, method,
+                paidAt == null ? null : "PT-" + suffix, paidAt == null ? null : java.sql.Timestamp.from(paidAt));
+    }
+
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
         visit(mabenhnhan, queueDate, status, null);
     }
 
-    private void visit(String mabenhnhan, LocalDate queueDate, String status, UUID doctor) {
+    private UUID visit(String mabenhnhan, LocalDate queueDate, String status, UUID doctor) {
         UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
         UUID id = UUID.randomUUID();
         jdbc.update("""
@@ -309,6 +360,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, ?, ?, now(), now(), 0)
                 """, id, "VV-" + id.toString().substring(0, 12), patient, ROOM, RECEPTIONIST, queueDate,
                 ++queueNumber, status, doctor);
+        return id;
     }
 
     private StaffAccount account(Role role) {

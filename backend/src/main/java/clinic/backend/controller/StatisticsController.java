@@ -7,6 +7,7 @@ import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.service.StatisticsService;
@@ -67,5 +68,14 @@ public class StatisticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.success(statisticsService.getParaclinicalStatistics(from, to));
+    }
+
+    @Operation(summary = "UC-31 Thống kê doanh thu đã thu, tách phần BHYT chi trả và phần bệnh nhân trả")
+    @GetMapping("/revenue")
+    public ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) StatisticsGroupBy groupBy) {
+        return ApiResponse.success(statisticsService.getRevenueStatistics(from, to, groupBy));
     }
 }
