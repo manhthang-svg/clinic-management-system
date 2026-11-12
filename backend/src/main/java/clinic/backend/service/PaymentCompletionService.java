@@ -2,13 +2,13 @@ package clinic.backend.service;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.entity.MedicalService;
@@ -29,6 +29,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.service.impl.ParaclinicalRoomDuty;
 import clinic.backend.repository.VisitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,9 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UC-71 steps 7–8 after a receipt becomes Paid, shared by the counter confirmation and PayOS: the examination
- * fee issues the visit's queue number and puts it in its room's waiting list (BR-15, I1-D48); the paraclinical fee releases the orders of UC-49 to the
- * rooms the Doctor chose (BR-26, I1-D47). Both write the audit entry (BR-37). UC-49 uses the same routing to release
- * orders that do not wait for payment.
+ * fee issues the visit's queue number and puts it in its room's waiting list (BR-15, I1-D48); the paraclinical fee
+ * releases the orders of UC-49, each service to the staffed room with the fewest waiting services (BR-28, BA decision
+ * 12/11/2026). Both write the audit entry (BR-37). UC-49 releases orders that do not wait for payment to the rooms the
+ * Doctor chose (BR-26, I1-D47).
  */
 @Slf4j
 @Service
@@ -54,6 +56,7 @@ public class PaymentCompletionService {
     private final RoomRepository roomRepository;
     private final RoomQueueCounterRepository queueCounterRepository;
     private final AuditLogService auditLogService;
+    private final ParaclinicalRoomDuty paraclinicalRoomDuty;
     private final Clock clock;
 
     /**
@@ -63,7 +66,6 @@ public class PaymentCompletionService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void completePaidReceipt(Payment payment, UUID actorAccountId) {
         Instant now = clock.instant();
-        LocalDate today = LocalDate.now(clock);
         Visit visit = visitRepository.findById(payment.getVisitId())
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
 
@@ -79,7 +81,7 @@ public class PaymentCompletionService {
         } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
             // An insurance visit's orders were already released at order time (BR-26); only pending ones move.
             paraclinicalOrderRepository.findByPaymentId(payment.getId())
-                    .ifPresent(order -> unroutedServices.addAll(release(order, today, now)));
+                    .ifPresent(order -> unroutedServices.addAll(release(order, now, true)));
         }
 
         Map<String, Object> audit = new LinkedHashMap<>();
@@ -111,16 +113,22 @@ public class PaymentCompletionService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public List<String> releaseOrder(ParaclinicalOrder order) {
-        return release(order, LocalDate.now(clock), clock.instant());
+        return release(order, clock.instant(), false);
     }
 
-    private List<String> release(ParaclinicalOrder order, LocalDate today, Instant now) {
+    /**
+     * {@code atPayment}: the patient paid the paraclinical fee (self-pay visit), so each service goes to the room
+     * picked now by {@link #roomAtPayment} instead of the room chosen when ordering, which may have been minutes or
+     * hours earlier (BA decision 12/11/2026, replaces the "keep the chosen room" part of I1-D47 / BR-50-02).
+     */
+    private List<String> release(ParaclinicalOrder order, Instant now, boolean atPayment) {
+        Set<UUID> staffed = atPayment ? paraclinicalRoomDuty.staffedRooms(now) : Set.of();
         order.release();
         paraclinicalOrderRepository.save(order);
         List<String> unrouted = new ArrayList<>();
         for (ParaclinicalOrderDetail detail : order.getDetails()) {
             if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_PAYMENT
-                    && !routeToRoom(detail, today, now)) {
+                    && !routeToRoom(detail, now, atPayment, staffed)) {
                 unrouted.add(detail.getTenchidinh());
             }
         }
@@ -143,25 +151,50 @@ public class PaymentCompletionService {
     }
 
     /**
-     * Sends one paid service to the room the Doctor chose (I1-D47, BR-50-02). An order line without a chosen room
-     * (created before I1-D47) goes to the least busy Active room of its group (BR-28). A chosen room that is no longer
-     * Active should not happen (BR-50-03); it also falls back to the least busy room. Returns false when no Active
-     * room performs the service (UC-71 AF-02).
+     * Room of a service paid now (BR-28 as clarified by the BA on 12/11/2026): among the Active rooms of the
+     * service group, the rooms with a staff member on duty in the current shift; among them the room with the
+     * fewest waiting services; ties go to the lower room code. ASSUMPTION: when no room of the group is staffed
+     * now, every Active room of the group is a candidate, so the paid service still gets a room.
      */
-    private boolean routeToRoom(ParaclinicalOrderDetail detail, LocalDate today, Instant now) {
-        Room room = Optional.ofNullable(detail.getRoomId())
+    Optional<Room> roomAtPayment(UUID serviceGroupId, Set<UUID> staffedRooms) {
+        if (serviceGroupId == null) {
+            return Optional.empty();
+        }
+        List<Room> active = roomRepository
+                .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(serviceGroupId, ActivationStatus.ACTIVE);
+        List<Room> onDuty = active.stream().filter(room -> staffedRooms.contains(room.getId())).toList();
+        return (onDuty.isEmpty() ? active : onDuty).stream()
+                .sorted(Comparator.comparing(Room::getRoomCode))
+                .min(Comparator.comparingLong(candidate -> paraclinicalOrderDetailRepository
+                        .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING)));
+    }
+
+    /**
+     * Sends one service to its room. At payment the room is picked again by {@link #roomAtPayment}; the room chosen
+     * when ordering is only used when the service group is unknown. Without payment (UC-49, insurance visit or
+     * fee-exempt receipt) the service goes to the room the Doctor chose (I1-D47), or to the least busy Active room
+     * when none was chosen or the chosen room is no longer Active (BR-50-03). Returns false when no Active room
+     * performs the service (UC-71 AF-02).
+     */
+    private boolean routeToRoom(ParaclinicalOrderDetail detail, Instant now, boolean atPayment, Set<UUID> staffed) {
+        Optional<UUID> groupId = medicalServiceRepository.findById(detail.getServiceId())
+                .map(MedicalService::getServiceGroupId);
+        Room chosen = Optional.ofNullable(detail.getRoomId())
                 .flatMap(roomRepository::findById)
-                .filter(chosen -> chosen.getStatus() == ActivationStatus.ACTIVE)
+                .filter(room -> room.getStatus() == ActivationStatus.ACTIVE)
                 .orElse(null);
-        if (room == null) {
-            if (detail.getRoomId() != null) {
-                log.warn("Chosen room {} of order line {} is not active; routing to the least busy room",
-                        detail.getRoomId(), detail.getId());
+        Room room;
+        if (atPayment) {
+            room = groupId.flatMap(group -> roomAtPayment(group, staffed)).orElse(chosen);
+        } else {
+            room = chosen;
+            if (room == null) {
+                if (detail.getRoomId() != null) {
+                    log.warn("Chosen room {} of order line {} is not active; routing to the least busy room",
+                            detail.getRoomId(), detail.getId());
+                }
+                room = groupId.flatMap(this::leastBusyRoom).orElse(null);
             }
-            room = medicalServiceRepository.findById(detail.getServiceId())
-                    .map(MedicalService::getServiceGroupId)
-                    .flatMap(this::leastBusyRoom)
-                    .orElse(null);
         }
 
         if (room == null) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import {
     ArrowLeft,
@@ -105,6 +105,21 @@ export default function PaymentDetailPage() {
         }
     };
 
+    // Sau khi thu tiền: phí khám thì mở ngay phiếu số thứ tự để in cho bệnh nhân (số vừa được cấp, I1-D48);
+    // các khoản khác thì in phiếu thu như trước (UC-71 bước 9). Phiếu thu vẫn in được bằng nút "In phiếu thu".
+    const afterPaid = async () => {
+        if (queueTicketVisitId(payment)) {
+            openQueueTicket();
+        } else {
+            await handlePrint();
+        }
+    };
+    // The PayOS polling effect calls the latest afterPaid without restarting its timer.
+    const afterPaidRef = useRef(afterPaid);
+    useEffect(() => {
+        afterPaidRef.current = afterPaid;
+    });
+
     const loadPayment = useCallback(async () => {
         if (!id) return;
         setLoading(true);
@@ -146,8 +161,7 @@ export default function PaymentDetailPage() {
             setNotice(confirmedNoticeText(res?.data || res));
             setCashModalOpen(false);
             await loadPayment();
-            // UC-71 bước 9: mở bản in phiếu thu ngay sau khi xác nhận (UC-72)
-            await handlePrint();
+            await afterPaid();
         } catch (err) {
             alert(confirmErrorMessage(err));
             setCashModalOpen(false);
@@ -185,7 +199,8 @@ export default function PaymentDetailPage() {
             if (data?.status === 'PAID') {
                 setNotice('Thanh toán thành công qua PayOS!');
                 setQrModalOpen(false);
-                loadPayment();
+                await loadPayment();
+                await afterPaid();
             } else {
                 alert('Chưa nhận được tiền chuyển khoản. Vui lòng kiểm tra lại sau ít giây.');
             }
@@ -206,7 +221,8 @@ export default function PaymentDetailPage() {
                 if (data?.status === 'PAID') {
                     setNotice('Thanh toán thành công qua PayOS!');
                     setQrModalOpen(false);
-                    loadPayment();
+                    await loadPayment();
+                    await afterPaidRef.current();
                 }
             } catch {
                 // Ignore

@@ -8,6 +8,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.entity.MedicalService;
@@ -30,6 +31,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
+import clinic.backend.service.impl.ParaclinicalRoomDuty;
 import clinic.backend.repository.VisitRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +63,7 @@ class PaymentCompletionServiceTest {
     @Mock private RoomRepository roomRepository;
     @Mock private RoomQueueCounterRepository queueCounterRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private ParaclinicalRoomDuty paraclinicalRoomDuty;
 
     private PaymentCompletionService service;
 
@@ -69,7 +72,7 @@ class PaymentCompletionServiceTest {
         service = new PaymentCompletionService(
                 visitRepository, paraclinicalOrderRepository, paraclinicalOrderDetailRepository,
                 medicalServiceRepository, roomRepository, queueCounterRepository, auditLogService,
-                Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
+                paraclinicalRoomDuty, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
     @Test
@@ -202,22 +205,85 @@ class PaymentCompletionServiceTest {
     }
 
     @Test
-    void sendsAPaidServiceToTheRoomTheDoctorChoseEvenWhenAnotherIsLessBusy() {
+    void picksTheRoomAgainAtPaymentInsteadOfTheRoomTheDoctorChose() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room chosen = room(groupId, "CLS01");
+        Room free = room(groupId, "CLS02");
+        ParaclinicalOrderDetail detail = detail(order, chosen.getId());
+        order.addDetail(detail);
+        stubParaclinical(payment, order, groupId, List.of(chosen, free));
+        when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
+        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(chosen.getId(), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(4L);
+        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(free.getId(), ParaclinicalOrderDetailStatus.WAITING))
+                .thenReturn(0L);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        // BA 12/11/2026: the room is picked when the patient pays, not kept from the order.
+        assertThat(detail.getRoomId()).isEqualTo(free.getId());
+        assertThat(detail.getQueueNumber()).isNull();
+    }
+
+    @Test
+    void prefersARoomWithStaffOnDutyEvenWhenAnUnstaffedRoomIsLessBusy() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        ParaclinicalOrderDetail detail = detail(order);
+        order.addDetail(detail);
+        Room staffed = room(groupId, "CLS02");
+        Room empty = room(groupId, "CLS01");
+        stubParaclinical(payment, order, groupId, List.of(empty, staffed));
+        // The staffed room is busier, but the empty room has nobody on duty now.
+        when(paraclinicalRoomDuty.staffedRooms(NOW)).thenReturn(Set.of(staffed.getId()));
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getRoomId()).isEqualTo(staffed.getId());
+        verify(paraclinicalOrderDetailRepository, never())
+                .countByRoomIdAndStatus(empty.getId(), ParaclinicalOrderDetailStatus.WAITING);
+    }
+
+    @Test
+    void breaksATieBetweenStaffedRoomsWithTheLowerRoomCode() {
+        UUID groupId = UUID.randomUUID();
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        ParaclinicalOrderDetail detail = detail(order);
+        order.addDetail(detail);
+        Room second = room(groupId, "XN-SH-2");
+        Room first = room(groupId, "XN-SH-1");
+        stubParaclinical(payment, order, groupId, List.of(second, first));
+        when(paraclinicalRoomDuty.staffedRooms(NOW)).thenReturn(Set.of(first.getId(), second.getId()));
+        when(paraclinicalOrderDetailRepository.countByRoomIdAndStatus(any(), eq(ParaclinicalOrderDetailStatus.WAITING)))
+                .thenReturn(2L);
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getRoomId()).isEqualTo(first.getId());
+    }
+
+    @Test
+    void releaseWithoutPaymentKeepsTheRoomTheDoctorChose() {
         UUID groupId = UUID.randomUUID();
         Payment payment = paidParaclinicalFee();
         ParaclinicalOrder order = order(payment);
         Room chosen = room(groupId, "CLS01");
         ParaclinicalOrderDetail detail = detail(order, chosen.getId());
         order.addDetail(detail);
-        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_PARACLINICAL)));
-        when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+        MedicalService medicalService = mock(MedicalService.class);
+        when(medicalService.getServiceGroupId()).thenReturn(groupId);
+        when(medicalServiceRepository.findById(SERVICE_ID)).thenReturn(Optional.of(medicalService));
         when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
 
-        service.completePaidReceipt(payment, UUID.randomUUID());
+        service.releaseOrder(order);
 
-        // Case 1: the chosen room keeps the service; queue number is null until on-site check-in.
+        // Insurance visit or fee-exempt receipt (UC-49, BR-26): the room printed on the order slip is kept.
         assertThat(detail.getRoomId()).isEqualTo(chosen.getId());
-        assertThat(detail.getQueueNumber()).isNull();
+        verify(paraclinicalRoomDuty, never()).staffedRooms(any());
         verify(roomRepository, never()).findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(any(), any());
     }
 
