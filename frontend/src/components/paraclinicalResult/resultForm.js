@@ -96,16 +96,24 @@ export function emptyDescriptiveResult() {
   };
 }
 
+/**
+ * The saved fields that hold a value. The API returns null for a field left blank in a draft (e.g. a draft saved
+ * before the conclusion was typed); spreading that null over the empty form would break the inputs and `.trim()`.
+ */
+function withoutBlanks(saved) {
+  return Object.fromEntries(Object.entries(saved ?? {}).filter(([, value]) => value !== null && value !== undefined));
+}
+
 /** The form state of an order: its saved draft or an empty form. */
 export function resultToForm(order) {
   const saved = order.result;
   if (isLab(order)) {
     const empty = emptyLabResult(order);
     if (!saved) return empty;
-    return { ...empty, ...saved, values: { ...empty.values, ...saved.values } };
+    return { ...empty, ...withoutBlanks(saved), values: { ...empty.values, ...withoutBlanks(saved.values) } };
   }
-  const form = { ...emptyDescriptiveResult(), ...(saved ?? {}), files: saved?.files ?? [] };
-  if (sectionsFor(order)) form.sections = { ...emptySections(order), ...(saved?.sections ?? {}) };
+  const form = { ...emptyDescriptiveResult(), ...withoutBlanks(saved), files: saved?.files ?? [] };
+  if (sectionsFor(order)) form.sections = { ...emptySections(order), ...withoutBlanks(saved?.sections) };
   return form;
 }
 

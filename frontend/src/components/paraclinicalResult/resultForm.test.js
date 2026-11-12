@@ -73,4 +73,29 @@ describe('resultForm', () => {
     expect(result.errors).toHaveLength(2);
     expect(checkFiles([files[0]], MAX_FILES).accepted).toEqual([]);
   });
+
+  // The API returns null for every blank field of a draft (here: saved before anything was typed).
+  const blankDraft = {
+    status: 'DRAFT', savedAt: '2026-11-12T09:31:35Z', submittedAt: null, receivedAt: null, values: {},
+    interpretations: {}, conclusion: null, technique: null, description: null, sections: null, recommendation: null,
+    imageLink: null, readingDoctor: null, instrumentId: null, instrumentName: null, files: [],
+  };
+
+  it('opens a lab draft saved without a conclusion instead of crashing', () => {
+    const lab = { ...order('cls-002'), result: blankDraft };
+    const form = resultToForm(lab);
+
+    expect(form.conclusion).toBe('');
+    expect(form.instrumentId).toBe('');
+    expect(Object.values(form.values).every((value) => value === '')).toBe(true);
+    expect(validateResult(lab, form)).toHaveProperty('conclusion');
+  });
+
+  it('opens a descriptive draft whose fields are all null', () => {
+    const xray = { ...order('cls-008'), result: blankDraft };
+    const form = resultToForm(xray);
+
+    expect(form).toMatchObject({ conclusion: '', description: '', technique: '', imageLink: '' });
+    expect(() => validateResult(xray, form)).not.toThrow();
+  });
 });
