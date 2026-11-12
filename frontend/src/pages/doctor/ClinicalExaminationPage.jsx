@@ -10,6 +10,7 @@ import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrd
 import { cancelledMessage, createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import ConclusionPanel from '../../components/clinical/ConclusionPanel';
+import PrescriptionPanel from '../../components/clinical/PrescriptionPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
@@ -373,7 +374,7 @@ export default function ClinicalExaminationPage() {
     let shownSection = activeSection;
     if (activeSection === 'transfer' && !transferable) shownSection = 'clinical';
     if (activeSection === 'paraclinical' && readOnly) shownSection = 'orders';
-    if (activeSection === 'conclusion' && !concludable) shownSection = 'clinical';
+    if ((activeSection === 'conclusion' || activeSection === 'prescription') && !concludable) shownSection = 'clinical';
     const openConclusion = () => {
         if (shownSection === 'conclusion') return;
         if (readOnly) {
@@ -414,7 +415,7 @@ export default function ClinicalExaminationPage() {
         [ClipboardList, 'Danh sách đã chỉ định', 'orders', () => setActiveSection('orders')],
         // UC-56 Conclude Examination, UC-59 Prescribe Medication, UC-61 Create Follow-up Appointment.
         [FileCheck2, 'Kết luận', 'conclusion', concludable ? openConclusion : null],
-        [Pill, 'Kê đơn', 'prescription', null],
+        [Pill, 'Kê đơn', 'prescription', concludable ? () => setActiveSection('prescription') : null],
         [CalendarDays, 'Hẹn tái khám', 'follow-up', null],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
@@ -459,7 +460,9 @@ export default function ClinicalExaminationPage() {
                 {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || saving} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${shownSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
             </nav>
 
-            {shownSection === 'conclusion' ? (
+            {shownSection === 'prescription' ? (
+                <PrescriptionPanel visitId={visit.id} />
+            ) : shownSection === 'conclusion' ? (
                 <ConclusionPanel visitId={visit.id} />
             ) : shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />

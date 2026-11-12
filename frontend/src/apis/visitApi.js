@@ -179,6 +179,24 @@ export const visitApi = {
         });
     },
 
+    // UC-59: the visit's prescription form, with the conclusion diagnoses and drug allergies.
+    getPrescription(visitId, signal) {
+        return apiClient.request(`/prescriptions/visits/${encodeURIComponent(visitId)}`, { signal });
+    },
+
+    savePrescription(visitId, payload) {
+        return apiClient.request(`/prescriptions/visits/${encodeURIComponent(visitId)}`, {
+            method: 'PUT',
+            body: payload,
+        });
+    },
+
+    // Active ordinary medicines (BR-33, BR-52) by name, active ingredient or code.
+    searchMedicines(keyword, signal) {
+        const query = new URLSearchParams({ keyword, limit: '10' });
+        return apiClient.request(`/prescriptions/medicines?${query.toString()}`, { signal });
+    },
+
     searchIcd10(keyword, signal) {
         const query = new URLSearchParams({ keyword, limit: '10' });
         return apiClient.request(`/clinical-examinations/icd10?${query.toString()}`, { signal });

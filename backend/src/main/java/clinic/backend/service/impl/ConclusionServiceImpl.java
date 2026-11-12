@@ -56,6 +56,7 @@ import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ConclusionService;
 import clinic.backend.service.DutyShiftConfigService;
+import clinic.backend.service.impl.ConcludingVisitGuard.Context;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -74,22 +75,14 @@ public class ConclusionServiceImpl implements ConclusionService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String AUDIT_ENTITY = "conclusions";
-    private static final Set<VisitStatus> CONCLUDABLE =
-            Set.of(VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_CONCLUSION);
     private static final Set<PrescriptionLienthongStatus> SENT =
             Set.of(PrescriptionLienthongStatus.SENT, PrescriptionLienthongStatus.ACCEPTED);
 
     // ASSUMPTION (BR-106 not in docs/): at most 12 secondary diagnoses. The texts have no length limit (TEXT).
     static final int SECONDARY_MAX = 12;
 
-    private final VisitRepository visitRepository;
-    private final PatientRepository patientRepository;
-    private final RoomRepository roomRepository;
+    private final ConcludingVisitGuard guard;
     private final StaffAccountRepository staffAccountRepository;
-    private final StaffRoomAssignmentRepository assignmentRepository;
-    private final DutyScheduleRepository dutyScheduleRepository;
-    private final DutyShiftConfigService dutyShiftConfigService;
-    private final MedicalRecordRepository medicalRecordRepository;
     private final ClinicalExaminationRepository examinationRepository;
     private final ConclusionRepository conclusionRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -101,7 +94,7 @@ public class ConclusionServiceImpl implements ConclusionService {
     @Override
     @Transactional
     public ConclusionResponse get(StaffPrincipal principal, UUID visitId) {
-        Context context = requireConcludableVisit(principal, visitId);
+        Context context = guard.require(principal, visitId);
         Conclusion conclusion = conclusionRepository.findByMedicalRecordId(context.record().getId()).orElse(null);
         if (conclusion != null) {
             auditLogService.recordBusinessChange(
@@ -114,7 +107,7 @@ public class ConclusionServiceImpl implements ConclusionService {
     @Override
     @Transactional
     public ConclusionResponse save(StaffPrincipal principal, UUID visitId, SaveConclusionRequest request) {
-        Context context = requireConcludableVisit(principal, visitId);
+        Context context = guard.require(principal, visitId);
         Instant now = clock.instant();
         Conclusion conclusion = conclusionRepository.findByMedicalRecordId(context.record().getId())
                 .orElse(null);
@@ -229,45 +222,6 @@ public class ConclusionServiceImpl implements ConclusionService {
                 || !saved.equals(secondary.stream().map(Icd10::getMaicd).toList());
     }
 
-    private Context requireConcludableVisit(StaffPrincipal principal, UUID visitId) {
-        Instant now = clock.instant();
-        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
-        LocalTime time = LocalTime.ofInstant(now, CLINIC_ZONE);
-        StaffAccount doctor = staffAccountRepository.findById(principal.accountId())
-                .filter(account -> account.getRole() == Role.DOCTOR)
-                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
-                .orElseThrow(() -> new AppException(ErrorCode.ACCESS_DENIED));
-        StaffRoomAssignment assignment = assignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(doctor.getId())
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
-        Room room = roomRepository.findById(assignment.getRoomId())
-                .filter(value -> value.getType() == RoomType.EXAMINATION)
-                .filter(value -> value.getStatus() == ActivationStatus.ACTIVE)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
-        boolean onDuty = dutyShiftConfigService.shiftAt(today, time)
-                .flatMap(shift -> dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
-                        today, shift, doctor.getId()))
-                .map(DutySchedule::getRoomId).filter(room.getId()::equals).isPresent();
-        if (!onDuty) {
-            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
-        }
-        Visit visit = visitRepository.findById(visitId)
-                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
-        if (!room.getId().equals(visit.getRoomId()) || !doctor.getId().equals(visit.getDoctorAccountId())) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
-        }
-        if (visit.isSkipped() || !CONCLUDABLE.contains(visit.getStatus())) {
-            throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION);
-        }
-        MedicalRecord record = medicalRecordRepository.findByVisitId(visitId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        if (record.getStatus() != MedicalRecordStatus.OPEN) {
-            throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
-        }
-        Patient patient = patientRepository.findById(visit.getPatientId())
-                .orElseThrow(() -> new AppException(ErrorCode.PATIENT_NOT_FOUND));
-        return new Context(visit, patient, record, doctor);
-    }
-
     private ConclusionResponse toResponse(Context context, Conclusion conclusion) {
         ClinicalExamination examination = examinationRepository.findByMedicalRecordId(context.record().getId())
                 .orElse(null);
@@ -328,6 +282,4 @@ public class ConclusionServiceImpl implements ConclusionService {
         return value == null || value.isBlank() ? null : value.strip();
     }
 
-    private record Context(Visit visit, Patient patient, MedicalRecord record, StaffAccount doctor) {
-    }
 }
