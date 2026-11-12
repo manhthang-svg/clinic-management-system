@@ -3,9 +3,11 @@ package clinic.backend.repository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
@@ -66,6 +68,52 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
 
         BigDecimal getPatientAmount();
     }
+
+    /** UC-28: visits of one doctor in one status. */
+    interface DoctorStatusCount {
+        UUID getDoctorId();
+
+        VisitStatus getStatus();
+
+        long getTotal();
+    }
+
+    /** UC-28: distinct patients of one doctor. */
+    interface DoctorPatientCount {
+        UUID getDoctorId();
+
+        long getTotal();
+    }
+
+    @Query("""
+            select v.doctorAccountId as doctorId, v.status as status, count(v) as total
+            from Visit v
+            where v.queueDate between :from and :to and v.doctorAccountId is not null
+            group by v.doctorAccountId, v.status
+            """)
+    List<DoctorStatusCount> countVisitsByDoctorAndStatus(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            select v.doctorAccountId as doctorId, count(distinct v.patientId) as total
+            from Visit v
+            where v.queueDate between :from and :to and v.doctorAccountId is not null
+            group by v.doctorAccountId
+            """)
+    List<DoctorPatientCount> countPatientsByDoctor(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            select count(v)
+            from Visit v
+            where v.queueDate between :from and :to and v.doctorAccountId is null
+            """)
+    long countVisitsWithoutDoctor(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** UC-28: every Doctor account, and any other account that examined patients in the period. */
+    @Query("""
+            select a from StaffAccount a
+            where a.role = clinic.backend.enums.Role.DOCTOR or a.id in :ids
+            """)
+    List<StaffAccount> doctorsOrAccounts(@Param("ids") Collection<UUID> ids);
 
     /** UC-27: one row per (day, status, patient type, priority); {@code followUps} counts follow-up visits. */
     interface VisitBreakdown {

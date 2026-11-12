@@ -34,6 +34,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String PASSWORD = "statistics-api-password";
     private static final String DASHBOARD = "/api/v1/statistics/dashboard";
     private static final String VISITS = "/api/v1/statistics/visits";
+    private static final String DOCTORS = "/api/v1/statistics/doctors";
     private static final UUID RECEPTIONIST = UUID.fromString("0192a000-0005-7000-8000-000000000007");
     private static final UUID ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000004");
 
@@ -138,16 +139,51 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void doctorStatisticsCountTheVisitsEachDoctorExaminedOnPostgres() throws Exception {
+        StaffAccount an = account(Role.DOCTOR);
+        StaffAccount binh = account(Role.DOCTOR);
+        visit("BN00000003", LocalDate.of(2003, 5, 2), "COMPLETED", an.getId());
+        visit("BN00000004", LocalDate.of(2003, 5, 2), "ABANDONED", an.getId());
+        visit("BN00000003", LocalDate.of(2003, 5, 3), "COMPLETED", an.getId());
+        visit("BN00000008", LocalDate.of(2003, 5, 3), "COMPLETED", binh.getId());
+        visit("BN00000004", LocalDate.of(2003, 5, 4), "WAITING");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(DOCTORS).param("from", "2003-05-01").param("to", "2003-05-31")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.examinedVisits").value(4))
+                .andExpect(jsonPath("$.data.visitsWithoutDoctor").value(1))
+                .andExpect(jsonPath("$.data.doctors[0].doctorId").value(an.getId().toString()))
+                .andExpect(jsonPath("$.data.doctors[0].visits").value(3))
+                .andExpect(jsonPath("$.data.doctors[0].patients").value(2))
+                .andExpect(jsonPath("$.data.doctors[0].completed").value(2))
+                .andExpect(jsonPath("$.data.doctors[0].abandoned").value(1))
+                .andExpect(jsonPath("$.data.doctors[1].doctorId").value(binh.getId().toString()))
+                .andExpect(jsonPath("$.data.doctors[1].visits").value(1));
+
+        mockMvc.perform(get(DOCTORS).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.DOCTOR))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(DOCTORS).param("from", "2026-11-10").param("to", "2026-11-01")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
+        visit(mabenhnhan, queueDate, status, null);
+    }
+
+    private void visit(String mabenhnhan, LocalDate queueDate, String status, UUID doctor) {
         UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
                     doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
-                    status, created_at, updated_at, version)
-                values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, ?, now(), now(), 0)
+                    status, doctor_account_id, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, ?, ?, now(), now(), 0)
                 """, id, "VV-" + id.toString().substring(0, 12), patient, ROOM, RECEPTIONIST, queueDate,
-                ++queueNumber, status);
+                ++queueNumber, status, doctor);
     }
 
     private StaffAccount account(Role role) {
