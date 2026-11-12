@@ -21,13 +21,19 @@ import clinic.backend.dto.response.DashboardStatisticsResponse.DiagnosisCount;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RevenueSummary;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RoomVisits;
 import clinic.backend.dto.response.DashboardStatisticsResponse.VisitSummary;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
+import clinic.backend.dto.response.DepartmentStatisticsResponse.RoomRow;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
+import clinic.backend.entity.Department;
+import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -158,6 +164,83 @@ public class StatisticsServiceImpl implements StatisticsService {
         long examined = rows.stream().mapToLong(DoctorRow::visits).sum();
         return new DoctorStatisticsResponse(
                 start, end, examined, statisticsRepository.countVisitsWithoutDoctor(start, end), rows);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DepartmentStatisticsResponse getDepartmentStatistics(LocalDate from, LocalDate to) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+        Instant startInstant = start.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant endInstant = end.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        Map<UUID, long[]> visitsByRoom = new HashMap<>(); // total, completed, inProgress
+        for (StatisticsRepository.RoomVisitCount row : statisticsRepository.countVisitsByRoomAndStatus(start, end)) {
+            long[] counts = visitsByRoom.computeIfAbsent(row.getRoomId(), id -> new long[3]);
+            counts[0] += row.getTotal();
+            if (row.getStatus() == VisitStatus.COMPLETED) {
+                counts[1] += row.getTotal();
+            } else if (IN_PROGRESS.contains(row.getStatus())) {
+                counts[2] += row.getTotal();
+            }
+        }
+        Map<UUID, long[]> servicesByRoom = new HashMap<>(); // total, performed, waiting, cancelled
+        for (StatisticsRepository.RoomServiceCount row
+                : statisticsRepository.countServicesByRoomAndStatus(startInstant, endInstant)) {
+            long[] counts = servicesByRoom.computeIfAbsent(row.getRoomId(), id -> new long[4]);
+            int slot = switch (row.getStatus()) {
+                case PENDING_RESULT, COMPLETED -> 1;
+                case WAITING, IN_PROGRESS -> 2;
+                case CANCELLED, ABANDONED -> 3;
+                case PENDING_PAYMENT -> -1; // never released; not workload
+            };
+            if (slot > 0) {
+                counts[0] += row.getTotal();
+                counts[slot] += row.getTotal();
+            }
+        }
+
+        Map<UUID, List<RoomRow>> roomsByDepartment = new HashMap<>();
+        for (Room room : statisticsRepository.allRooms()) {
+            long[] visits = visitsByRoom.getOrDefault(room.getId(), new long[3]);
+            long[] services = servicesByRoom.getOrDefault(room.getId(), new long[4]);
+            boolean active = room.getStatus() == ActivationStatus.ACTIVE;
+            if (!active && visits[0] == 0 && services[0] == 0) {
+                continue; // an inactive room without work in the period is not listed
+            }
+            roomsByDepartment.computeIfAbsent(room.getDepartmentId(), id -> new ArrayList<>()).add(new RoomRow(
+                    room.getId(), room.getRoomCode(), room.getRoomName(), room.getType(), active,
+                    visits[0], visits[1], visits[2], services[0], services[1], services[2], services[3]));
+        }
+
+        Comparator<RoomRow> busiestRoom = Comparator
+                .comparingLong((RoomRow room) -> room.visits() + room.services()).reversed()
+                .thenComparing(RoomRow::roomCode, Comparator.nullsLast(Comparator.naturalOrder()));
+        List<DepartmentRow> departments = new ArrayList<>();
+        for (Department department : statisticsRepository.allDepartments()) {
+            List<RoomRow> rooms = new ArrayList<>(roomsByDepartment.getOrDefault(department.getId(), List.of()));
+            if (!department.isActive() && rooms.isEmpty()) {
+                continue;
+            }
+            rooms.sort(busiestRoom);
+            departments.add(new DepartmentRow(
+                    department.getId(), department.getDepartmentCode(), department.getDepartmentName(),
+                    department.getType(), department.isActive(),
+                    rooms.stream().mapToLong(RoomRow::visits).sum(),
+                    rooms.stream().mapToLong(RoomRow::completedVisits).sum(),
+                    rooms.stream().mapToLong(RoomRow::services).sum(),
+                    rooms.stream().mapToLong(RoomRow::performedServices).sum(),
+                    rooms));
+        }
+        departments.sort(Comparator
+                .comparingLong((DepartmentRow row) -> row.visits() + row.services()).reversed()
+                .thenComparing(DepartmentRow::departmentCode, Comparator.nullsLast(Comparator.naturalOrder())));
+
+        return new DepartmentStatisticsResponse(start, end,
+                departments.stream().mapToLong(DepartmentRow::visits).sum(),
+                departments.stream().mapToLong(DepartmentRow::services).sum(),
+                departments);
     }
 
     /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */

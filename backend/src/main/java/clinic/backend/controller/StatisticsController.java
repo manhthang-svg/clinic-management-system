@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
@@ -49,5 +50,13 @@ public class StatisticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.success(statisticsService.getDoctorStatistics(from, to));
+    }
+
+    @Operation(summary = "UC-29 Thống kê khối lượng công việc của từng khoa và từng phòng trong khoảng ngày")
+    @GetMapping("/departments")
+    public ApiResponse<DepartmentStatisticsResponse> getDepartmentStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsService.getDepartmentStatistics(from, to));
     }
 }

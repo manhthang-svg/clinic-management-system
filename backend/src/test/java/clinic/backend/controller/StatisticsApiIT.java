@@ -35,6 +35,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String DASHBOARD = "/api/v1/statistics/dashboard";
     private static final String VISITS = "/api/v1/statistics/visits";
     private static final String DOCTORS = "/api/v1/statistics/doctors";
+    private static final String DEPARTMENTS = "/api/v1/statistics/departments";
     private static final UUID RECEPTIONIST = UUID.fromString("0192a000-0005-7000-8000-000000000007");
     private static final UUID ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000004");
 
@@ -168,6 +169,33 @@ class StatisticsApiIT extends PostgresIntegrationTest {
         mockMvc.perform(get(DOCTORS).param("from", "2026-11-10").param("to", "2026-11-01")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void departmentStatisticsGroupRoomWorkloadByDepartmentOnPostgres() throws Exception {
+        visit("BN00000003", LocalDate.of(2003, 6, 2), "COMPLETED");
+        visit("BN00000004", LocalDate.of(2003, 6, 2), "COMPLETED");
+        visit("BN00000008", LocalDate.of(2003, 6, 3), "WAITING");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(DEPARTMENTS).param("from", "2003-06-01").param("to", "2003-06-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.visits").value(3))
+                .andExpect(jsonPath("$.data.services").value(0))
+                .andExpect(jsonPath("$.data.departments[0].departmentCode").value("TEST-NOI"))
+                .andExpect(jsonPath("$.data.departments[0].type").value("CLINICAL"))
+                .andExpect(jsonPath("$.data.departments[0].visits").value(3))
+                .andExpect(jsonPath("$.data.departments[0].completedVisits").value(2))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].roomCode").value("PK-NOI-TQ"))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].visits").value(3))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].inProgressVisits").value(1))
+                .andExpect(jsonPath("$.data.departments[0].rooms[1].roomCode").value("PK-NGOAI"))
+                .andExpect(jsonPath("$.data.departments[0].rooms[1].visits").value(0));
+
+        mockMvc.perform(get(DEPARTMENTS)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.TECHNICIAN))))
+                .andExpect(status().isForbidden());
     }
 
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
