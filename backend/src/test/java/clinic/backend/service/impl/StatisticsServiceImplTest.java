@@ -14,6 +14,7 @@ import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.entity.Department;
@@ -28,7 +29,9 @@ import clinic.backend.enums.RoomType;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
@@ -50,7 +53,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics, UC-31 View Revenue Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -88,6 +91,15 @@ class StatisticsServiceImplTest {
 
     record Performed(UUID getServiceId, UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
             implements StatisticsRepository.PerformedServiceCount { }
+
+    record RevenueLine(String getDay, String getType, String getMethod, long getPayments, BigDecimal getTotalAmount,
+            BigDecimal getInsuranceAmount, BigDecimal getPatientAmount) implements StatisticsRepository.RevenueRow { }
+
+    private static RevenueLine revenue(String day, String type, String method, long payments, long insurance,
+            long patient) {
+        return new RevenueLine(day, type, method, payments, BigDecimal.valueOf(insurance + patient),
+                BigDecimal.valueOf(insurance), BigDecimal.valueOf(patient));
+    }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -542,6 +554,74 @@ class StatisticsServiceImplTest {
     @Test
     void paraclinicalStatisticsRejectInvalidPeriods() {
         assertThatThrownBy(() -> service.getParaclinicalStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-31 View Revenue Statistics ----
+
+    @Test
+    void revenueStatisticsSeparateInsuranceAndPatientAmountsByDayTypeAndMethod() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of(
+                revenue("2026-11-02", "EXAMINATION_FEE", "CASH", 3, 200000, 250000),
+                revenue("2026-11-02", "PARACLINICAL_FEE", "BANK_TRANSFER", 2, 0, 600000),
+                revenue("2026-11-04", "EXAMINATION_FEE", "BANK_TRANSFER", 1, 100000, 50000)));
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(
+                LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 4), null);
+
+        assertThat(result.groupBy()).isEqualTo(StatisticsGroupBy.DAY);
+        RevenueStatisticsResponse.Amounts summary = result.summary();
+        assertThat(summary.payments()).isEqualTo(6);
+        assertThat(summary.totalAmount()).isEqualByComparingTo("1200000");
+        assertThat(summary.insuranceAmount()).isEqualByComparingTo("300000");
+        assertThat(summary.patientAmount()).isEqualByComparingTo("900000");
+        assertThat(result.series()).extracting(RevenueStatisticsResponse.PeriodAmounts::period).containsExactly(
+                LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 3), LocalDate.of(2026, 11, 4));
+        assertThat(result.series()).extracting(period -> period.amounts().totalAmount().longValue())
+                .containsExactly(1050000L, 0L, 150000L);
+        assertThat(result.byType()).extracting(RevenueStatisticsResponse.TypeAmounts::type)
+                .containsExactly(PaymentType.EXAMINATION_FEE, PaymentType.PARACLINICAL_FEE);
+        assertThat(result.byType().get(0).amounts().insuranceAmount()).isEqualByComparingTo("300000");
+        // Methods are listed by the money the patients paid, largest first.
+        assertThat(result.byMethod()).extracting(RevenueStatisticsResponse.MethodAmounts::method)
+                .containsExactly(PaymentMethod.BANK_TRANSFER, PaymentMethod.CASH);
+        assertThat(result.byMethod().get(0).amounts().patientAmount()).isEqualByComparingTo("650000");
+        verify(repository).revenueByDayTypeAndMethod(
+                Instant.parse("2026-11-01T17:00:00Z"), Instant.parse("2026-11-04T17:00:00Z"));
+    }
+
+    @Test
+    void revenueStatisticsByMonthKeyEachMonthByItsFirstDay() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of(
+                revenue("2026-09-20", "EXAMINATION_FEE", "CASH", 1, 0, 150000),
+                revenue("2026-11-01", "EXAMINATION_FEE", "CASH", 2, 0, 300000)));
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(
+                LocalDate.of(2026, 9, 15), LocalDate.of(2026, 11, 11), StatisticsGroupBy.MONTH);
+
+        assertThat(result.series()).extracting(RevenueStatisticsResponse.PeriodAmounts::period).containsExactly(
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1));
+        assertThat(result.series()).extracting(period -> period.amounts().payments()).containsExactly(1L, 0L, 2L);
+    }
+
+    @Test
+    void revenueStatisticsAreZeroWhenNothingWasPaid() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of());
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(null, null, StatisticsGroupBy.DAY);
+
+        assertThat(result.summary()).isEqualTo(RevenueStatisticsResponse.Amounts.zero());
+        assertThat(result.byType()).isEmpty();
+        assertThat(result.byMethod()).isEmpty();
+        assertThat(result.series()).hasSize(11);
+    }
+
+    @Test
+    void revenueStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getRevenueStatistics(
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2), StatisticsGroupBy.MONTH))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
         verifyNoInteractions(repository);

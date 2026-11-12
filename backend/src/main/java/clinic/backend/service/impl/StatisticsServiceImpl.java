@@ -1,5 +1,6 @@
 package clinic.backend.service.impl;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -35,6 +37,11 @@ import clinic.backend.dto.response.ParaclinicalStatisticsResponse.GroupCount;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse.RoomCount;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse.ServiceCount;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse.TypeCount;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse.Amounts;
+import clinic.backend.dto.response.RevenueStatisticsResponse.MethodAmounts;
+import clinic.backend.dto.response.RevenueStatisticsResponse.PeriodAmounts;
+import clinic.backend.dto.response.RevenueStatisticsResponse.TypeAmounts;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
@@ -49,7 +56,9 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
@@ -357,6 +366,62 @@ public class StatisticsServiceImpl implements StatisticsService {
     private static void add(long[] counter, long performed, long withResult) {
         counter[0] += performed;
         counter[1] += withResult;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RevenueStatisticsResponse getRevenueStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+        StatisticsGroupBy bucket = groupBy != null ? groupBy : StatisticsGroupBy.DAY;
+        Instant startInstant = start.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant endInstant = end.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        Map<LocalDate, Amounts> byPeriod = new LinkedHashMap<>();
+        for (LocalDate key = bucketOf(start, bucket); !key.isAfter(end); key = next(key, bucket)) {
+            byPeriod.put(key, Amounts.zero());
+        }
+        Amounts summary = Amounts.zero();
+        Map<PaymentType, Amounts> byType = new EnumMap<>(PaymentType.class);
+        Map<Optional<PaymentMethod>, Amounts> byMethod = new LinkedHashMap<>();
+        for (StatisticsRepository.RevenueRow row
+                : statisticsRepository.revenueByDayTypeAndMethod(startInstant, endInstant)) {
+            long payments = row.getPayments();
+            BigDecimal total = orZero(row.getTotalAmount());
+            BigDecimal insurance = orZero(row.getInsuranceAmount());
+            BigDecimal patient = orZero(row.getPatientAmount());
+            summary = summary.plus(payments, total, insurance, patient);
+            byPeriod.computeIfPresent(bucketOf(LocalDate.parse(row.getDay()), bucket),
+                    (key, amounts) -> amounts.plus(payments, total, insurance, patient));
+            if (row.getType() != null) {
+                byType.merge(PaymentType.valueOf(row.getType()),
+                        Amounts.zero().plus(payments, total, insurance, patient), StatisticsServiceImpl::sumAmounts);
+            }
+            Optional<PaymentMethod> method = Optional.ofNullable(row.getMethod()).map(PaymentMethod::valueOf);
+            byMethod.merge(method, Amounts.zero().plus(payments, total, insurance, patient),
+                    StatisticsServiceImpl::sumAmounts);
+        }
+
+        List<TypeAmounts> types = byType.entrySet().stream()
+                .map(entry -> new TypeAmounts(entry.getKey(), entry.getValue()))
+                .toList();
+        List<MethodAmounts> methods = byMethod.entrySet().stream()
+                .map(entry -> new MethodAmounts(entry.getKey().orElse(null), entry.getValue()))
+                .sorted(Comparator.comparing((MethodAmounts row) -> row.amounts().patientAmount()).reversed())
+                .toList();
+        List<PeriodAmounts> series = new ArrayList<>(byPeriod.size());
+        byPeriod.forEach((period, amounts) -> series.add(new PeriodAmounts(period, amounts)));
+        return new RevenueStatisticsResponse(start, end, bucket, summary, types, methods, series);
+    }
+
+    private static BigDecimal orZero(BigDecimal amount) {
+        return amount != null ? amount : BigDecimal.ZERO;
+    }
+
+    /** Adds two amount totals; used to merge rows of the same receipt type or payment method. */
+    private static Amounts sumAmounts(Amounts left, Amounts right) {
+        return left.plus(right.payments(), right.totalAmount(), right.insuranceAmount(), right.patientAmount());
     }
 
     /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */
