@@ -268,7 +268,7 @@ export default function DoctorWaitingListPage({
                 ? `Bệnh nhân ${visit.patientName} đã có mặt, chuyển sang bước kết luận.`
                 : `Bệnh nhân ${visit.patientName} đã có mặt, bắt đầu khám.`);
             navigate(
-                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : clinicalExaminationPath(visit.id),
+                clinicalExaminationPath(visit.id, visit.status === 'WAITING_CONCLUSION' ? 'conclusion' : 'clinical'),
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, returnTab: activeTab } },
             );
         } catch (error) {
@@ -305,7 +305,7 @@ export default function DoctorWaitingListPage({
             await visitApi.acceptSkippedVisit(visit.id);
             toast.success(`Đã tiếp nhận lại bệnh nhân ${visit.patientName}.`);
             navigate(
-                visit.status === 'WAITING_CONCLUSION' ? '/doctor/conclusion' : clinicalExaminationPath(visit.id),
+                clinicalExaminationPath(visit.id, visit.status === 'WAITING_CONCLUSION' ? 'conclusion' : 'clinical'),
                 { state: { visitId: visit.id, stage: visit.status, visit, queueInfo, acceptedFromSkipped: true, returnTab: activeTab } },
             );
         } catch (error) {

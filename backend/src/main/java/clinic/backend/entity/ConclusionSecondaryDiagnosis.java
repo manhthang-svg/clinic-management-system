@@ -1,5 +1,8 @@
 package clinic.backend.entity;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -37,4 +40,13 @@ public class ConclusionSecondaryDiagnosis extends CreatedOnlyEntity {
 
     @Column(name = "thu_tu", nullable = false)
     private short thuTu;
+
+    public ConclusionSecondaryDiagnosis(
+            UUID id, Instant createdAt, Conclusion conclusion, String maicd, String tenicd, short thuTu) {
+        super(id, createdAt);
+        this.conclusion = conclusion;
+        this.maicd = maicd;
+        this.tenicd = tenicd;
+        this.thuTu = thuTu;
+    }
 }

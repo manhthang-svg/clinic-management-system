@@ -72,7 +72,7 @@ export const ROUTES = {
 };
 
 /** Tabs of the examination screen that have their own link; the first is the default. */
-export const EXAMINATION_SECTIONS = ['clinical', 'paraclinical', 'orders', 'transfer'];
+export const EXAMINATION_SECTIONS = ['clinical', 'paraclinical', 'orders', 'conclusion', 'transfer'];
 
 /** Link of one visit's examination screen, e.g. /doctor/clinical-examination/{visitId}/paraclinical. */
 export function clinicalExaminationPath(visitId, section = 'clinical') {

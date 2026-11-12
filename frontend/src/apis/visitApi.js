@@ -167,6 +167,18 @@ export const visitApi = {
         });
     },
 
+    // UC-56: the conclusion form of a visit, with any saved data.
+    getConclusion(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, { signal });
+    },
+
+    saveConclusion(visitId, payload) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, {
+            method: 'PUT',
+            body: payload,
+        });
+    },
+
     searchIcd10(keyword, signal) {
         const query = new URLSearchParams({ keyword, limit: '10' });
         return apiClient.request(`/clinical-examinations/icd10?${query.toString()}`, { signal });

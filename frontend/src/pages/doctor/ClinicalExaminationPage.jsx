@@ -9,6 +9,7 @@ import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOr
 import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrderList';
 import { cancelledMessage, createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
+import ConclusionPanel from '../../components/clinical/ConclusionPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
@@ -312,14 +313,13 @@ export default function ClinicalExaminationPage() {
             setClinicalData(saved);
             setForm(savedValues);
             setSavedForm(savedValues);
-            // MSG03 for an explicit save; opening the order tab saves quietly, the tab itself shows it worked.
-            if (nextStep !== 'PARACLINICAL') toast.success('Cập nhật hồ sơ khám lâm sàng thành công.');
-            if (nextStep === 'CONCLUSION') toast.info('Hồ sơ đã sẵn sàng để thực hiện kết luận khám (UC-56).');
+            // MSG03 for an explicit save; opening the order or conclusion tab saves quietly, the tab shows it worked.
+            if (!nextStep) toast.success('Cập nhật hồ sơ khám lâm sàng thành công.');
         } catch (error) {
             setFieldErrors(fieldErrorsFromApi(error));
             setPageError(examinationErrorMessage(error));
-            // The order tab opened before the save finished: go back so the Doctor sees what to fix.
-            if (nextStep === 'PARACLINICAL') setActiveSection('clinical', { replace: true });
+            // The next tab opened before the save finished: go back so the Doctor sees what to fix.
+            if (nextStep) setActiveSection('clinical', { replace: true });
         } finally {
             setSaving(false);
         }
@@ -360,14 +360,34 @@ export default function ClinicalExaminationPage() {
         );
     }
 
-    // While waiting for paraclinical services the Doctor can only review the examination and the orders.
-    const readOnly = visit.status === 'WAITING_PARACLINICAL';
+    // The examination is edited only while the patient is in the room; waiting for paraclinical services or back
+    // for the conclusion, the Doctor reviews it.
+    const waitingParaclinical = visit.status === 'WAITING_PARACLINICAL';
+    const waitingConclusion = visit.status === 'WAITING_CONCLUSION';
+    const readOnly = visit.status !== 'IN_EXAMINATION';
+    // UC-56: nothing waits for paraclinical services (BR-30, BR-41).
+    const concludable = visit.status === 'IN_EXAMINATION' || waitingConclusion;
     const transferable = clinicalData?.version === 0 && !loadError && !readOnly;
     // The transfer tab is open only while the visit can still be transferred (e.g. after a reload of its link).
-    // While waiting for paraclinical services no new order is made, so the order tab shows the ordered list.
+    // Outside the examination no new order is made, so the order tab shows the ordered list.
     let shownSection = activeSection;
     if (activeSection === 'transfer' && !transferable) shownSection = 'clinical';
     if (activeSection === 'paraclinical' && readOnly) shownSection = 'orders';
+    if (activeSection === 'conclusion' && !concludable) shownSection = 'clinical';
+    const openConclusion = () => {
+        if (shownSection === 'conclusion') return;
+        if (readOnly) {
+            setActiveSection('conclusion');
+            return;
+        }
+        // UC-47 "Save and Continue": the examination must be valid; otherwise the errors show and the tab stays.
+        if (Object.keys(validateExamination(form, 'CONTINUE')).length) {
+            save('CONTINUE', 'CONCLUSION');
+            return;
+        }
+        setActiveSection('conclusion');
+        save('CONTINUE', 'CONCLUSION');
+    };
     const openParaclinical = () => {
         if (shownSection === 'paraclinical' || shownSection === 'orders' && readOnly) return;
         if (readOnly) {
@@ -393,7 +413,7 @@ export default function ClinicalExaminationPage() {
         // The orders already made for the visit, with cancelling a refused service (BR-25, BR-41).
         [ClipboardList, 'Danh sách đã chỉ định', 'orders', () => setActiveSection('orders')],
         // UC-56 Conclude Examination, UC-59 Prescribe Medication, UC-61 Create Follow-up Appointment.
-        [FileCheck2, 'Kết luận', 'conclusion', readOnly ? null : () => save('CONTINUE', 'CONCLUSION')],
+        [FileCheck2, 'Kết luận', 'conclusion', concludable ? openConclusion : null],
         [Pill, 'Kê đơn', 'prescription', null],
         [CalendarDays, 'Hẹn tái khám', 'follow-up', null],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
@@ -406,7 +426,8 @@ export default function ClinicalExaminationPage() {
                 <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="flex items-center text-xs text-slate-400"><button type="button" onClick={returnToWaitingList} className="cursor-pointer font-semibold text-teal-700 hover:text-teal-900 hover:underline">Khám bệnh</button><span className="px-1">›</span><span>Khám lâm sàng</span></p></div></div>
             </header>
 
-            {readOnly && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
+            {waitingParaclinical && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
+            {waitingConclusion && <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">Bệnh nhân đã có đủ kết quả cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem; thực hiện kết luận ở tab Kết luận.</p>}
 
             {pageError && <div role="alert" tabIndex={-1} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{pageError}</div>}
 
@@ -438,7 +459,9 @@ export default function ClinicalExaminationPage() {
                 {tabs.map(([Icon, label, id, action]) => <button key={label} type="button" onClick={action ?? undefined} disabled={!action || saving} className={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold ${shownSection === id ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-500 disabled:opacity-60'}`}><Icon className="h-4 w-4" />{label}</button>)}
             </nav>
 
-            {shownSection === 'transfer' ? (
+            {shownSection === 'conclusion' ? (
+                <ConclusionPanel visitId={visit.id} />
+            ) : shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
             ) : shownSection === 'orders' ? (
                 <ParaclinicalOrderList

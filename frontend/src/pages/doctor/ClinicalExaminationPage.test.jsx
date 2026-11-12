@@ -142,6 +142,28 @@ describe('ClinicalExaminationPage', () => {
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
     });
 
+    it('opens the conclusion of a patient back from the paraclinical rooms, the examination read-only (UC-56)', async () => {
+        visitApi.openClinicalExamination.mockResolvedValue({ ...clinicalData, visitStatus: 'WAITING_CONCLUSION' });
+        vi.spyOn(visitApi, 'getConclusion').mockResolvedValue({
+            visitId: visit.id, medicalRecordId: 'record-1', conclusionId: null, version: null,
+            preliminaryDiagnosis: 'Viêm họng', preliminaryDiagnoses: [], diagnosis: null, mainDiagnosis: null,
+            secondaryDiagnoses: [], treatmentPlan: null, treatmentResult: null, advice: null, summary: null, note: null,
+            diagnosesLocked: false, doctorName: null, concludedAt: null,
+        });
+        render(
+            <MemoryRouter initialEntries={['/doctor/clinical-examination/visit-1/conclusion']}>
+                <Routes>
+                    <Route path="/doctor/clinical-examination/:visitId/:section?" element={<ClinicalExaminationPage />} />
+                </Routes>
+            </MemoryRouter>,
+        );
+
+        expect(await screen.findByRole('form', { name: 'Kết luận khám' })).toBeInTheDocument();
+        expect(screen.getByText(/Bệnh nhân đã có đủ kết quả cận lâm sàng/)).toBeInTheDocument();
+        expect(visitApi.getConclusion).toHaveBeenCalledWith('visit-1', expect.any(AbortSignal));
+        expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
+    });
+
     it('calculates BMI from weight and height', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });

@@ -84,4 +84,32 @@ public class Conclusion extends VersionedEntity {
     public List<ConclusionSecondaryDiagnosis> getSecondaryDiagnoses() {
         return Collections.unmodifiableList(secondaryDiagnoses);
     }
+
+    public Conclusion(UUID id, Instant createdAt, UUID medicalRecordId) {
+        super(id, createdAt);
+        this.medicalRecordId = medicalRecordId;
+    }
+
+    /** UC-56 step 7: the conclusion as the Doctor saved it; the record stays open. */
+    public void record(
+            UUID doctorAccountId, String chandoan, String maicd, String tenicd, String huongdieutri,
+            short ketquadieutri, String loidanbacsi, String tomtat, String ghichu, Instant now) {
+        this.doctorAccountId = doctorAccountId;
+        this.chandoan = chandoan;
+        this.maicd = maicd;
+        this.tenicd = tenicd;
+        this.huongdieutri = huongdieutri;
+        this.ketquadieutri = ketquadieutri;
+        this.loidanbacsi = loidanbacsi;
+        this.tomtat = tomtat;
+        this.ghichu = ghichu;
+        this.concludedAt = now;
+        touch(now);
+    }
+
+    /** Replaces the secondary diagnoses, in the order given (thu_tu from 1). */
+    public void replaceSecondaryDiagnoses(List<ConclusionSecondaryDiagnosis> values) {
+        secondaryDiagnoses.clear();
+        secondaryDiagnoses.addAll(values);
+    }
 }

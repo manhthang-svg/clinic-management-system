@@ -245,10 +245,13 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         return requireVisitInStatus(principal, visitId, Set.of(VisitStatus.IN_EXAMINATION));
     }
 
-    /** While the patient is away for paraclinical services the Doctor may still read the examination. */
+    /**
+     * While the patient is away for paraclinical services, or back for the conclusion (UC-56), the Doctor may still
+     * read the examination.
+     */
     private AccessContext requireViewableVisit(StaffPrincipal principal, UUID visitId) {
-        return requireVisitInStatus(
-                principal, visitId, Set.of(VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL));
+        return requireVisitInStatus(principal, visitId, Set.of(
+                VisitStatus.IN_EXAMINATION, VisitStatus.WAITING_PARACLINICAL, VisitStatus.WAITING_CONCLUSION));
     }
 
     private AccessContext requireVisitInStatus(
