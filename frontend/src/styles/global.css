@@ -853,3 +853,44 @@ p[role='alert']:not(.banner) {
     -webkit-print-color-adjust: exact;
   }
 }
+
+/* UC-33: "In / Lưu PDF" on a statistics report page prints the report itself. Scoped with :has() so it changes
+   nothing for the other printed sheets. The admin shell is one screen high and scrolls inside, which would cut a
+   long report at the first page; in print it flows over as many pages as needed. */
+@media print {
+  body:has(.statistics-report-print) .admin-shell,
+  body:has(.statistics-report-print) .admin-shell-scroll {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body:has(.statistics-report-print) .admin-shell-chrome,
+  body:has(.statistics-report-print) .statistics-print-hide {
+    display: none !important;
+  }
+
+  .statistics-report-print,
+  .statistics-report-print * {
+    visibility: visible !important;
+  }
+
+  .statistics-report-print {
+    padding: 0 !important;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Charts keep their on-screen width; shrink them to the paper instead of running off the page. */
+  .statistics-report-print .recharts-surface {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .statistics-report-print section,
+  .statistics-report-print tr {
+    break-inside: avoid;
+  }
+}
+

@@ -26,6 +26,7 @@ import {
   ReportTabs,
 } from '../../components/statistics/StatisticsParts';
 import { COLORS } from '../../components/statistics/statisticsTheme';
+import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
 
 const { ADMIN } = ROUTES;
@@ -81,14 +82,17 @@ export function DoctorStatisticsPage({
 
   return (
     <AdminLayout {...layoutProps}>
-      <div className="px-6 pb-8 space-y-6">
+      <div className="statistics-report-print px-6 pb-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <AccountPageHeader
             title="Thống kê theo bác sĩ"
             description="Số lượt khám và số bệnh nhân mà từng bác sĩ đã khám."
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Bác sĩ' }]}
           />
-          <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          <div className="statistics-print-hide flex flex-wrap items-center gap-2">
+            <ReportActions report="DOCTORS" period={period} disabled={Boolean(periodError) || !data} />
+            <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          </div>
         </div>
 
         <ReportTabs />
@@ -173,7 +177,7 @@ export function DoctorStatisticsPage({
               title="Chi tiết theo bác sĩ"
               description="Mọi bác sĩ đang hoạt động; bác sĩ đã khóa chỉ hiện khi có khám trong khoảng này."
               actions={(
-                <div className="relative">
+                <div className="statistics-print-hide relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <label htmlFor="doctor-stats-search" className="sr-only">Tìm bác sĩ</label>
                   <input

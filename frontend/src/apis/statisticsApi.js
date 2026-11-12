@@ -39,6 +39,15 @@ export function createStatisticsApi(client = apiClient) {
     /** UC-32 View Diagnosis Statistics; limit is the size of each ranking (1–100). */
     getDiagnoses: ({ from, to, limit } = {}, signal) =>
       client.request(withQuery('/statistics/diagnoses', { from, to, limit }), { signal }),
+
+    /**
+     * UC-33 Export Report: the chosen reports (VISITS, DOCTORS, DEPARTMENTS, PARACLINICAL, REVENUE, DIAGNOSES; all
+     * when empty) as one Excel workbook. Resolves to { blob, fileName }.
+     */
+    exportExcel: ({ from, to, reports = [], groupBy, limit } = {}) =>
+      client.download(withQuery('/statistics/export', {
+        from, to, reports: reports.join(','), groupBy, limit,
+      })),
   };
 }
 

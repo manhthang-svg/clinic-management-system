@@ -35,6 +35,7 @@ import {
   SegmentedControl,
 } from '../../components/statistics/StatisticsParts';
 import { COLORS } from '../../components/statistics/statisticsTheme';
+import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
 
 const { ADMIN } = ROUTES;
@@ -120,14 +121,17 @@ export function RevenueStatisticsPage({
 
   return (
     <AdminLayout {...layoutProps}>
-      <div className="px-6 pb-8 space-y-6">
+      <div className="statistics-report-print px-6 pb-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <AccountPageHeader
             title="Thống kê doanh thu"
             description="Các khoản đã thu, tách phần BHYT chi trả và phần bệnh nhân trả."
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Doanh thu' }]}
           />
-          <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          <div className="statistics-print-hide flex flex-wrap items-center gap-2">
+            <ReportActions report="REVENUE" period={period} groupBy={groupBy} disabled={Boolean(periodError) || !data} />
+            <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          </div>
         </div>
 
         <ReportTabs />

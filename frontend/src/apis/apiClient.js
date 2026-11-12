@@ -96,6 +96,65 @@ export class ApiClient {
         }
         return (isApiResponse(responseBody) ? responseBody.data : responseBody);
     }
+
+    /**
+     * Downloads a file (e.g. UC-33 Excel export): same authentication and error handling as {@link request}, but
+     * returns the body as a Blob with the file name taken from Content-Disposition.
+     */
+    async download(path, options = {}) {
+        assertRelativeApiPath(path);
+        const headers = new Headers(options.headers);
+        headers.set('Accept', '*/*');
+        const accessToken = await this.accessTokenProvider?.();
+        if (accessToken && !headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${accessToken}`);
+        }
+        let response;
+        try {
+            response = await this.fetchImplementation(`${this.baseUrl}${path}`, {
+                method: options.method ?? 'GET',
+                headers,
+                signal: options.signal,
+                credentials: options.credentials ?? this.credentials,
+            });
+        }
+        catch (cause) {
+            if (cause?.name === 'AbortError') {
+                throw cause;
+            }
+            throw new ApiError('Unable to reach the API.', { cause });
+        }
+        if (!response.ok) {
+            if (response.status === 401 && this.onUnauthorized) {
+                this.onUnauthorized();
+            }
+            const errorResponse = await parseErrorResponse(response);
+            throw new ApiError(errorResponse?.message || 'The API request failed.', {
+                status: response.status,
+                errorResponse,
+            });
+        }
+        return {
+            blob: await response.blob(),
+            fileName: fileNameOf(response.headers.get('content-disposition')),
+        };
+    }
+}
+
+/** The file name of a Content-Disposition header (RFC 6266 filename* first), or null. */
+export function fileNameOf(contentDisposition) {
+    if (!contentDisposition) return null;
+    const encoded = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(contentDisposition);
+    if (encoded) {
+        try {
+            return decodeURIComponent(encoded[1].trim().replace(/^"|"$/g, ''));
+        }
+        catch {
+            // fall back to the plain filename
+        }
+    }
+    const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(contentDisposition);
+    return plain ? plain[1].trim() : null;
 }
 
 export default ApiClient;

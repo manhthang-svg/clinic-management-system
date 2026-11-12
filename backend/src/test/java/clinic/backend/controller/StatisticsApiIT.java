@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,6 +40,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String PARACLINICAL = "/api/v1/statistics/paraclinical";
     private static final String REVENUE = "/api/v1/statistics/revenue";
     private static final String DIAGNOSES = "/api/v1/statistics/diagnoses";
+    private static final String EXPORT = "/api/v1/statistics/export";
     private static final UUID LAB_DEPARTMENT = UUID.fromString("0192a000-0001-7000-8000-000000000003");
     private static final UUID BIOCHEMISTRY = UUID.fromString("0192a000-0002-7000-8000-000000000002");
     private static final UUID LAB_ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000008");
@@ -426,6 +428,46 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 insert into conclusion_secondary_diagnoses (id, conclusion_id, maicd, tenicd, thu_tu, created_at)
                 values (?, ?, ?, ?, 1, now())
                 """, UUID.randomUUID(), conclusion, code, name);
+    }
+
+    @Test
+    void adminDownloadsTheStatisticsAsAnExcelWorkbookAndTheExportIsAudited() throws Exception {
+        visit("BN00000003", LocalDate.of(2003, 12, 2), "COMPLETED");
+        StaffAccount admin = account(Role.ADMIN);
+        String token = accessToken(admin);
+
+        byte[] body = mockMvc.perform(get(EXPORT).param("from", "2003-12-01").param("to", "2003-12-31")
+                        .param("reports", "VISITS", "REVENUE")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                        HttpHeaders.CONTENT_TYPE,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"bao-cao-thong-ke_2003-12-01_2003-12-31.xlsx\""))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(body))) {
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(3);
+            assertThat(workbook.getSheetName(1)).isEqualTo("Lượt khám");
+            assertThat(workbook.getSheetName(2)).isEqualTo("Doanh thu");
+        }
+        assertThat(jdbc.queryForObject("""
+                select count(*) from audit_logs
+                where action = 'EXPORT' and entity_type = 'statistics_reports' and actor_account_id = ?
+                """, Integer.class, admin.getId())).isEqualTo(1);
+
+        mockMvc.perform(get(EXPORT).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(EXPORT).param("reports", "UNKNOWN").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(EXPORT).param("from", "2026-11-10").param("to", "2026-11-01")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(EXPORT).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
     }
 
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
