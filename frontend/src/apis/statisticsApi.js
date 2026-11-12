@@ -31,6 +31,10 @@ export function createStatisticsApi(client = apiClient) {
     /** UC-30 View Paraclinical Service Statistics. */
     getParaclinical: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/paraclinical', { from, to }), { signal }),
+
+    /** UC-31 View Revenue Statistics; groupBy is DAY or MONTH. */
+    getRevenue: ({ from, to, groupBy } = {}, signal) =>
+      client.request(withQuery('/statistics/revenue', { from, to, groupBy }), { signal }),
   };
 }
 
