@@ -195,7 +195,9 @@ export function RoomTable({
                             !isActive
                               ? 'Kích hoạt lại'
                               : room.hasDoctorOnDutyToday || room.doctorOnDutyToday
-                              ? `Không thể tạm ngưng: phòng đang có bác sĩ trực trong ngày${
+                              ? `Không thể tạm ngưng: phòng đang có ${
+                                  room.type === 'EXAMINATION' ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên'
+                                } trực trong ngày${
                                   room.doctorOnDutyToday ? ` (${room.doctorOnDutyToday})` : ''
                                 }`
                               : 'Vô hiệu hóa / Tạm ngưng'

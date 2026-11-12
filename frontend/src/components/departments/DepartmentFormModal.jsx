@@ -658,13 +658,13 @@ function DepartmentFormModalContent({
                       >
                         Tạm ngưng
                         {isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
-                          ? ' (Có BS trực hôm nay)'
+                          ? ` (Có ${initialData?.type === 'EXAMINATION' ? 'BS' : 'nhân sự'} trực hôm nay)`
                           : ''}
                       </option>
                     </select>
                     {isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday) && (
                       <p className="text-[11px] text-amber-600 mt-1">
-                        Phòng đang có bác sĩ trực trong ngày
+                        Phòng đang có {initialData?.type === 'EXAMINATION' ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên'} trực trong ngày
                         {initialData?.doctorOnDutyToday ? ` (${initialData.doctorOnDutyToday})` : ''}.
                         Không thể tạm ngưng.
                       </p>
