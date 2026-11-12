@@ -7,7 +7,6 @@ import {
   ChevronDown,
   RotateCcw,
   RefreshCw,
-  Megaphone,
   User,
   ShieldCheck,
   MapPin,
@@ -34,42 +33,6 @@ import {
 } from '../../components/technician';
 import { PERFORM_MESSAGES, performErrorMessage } from '../../components/technician/performOrder';
 import { groupStatusOf, isServiceCheckedIn, serviceForAction } from '../../components/technician/queueGroups';
-
-/**
- * Âm thanh chuông báo gọi số bệnh nhân (Web Audio API Synthesizer)
- */
-function playChimeSound() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const now = ctx.currentTime;
-
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, now); // D5
-    gain1.gain.setValueAtTime(0.15, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.5);
-
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(880, now + 0.15); // A5
-    gain2.gain.setValueAtTime(0.18, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 0.7);
-  } catch {
-    // AudioContext blocked
-  }
-}
 
 export function TechnicianQueuePage() {
   // 1. Quản lý danh sách phòng máy thực tế từ backend
@@ -387,7 +350,6 @@ export function TechnicianQueuePage() {
       setActionLoadingId(order.id);
       const targetId = order.roomServices?.[0]?.id || order.id;
       const updated = await technicianApi.checkInOrder(targetId);
-      playChimeSound();
       const numStr = updated?.queueNumber
         ? (updated.queueNumber < 10 ? `0${updated.queueNumber}` : updated.queueNumber)
         : '';
@@ -419,23 +381,6 @@ export function TechnicianQueuePage() {
     } finally {
       setActionLoadingId(null);
     }
-  };
-
-  // Thao tác: Phát loa gọi số bệnh nhân
-  const handleCallQueue = (order, e) => {
-    e?.stopPropagation();
-    playChimeSound();
-    const numStr = order.queueNumber
-      ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber)
-      : '---';
-    const roomName = currentRoom?.name || 'phòng máy';
-    toast.success(
-      `🔔 Đang gọi số #${numStr}: Bệnh nhân ${order.patientName} vào ${roomName}!`,
-      {
-        duration: 4500,
-        className: 'font-semibold text-xs',
-      }
-    );
   };
 
   // Thao tác: Tiếp nhận bệnh nhân vào phòng máy
@@ -870,7 +815,7 @@ export function TechnicianQueuePage() {
                   <th className="py-3 px-3 whitespace-nowrap">Bác sĩ & Phòng</th>
                   <th className="py-3 px-2.5 whitespace-nowrap text-center">Thời gian</th>
                   <th className="py-3 px-2.5 whitespace-nowrap text-center">Trạng thái</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap text-right">Thao tác</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1049,20 +994,22 @@ export function TechnicianQueuePage() {
                       </td>
 
                       {/* Thao tác */}
-                      <td className="py-3 px-3.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
                         {!canManage ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDetail(order)}
-                            className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
-                            title="Xem chi tiết lâm sàng & y lệnh"
-                          >
-                            <Eye className="w-3 h-3 text-slate-500 shrink-0" />
-                            <span>Chi tiết</span>
-                          </button>
+                          <div className="flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDetail(order)}
+                              className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
+                              title="Xem chi tiết lâm sàng & y lệnh"
+                            >
+                              <Eye className="w-3 h-3 text-slate-500 shrink-0" />
+                              <span>Chi tiết</span>
+                            </button>
+                          </div>
                         ) : activeTab === 'waiting_unconfirmed' ? (
                           /* Thao tác Tab 1: Xác nhận có mặt */
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-center">
                             <button
                               type="button"
                               onClick={(e) => handleCheckInOrder(order, e)}
@@ -1074,21 +1021,8 @@ export function TechnicianQueuePage() {
                             </button>
                           </div>
                         ) : (
-                          /* Thao tác Tab 2: Gọi số, Tiếp nhận, Bỏ qua / Nhận lại / Đã thực hiện */
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Nút Gọi số / Gọi lại */}
-                            {(isWaiting || isSkipped) && (
-                              <button
-                                type="button"
-                                onClick={(e) => handleCallQueue(order, e)}
-                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                                title={isSkipped ? 'Phát loa gọi lại bệnh nhân vào phòng' : 'Phát loa gọi số bệnh nhân vào phòng'}
-                              >
-                                <Megaphone className="w-3 h-3 text-amber-600 shrink-0" />
-                                <span>{isSkipped ? 'Gọi lại' : 'Gọi số'}</span>
-                              </button>
-                            )}
-
+                          /* Thao tác Tab 2: Tiếp nhận, Bỏ qua / Nhận lại / Đã thực hiện */
+                          <div className="flex items-center justify-center gap-1.5">
                             {/* Nút Tiếp nhận (khi WAITING) */}
                             {isWaiting && (
                               <button
