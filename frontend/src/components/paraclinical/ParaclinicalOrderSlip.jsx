@@ -4,101 +4,140 @@ import { LoaderCircle, Printer } from 'lucide-react';
 
 import visitApi from '../../apis/visitApi';
 import { VISIT_TYPE_LABELS } from '../../constants/visitData';
-import { formatDateTime } from '../visits/visitFormat';
+import { Barcode } from '../paraclinicalResult/Barcode';
 import { printErrorMessage } from './paraclinicalOrder';
 
+/** Printed clinic name; address and phone still come from the facility settings (UC-77). */
+export const SLIP_CLINIC_NAME = 'PHÒNG KHÁM ĐA KHOA METPH';
+
+function roomLabel(sheet) {
+    if (!sheet.room) return `${sheet.serviceGroupName || 'Cận lâm sàng'} – phòng sẽ được chỉ định sau khi thanh toán`;
+    return `${sheet.room.roomName}${sheet.room.location ? ` – ${sheet.room.location}` : ''}`;
+}
+
+function longDate(iso) {
+    if (!iso) return 'Ngày …… tháng …… năm ……';
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',
+    }).formatToParts(new Date(iso));
+    const part = (type) => parts.find((item) => item.type === type)?.value;
+    return `Ngày ${part('day')} tháng ${part('month')} năm ${part('year')}`;
+}
+
+function Field({ label, children, className = '' }) {
+    return (
+        <span className={className}>
+            <strong>{label}</strong> {children}
+        </span>
+    );
+}
+
 /**
- * UC-50 Print Paraclinical Order: one sheet per performing room with the room and its location (BR-50-04),
- * modelled on the request part of the TT 32/2023/TT-BYT forms 08/BV2 to 26/BV2. No amounts (BR-50-06) and no queue
- * number (BR-50-02). TBD: printer integration (HW-01); it uses the browser print dialog.
+ * UC-50 Print Paraclinical Order: every service of the order on one sheet, each with its performing room and
+ * location (BR-50-04), laid out like the clinic's printed paraclinical forms (header with barcode, priority boxes,
+ * patient lines, bordered request table, treating Doctor's signature). No amounts (BR-50-06) and no queue number
+ * (BR-50-02). TBD: printer integration (HW-01); it uses the browser print dialog.
  */
 export function ParaclinicalOrderSlip({ slip }) {
     const patient = slip.patient ?? {};
     const facility = slip.facility ?? {};
     const visitType = VISIT_TYPE_LABELS[patient.visitType] || patient.visitType;
+    const emergency = slip.mucdochidinh === 'Cấp cứu';
+    // Services in room order; the room cell spans the services of that room.
+    const rows = slip.sheets.flatMap((sheet) => sheet.services.map((service, index) => ({
+        service, sheet, firstOfRoom: index === 0,
+    })));
 
     return (
-        <div className="paraclinical-order-print space-y-4">
-            {slip.sheets.map((sheet) => (
-                <article
-                    key={sheet.index}
-                    aria-label={`Phiếu chỉ định tờ ${sheet.index}/${sheet.total}`}
-                    className="paraclinical-order-sheet rounded-2xl border border-slate-200 bg-white p-6 text-xs text-slate-900"
-                >
-                    <header className="flex items-start justify-between gap-4">
-                        <div>
-                            <p className="font-bold uppercase">{facility.tenCskcb}</p>
-                            {facility.diachi && <p>{facility.diachi}</p>}
-                            {facility.sodienthoai && <p>Điện thoại: {facility.sodienthoai}</p>}
+        <div className="paraclinical-order-print">
+            <article
+                aria-label="Phiếu chỉ định cận lâm sàng"
+                className="paraclinical-order-sheet space-y-2 rounded-2xl border border-slate-200 bg-white p-6 font-['Times_New_Roman',serif] text-[13px] leading-[1.45] text-black"
+            >
+                <header className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center border-2 border-black text-[10px] font-bold">METPH</div>
+                        <div className="leading-5">
+                            <div className="font-extrabold">{SLIP_CLINIC_NAME}</div>
+                            {facility.diachi && <div className="text-[12px]">Địa chỉ: {facility.diachi}</div>}
+                            {facility.sodienthoai && <div className="text-[12px]">SĐT: {facility.sodienthoai}</div>}
                         </div>
-                        <div className="text-right">
-                            <p>Số: <strong className="font-mono">{slip.sophieu}</strong></p>
-                            <p>Tờ {sheet.index}/{sheet.total}</p>
-                            {slip.reprint && <p className="font-extrabold text-rose-700">BẢN IN LẠI</p>}
-                        </div>
-                    </header>
+                    </div>
+                    <div className="text-right">
+                        <div className="font-bold">Số: {slip.sophieu}</div>
+                        <Barcode value={slip.sophieu} />
+                        {slip.reprint && <div className="font-extrabold text-red-700">BẢN IN LẠI</div>}
+                    </div>
+                </header>
 
-                    <h2 className="mt-3 text-center text-base font-extrabold uppercase">Phiếu chỉ định cận lâm sàng</h2>
-                    {slip.mucdochidinh && <p className="text-center">Mức độ: <strong>{slip.mucdochidinh}</strong></p>}
+                <div className="my-3 text-center">
+                    <h2 className="text-[20px] font-extrabold uppercase tracking-wide">Phiếu chỉ định cận lâm sàng</h2>
+                    <div className="mt-1 flex items-center justify-center gap-3 text-[12px] italic">
+                        <span>Thường</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center border border-black font-bold not-italic">{emergency ? '' : 'X'}</span>
+                        <span className="text-red-700">Cấp cứu</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center border border-red-700 font-bold not-italic">{emergency ? 'X' : ''}</span>
+                    </div>
+                </div>
 
-                    <dl className="mt-4 grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1">
-                        <dt className="text-slate-500">Họ tên</dt>
-                        <dd className="font-semibold uppercase">{patient.fullName}</dd>
-                        <dt className="text-slate-500">Năm sinh</dt>
-                        <dd>{patient.birthYear ?? '—'}{patient.age != null ? ` (${patient.age} tuổi)` : ''} – {patient.gender}</dd>
-                        <dt className="text-slate-500">Mã bệnh nhân</dt>
-                        <dd className="font-mono">{patient.patientCode}</dd>
-                        <dt className="text-slate-500">Mã lượt khám</dt>
-                        <dd className="font-mono">{patient.visitCode}</dd>
-                        <dt className="text-slate-500">Địa chỉ</dt>
-                        <dd className="col-span-3">{patient.address || '—'}</dd>
-                        <dt className="text-slate-500">Đối tượng</dt>
-                        <dd>{visitType}</dd>
-                        <dt className="text-slate-500">Số thẻ BHYT</dt>
-                        <dd className="font-mono">{patient.insuranceCardNumber || '—'}</dd>
-                        <dt className="text-slate-500">Khoa / phòng</dt>
-                        <dd className="col-span-3">{[slip.orderingDepartment, slip.orderingRoom].filter(Boolean).join(' – ') || '—'}</dd>
-                        <dt className="text-slate-500">Chẩn đoán</dt>
-                        <dd className="col-span-3">{slip.chandoansobo || '—'}</dd>
-                    </dl>
+                <div className="space-y-0.5">
+                    <div className="flex flex-wrap gap-x-6">
+                        <Field label="Họ và tên:" className="flex-1"><span className="font-bold uppercase">{patient.fullName}</span></Field>
+                        <Field label="Tuổi:">{patient.age != null ? `${patient.age} tuổi` : (patient.birthYear ?? '—')}</Field>
+                        <span>{patient.gender}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-6">
+                        <Field label="Đối tượng:">{visitType}</Field>
+                        {patient.insuranceCardNumber && (
+                            <Field label="Số thẻ BHYT:" className="flex-1">{patient.insuranceCardNumber}</Field>
+                        )}
+                        <Field label="Mã BN:">{patient.patientCode}</Field>
+                    </div>
+                    <div><Field label="Địa chỉ:">{patient.address || '—'}</Field></div>
+                    <div className="flex flex-wrap gap-x-6">
+                        <Field label="Phòng:" className="flex-1">{slip.orderingRoom || '—'}</Field>
+                        {slip.orderingDepartment && <span>({slip.orderingDepartment})</span>}
+                    </div>
+                    <div><Field label="Chẩn đoán:">{slip.chandoansobo || '—'}</Field></div>
+                </div>
 
-                    <table className="mt-4 w-full border-collapse">
-                        <thead>
-                            <tr className="border-b border-slate-300 text-left">
-                                <th scope="col" className="w-10 py-1 pr-2">STT</th>
-                                <th scope="col" className="py-1 pr-2">Mã chỉ định</th>
-                                <th scope="col" className="py-1 pr-2">Yêu cầu</th>
-                                <th scope="col" className="w-16 py-1 text-right">Số lượng</th>
+                <table className="w-full border-collapse border border-black">
+                    <thead>
+                        <tr>
+                            <th scope="col" colSpan={4} className="border border-black px-2 text-left font-bold">Yêu cầu chỉ định</th>
+                        </tr>
+                        <tr>
+                            <th scope="col" className="w-10 border border-black px-1.5">STT</th>
+                            <th scope="col" className="border border-black px-1.5 text-left">Tên chỉ định</th>
+                            <th scope="col" className="w-12 border border-black px-1.5">SL</th>
+                            <th scope="col" className="border border-black px-1.5 text-left">Nơi thực hiện</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(({ service, sheet, firstOfRoom }, index) => (
+                            <tr key={service.machidinh} className="align-top">
+                                <td className="border border-black px-1.5 text-center">{index + 1}</td>
+                                <td className="border border-black px-1.5">{service.tenchidinh}</td>
+                                <td className="border border-black px-1.5 text-center tabular-nums">{Number(service.soluong ?? 1).toLocaleString('vi-VN')}</td>
+                                {firstOfRoom && (
+                                    <td rowSpan={sheet.services.length} className="border border-black px-1.5 font-semibold" data-testid="slip-room">
+                                        {roomLabel(sheet)}
+                                    </td>
+                                )}
                             </tr>
-                        </thead>
-                        <tbody>
-                            {sheet.services.map((service, index) => (
-                                <tr key={service.machidinh} className="border-b border-slate-100 align-top">
-                                    <td className="py-1 pr-2">{index + 1}</td>
-                                    <td className="py-1 pr-2 font-mono">{service.machidinh}</td>
-                                    <td className="py-1 pr-2">{service.tenchidinh}</td>
-                                    <td className="py-1 text-right tabular-nums">{Number(service.soluong ?? 1).toLocaleString('vi-VN')}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                        ))}
+                    </tbody>
+                </table>
 
-                    <p className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm" data-testid="slip-room">
-                        <span className="font-semibold">Nơi thực hiện: </span>
-                        {sheet.room
-                            ? `${sheet.room.roomName}${sheet.room.location ? ` – ${sheet.room.location}` : ''}`
-                            : `${sheet.serviceGroupName || 'Cận lâm sàng'} – phòng sẽ được chỉ định sau khi thanh toán`}
-                    </p>
-
-                    <footer className="mt-6 flex justify-end text-center">
-                        <div>
-                            <p>Ngày giờ chỉ định: {formatDateTime(slip.orderedAt)}</p>
-                            <p className="mt-1 font-semibold">Bác sĩ chỉ định</p>
-                            <p className="mt-12">{slip.doctorName}</p>
-                        </div>
-                    </footer>
-                </article>
-            ))}
+                <div className="flex justify-end pt-1">
+                    <div className="w-64 text-center">
+                        <div className="italic">{longDate(slip.orderedAt)}</div>
+                        <div className="font-bold">Bác sĩ điều trị</div>
+                        <div className="h-14" />
+                        <div className="font-bold">{slip.doctorName}</div>
+                    </div>
+                </div>
+            </article>
         </div>
     );
 }
@@ -153,7 +192,7 @@ export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
             {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
             {printed && !error && (
                 <p role="status" className="text-xs text-slate-600">
-                    Đã mở hộp thoại in phiếu {printed.sophieu} ({printed.sheets.length} tờ).
+                    Đã mở hộp thoại in phiếu {printed.sophieu}.
                 </p>
             )}
             {job && createPortal(
