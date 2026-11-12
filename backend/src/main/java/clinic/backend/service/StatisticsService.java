@@ -4,13 +4,14 @@ import java.time.LocalDate;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
 import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
 
-/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics, UC-29 department and room statistics, UC-30 paraclinical service statistics, UC-31 revenue statistics. */
+/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics, UC-29 department and room statistics, UC-30 paraclinical service statistics, UC-31 revenue statistics, UC-32 diagnosis statistics. */
 public interface StatisticsService {
 
     /**
@@ -39,4 +40,10 @@ public interface StatisticsService {
      * in {@link #getDashboard}.
      */
     RevenueStatisticsResponse getRevenueStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy);
+
+    /**
+     * UC-32 View Diagnosis Statistics for {@code [from, to]}: the {@code limit} most common diagnoses (default 10,
+     * 1 to 100); missing dates default as in {@link #getDashboard}.
+     */
+    DiagnosisStatisticsResponse getDiagnosisStatistics(LocalDate from, LocalDate to, Integer limit);
 }

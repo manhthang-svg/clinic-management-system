@@ -30,6 +30,7 @@ import clinic.backend.dto.response.DashboardStatisticsResponse.VisitSummary;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
 import clinic.backend.dto.response.DepartmentStatisticsResponse.RoomRow;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
@@ -77,6 +78,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     /** Longest period one dashboard request may cover (one leap year). */
     static final long MAX_PERIOD_DAYS = 366;
     static final int TOP_LIMIT = 5;
+    static final int DEFAULT_DIAGNOSIS_LIMIT = 10;
+    static final int MAX_DIAGNOSIS_LIMIT = 100;
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Set<VisitStatus> IN_PROGRESS = EnumSet.of(
@@ -422,6 +425,46 @@ public class StatisticsServiceImpl implements StatisticsService {
     /** Adds two amount totals; used to merge rows of the same receipt type or payment method. */
     private static Amounts sumAmounts(Amounts left, Amounts right) {
         return left.plus(right.payments(), right.totalAmount(), right.insuranceAmount(), right.patientAmount());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DiagnosisStatisticsResponse getDiagnosisStatistics(LocalDate from, LocalDate to, Integer limit) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+        int size = limit != null ? limit : DEFAULT_DIAGNOSIS_LIMIT;
+        if (size < 1 || size > MAX_DIAGNOSIS_LIMIT) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID,
+                    Map.of("limit", "The limit must be between 1 and " + MAX_DIAGNOSIS_LIMIT + "."));
+        }
+        Instant startInstant = start.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant endInstant = end.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        StatisticsRepository.ConclusionTotals totals = statisticsRepository.conclusionTotals(startInstant, endInstant);
+        if (totals.getWithIcd() == 0) {
+            return new DiagnosisStatisticsResponse(start, end, size, totals.getConclusions(), 0,
+                    totals.getConclusions(), 0, List.of(), List.of(), List.of());
+        }
+        PageRequest top = PageRequest.of(0, size);
+        return new DiagnosisStatisticsResponse(
+                start, end, size,
+                totals.getConclusions(),
+                totals.getWithIcd(),
+                totals.getConclusions() - totals.getWithIcd(),
+                totals.getDistinctCodes(),
+                statisticsRepository.topMainDiagnoses(startInstant, endInstant, top).stream()
+                        .map(row -> new DiagnosisStatisticsResponse.DiagnosisRow(
+                                row.getCode(), row.getName(), row.getCases(), row.getPatients()))
+                        .toList(),
+                statisticsRepository.topDiagnosisCategories(startInstant, endInstant, top).stream()
+                        .map(row -> new DiagnosisStatisticsResponse.CategoryRow(
+                                row.getCode(), row.getName(), row.getCases()))
+                        .toList(),
+                statisticsRepository.topSecondaryDiagnoses(startInstant, endInstant, top).stream()
+                        .map(row -> new DiagnosisStatisticsResponse.SecondaryRow(
+                                row.getCode(), row.getName(), row.getCases()))
+                        .toList());
     }
 
     /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */
