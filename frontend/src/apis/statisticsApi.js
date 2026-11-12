@@ -35,6 +35,10 @@ export function createStatisticsApi(client = apiClient) {
     /** UC-31 View Revenue Statistics; groupBy is DAY or MONTH. */
     getRevenue: ({ from, to, groupBy } = {}, signal) =>
       client.request(withQuery('/statistics/revenue', { from, to, groupBy }), { signal }),
+
+    /** UC-32 View Diagnosis Statistics; limit is the size of each ranking (1–100). */
+    getDiagnoses: ({ from, to, limit } = {}, signal) =>
+      client.request(withQuery('/statistics/diagnoses', { from, to, limit }), { signal }),
   };
 }
 

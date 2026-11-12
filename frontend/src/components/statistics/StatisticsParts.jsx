@@ -172,6 +172,7 @@ const REPORT_TABS = [
   { to: '/admin/reports/departments', label: 'Khoa / Phòng' },
   { to: '/admin/reports/paraclinical', label: 'Cận lâm sàng' },
   { to: '/admin/reports/revenue', label: 'Doanh thu' },
+  { to: '/admin/reports/diagnoses', label: 'Bệnh thường gặp' },
 ];
 
 /** Tabs of the "Báo cáo thống kê" section, one per statistics use case. */
