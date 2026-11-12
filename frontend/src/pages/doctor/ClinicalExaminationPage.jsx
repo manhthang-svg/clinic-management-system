@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import {
-    Activity, ArrowRightLeft, CalendarDays, ClipboardPlus, FileCheck2, HeartPulse, Info as InfoIcon,
+    Activity, ArrowRightLeft, CalendarDays, ClipboardList, ClipboardPlus, FileCheck2, HeartPulse, Info as InfoIcon,
     LoaderCircle, Pill, Save, Send, Stethoscope, UserRound, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -364,11 +364,14 @@ export default function ClinicalExaminationPage() {
     const readOnly = visit.status === 'WAITING_PARACLINICAL';
     const transferable = clinicalData?.version === 0 && !loadError && !readOnly;
     // The transfer tab is open only while the visit can still be transferred (e.g. after a reload of its link).
-    const shownSection = activeSection === 'transfer' && !transferable ? 'clinical' : activeSection;
+    // While waiting for paraclinical services no new order is made, so the order tab shows the ordered list.
+    let shownSection = activeSection;
+    if (activeSection === 'transfer' && !transferable) shownSection = 'clinical';
+    if (activeSection === 'paraclinical' && readOnly) shownSection = 'orders';
     const openParaclinical = () => {
-        if (activeSection === 'paraclinical') return;
+        if (shownSection === 'paraclinical' || shownSection === 'orders' && readOnly) return;
         if (readOnly) {
-            setActiveSection('paraclinical');
+            setActiveSection('orders');
             return;
         }
         // AF-04: the examination must be valid (diagnosis required); otherwise the errors show and the tab stays.
@@ -387,11 +390,14 @@ export default function ClinicalExaminationPage() {
     const tabs = [
         [Stethoscope, 'Khám lâm sàng', 'clinical', () => setActiveSection('clinical')],
         [ClipboardPlus, 'Chỉ định cận lâm sàng', 'paraclinical', openParaclinical],
+        // The orders already made for the visit, with cancelling a refused service (BR-25, BR-41).
+        [ClipboardList, 'Danh sách đã chỉ định', 'orders', () => setActiveSection('orders')],
+        // UC-56 Conclude Examination, UC-59 Prescribe Medication, UC-61 Create Follow-up Appointment.
+        [FileCheck2, 'Kết luận', 'conclusion', readOnly ? null : () => save('CONTINUE', 'CONCLUSION')],
+        [Pill, 'Kê đơn', 'prescription', null],
+        [CalendarDays, 'Hẹn tái khám', 'follow-up', null],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
-        [FileCheck2, 'Chẩn đoán', 'diagnosis', null],
-        [Pill, 'Đơn thuốc', 'prescription', null],
-        [CalendarDays, 'Kết luận & Hẹn tái khám', 'conclusion', readOnly ? null : () => save('CONTINUE', 'CONCLUSION')],
     ];
 
     return (
@@ -434,7 +440,7 @@ export default function ClinicalExaminationPage() {
 
             {shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
-            ) : shownSection === 'paraclinical' && readOnly ? (
+            ) : shownSection === 'orders' ? (
                 <ParaclinicalOrderList
                     visitId={visit.id}
                     onCancelled={(result) => {
