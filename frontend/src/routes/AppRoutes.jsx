@@ -5,6 +5,7 @@ import { ROUTES } from "./routes.js";
 import {
   AdminDashboardPage,
   VisitStatisticsPage,
+  DoctorStatisticsPage,
   AccountManagementPage,
   DepartmentManagementPage,
   ServiceManagementPage,
@@ -67,6 +68,17 @@ export function AppRoutes({
             path="dashboard"
             element={
               <AdminDashboardPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/doctors"
+            element={
+              <DoctorStatisticsPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

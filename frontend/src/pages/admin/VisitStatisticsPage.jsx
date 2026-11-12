@@ -24,6 +24,7 @@ import {
   LoadError,
   PeriodFilter,
   RefreshButton,
+  ReportTabs,
   SegmentedControl,
 } from '../../components/statistics/StatisticsParts';
 import { COLORS, OUTCOMES } from '../../components/statistics/statisticsTheme';
@@ -101,6 +102,8 @@ export function VisitStatisticsPage({
           />
           <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
         </div>
+
+        <ReportTabs />
 
         <PeriodFilter
           idPrefix="visit-stats"
