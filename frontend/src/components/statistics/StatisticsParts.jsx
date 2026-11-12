@@ -169,6 +169,7 @@ export function LoadError({ message, onRetry }) {
 const REPORT_TABS = [
   { to: '/admin/reports', label: 'Lượt khám', end: true },
   { to: '/admin/reports/doctors', label: 'Bác sĩ' },
+  { to: '/admin/reports/departments', label: 'Khoa / Phòng' },
 ];
 
 /** Tabs of the "Báo cáo thống kê" section, one per statistics use case. */
