@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import clinic.backend.entity.Department;
+import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -68,6 +70,47 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
 
         BigDecimal getPatientAmount();
     }
+
+    /** UC-29: visits registered in one examination room, by status. */
+    interface RoomVisitCount {
+        UUID getRoomId();
+
+        VisitStatus getStatus();
+
+        long getTotal();
+    }
+
+    /** UC-29: paraclinical services sent to one room, by status. */
+    interface RoomServiceCount {
+        UUID getRoomId();
+
+        ParaclinicalOrderDetailStatus getStatus();
+
+        long getTotal();
+    }
+
+    @Query("""
+            select v.roomId as roomId, v.status as status, count(v) as total
+            from Visit v
+            where v.queueDate between :from and :to
+            group by v.roomId, v.status
+            """)
+    List<RoomVisitCount> countVisitsByRoomAndStatus(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Services sent to a room in {@code [start, end)}: they reached the room when they were released to it. */
+    @Query("""
+            select d.roomId as roomId, d.status as status, count(d) as total
+            from ParaclinicalOrderDetail d
+            where d.roomId is not null and d.releasedAt >= :start and d.releasedAt < :end
+            group by d.roomId, d.status
+            """)
+    List<RoomServiceCount> countServicesByRoomAndStatus(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("select r from Room r")
+    List<Room> allRooms();
+
+    @Query("select d from Department d")
+    List<Department> allDepartments();
 
     /** UC-28: visits of one doctor in one status. */
     interface DoctorStatusCount {

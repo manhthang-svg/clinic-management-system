@@ -9,12 +9,19 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
+import clinic.backend.entity.Department;
+import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
@@ -39,7 +46,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -68,6 +75,12 @@ class StatisticsServiceImplTest {
             implements StatisticsRepository.DoctorStatusCount { }
 
     record DoctorPatients(UUID getDoctorId, long getTotal) implements StatisticsRepository.DoctorPatientCount { }
+
+    record RoomVisits(UUID getRoomId, VisitStatus getStatus, long getTotal)
+            implements StatisticsRepository.RoomVisitCount { }
+
+    record RoomServices(UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
+            implements StatisticsRepository.RoomServiceCount { }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -330,6 +343,104 @@ class StatisticsServiceImplTest {
     @Test
     void doctorStatisticsRejectInvalidPeriods() {
         assertThatThrownBy(() -> service.getDoctorStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-29 View Department and Room Statistics ----
+
+    private static Department department(UUID id, String code, String name, DepartmentType type, boolean active) {
+        Department department = org.mockito.Mockito.mock(Department.class);
+        lenient().when(department.getId()).thenReturn(id);
+        lenient().when(department.getDepartmentCode()).thenReturn(code);
+        lenient().when(department.getDepartmentName()).thenReturn(name);
+        lenient().when(department.getType()).thenReturn(type);
+        lenient().when(department.isActive()).thenReturn(active);
+        return department;
+    }
+
+    private static Room room(UUID id, UUID departmentId, String code, RoomType type, ActivationStatus status) {
+        Room room = org.mockito.Mockito.mock(Room.class);
+        lenient().when(room.getId()).thenReturn(id);
+        lenient().when(room.getDepartmentId()).thenReturn(departmentId);
+        lenient().when(room.getRoomCode()).thenReturn(code);
+        lenient().when(room.getRoomName()).thenReturn("Phòng " + code);
+        lenient().when(room.getType()).thenReturn(type);
+        lenient().when(room.getStatus()).thenReturn(status);
+        return room;
+    }
+
+    @Test
+    void departmentStatisticsSumTheWorkloadOfEachRoomByDepartment() {
+        UUID noi = UUID.randomUUID();
+        UUID xn = UUID.randomUUID();
+        UUID pk1 = UUID.randomUUID();
+        UUID pk2 = UUID.randomUUID();
+        UUID sh1 = UUID.randomUUID();
+        UUID closed = UUID.randomUUID();
+        Department clinical = department(noi, "NOI", "Khoa Nội", DepartmentType.CLINICAL, true);
+        Department lab = department(xn, "XN", "Khoa Xét nghiệm", DepartmentType.PARACLINICAL, true);
+        List<Room> rooms = List.of(
+                room(pk1, noi, "PK-1", RoomType.EXAMINATION, ActivationStatus.ACTIVE),
+                room(pk2, noi, "PK-2", RoomType.EXAMINATION, ActivationStatus.ACTIVE),
+                room(sh1, xn, "XN-SH-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(closed, xn, "XN-SH-9", RoomType.PARACLINICAL, ActivationStatus.INACTIVE));
+        when(repository.allDepartments()).thenReturn(List.of(clinical, lab));
+        when(repository.allRooms()).thenReturn(rooms);
+        when(repository.countVisitsByRoomAndStatus(any(), any())).thenReturn(List.of(
+                new RoomVisits(pk1, VisitStatus.COMPLETED, 3),
+                new RoomVisits(pk2, VisitStatus.COMPLETED, 6),
+                new RoomVisits(pk2, VisitStatus.WAITING, 2),
+                new RoomVisits(pk2, VisitStatus.CANCELLED, 1)));
+        when(repository.countServicesByRoomAndStatus(any(), any())).thenReturn(List.of(
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.COMPLETED, 10),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.PENDING_RESULT, 4),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.WAITING, 3),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.ABANDONED, 1)));
+
+        DepartmentStatisticsResponse result = service.getDepartmentStatistics(null, null);
+
+        assertThat(result.visits()).isEqualTo(12);
+        assertThat(result.services()).isEqualTo(18);
+        // Busiest first: the lab (18 services) before the clinical department (12 visits).
+        assertThat(result.departments()).extracting(DepartmentRow::departmentCode).containsExactly("XN", "NOI");
+        DepartmentRow clinicalRow = result.departments().get(1);
+        assertThat(clinicalRow.visits()).isEqualTo(12);
+        assertThat(clinicalRow.completedVisits()).isEqualTo(9);
+        assertThat(clinicalRow.rooms()).containsExactly(
+                new DepartmentStatisticsResponse.RoomRow(pk2, "PK-2", "Phòng PK-2", RoomType.EXAMINATION, true, 9, 6, 2, 0, 0, 0, 0),
+                new DepartmentStatisticsResponse.RoomRow(pk1, "PK-1", "Phòng PK-1", RoomType.EXAMINATION, true, 3, 3, 0, 0, 0, 0, 0));
+        // The inactive room without work is not listed.
+        assertThat(result.departments().get(0).rooms()).containsExactly(
+                new DepartmentStatisticsResponse.RoomRow(sh1, "XN-SH-1", "Phòng XN-SH-1", RoomType.PARACLINICAL, true, 0, 0, 0, 18, 14, 3, 1));
+        verify(repository).countServicesByRoomAndStatus(
+                Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"));
+    }
+
+    @Test
+    void departmentStatisticsListActiveRoomsWithoutWorkAndHideIdleInactiveDepartments() {
+        UUID noi = UUID.randomUUID();
+        UUID old = UUID.randomUUID();
+        UUID pk1 = UUID.randomUUID();
+        List<Department> departments = List.of(
+                department(noi, "NOI", "Khoa Nội", DepartmentType.CLINICAL, true),
+                department(old, "CU", "Khoa cũ", DepartmentType.CLINICAL, false));
+        List<Room> rooms = List.of(room(pk1, noi, "PK-1", RoomType.EXAMINATION, ActivationStatus.ACTIVE));
+        when(repository.allDepartments()).thenReturn(departments);
+        when(repository.allRooms()).thenReturn(rooms);
+        when(repository.countVisitsByRoomAndStatus(any(), any())).thenReturn(List.of());
+        when(repository.countServicesByRoomAndStatus(any(), any())).thenReturn(List.of());
+
+        DepartmentStatisticsResponse result = service.getDepartmentStatistics(null, null);
+
+        assertThat(result.departments()).extracting(DepartmentRow::departmentCode).containsExactly("NOI");
+        assertThat(result.departments().get(0).rooms()).extracting(DepartmentStatisticsResponse.RoomRow::visits).containsExactly(0L);
+    }
+
+    @Test
+    void departmentStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getDepartmentStatistics(LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2)))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
         verifyNoInteractions(repository);

@@ -3,11 +3,12 @@ package clinic.backend.service;
 import java.time.LocalDate;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
 
-/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics. */
+/** Admin statistics: UC-26 dashboard, UC-27 visit statistics, UC-28 doctor statistics, UC-29 department and room statistics. */
 public interface StatisticsService {
 
     /**
@@ -24,4 +25,7 @@ public interface StatisticsService {
 
     /** UC-28 View Doctor Statistics for {@code [from, to]}; missing dates default as in {@link #getDashboard}. */
     DoctorStatisticsResponse getDoctorStatistics(LocalDate from, LocalDate to);
+
+    /** UC-29 View Department and Room Statistics for {@code [from, to]}; missing dates default as in {@link #getDashboard}. */
+    DepartmentStatisticsResponse getDepartmentStatistics(LocalDate from, LocalDate to);
 }
