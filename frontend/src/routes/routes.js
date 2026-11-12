@@ -27,6 +27,7 @@ export const ROUTES = {
     REPORTS_DOCTORS: '/admin/reports/doctors',
     REPORTS_DEPARTMENTS: '/admin/reports/departments',
     REPORTS_PARACLINICAL: '/admin/reports/paraclinical',
+    REPORTS_REVENUE: '/admin/reports/revenue',
     SETTINGS: '/admin/settings',
     HOSPITAL_INFORMATION: '/admin/hospital-information',
   },

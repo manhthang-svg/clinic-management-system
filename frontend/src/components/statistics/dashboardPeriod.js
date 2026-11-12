@@ -77,6 +77,22 @@ export function formatMoney(value) {
   return `${numberFormat.format(Number(value ?? 0))} ₫`;
 }
 
+/** Compact money for chart axes: 1,2 tỷ / 3,5 tr / 350 N. */
+export function formatMoneyShort(value) {
+  const n = Number(value ?? 0);
+  const short = (amount) => amount.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+  if (Math.abs(n) >= 1_000_000_000) return `${short(n / 1_000_000_000)} tỷ`;
+  if (Math.abs(n) >= 1_000_000) return `${short(n / 1_000_000)} tr`;
+  if (Math.abs(n) >= 1_000) return `${Math.round(n / 1_000).toLocaleString('vi-VN')} N`;
+  return numberFormat.format(n);
+}
+
+/** MM/yyyy from the first day of a month (YYYY-MM-01). */
+export function formatMonth(iso) {
+  const [y, m] = iso.split('-');
+  return `${m}/${y}`;
+}
+
 /** dd/MM from YYYY-MM-DD, for chart axes. */
 export function formatDayShort(iso) {
   const [, m, d] = iso.split('-');
