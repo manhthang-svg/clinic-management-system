@@ -20,6 +20,19 @@ function renderPage(orderId, api = createMockResultApi({ latency: 0 })) {
 }
 
 describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
+  it('opens a draft saved before the conclusion was typed (API returns null fields)', async () => {
+    const blankDraft = {
+      status: 'DRAFT', savedAt: '2026-11-12T09:31:35Z', submittedAt: null, receivedAt: null, values: {},
+      interpretations: {}, conclusion: null, technique: null, description: null, sections: null,
+      recommendation: null, imageLink: null, readingDoctor: null, instrumentId: null, instrumentName: null, files: [],
+    };
+    const lab = MOCK_RESULT_ORDERS.find((entry) => entry.id === 'cls-002');
+    renderPage('cls-002', createMockResultApi({ orders: [{ ...lab, result: blankDraft }], latency: 0 }));
+
+    expect(await screen.findByRole('button', { name: 'Gửi kết quả' })).toBeInTheDocument();
+    expect(screen.getByText(/Lưu nháp lúc/)).toBeInTheDocument();
+  });
+
   it.each(INITIAL_PARACLINICAL_RESULTS.map((entry) => [entry.id, entry.serviceName]))(
     'opens the result form of list row %s (%s)',
     async (orderId) => {
