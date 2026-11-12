@@ -79,16 +79,20 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         ]);
         if (cancelled) return;
 
-        // Xây dựng map bác sĩ trực hôm nay theo phòng
-        const doctorDutyMap = {};
+        // Xây dựng map nhân sự (bác sĩ & KTV) trực hôm nay theo phòng
+        const staffDutyMap = {};
         if (dutyData?.items && Array.isArray(dutyData.items)) {
           dutyData.items.forEach((item) => {
-            if (item.roomId && item.workDate === todayStr && item.staffRole === 'DOCTOR') {
-              if (!doctorDutyMap[item.roomId]) {
-                doctorDutyMap[item.roomId] = [];
+            if (
+              item.roomId &&
+              item.workDate === todayStr &&
+              (item.staffRole === 'DOCTOR' || item.staffRole === 'TECHNICIAN')
+            ) {
+              if (!staffDutyMap[item.roomId]) {
+                staffDutyMap[item.roomId] = [];
               }
-              if (item.staffName && !doctorDutyMap[item.roomId].includes(item.staffName)) {
-                doctorDutyMap[item.roomId].push(item.staffName);
+              if (item.staffName && !staffDutyMap[item.roomId].includes(item.staffName)) {
+                staffDutyMap[item.roomId].push(item.staffName);
               }
             }
           });
@@ -97,19 +101,18 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         if (Array.isArray(fetchedItems)) {
           const mergedItems = fetchedItems.map((it) => {
             if (it.unitType !== 'ROOM') return it;
-            const scheduledDoctors = doctorDutyMap[it.id];
-            const hasDoctorScheduled = Boolean(
-              it.hasDoctorOnDutyToday || (scheduledDoctors && scheduledDoctors.length > 0)
+            const scheduledStaff = staffDutyMap[it.id];
+            const hasStaffScheduled = Boolean(
+              it.hasDoctorOnDutyToday || (scheduledStaff && scheduledStaff.length > 0)
             );
-            const doctorName =
-              it.doctorOnDutyToday ||
-              (scheduledDoctors && scheduledDoctors.length > 0
-                ? scheduledDoctors.join(', ')
-                : null);
+            const staffName =
+              (scheduledStaff && scheduledStaff.length > 0
+                ? scheduledStaff.join(', ')
+                : null) || it.doctorOnDutyToday;
             return {
               ...it,
-              hasDoctorOnDutyToday: hasDoctorScheduled,
-              doctorOnDutyToday: doctorName,
+              hasDoctorOnDutyToday: hasStaffScheduled,
+              doctorOnDutyToday: staffName,
             };
           });
           setItems(mergedItems);
@@ -398,8 +401,10 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
 
     // Trường hợp là ROOM (Phòng chức năng)
     if (isDeactivating && (item.hasDoctorOnDutyToday || item.doctorOnDutyToday)) {
+      const isExam = item.type === 'EXAMINATION';
+      const roleLabel = isExam ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên';
       toast.error(
-        `Không được phép tạm ngừng phòng "${item.name}" vì phòng đang có bác sĩ trực trong ngày${
+        `Không được phép tạm ngừng phòng "${item.name}" vì phòng đang có ${roleLabel} trực trong ngày${
           item.doctorOnDutyToday ? ` (${item.doctorOnDutyToday})` : ''
         }!`
       );

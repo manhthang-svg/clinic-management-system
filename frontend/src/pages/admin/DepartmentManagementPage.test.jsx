@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { DepartmentManagementPage } from './DepartmentManagementPage';
 import { departmentApi } from '../../apis/departmentApi';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
+import { getVietnamTodayStr } from '../../utils/vietnamTimeUtils';
 import { toast } from 'sonner';
 
 vi.mock('../../apis/departmentApi', () => ({
@@ -61,6 +62,20 @@ const roomWithoutDoctor = {
   status: 'ACTIVE',
   hasDoctorOnDutyToday: false,
   doctorOnDutyToday: null,
+};
+
+const roomWithTechnician = {
+  id: 'room-3',
+  unitType: 'ROOM',
+  code: 'CDHA-XQ',
+  name: 'Phòng X-quang',
+  departmentId: 'dept-3',
+  departmentName: 'Khoa CĐHA',
+  type: 'PARACLINICAL',
+  location: 'Tầng 2 - P.203',
+  status: 'ACTIVE',
+  hasDoctorOnDutyToday: true,
+  doctorOnDutyToday: 'KTV Nguyễn Văn B',
 };
 
 const dept1 = {
@@ -126,6 +141,98 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
     expect(departmentApi.toggleRoomStatus).not.toHaveBeenCalled();
     // Không được xuất hiện dialog xác nhận tạm ngưng
     expect(screen.queryByText('Bạn có chắc muốn tạm ngưng "Phòng khám Nội 1" (PK-NOI-01)?')).not.toBeInTheDocument();
+  });
+
+  it('không cho phép tạm ngưng phòng cận lâm sàng khi phòng có kỹ thuật viên trực trong ngày', async () => {
+    departmentApi.getItems.mockResolvedValue([dept1, roomWithDoctor, roomWithoutDoctor, roomWithTechnician]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng X-quang')).toBeInTheDocument();
+
+    const toggleBtnTech = screen.getByTitle(/Không thể tạm ngưng: phòng đang có bác sĩ\/kỹ thuật viên trực trong ngày/i);
+    expect(toggleBtnTech).toBeInTheDocument();
+
+    await user.click(toggleBtnTech);
+
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('Không được phép tạm ngừng phòng "Phòng X-quang"')
+    );
+    expect(departmentApi.toggleRoomStatus).not.toHaveBeenCalled();
+  });
+
+  it('đánh dấu phòng cận lâm sàng có KTV trực khi tải lịch trực trong ngày (staffRole: TECHNICIAN)', async () => {
+    const todayStr = getVietnamTodayStr();
+    const roomTechNoSchedule = {
+      id: 'room-tech-1',
+      unitType: 'ROOM',
+      code: 'CDHA-CT',
+      name: 'Phòng CT',
+      departmentId: 'dept-3',
+      departmentName: 'Khoa CĐHA',
+      type: 'PARACLINICAL',
+      location: 'Tầng 2 - P.204',
+      status: 'ACTIVE',
+      hasDoctorOnDutyToday: false,
+      doctorOnDutyToday: null,
+    };
+    departmentApi.getItems.mockResolvedValue([roomTechNoSchedule]);
+    dutyScheduleApi.getWeeklySchedule.mockResolvedValue({
+      items: [
+        {
+          id: 'duty-tech-1',
+          roomId: 'room-tech-1',
+          workDate: todayStr,
+          shift: 'MORNING',
+          staffRole: 'TECHNICIAN',
+          staffName: 'KTV Trần Văn C',
+        },
+      ],
+    });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng CT')).toBeInTheDocument();
+
+    const toggleBtn = await screen.findByTitle(/Không thể tạm ngưng: phòng đang có bác sĩ\/kỹ thuật viên trực trong ngày/i);
+    expect(toggleBtn).toBeInTheDocument();
+
+    await user.click(toggleBtn);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('Không được phép tạm ngừng phòng "Phòng CT"')
+    );
+    expect(departmentApi.toggleRoomStatus).not.toHaveBeenCalled();
   });
 
   it('cho phép tạm ngưng phòng khi phòng không có bác sĩ trực trong ngày', async () => {

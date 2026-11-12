@@ -116,7 +116,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         for (DutySchedule ds : todayDutySchedules) {
             if (ds.getRoomId() == null) continue;
             StaffAccount staff = dutyStaffMap.get(ds.getStaffAccountId());
-            if (staff != null && staff.getRole() == Role.DOCTOR) {
+            if (staff != null && (staff.getRole() == Role.DOCTOR || staff.getRole() == Role.TECHNICIAN)) {
                 String title = staff.getAcademicTitle() != null && !staff.getAcademicTitle().isBlank()
                         ? staff.getAcademicTitle().strip() + " "
                         : "";
@@ -860,11 +860,11 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     private void checkNoDoctorOnDutyToday(UUID roomId) {
-        String dutyDoctor = resolveDutyDoctorForRoomToday(roomId);
-        if (dutyDoctor != null) {
+        String dutyStaff = resolveDutyDoctorForRoomToday(roomId);
+        if (dutyStaff != null) {
             throw new AppException(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY,
-                    "Không thể tạm ngưng phòng đang có bác sĩ trực trong ngày: " + dutyDoctor,
-                    Map.of("roomId", "Không thể tạm ngưng phòng đang có bác sĩ trực trong ngày"));
+                    "Không thể tạm ngưng phòng đang có nhân sự (bác sĩ/kỹ thuật viên) trực trong ngày: " + dutyStaff,
+                    Map.of("roomId", "Không thể tạm ngưng phòng đang có nhân sự (bác sĩ/kỹ thuật viên) trực trong ngày"));
         }
     }
 
@@ -879,7 +879,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .map(DutySchedule::getStaffAccountId)
                 .collect(Collectors.toSet());
         List<String> names = staffAccountRepository.findAllById(staffIds).stream()
-                .filter(staff -> staff.getRole() == Role.DOCTOR)
+                .filter(staff -> staff.getRole() == Role.DOCTOR || staff.getRole() == Role.TECHNICIAN)
                 .map(staff -> (staff.getAcademicTitle() != null && !staff.getAcademicTitle().isBlank()
                         ? staff.getAcademicTitle().strip() + " "
                         : "") + staff.getFullName())

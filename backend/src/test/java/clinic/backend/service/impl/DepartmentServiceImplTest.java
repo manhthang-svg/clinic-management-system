@@ -844,6 +844,33 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    @DisplayName("Ném AppException(ROOM_HAS_DOCTOR_ON_DUTY) khi tạm ngưng phòng đang có kỹ thuật viên trực trong ngày qua toggleRoomStatus")
+    void toggleRoomStatus_ThrowsException_WhenTechnicianOnDutyToday() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "CDHA-XQ", "Phòng X-quang", "Tầng 2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        UUID techId = UUID.randomUUID();
+        DutySchedule duty = new DutySchedule(UUID.randomUUID(), now, today, DutyShift.MORNING, techId, roomId, null, null);
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of(duty));
+
+        StaffAccount technician = StaffAccount.builder()
+                .id(techId)
+                .fullName("KTV Nguyễn Văn B")
+                .role(Role.TECHNICIAN)
+                .build();
+        when(staffAccountRepository.findAllById(java.util.Set.of(techId))).thenReturn(List.of(technician));
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY));
+    }
+
+    @Test
     @DisplayName("Ném AppException(ROOM_HAS_DOCTOR_ON_DUTY) khi cập nhật phòng sang INACTIVE và phòng đang có bác sĩ trực trong ngày")
     void updateRoom_ThrowsException_WhenDoctorOnDutyTodayAndStatusInactive() {
         UUID roomId = UUID.randomUUID();
