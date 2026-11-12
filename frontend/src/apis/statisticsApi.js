@@ -19,6 +19,10 @@ export function createStatisticsApi(client = apiClient) {
     /** UC-27 View Patient Visit Statistics; groupBy is DAY or MONTH. */
     getVisits: ({ from, to, groupBy } = {}, signal) =>
       client.request(withQuery('/statistics/visits', { from, to, groupBy }), { signal }),
+
+    /** UC-28 View Doctor Statistics. */
+    getDoctors: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/doctors', { from, to }), { signal }),
   };
 }
 

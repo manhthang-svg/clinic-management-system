@@ -1,4 +1,5 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { NavLink } from 'react-router';
 import { RefreshCw } from 'lucide-react';
 import { FormAlert } from '../shared/FormFields';
 import { PRESETS, formatNumber } from './dashboardPeriod';
@@ -162,5 +163,30 @@ export function LoadError({ message, onRetry }) {
         Thử lại
       </button>
     </div>
+  );
+}
+
+const REPORT_TABS = [
+  { to: '/admin/reports', label: 'Lượt khám', end: true },
+  { to: '/admin/reports/doctors', label: 'Bác sĩ' },
+];
+
+/** Tabs of the "Báo cáo thống kê" section, one per statistics use case. */
+export function ReportTabs() {
+  return (
+    <nav aria-label="Loại báo cáo" className="flex flex-wrap gap-1 border-b border-slate-200">
+      {REPORT_TABS.map((tab) => (
+        <NavLink
+          key={tab.to}
+          to={tab.to}
+          end={tab.end}
+          className={({ isActive }) => `px-4 py-2.5 text-sm -mb-px border-b-2 transition-colors ${isActive
+            ? 'border-[#127e7a] text-[#127e7a] font-semibold'
+            : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          {tab.label}
+        </NavLink>
+      ))}
+    </nav>
   );
 }

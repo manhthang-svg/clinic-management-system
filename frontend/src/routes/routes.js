@@ -24,6 +24,7 @@ export const ROUTES = {
     BILLING: '/admin/billing',
     STAFF: '/admin/staff',
     REPORTS: '/admin/reports',
+    REPORTS_DOCTORS: '/admin/reports/doctors',
     SETTINGS: '/admin/settings',
     HOSPITAL_INFORMATION: '/admin/hospital-information',
   },
