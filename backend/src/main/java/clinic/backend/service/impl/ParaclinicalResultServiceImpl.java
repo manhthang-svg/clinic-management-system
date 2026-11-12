@@ -11,12 +11,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -34,6 +36,7 @@ import clinic.backend.entity.ParaclinicalOrder;
 import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.ServiceLabParameter;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
@@ -510,26 +513,13 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 result = imagingResult(imaging.get());
             }
         }
-        List<ParaclinicalResultResponse.SiblingService> siblingServices = orderDetailRepository.findByOrderId(order.getId()).stream()
-                .filter(d -> Objects.equals(detail.getRoomId(), d.getRoomId()))
-                .map(d -> {
-                    MedicalService s = medicalServiceRepository.findById(d.getServiceId()).orElse(null);
-                    return new ParaclinicalResultResponse.SiblingService(
-                            d.getId(),
-                            order.getSophieu(),
-                            d.getTenchidinh(),
-                            s != null ? s.getCode() : null,
-                            s != null ? resultFormOf(s) : null,
-                            siblingStatusOf(d, s),
-                            d.getRoomId(),
-                            true
-                    );
-                })
-                .toList();
+        boolean currentIsDraft = result != null && !"SUBMITTED".equals(result.status());
+        List<ParaclinicalResultResponse.SiblingService> siblingServices = siblingServices(detail, order, currentIsDraft);
+        Map<UUID, String> staffNames = staffNames(order.getDoctorAccountId(), detail.getPerformerAccountId());
         return new ParaclinicalResultResponse(
                 detail.getId(), order.getSophieu(), context.form(), context.service().getType().name(),
                 sectionOf(context, rows), context.service().getCode(), detail.getTenchidinh(),
-                staffName(order.getDoctorAccountId()), order.getNoichidinh(), null, performingDepartment(detail),
+                staffNames.get(order.getDoctorAccountId()), order.getNoichidinh(), null, performingDepartment(detail),
                 order.getMucdochidinh() != null && order.getMucdochidinh().toLowerCase(Locale.ROOT).contains(EMERGENCY)
                         ? "EMERGENCY" : "NORMAL",
                 patient(context), order.getChandoansobo(),
@@ -538,7 +528,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 context.form() == ResultForm.MRI ? screening(detail) : null,
                 detail.getNgaychidinh(), detail.getPerformedAt(), statusOf(detail),
                 detail.getPerformerAccountId() == null ? null : new ParaclinicalResultResponse.Performer(
-                        detail.getPerformerAccountId(), staffName(detail.getPerformerAccountId())),
+                        detail.getPerformerAccountId(), staffNames.get(detail.getPerformerAccountId())),
                 isPerformer,
                 rows.stream().map(ParaclinicalResultServiceImpl::parameter).toList(),
                 result, printCount, instruments(context),
@@ -627,19 +617,64 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     }
 
     /**
-     * Status shown on a sibling tab of the result form: COMPLETED once its result was submitted, DRAFT while a
-     * saved result waits, otherwise the service status (PERFORMED for a service waiting for its result).
+     * The services of the same order in the same room: the tabs of the result form. Built with one query per kind of
+     * data (services, lab drafts, imaging drafts) whatever the number of services, because every tab switch loads
+     * the form again.
      */
-    private String siblingStatusOf(ParaclinicalOrderDetail detail, MedicalService service) {
-        if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT && service != null) {
-            boolean hasDraft = service.getType() == MedicalServiceType.LAB
-                    ? labResultRepository.findByOrderDetailId(detail.getId()).filter(r -> !r.isSubmitted()).isPresent()
-                    : imagingResultRepository.findByOrderDetailId(detail.getId()).filter(r -> !r.isSubmitted()).isPresent();
-            if (hasDraft) {
-                return "DRAFT";
-            }
+    private List<ParaclinicalResultResponse.SiblingService> siblingServices(
+            ParaclinicalOrderDetail detail, ParaclinicalOrder order, boolean currentIsDraft) {
+        List<ParaclinicalOrderDetail> siblings = orderDetailRepository.findByOrderId(order.getId()).stream()
+                .filter(sibling -> Objects.equals(detail.getRoomId(), sibling.getRoomId()))
+                .toList();
+        Map<UUID, MedicalService> services = medicalServiceRepository
+                .findAllById(siblings.stream().map(ParaclinicalOrderDetail::getServiceId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(MedicalService::getId, Function.identity()));
+        // The open service's own result is already loaded; only the other tabs are looked up.
+        Set<UUID> drafts = draftDetailIds(
+                siblings.stream().filter(sibling -> !sibling.getId().equals(detail.getId())).toList(), services);
+        if (currentIsDraft) {
+            drafts.add(detail.getId());
         }
-        return statusOf(detail);
+        return siblings.stream()
+                .map(sibling -> {
+                    MedicalService service = services.get(sibling.getServiceId());
+                    return new ParaclinicalResultResponse.SiblingService(
+                            sibling.getId(),
+                            order.getSophieu(),
+                            sibling.getTenchidinh(),
+                            service != null ? service.getCode() : null,
+                            service != null ? resultFormOf(service) : null,
+                            drafts.contains(sibling.getId()) ? "DRAFT" : statusOf(sibling),
+                            sibling.getRoomId(),
+                            true);
+                })
+                .toList();
+    }
+
+    /**
+     * Performed services whose result is saved but not submitted: their tab shows "Bản nháp" instead of "Chờ nhập".
+     * One query for the lab services and one for the others, only when there are such services.
+     */
+    private Set<UUID> draftDetailIds(List<ParaclinicalOrderDetail> siblings, Map<UUID, MedicalService> services) {
+        Map<Boolean, List<UUID>> pendingByLab = siblings.stream()
+                .filter(sibling -> sibling.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT)
+                .filter(sibling -> services.containsKey(sibling.getServiceId()))
+                .collect(Collectors.partitioningBy(
+                        sibling -> services.get(sibling.getServiceId()).getType() == MedicalServiceType.LAB,
+                        Collectors.mapping(ParaclinicalOrderDetail::getId, Collectors.toList())));
+        Set<UUID> drafts = new HashSet<>();
+        if (!pendingByLab.get(true).isEmpty()) {
+            labResultRepository.findByOrderDetailIdIn(pendingByLab.get(true)).stream()
+                    .filter(result -> !result.isSubmitted())
+                    .forEach(result -> drafts.add(result.getOrderDetailId()));
+        }
+        if (!pendingByLab.get(false).isEmpty()) {
+            imagingResultRepository.findByOrderDetailIdIn(pendingByLab.get(false)).stream()
+                    .filter(result -> !result.isSubmitted())
+                    .forEach(result -> drafts.add(result.getOrderDetailId()));
+        }
+        return drafts;
     }
 
     private static String statusOf(ParaclinicalOrderDetail detail) {
@@ -667,15 +702,20 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .toList();
     }
 
-    private String staffName(UUID accountId) {
-        if (accountId == null) {
-            return null;
+    /** Display names of the ordering doctor and the performer, in one query. */
+    private Map<UUID, String> staffNames(UUID... accountIds) {
+        Set<UUID> ids = Arrays.stream(accountIds).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
         }
-        return staffAccountRepository.findById(accountId)
-                .map(account -> account.getAcademicTitle() == null || account.getAcademicTitle().isBlank()
-                        ? account.getFullName()
-                        : account.getAcademicTitle().strip() + " " + account.getFullName())
-                .orElse(null);
+        return staffAccountRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(StaffAccount::getId, ParaclinicalResultServiceImpl::displayName));
+    }
+
+    private static String displayName(StaffAccount account) {
+        return account.getAcademicTitle() == null || account.getAcademicTitle().isBlank()
+                ? account.getFullName()
+                : account.getAcademicTitle().strip() + " " + account.getFullName();
     }
 
     private static String trim(String text) {
