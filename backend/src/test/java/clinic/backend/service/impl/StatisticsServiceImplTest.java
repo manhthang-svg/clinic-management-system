@@ -13,16 +13,20 @@ import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.RoomType;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
 import clinic.backend.enums.StatisticsGroupBy;
@@ -46,7 +50,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -81,6 +85,9 @@ class StatisticsServiceImplTest {
 
     record RoomServices(UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
             implements StatisticsRepository.RoomServiceCount { }
+
+    record Performed(UUID getServiceId, UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
+            implements StatisticsRepository.PerformedServiceCount { }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -441,6 +448,100 @@ class StatisticsServiceImplTest {
     @Test
     void departmentStatisticsRejectInvalidPeriods() {
         assertThatThrownBy(() -> service.getDepartmentStatistics(LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-30 View Paraclinical Service Statistics ----
+
+    private static MedicalService medicalService(UUID id, String code, String name, MedicalServiceType type, UUID groupId) {
+        MedicalService service = org.mockito.Mockito.mock(MedicalService.class);
+        lenient().when(service.getId()).thenReturn(id);
+        lenient().when(service.getCode()).thenReturn(code);
+        lenient().when(service.getTenchidinh()).thenReturn(name);
+        lenient().when(service.getType()).thenReturn(type);
+        lenient().when(service.getServiceGroupId()).thenReturn(groupId);
+        return service;
+    }
+
+    private static ServiceGroup serviceGroup(UUID id, String code, String name) {
+        ServiceGroup group = org.mockito.Mockito.mock(ServiceGroup.class);
+        lenient().when(group.getId()).thenReturn(id);
+        lenient().when(group.getServiceGroupCode()).thenReturn(code);
+        lenient().when(group.getServiceGroupName()).thenReturn(name);
+        return group;
+    }
+
+    @Test
+    void paraclinicalStatisticsCountPerformedServicesByTypeGroupServiceAndRoom() {
+        UUID sinhHoa = UUID.randomUUID();
+        UUID sieuAm = UUID.randomUUID();
+        UUID glucose = UUID.randomUUID();
+        UUID astAlt = UUID.randomUUID();
+        UUID bung = UUID.randomUUID();
+        UUID sh1 = UUID.randomUUID();
+        UUID sh2 = UUID.randomUUID();
+        UUID sa1 = UUID.randomUUID();
+        List<MedicalService> services = List.of(
+                medicalService(glucose, "XN-SH-901", "Bộ đường huyết", MedicalServiceType.LAB, sinhHoa),
+                medicalService(astAlt, "XN-SH-004", "Đo hoạt độ AST, ALT", MedicalServiceType.LAB, sinhHoa),
+                medicalService(bung, "SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, sieuAm));
+        List<ServiceGroup> groups = List.of(
+                serviceGroup(sinhHoa, "BIOCHEMISTRY", "Sinh hóa"), serviceGroup(sieuAm, "ULTRASOUND", "Siêu âm"));
+        List<Room> rooms = List.of(
+                room(sh1, UUID.randomUUID(), "XN-SH-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(sh2, UUID.randomUUID(), "XN-SH-2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(sa1, UUID.randomUUID(), "SA-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE));
+        when(repository.countPerformedServices(any(), any())).thenReturn(List.of(
+                new Performed(glucose, sh1, ParaclinicalOrderDetailStatus.COMPLETED, 5),
+                new Performed(glucose, sh2, ParaclinicalOrderDetailStatus.PENDING_RESULT, 2),
+                new Performed(astAlt, sh1, ParaclinicalOrderDetailStatus.COMPLETED, 3),
+                new Performed(bung, sa1, ParaclinicalOrderDetailStatus.COMPLETED, 4)));
+        when(repository.servicesByIds(any())).thenReturn(services);
+        when(repository.serviceGroupsByIds(any())).thenReturn(groups);
+        when(repository.roomsByIds(any())).thenReturn(rooms);
+
+        ParaclinicalStatisticsResponse result = service.getParaclinicalStatistics(null, null);
+
+        assertThat(result.performed()).isEqualTo(14);
+        assertThat(result.withResult()).isEqualTo(12);
+        assertThat(result.byType()).containsExactly(
+                new ParaclinicalStatisticsResponse.TypeCount(MedicalServiceType.LAB, 10, 8),
+                new ParaclinicalStatisticsResponse.TypeCount(MedicalServiceType.IMAGING, 4, 4));
+        assertThat(result.byGroup()).containsExactly(
+                new ParaclinicalStatisticsResponse.GroupCount(sinhHoa, "BIOCHEMISTRY", "Sinh hóa", 10, 8),
+                new ParaclinicalStatisticsResponse.GroupCount(sieuAm, "ULTRASOUND", "Siêu âm", 4, 4));
+        assertThat(result.byService()).containsExactly(
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        glucose, "XN-SH-901", "Bộ đường huyết", MedicalServiceType.LAB, "Sinh hóa", 7, 5),
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        bung, "SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, "Siêu âm", 4, 4),
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        astAlt, "XN-SH-004", "Đo hoạt độ AST, ALT", MedicalServiceType.LAB, "Sinh hóa", 3, 3));
+        assertThat(result.byRoom()).containsExactly(
+                new ParaclinicalStatisticsResponse.RoomCount(sh1, "XN-SH-1", "Phòng XN-SH-1", 8, 8),
+                new ParaclinicalStatisticsResponse.RoomCount(sa1, "SA-1", "Phòng SA-1", 4, 4),
+                new ParaclinicalStatisticsResponse.RoomCount(sh2, "XN-SH-2", "Phòng XN-SH-2", 2, 0));
+        verify(repository).countPerformedServices(
+                Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"));
+    }
+
+    @Test
+    void paraclinicalStatisticsAreEmptyWithoutLookingUpCatalogsWhenNothingWasPerformed() {
+        when(repository.countPerformedServices(any(), any())).thenReturn(List.of());
+
+        ParaclinicalStatisticsResponse result = service.getParaclinicalStatistics(null, null);
+
+        assertThat(result.performed()).isZero();
+        assertThat(result.byService()).isEmpty();
+        verify(repository, org.mockito.Mockito.never()).servicesByIds(any());
+        verify(repository, org.mockito.Mockito.never()).roomsByIds(any());
+    }
+
+    @Test
+    void paraclinicalStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getParaclinicalStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
         verifyNoInteractions(repository);

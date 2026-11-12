@@ -36,6 +36,10 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String VISITS = "/api/v1/statistics/visits";
     private static final String DOCTORS = "/api/v1/statistics/doctors";
     private static final String DEPARTMENTS = "/api/v1/statistics/departments";
+    private static final String PARACLINICAL = "/api/v1/statistics/paraclinical";
+    private static final UUID LAB_DEPARTMENT = UUID.fromString("0192a000-0001-7000-8000-000000000003");
+    private static final UUID BIOCHEMISTRY = UUID.fromString("0192a000-0002-7000-8000-000000000002");
+    private static final UUID LAB_ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000008");
     private static final UUID RECEPTIONIST = UUID.fromString("0192a000-0005-7000-8000-000000000007");
     private static final UUID ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000004");
 
@@ -196,6 +200,99 @@ class StatisticsApiIT extends PostgresIntegrationTest {
         mockMvc.perform(get(DEPARTMENTS)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.TECHNICIAN))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void paraclinicalStatisticsCountPerformedServicesOnPostgres() throws Exception {
+        UUID glucose = labService("XN-GLU", "Định lượng Glucose");
+        UUID order = paraclinicalOrder("BN00000003", LocalDate.of(2003, 7, 1));
+        Instant inPeriod = Instant.parse("2003-07-01T03:00:00Z");
+        performed(order, glucose, "COMPLETED", inPeriod);
+        performed(order, glucose, "PENDING_RESULT", inPeriod);
+        performed(order, glucose, "WAITING", null); // not performed: not counted
+        performed(order, glucose, "COMPLETED", Instant.parse("2003-08-01T03:00:00Z")); // outside the period
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(PARACLINICAL).param("from", "2003-07-01").param("to", "2003-07-31")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.performed").value(2))
+                .andExpect(jsonPath("$.data.withResult").value(1))
+                .andExpect(jsonPath("$.data.byType[0].type").value("LAB"))
+                .andExpect(jsonPath("$.data.byGroup[0].groupName").value("Sinh hóa"))
+                .andExpect(jsonPath("$.data.byService[0].serviceCode").value("XN-GLU"))
+                .andExpect(jsonPath("$.data.byService[0].performed").value(2))
+                .andExpect(jsonPath("$.data.byRoom[0].roomCode").value("XN-SH"))
+                .andExpect(jsonPath("$.data.byRoom[0].withResult").value(1));
+
+        mockMvc.perform(get(PARACLINICAL).param("from", "2001-01-01").param("to", "2001-01-31")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.performed").value(0))
+                .andExpect(jsonPath("$.data.byService", hasSize(0)));
+        mockMvc.perform(get(PARACLINICAL)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.TECHNICIAN))))
+                .andExpect(status().isForbidden());
+    }
+
+    private UUID labService(String code, String name) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into services (id, code, tenchidinh, type, department_id, service_group_id, clinic_price, status,
+                    created_at, updated_at, version)
+                values (?, ?, ?, 'LAB', ?, ?, 50000, 'ACTIVE', now(), now(), 0)
+                """, id, code, name, LAB_DEPARTMENT, BIOCHEMISTRY);
+        return id;
+    }
+
+    /** A completed visit with its medical record and a paid paraclinical order. */
+    private UUID paraclinicalOrder(String mabenhnhan, LocalDate day) {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
+        UUID visit = UUID.randomUUID();
+        jdbc.update("""
+                insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
+                    doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
+                    status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, 'COMPLETED', now(), now(), 0)
+                """, visit, "VV-" + suffix, patient, ROOM, RECEPTIONIST, day, ++queueNumber);
+        String recordType = "TK-" + suffix;
+        jdbc.update("""
+                insert into medical_record_types (loaiba, ten, pham_vi, van_ban, is_default, created_at, updated_at,
+                    version)
+                values (?, 'Bệnh án ngoại trú', 'OUTPATIENT', '32/2023/TT-BYT', false, now(), now(), 0)
+                """, recordType);
+        UUID record = UUID.randomUUID();
+        jdbc.update("""
+                insert into medical_records (id, visit_id, soba, loaiba, status, opened_at, opened_by_account_id,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'OPEN', now(), ?, now(), now(), 0)
+                """, record, visit, "BA-" + suffix, recordType, RECEPTIONIST);
+        UUID payment = UUID.randomUUID();
+        jdbc.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount,
+                    insurance_total_amount, patient_total_amount, paid_at, created_at, updated_at, version)
+                values (?, ?, ?, 'PARACLINICAL_FEE', 'PAID', 50000, 0, 50000, now(), now(), now(), 0)
+                """, payment, "HD-" + suffix, visit);
+        UUID order = UUID.randomUUID();
+        jdbc.update("""
+                insert into paraclinical_orders (id, sophieu, medical_record_id, doctor_account_id, payment_id,
+                    chandoansobo, doituongbn, noichidinh, tongcong, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, 'E11', 2, 'Phòng khám Nội', 50000, 'RELEASED', now(), now(), 0)
+                """, order, "PCD-" + suffix, record, RECEPTIONIST, payment);
+        return order;
+    }
+
+    private void performed(UUID order, UUID service, String status, Instant performedAt) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into paraclinical_order_details (id, order_id, service_id, machidinh, ngaychidinh, tenchidinh,
+                    dongia, thanhtien, benhnhanphaitra, room_id, queue_number, status, released_at, accepted_at,
+                    performed_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, now(), 'Định lượng Glucose', 50000, 50000, 50000, ?, 1, ?, now(), now(), ?,
+                    now(), now(), 0)
+                """, id, order, service, "CD-" + id.toString().substring(0, 8), LAB_ROOM, status,
+                performedAt == null ? null : java.sql.Timestamp.from(performedAt));
     }
 
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
