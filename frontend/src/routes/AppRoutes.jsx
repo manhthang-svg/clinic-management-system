@@ -9,6 +9,7 @@ import {
   DepartmentStatisticsPage,
   ParaclinicalStatisticsPage,
   RevenueStatisticsPage,
+  DiagnosisStatisticsPage,
   AccountManagementPage,
   DepartmentManagementPage,
   ServiceManagementPage,
@@ -71,6 +72,17 @@ export function AppRoutes({
             path="dashboard"
             element={
               <AdminDashboardPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/diagnoses"
+            element={
+              <DiagnosisStatisticsPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

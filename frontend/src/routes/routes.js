@@ -28,6 +28,7 @@ export const ROUTES = {
     REPORTS_DEPARTMENTS: '/admin/reports/departments',
     REPORTS_PARACLINICAL: '/admin/reports/paraclinical',
     REPORTS_REVENUE: '/admin/reports/revenue',
+    REPORTS_DIAGNOSES: '/admin/reports/diagnoses',
     SETTINGS: '/admin/settings',
     HOSPITAL_INFORMATION: '/admin/hospital-information',
   },
