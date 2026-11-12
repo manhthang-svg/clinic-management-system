@@ -758,22 +758,20 @@ p[role='alert']:not(.banner) {
     visibility: visible !important;
   }
 
-  /* UC-50: one A5 sheet per performing room (BR-50-04). */
+  /* UC-50: one sheet with every service and its room (BR-50-04), across the printable width like the result slips. */
   .paraclinical-order-print {
     position: absolute;
-    inset: 0 auto auto 0;
-    width: 148mm;
+    inset: 0 0 auto 0;
     color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .paraclinical-order-sheet {
     border: 0 !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
-    break-after: page;
-  }
-
-  .paraclinical-order-sheet:last-child {
-    break-after: auto;
+    padding: 0 !important;
   }
 
   /* fixed, not absolute: the result page sits inside a scrolled `main` of an h-screen layout, which clips an

@@ -106,7 +106,7 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('Lý do hủy từ 5 đến 500 ký tự.');
         expect(api.cancelParaclinicalService).not.toHaveBeenCalled();
     });
-    it('prints the order slip with one sheet per room and its location (UC-50)', async () => {
+    it('prints every service with its room and location on one sheet (UC-50)', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const api = {
@@ -118,11 +118,17 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
 
         expect(api.prepareParaclinicalOrderPrint).toHaveBeenCalledWith('o1');
-        const first = await screen.findByRole('article', { name: 'Phiếu chỉ định tờ 1/2' });
-        expect(within(first).getByTestId('slip-room')).toHaveTextContent('Nơi thực hiện: Phòng siêu âm 1 – Tầng 2, khu B');
-        expect(within(first).getByText('Siêu âm ổ bụng')).toBeInTheDocument();
-        expect(within(first).queryByText(/₫/)).not.toBeInTheDocument();
-        expect(screen.getByRole('article', { name: 'Phiếu chỉ định tờ 2/2' })).toHaveTextContent('Phòng xét nghiệm');
+        const sheet = await screen.findByRole('article', { name: 'Phiếu chỉ định cận lâm sàng' });
+        expect(screen.getAllByRole('article', { name: 'Phiếu chỉ định cận lâm sàng' })).toHaveLength(1);
+        expect(within(sheet).getByText('PHÒNG KHÁM ĐA KHOA METPH')).toBeInTheDocument();
+        expect(within(sheet).getByRole('img', { name: 'Mã vạch CD1' })).toBeInTheDocument();
+        const rows = within(sheet).getAllByRole('row').slice(2);
+        expect(rows[0]).toHaveTextContent('Siêu âm ổ bụng');
+        expect(rows[0]).toHaveTextContent('Phòng siêu âm 1 – Tầng 2, khu B');
+        expect(rows[1]).toHaveTextContent('Tổng phân tích máu');
+        expect(rows[1]).toHaveTextContent('Phòng xét nghiệm – Tầng 1');
+        expect(within(sheet).getByText('Ngày 08 tháng 11 năm 2026')).toBeInTheDocument();
+        expect(within(sheet).queryByText(/₫/)).not.toBeInTheDocument();
         await vi.waitFor(() => expect(print).toHaveBeenCalled());
         print.mockRestore();
     });
