@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ClinicalExaminationPage from './ClinicalExaminationPage';
@@ -119,6 +119,27 @@ describe('ClinicalExaminationPage', () => {
         expect(screen.getByText('Chờ thực hiện')).toBeInTheDocument();
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
         expect(visitApi.getParaclinicalOrders).toHaveBeenCalledWith(visit.id, expect.any(AbortSignal));
+    });
+
+    it('lists the tabs with the ordered list after the order tab and the transfer last', async () => {
+        vi.spyOn(visitApi, 'getParaclinicalOrders').mockResolvedValue([{
+            id: 'order-1', sophieu: 'CLS0001', chandoansobo: 'Viêm họng', tongcong: 150000,
+            createdAt: '2026-10-30T03:00:00Z',
+            details: [{ id: 'detail-1', machidinh: 'XN01', tenchidinh: 'Tổng phân tích tế bào máu', thanhtien: 150000, status: 'WAITING' }],
+        }]);
+        renderPage();
+        await screen.findByRole('heading', { name: 'Khám lâm sàng' });
+
+        const tabs = within(screen.getByRole('navigation', { name: 'Các bước khám bệnh' })).getAllByRole('button');
+        expect(tabs.map((tab) => tab.textContent)).toEqual([
+            'Khám lâm sàng', 'Chỉ định cận lâm sàng', 'Danh sách đã chỉ định', 'Kết luận', 'Kê đơn',
+            'Hẹn tái khám', 'Chuyển phòng',
+        ]);
+
+        // The ordered list opens during the examination too, without saving it.
+        fireEvent.click(screen.getByRole('button', { name: 'Danh sách đã chỉ định' }));
+        expect(await screen.findByText('Tổng phân tích tế bào máu')).toBeInTheDocument();
+        expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
     });
 
     it('calculates BMI from weight and height', async () => {
