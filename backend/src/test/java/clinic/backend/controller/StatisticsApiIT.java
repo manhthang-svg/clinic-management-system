@@ -38,6 +38,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String DEPARTMENTS = "/api/v1/statistics/departments";
     private static final String PARACLINICAL = "/api/v1/statistics/paraclinical";
     private static final String REVENUE = "/api/v1/statistics/revenue";
+    private static final String DIAGNOSES = "/api/v1/statistics/diagnoses";
     private static final UUID LAB_DEPARTMENT = UUID.fromString("0192a000-0001-7000-8000-000000000003");
     private static final UUID BIOCHEMISTRY = UUID.fromString("0192a000-0002-7000-8000-000000000002");
     private static final UUID LAB_ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000008");
@@ -344,6 +345,87 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now(), 0)
                 """, id, "HD-" + suffix, visit, type, status, insurance + patient, insurance, patient, method,
                 paidAt == null ? null : "PT-" + suffix, paidAt == null ? null : java.sql.Timestamp.from(paidAt));
+    }
+
+    @Test
+    void diagnosisStatisticsRankTheMainDiagnosesOfThePeriodOnPostgres() throws Exception {
+        icd("U98", "Nhóm bệnh thử");
+        icd("U98.1", "Bệnh thử một");
+        icd("U98.2", "Bệnh thử hai");
+        icd("U97.0", "Bệnh kèm theo thử");
+        StaffAccount doctor = account(Role.DOCTOR);
+        Instant inPeriod = Instant.parse("2003-11-03T03:00:00Z");
+        UUID first = conclusion("BN00000003", doctor, "U98.1", "Bệnh thử một", inPeriod);
+        conclusion("BN00000004", doctor, "U98.1", "Bệnh thử một", inPeriod);
+        conclusion("BN00000008", doctor, "U98.2", "Bệnh thử hai", inPeriod);
+        conclusion("BN00000003", doctor, "U98.2", "Bệnh thử hai", Instant.parse("2003-12-01T03:00:00Z"));
+        secondary(first, "U97.0", "Bệnh kèm theo thử");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(DIAGNOSES).param("from", "2003-11-01").param("to", "2003-11-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.conclusions").value(3))
+                .andExpect(jsonPath("$.data.withIcd").value(3))
+                .andExpect(jsonPath("$.data.distinctCodes").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].icdCode").value("U98.1"))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].cases").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].patients").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[1].icdCode").value("U98.2"))
+                .andExpect(jsonPath("$.data.categories[0].categoryCode").value("U98"))
+                .andExpect(jsonPath("$.data.categories[0].categoryName").value("Nhóm bệnh thử"))
+                .andExpect(jsonPath("$.data.categories[0].cases").value(3))
+                .andExpect(jsonPath("$.data.secondaryDiagnoses[0].icdCode").value("U97.0"))
+                .andExpect(jsonPath("$.data.secondaryDiagnoses[0].cases").value(1));
+
+        mockMvc.perform(get(DIAGNOSES).param("from", "2003-11-01").param("to", "2003-11-30").param("limit", "1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mainDiagnoses", hasSize(1)));
+        mockMvc.perform(get(DIAGNOSES).param("limit", "0").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(DIAGNOSES).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(doctor)))
+                .andExpect(status().isForbidden());
+    }
+
+    private void icd(String code, String name) {
+        jdbc.update("""
+                insert into icd10 (maicd, tenicd, hieu_luc_tu) values (?, ?, date '2000-01-01')
+                on conflict (maicd) do nothing
+                """, code, name);
+    }
+
+    /** A completed visit, its medical record and the doctor's conclusion saved at {@code concludedAt}. */
+    private UUID conclusion(String mabenhnhan, StaffAccount doctor, String code, String name, Instant concludedAt) {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID visit = visit(mabenhnhan, LocalDate.ofInstant(concludedAt, java.time.ZoneOffset.UTC), "COMPLETED",
+                doctor.getId());
+        String recordType = "KL-" + suffix;
+        jdbc.update("""
+                insert into medical_record_types (loaiba, ten, pham_vi, van_ban, is_default, created_at, updated_at,
+                    version)
+                values (?, 'Bệnh án ngoại trú', 'OUTPATIENT', '32/2023/TT-BYT', false, now(), now(), 0)
+                """, recordType);
+        UUID record = UUID.randomUUID();
+        jdbc.update("""
+                insert into medical_records (id, visit_id, soba, loaiba, status, opened_at, opened_by_account_id,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'LOCKED', now(), ?, now(), now(), 0)
+                """, record, visit, "BA-" + suffix, recordType, doctor.getId());
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into conclusions (id, medical_record_id, doctor_account_id, chandoan, maicd, tenicd, huongdieutri,
+                    ketquadieutri, loidanbacsi, concluded_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, ?, 'Điều trị ngoại trú', 1, 'Tái khám khi cần', ?, now(), now(), 0)
+                """, id, record, doctor.getId(), name, code, name, java.sql.Timestamp.from(concludedAt));
+        return id;
+    }
+
+    private void secondary(UUID conclusion, String code, String name) {
+        jdbc.update("""
+                insert into conclusion_secondary_diagnoses (id, conclusion_id, maicd, tenicd, thu_tu, created_at)
+                values (?, ?, ?, ?, 1, now())
+                """, UUID.randomUUID(), conclusion, code, name);
     }
 
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {

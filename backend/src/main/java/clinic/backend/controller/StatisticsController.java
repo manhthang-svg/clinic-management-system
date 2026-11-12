@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
 import clinic.backend.dto.response.RevenueStatisticsResponse;
@@ -77,5 +78,14 @@ public class StatisticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) StatisticsGroupBy groupBy) {
         return ApiResponse.success(statisticsService.getRevenueStatistics(from, to, groupBy));
+    }
+
+    @Operation(summary = "UC-32 Thống kê các bệnh thường gặp theo mã ICD-10 trong khoảng ngày")
+    @GetMapping("/diagnoses")
+    public ApiResponse<DiagnosisStatisticsResponse> getDiagnosisStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResponse.success(statisticsService.getDiagnosisStatistics(from, to, limit));
     }
 }

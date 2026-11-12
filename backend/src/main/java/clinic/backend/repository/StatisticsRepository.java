@@ -73,6 +73,72 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         BigDecimal getPatientAmount();
     }
 
+    /** UC-32: one ICD-10 code as main diagnosis. */
+    interface MainDiagnosisCount {
+        String getCode();
+
+        String getName();
+
+        long getCases();
+
+        long getPatients();
+    }
+
+    /** UC-32: one ICD-10 code (or category) and its number of cases. */
+    interface CodeCount {
+        String getCode();
+
+        String getName();
+
+        long getCases();
+    }
+
+    /** UC-32: conclusions saved in the period, and those with an ICD-10 code. */
+    interface ConclusionTotals {
+        long getConclusions();
+
+        long getWithIcd();
+
+        long getDistinctCodes();
+    }
+
+    @Query("""
+            select count(c) as conclusions, count(c.maicd) as withIcd, count(distinct c.maicd) as distinctCodes
+            from Conclusion c
+            where c.concludedAt >= :start and c.concludedAt < :end
+            """)
+    ConclusionTotals conclusionTotals(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select c.maicd as code, max(c.tenicd) as name, count(c) as cases, count(distinct v.patientId) as patients
+            from Conclusion c, MedicalRecord r, Visit v
+            where r.id = c.medicalRecordId and v.id = r.visitId
+              and c.maicd is not null and c.concludedAt >= :start and c.concludedAt < :end
+            group by c.maicd
+            order by count(c) desc, c.maicd
+            """)
+    List<MainDiagnosisCount> topMainDiagnoses(
+            @Param("start") Instant start, @Param("end") Instant end, Pageable limit);
+
+    /** Categories: the first three characters of the main diagnosis code; the name comes from the ICD-10 catalog. */
+    @Query("""
+            select substring(c.maicd, 1, 3) as code, max(i.tenicd) as name, count(c) as cases
+            from Conclusion c left join Icd10 i on i.maicd = substring(c.maicd, 1, 3)
+            where c.maicd is not null and c.concludedAt >= :start and c.concludedAt < :end
+            group by substring(c.maicd, 1, 3)
+            order by count(c) desc, substring(c.maicd, 1, 3)
+            """)
+    List<CodeCount> topDiagnosisCategories(@Param("start") Instant start, @Param("end") Instant end, Pageable limit);
+
+    @Query("""
+            select s.maicd as code, max(s.tenicd) as name, count(s) as cases
+            from ConclusionSecondaryDiagnosis s join s.conclusion c
+            where s.maicd is not null and c.concludedAt >= :start and c.concludedAt < :end
+            group by s.maicd
+            order by count(s) desc, s.maicd
+            """)
+    List<CodeCount> topSecondaryDiagnoses(@Param("start") Instant start, @Param("end") Instant end, Pageable limit);
+
     /** UC-31: paid receipts of one clinic day (YYYY-MM-DD), receipt type and payment method. */
     interface RevenueRow {
         String getDay();

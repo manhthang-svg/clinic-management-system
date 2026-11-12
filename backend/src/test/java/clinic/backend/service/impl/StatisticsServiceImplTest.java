@@ -11,6 +11,7 @@ import java.util.UUID;
 import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse;
 import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
@@ -53,7 +54,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics, UC-31 View Revenue Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics, UC-31 View Revenue Statistics, UC-32 View Diagnosis Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -100,6 +101,14 @@ class StatisticsServiceImplTest {
         return new RevenueLine(day, type, method, payments, BigDecimal.valueOf(insurance + patient),
                 BigDecimal.valueOf(insurance), BigDecimal.valueOf(patient));
     }
+
+    record Totals(long getConclusions, long getWithIcd, long getDistinctCodes)
+            implements StatisticsRepository.ConclusionTotals { }
+
+    record MainDiagnosis(String getCode, String getName, long getCases, long getPatients)
+            implements StatisticsRepository.MainDiagnosisCount { }
+
+    record Code(String getCode, String getName, long getCases) implements StatisticsRepository.CodeCount { }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -624,6 +633,72 @@ class StatisticsServiceImplTest {
                 LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2), StatisticsGroupBy.MONTH))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-32 View Diagnosis Statistics ----
+
+    @Test
+    void diagnosisStatisticsListTheMostCommonCodesCategoriesAndSecondaryDiagnoses() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(40, 40, 12));
+        when(repository.topMainDiagnoses(any(), any(), any())).thenReturn(List.of(
+                new MainDiagnosis("J06.9", "Nhiễm trùng hô hấp trên cấp", 9, 8),
+                new MainDiagnosis("I10", "Tăng huyết áp vô căn", 6, 6)));
+        when(repository.topDiagnosisCategories(any(), any(), any())).thenReturn(List.of(
+                new Code("J06", "Nhiễm trùng cấp đường hô hấp trên", 11)));
+        when(repository.topSecondaryDiagnoses(any(), any(), any())).thenReturn(List.of(
+                new Code("E11.9", "Đái tháo đường type 2", 4)));
+
+        DiagnosisStatisticsResponse result = service.getDiagnosisStatistics(null, null, null);
+
+        assertThat(result.limit()).isEqualTo(StatisticsServiceImpl.DEFAULT_DIAGNOSIS_LIMIT);
+        assertThat(result.conclusions()).isEqualTo(40);
+        assertThat(result.withIcd()).isEqualTo(40);
+        assertThat(result.withoutIcd()).isZero();
+        assertThat(result.distinctCodes()).isEqualTo(12);
+        assertThat(result.mainDiagnoses()).containsExactly(
+                new DiagnosisStatisticsResponse.DiagnosisRow("J06.9", "Nhiễm trùng hô hấp trên cấp", 9, 8),
+                new DiagnosisStatisticsResponse.DiagnosisRow("I10", "Tăng huyết áp vô căn", 6, 6));
+        assertThat(result.categories()).containsExactly(
+                new DiagnosisStatisticsResponse.CategoryRow("J06", "Nhiễm trùng cấp đường hô hấp trên", 11));
+        assertThat(result.secondaryDiagnoses()).containsExactly(
+                new DiagnosisStatisticsResponse.SecondaryRow("E11.9", "Đái tháo đường type 2", 4));
+        verify(repository).topMainDiagnoses(Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"),
+                Pageable.ofSize(StatisticsServiceImpl.DEFAULT_DIAGNOSIS_LIMIT));
+    }
+
+    @Test
+    void diagnosisStatisticsUseTheRequestedLimit() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(3, 3, 3));
+        when(repository.topMainDiagnoses(any(), any(), any())).thenReturn(List.of());
+        when(repository.topDiagnosisCategories(any(), any(), any())).thenReturn(List.of());
+        when(repository.topSecondaryDiagnoses(any(), any(), any())).thenReturn(List.of());
+
+        service.getDiagnosisStatistics(null, null, 25);
+
+        verify(repository).topMainDiagnoses(any(), any(), eq(Pageable.ofSize(25)));
+        verify(repository).topSecondaryDiagnoses(any(), any(), eq(Pageable.ofSize(25)));
+    }
+
+    @Test
+    void diagnosisStatisticsSkipTheRankingsWhenNoConclusionHasACode() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(0, 0, 0));
+
+        DiagnosisStatisticsResponse result = service.getDiagnosisStatistics(null, null, null);
+
+        assertThat(result.mainDiagnoses()).isEmpty();
+        verify(repository, org.mockito.Mockito.never()).topMainDiagnoses(any(), any(), any());
+    }
+
+    @Test
+    void diagnosisStatisticsRejectAnInvalidLimitOrPeriod() {
+        for (int limit : new int[] {0, 101}) {
+            assertThatThrownBy(() -> service.getDiagnosisStatistics(null, null, limit))
+                    .isInstanceOfSatisfying(AppException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        }
+        assertThatThrownBy(() -> service.getDiagnosisStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1), 10))
+                .isInstanceOf(AppException.class);
         verifyNoInteractions(repository);
     }
 }
