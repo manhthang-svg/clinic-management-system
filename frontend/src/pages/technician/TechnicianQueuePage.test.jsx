@@ -286,4 +286,48 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(within(rows[1]).getByText('#04')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Mai Thanh Hoàng')).toBeInTheDocument();
   });
+
+  it('keeps a patient whose services were all performed out of "Tiếp nhận" and offers to enter the result', async () => {
+    const performed = (id, serviceName) => ({
+      ...inProgress, id, serviceName, status: 'PENDING_RESULT', queueNumber: 1, orderCode: 'CD0000000067',
+    });
+    technicianApi.getQueue.mockResolvedValue({
+      items: [
+        performed('detail-a', 'Bộ đường huyết (Glucose, HbA1c)'),
+        performed('detail-b', 'Bộ mỡ máu'),
+        performed('detail-c', 'Đo hoạt độ AST, ALT'),
+      ],
+      stats: { total: 3, waiting: 0, priority: 0, skipped: 0 },
+      canManage: true,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    const row = await rowOf('Nguyễn Văn Bình');
+    expect(within(row).getByText('Chờ nhập kết quả')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /Tiếp nhận/ })).not.toBeInTheDocument();
+    expect(within(row).queryByText('Đang chờ gọi')).not.toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Nhập KQ' }));
+    expect(await screen.findByText('Màn nhập kết quả')).toBeInTheDocument();
+  });
+
+  it('accepts the waiting service of a row even when another service of the row was performed', async () => {
+    technicianApi.getQueue.mockResolvedValue({
+      items: [
+        { ...inProgress, id: 'detail-done', status: 'PENDING_RESULT' },
+        { ...inProgress, id: 'detail-next', status: 'WAITING', serviceName: 'Chụp X-quang ngực thẳng' },
+      ],
+      stats: { total: 2, waiting: 1, priority: 0, skipped: 0 },
+      canManage: true,
+    });
+    technicianApi.acceptOrder.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+
+    const row = await rowOf('Nguyễn Văn Bình');
+    await user.click(within(row).getByRole('button', { name: /Tiếp nhận/ }));
+
+    expect(technicianApi.acceptOrder).toHaveBeenCalledWith('detail-next');
+  });
 });

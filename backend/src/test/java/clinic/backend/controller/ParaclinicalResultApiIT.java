@@ -197,6 +197,43 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.details.technique").exists());
     }
 
+    @Test
+    void siblingServicesOfTheSameRoomShowTheirResultStatusAndCanEachBeSubmitted() throws Exception {
+        Fixture fixture = fixture("LAB", "Bộ đường huyết (Glucose, HbA1c)");
+        String token = accessToken(fixture.technician());
+        UUID second = sibling(fixture, "Đo hoạt độ AST, ALT");
+        String first = path(fixture);
+        String other = "/api/v1/paraclinical-results/" + second;
+        String glucose = fixture.parameterCodes()[0];
+        String cholesterol = fixture.parameterCodes()[1];
+
+        mockMvc.perform(withToken(put(first + "/draft"), token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"values\":{\"" + glucose + "\":\"5\"},\"conclusion\":\"\"}"))
+                .andExpect(status().isOk());
+
+        // The tabs of the result form: the draft is no longer shown as "waiting for entry".
+        mockMvc.perform(withToken(get(other), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.siblingServices", hasSize(2)))
+                .andExpect(jsonPath("$.data.siblingServices[?(@.id == '" + fixture.detailId() + "')].status")
+                        .value("DRAFT"))
+                .andExpect(jsonPath("$.data.siblingServices[?(@.id == '" + second + "')].status")
+                        .value("PERFORMED"));
+
+        String body = "{\"values\":{\"" + glucose + "\":\"5\",\"" + cholesterol + "\":\"4\"},"
+                + "\"conclusion\":\"Bình thường\"}";
+        mockMvc.perform(withToken(post(other + "/commands/submit"), token)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.siblingServices[?(@.id == '" + second + "')].status")
+                        .value("COMPLETED"));
+        mockMvc.perform(withToken(post(first + "/commands/submit"), token)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
+    }
+
     // ---- fixture -----------------------------------------------------------------------------------------------
 
     private record Fixture(StaffAccount technician, UUID detailId, UUID visitId, String[] parameterCodes,
@@ -295,6 +332,20 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
                     now(), now(), 0)
                 """, detail, order, service, "CD-" + suffix, serviceName, room, technician.getId());
         return new Fixture(technician, detail, visit, codes, labInstrument, imagingInstrument, imagingCode);
+    }
+
+    /** Another performed service of the same order, in the same room and with the same service. */
+    private UUID sibling(Fixture fixture, String serviceName) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into paraclinical_order_details (id, order_id, service_id, machidinh, ngaychidinh, tenchidinh,
+                    dongia, thanhtien, benhnhanphaitra, room_id, queue_number, status, performer_account_id,
+                    released_at, accepted_at, performed_at, created_at, updated_at, version)
+                select ?, order_id, service_id, ?, now(), ?, 50000, 50000, 50000, room_id, 1, 'PENDING_RESULT',
+                    performer_account_id, now(), now(), now(), now(), now(), 0
+                from paraclinical_order_details where id = ?
+                """, id, "CD-" + suffix(), serviceName, fixture.detailId());
+        return id;
     }
 
     private void insertParameter(UUID service, String code, String name, int order, String low, String high) {
