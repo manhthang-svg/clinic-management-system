@@ -520,7 +520,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                             d.getTenchidinh(),
                             s != null ? s.getCode() : null,
                             s != null ? resultFormOf(s) : null,
-                            statusOf(d),
+                            siblingStatusOf(d, s),
                             d.getRoomId(),
                             true
                     );
@@ -624,6 +624,22 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private static ParaclinicalResultResponse.Screening screening(ParaclinicalOrderDetail detail) {
         String implant = detail.getHasMetalImplant() == null ? null : detail.getHasMetalImplant() ? "Có" : "Không";
         return new ParaclinicalResultResponse.Screening(implant, detail.getPriorResults());
+    }
+
+    /**
+     * Status shown on a sibling tab of the result form: COMPLETED once its result was submitted, DRAFT while a
+     * saved result waits, otherwise the service status (PERFORMED for a service waiting for its result).
+     */
+    private String siblingStatusOf(ParaclinicalOrderDetail detail, MedicalService service) {
+        if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT && service != null) {
+            boolean hasDraft = service.getType() == MedicalServiceType.LAB
+                    ? labResultRepository.findByOrderDetailId(detail.getId()).filter(r -> !r.isSubmitted()).isPresent()
+                    : imagingResultRepository.findByOrderDetailId(detail.getId()).filter(r -> !r.isSubmitted()).isPresent();
+            if (hasDraft) {
+                return "DRAFT";
+            }
+        }
+        return statusOf(detail);
     }
 
     private static String statusOf(ParaclinicalOrderDetail detail) {
