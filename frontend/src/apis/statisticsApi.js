@@ -27,6 +27,10 @@ export function createStatisticsApi(client = apiClient) {
     /** UC-29 View Department and Room Statistics. */
     getDepartments: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/departments', { from, to }), { signal }),
+
+    /** UC-30 View Paraclinical Service Statistics. */
+    getParaclinical: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/paraclinical', { from, to }), { signal }),
   };
 }
 
