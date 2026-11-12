@@ -7,13 +7,17 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse.DailyVisits;
@@ -26,15 +30,23 @@ import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
 import clinic.backend.dto.response.DepartmentStatisticsResponse.RoomRow;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse.GroupCount;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse.RoomCount;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse.ServiceCount;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse.TypeCount;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
 import clinic.backend.entity.Department;
+import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
@@ -241,6 +253,110 @@ public class StatisticsServiceImpl implements StatisticsService {
                 departments.stream().mapToLong(DepartmentRow::visits).sum(),
                 departments.stream().mapToLong(DepartmentRow::services).sum(),
                 departments);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParaclinicalStatisticsResponse getParaclinicalStatistics(LocalDate from, LocalDate to) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+        Instant startInstant = start.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant endInstant = end.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        List<StatisticsRepository.PerformedServiceCount> rows =
+                statisticsRepository.countPerformedServices(startInstant, endInstant);
+        if (rows.isEmpty()) {
+            return new ParaclinicalStatisticsResponse(start, end, 0, 0, List.of(), List.of(), List.of(), List.of());
+        }
+
+        Map<UUID, MedicalService> services = statisticsRepository
+                .servicesByIds(rows.stream().map(StatisticsRepository.PerformedServiceCount::getServiceId)
+                        .collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(MedicalService::getId, Function.identity()));
+        Set<UUID> groupIds = services.values().stream().map(MedicalService::getServiceGroupId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, ServiceGroup> groups = groupIds.isEmpty() ? Map.of() : statisticsRepository
+                .serviceGroupsByIds(groupIds)
+                .stream().collect(Collectors.toMap(ServiceGroup::getId, Function.identity()));
+        Set<UUID> roomIds = rows.stream().map(StatisticsRepository.PerformedServiceCount::getRoomId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, Room> rooms = roomIds.isEmpty() ? Map.of() : statisticsRepository.roomsByIds(roomIds)
+                .stream().collect(Collectors.toMap(Room::getId, Function.identity()));
+
+        // Each counter is {performed, withResult}.
+        long[] total = new long[2];
+        Map<MedicalServiceType, long[]> byType = new EnumMap<>(MedicalServiceType.class);
+        Map<UUID, long[]> byGroup = new HashMap<>();
+        Map<UUID, long[]> byService = new HashMap<>();
+        Map<UUID, long[]> byRoom = new HashMap<>();
+        for (StatisticsRepository.PerformedServiceCount row : rows) {
+            long performed = row.getTotal();
+            long withResult = row.getStatus() == ParaclinicalOrderDetailStatus.COMPLETED ? row.getTotal() : 0;
+            MedicalService service = services.get(row.getServiceId());
+            add(total, performed, withResult);
+            add(byService.computeIfAbsent(row.getServiceId(), id -> new long[2]), performed, withResult);
+            if (service != null) {
+                add(byType.computeIfAbsent(service.getType(), type -> new long[2]), performed, withResult);
+                if (service.getServiceGroupId() != null) {
+                    add(byGroup.computeIfAbsent(service.getServiceGroupId(), id -> new long[2]), performed, withResult);
+                }
+            }
+            if (row.getRoomId() != null) {
+                add(byRoom.computeIfAbsent(row.getRoomId(), id -> new long[2]), performed, withResult);
+            }
+        }
+
+        List<TypeCount> types = byType.entrySet().stream()
+                .map(entry -> new TypeCount(entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .sorted(Comparator.comparingLong(TypeCount::performed).reversed()
+                        .thenComparing(TypeCount::type))
+                .toList();
+        List<GroupCount> groupRows = byGroup.entrySet().stream()
+                .map(entry -> {
+                    ServiceGroup group = groups.get(entry.getKey());
+                    return new GroupCount(entry.getKey(),
+                            group != null ? group.getServiceGroupCode() : null,
+                            group != null ? group.getServiceGroupName() : null,
+                            entry.getValue()[0], entry.getValue()[1]);
+                })
+                .sorted(Comparator.comparingLong(GroupCount::performed).reversed()
+                        .thenComparing(GroupCount::groupCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        List<ServiceCount> serviceRows = byService.entrySet().stream()
+                .map(entry -> {
+                    MedicalService service = services.get(entry.getKey());
+                    ServiceGroup group = service == null || service.getServiceGroupId() == null
+                            ? null : groups.get(service.getServiceGroupId());
+                    return new ServiceCount(entry.getKey(),
+                            service != null ? service.getCode() : null,
+                            service != null ? service.getTenchidinh() : null,
+                            service != null ? service.getType() : null,
+                            group != null ? group.getServiceGroupName() : null,
+                            entry.getValue()[0], entry.getValue()[1]);
+                })
+                .sorted(Comparator.comparingLong(ServiceCount::performed).reversed()
+                        .thenComparing(ServiceCount::serviceCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        List<RoomCount> roomRows = byRoom.entrySet().stream()
+                .map(entry -> {
+                    Room room = rooms.get(entry.getKey());
+                    return new RoomCount(entry.getKey(),
+                            room != null ? room.getRoomCode() : null,
+                            room != null ? room.getRoomName() : null,
+                            entry.getValue()[0], entry.getValue()[1]);
+                })
+                .sorted(Comparator.comparingLong(RoomCount::performed).reversed()
+                        .thenComparing(RoomCount::roomCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        return new ParaclinicalStatisticsResponse(
+                start, end, total[0], total[1], types, groupRows, serviceRows, roomRows);
+    }
+
+    private static void add(long[] counter, long performed, long withResult) {
+        counter[0] += performed;
+        counter[1] += withResult;
     }
 
     /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */

@@ -8,7 +8,9 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.entity.Department;
+import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -70,6 +72,37 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
 
         BigDecimal getPatientAmount();
     }
+
+    /** UC-30: performed services of one service in one room, by status (awaiting result or with result). */
+    interface PerformedServiceCount {
+        UUID getServiceId();
+
+        UUID getRoomId();
+
+        ParaclinicalOrderDetailStatus getStatus();
+
+        long getTotal();
+    }
+
+    /** Services performed in {@code [start, end)}: still awaiting their result, or with the result submitted. */
+    @Query("""
+            select d.serviceId as serviceId, d.roomId as roomId, d.status as status, count(d) as total
+            from ParaclinicalOrderDetail d
+            where d.performedAt >= :start and d.performedAt < :end
+              and d.status in (clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_RESULT,
+                               clinic.backend.enums.ParaclinicalOrderDetailStatus.COMPLETED)
+            group by d.serviceId, d.roomId, d.status
+            """)
+    List<PerformedServiceCount> countPerformedServices(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("select s from MedicalService s where s.id in :ids")
+    List<MedicalService> servicesByIds(@Param("ids") Collection<UUID> ids);
+
+    @Query("select g from ServiceGroup g where g.id in :ids")
+    List<ServiceGroup> serviceGroupsByIds(@Param("ids") Collection<UUID> ids);
+
+    @Query("select r from Room r where r.id in :ids")
+    List<Room> roomsByIds(@Param("ids") Collection<UUID> ids);
 
     /** UC-29: visits registered in one examination room, by status. */
     interface RoomVisitCount {
