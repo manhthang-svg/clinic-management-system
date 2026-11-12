@@ -27,6 +27,7 @@ import {
   ReportTabs,
 } from '../../components/statistics/StatisticsParts';
 import { COLORS } from '../../components/statistics/statisticsTheme';
+import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
 
 const { ADMIN } = ROUTES;
@@ -89,14 +90,17 @@ export function ParaclinicalStatisticsPage({
 
   return (
     <AdminLayout {...layoutProps}>
-      <div className="px-6 pb-8 space-y-6">
+      <div className="statistics-report-print px-6 pb-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <AccountPageHeader
             title="Thống kê dịch vụ cận lâm sàng"
             description="Số dịch vụ cận lâm sàng đã thực hiện theo loại dịch vụ, theo dịch vụ và theo phòng."
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Cận lâm sàng' }]}
           />
-          <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          <div className="statistics-print-hide flex flex-wrap items-center gap-2">
+            <ReportActions report="PARACLINICAL" period={period} disabled={Boolean(periodError) || !data} />
+            <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          </div>
         </div>
 
         <ReportTabs />
@@ -189,7 +193,7 @@ export function ParaclinicalStatisticsPage({
               title="Chi tiết theo dịch vụ"
               description="Xếp theo số lần thực hiện, nhiều nhất trước."
               actions={(
-                <div className="relative">
+                <div className="statistics-print-hide relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <label htmlFor="paraclinical-stats-search" className="sr-only">Tìm dịch vụ</label>
                   <input

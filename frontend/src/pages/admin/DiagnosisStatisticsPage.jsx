@@ -26,6 +26,7 @@ import {
   SegmentedControl,
 } from '../../components/statistics/StatisticsParts';
 import { TEAL } from '../../components/statistics/statisticsTheme';
+import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
 
 const { ADMIN } = ROUTES;
@@ -89,14 +90,17 @@ export function DiagnosisStatisticsPage({
 
   return (
     <AdminLayout {...layoutProps}>
-      <div className="px-6 pb-8 space-y-6">
+      <div className="statistics-report-print px-6 pb-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <AccountPageHeader
             title="Thống kê bệnh thường gặp"
             description="Các chẩn đoán gặp nhiều nhất theo mã ICD-10 trong khoảng thời gian được chọn."
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Bệnh thường gặp' }]}
           />
-          <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          <div className="statistics-print-hide flex flex-wrap items-center gap-2">
+            <ReportActions report="DIAGNOSES" period={period} limit={limit} disabled={Boolean(periodError) || !data} />
+            <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
+          </div>
         </div>
 
         <ReportTabs />
