@@ -33,6 +33,7 @@ import {
   ReturnToWaitingDialog,
 } from '../../components/technician';
 import { PERFORM_MESSAGES, performErrorMessage } from '../../components/technician/performOrder';
+import { groupStatusOf, isServiceCheckedIn, serviceForAction } from '../../components/technician/queueGroups';
 
 /**
  * Âm thanh chuông báo gọi số bệnh nhân (Web Audio API Synthesizer)
@@ -184,9 +185,8 @@ export function TechnicianQueuePage() {
         // Khởi tạo tab linh hoạt khi mới tải dữ liệu: nếu không có ca chưa đến nhưng có ca trong active queue thì mở active queue
         if (!tabInitializedRef.current && items.length > 0) {
           tabInitializedRef.current = true;
-          const isItemCheckedIn = (i) => Boolean(i?.isCheckedIn || (i?.queueNumber != null && i?.queueNumber > 0) || i?.status === 'IN_PROGRESS' || i?.status === 'COMPLETED');
-          const hasUnconfirmed = items.some((i) => !isItemCheckedIn(i));
-          const hasActive = items.some((i) => isItemCheckedIn(i));
+          const hasUnconfirmed = items.some((i) => !isServiceCheckedIn(i));
+          const hasActive = items.some((i) => isServiceCheckedIn(i));
           if (!hasUnconfirmed && hasActive) {
             setActiveTab('active_queue');
           }
@@ -275,9 +275,7 @@ export function TechnicianQueuePage() {
     const groups = new Map();
 
     for (const item of orders) {
-      const isItemCheckedIn = Boolean(
-        item.isCheckedIn || (item.queueNumber != null && item.queueNumber > 0) || item.status === 'IN_PROGRESS' || item.status === 'COMPLETED'
-      );
+      const isItemCheckedIn = isServiceCheckedIn(item);
       // Nhóm theo lượt chỉ định của bệnh nhân tại phòng
       const groupKey = item.orderId || item.patientId || item.id;
       if (!groups.has(groupKey)) {
@@ -304,33 +302,12 @@ export function TechnicianQueuePage() {
     }
 
     return Array.from(groups.values()).map((group) => {
-      const svcs = group.roomServices;
-      const anyInProgress = svcs.some((s) => s.status === 'IN_PROGRESS');
-      const allCompleted = svcs.every((s) => s.status === 'COMPLETED');
-      const allCancelled = svcs.every((s) => s.status === 'CANCELLED');
-      const anySkipped = svcs.some((s) => s.isSkipped || s.status === 'SKIPPED');
-      const anyCheckedIn = svcs.some(
-        (s) => Boolean(s.isCheckedIn) || (s.queueNumber != null && s.queueNumber > 0) || s.status === 'IN_PROGRESS' || s.status === 'COMPLETED'
-      );
-
-      let groupStatus = 'WAITING';
-      if (anyInProgress) {
-        groupStatus = 'IN_PROGRESS';
-      } else if (allCompleted) {
-        groupStatus = 'COMPLETED';
-      } else if (allCancelled) {
-        groupStatus = 'CANCELLED';
-      } else if (anySkipped) {
-        groupStatus = 'SKIPPED';
-      } else if (anyCheckedIn) {
-        groupStatus = 'WAITING';
-      }
-
+      const status = groupStatusOf(group.roomServices);
       return {
         ...group,
-        status: groupStatus,
-        isCheckedIn: anyCheckedIn,
-        isSkipped: anySkipped,
+        status,
+        isCheckedIn: group.roomServices.some(isServiceCheckedIn),
+        isSkipped: status === 'SKIPPED',
       };
     });
   }, [orders]);
@@ -466,7 +443,7 @@ export function TechnicianQueuePage() {
     e?.stopPropagation();
     try {
       setActionLoadingId(order.id);
-      await technicianApi.acceptOrder(order.id);
+      await technicianApi.acceptOrder(serviceForAction(order).id);
       toast.success(`Đã tiếp nhận bệnh nhân ${order.patientName} vào phòng máy!`);
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
@@ -485,7 +462,7 @@ export function TechnicianQueuePage() {
     e?.stopPropagation();
     try {
       setActionLoadingId(order.id);
-      await technicianApi.skipOrder(order.id);
+      await technicianApi.skipOrder(serviceForAction(order).id);
       const numStr = order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber;
       toast.info(
         `Đã chuyển bệnh nhân ${order.patientName} (Số #${numStr}) sang trạng thái bỏ qua!`
@@ -506,7 +483,7 @@ export function TechnicianQueuePage() {
     e?.stopPropagation();
     try {
       setActionLoadingId(order.id);
-      await technicianApi.unskipOrder(order.id);
+      await technicianApi.unskipOrder(serviceForAction(order).id);
       toast.success(`Đã khôi phục bệnh nhân ${order.patientName} về danh sách chờ gọi!`);
       if (selectedOrder?.id === order.id) {
         setSelectedOrder((prev) => (prev ? { ...prev, isSkipped: false, status: 'WAITING' } : null));
@@ -524,18 +501,18 @@ export function TechnicianQueuePage() {
   const handleCompleteOrder = async (order, { openResultNow = false } = {}) => {
     try {
       setActionLoadingId(order.id);
-      await technicianApi.completeOrder(order.id);
+      await technicianApi.completeOrder(serviceForAction(order).id);
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
       }
       if (openResultNow) {
-        openResult(order);
+        openResult(serviceForAction(order));
         return;
       }
       toast.success(PERFORM_MESSAGES.performed, {
         description: `BN ${order.patientName} • ${order.serviceName}`,
-        action: { label: 'Nhập kết quả', onClick: () => openResult(order) },
+        action: { label: 'Nhập kết quả', onClick: () => openResult(serviceForAction(order)) },
       });
       await loadQueue(currentRoomId, { silent: true });
     } catch (err) {
@@ -909,6 +886,7 @@ export function TechnicianQueuePage() {
                   const isWaiting = order.status === 'WAITING';
                   const isSkipped = order.isSkipped || order.status === 'SKIPPED';
                   const isInProgress = order.status === 'IN_PROGRESS';
+                  const isPendingResult = order.status === 'PENDING_RESULT';
                   const isCompleted = order.status === 'COMPLETED';
                   const isCancelled = order.status === 'CANCELLED';
                   const isRowBusy = actionLoadingId === order.id;
@@ -1048,6 +1026,12 @@ export function TechnicianQueuePage() {
                                 Đang thực hiện
                               </span>
                             )}
+                            {isPendingResult && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                                Chờ nhập kết quả
+                              </span>
+                            )}
                             {isCompleted && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -1141,6 +1125,18 @@ export function TechnicianQueuePage() {
                               >
                                 <Play className="w-3 h-3 fill-current shrink-0" />
                                 <span>Nhận lại</span>
+                              </button>
+                            )}
+
+                            {/* Đã thực hiện xong: chỉ còn nhập kết quả (UC-67) */}
+                            {isPendingResult && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openResult(serviceForAction(order)); }}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                                title="Mở phiếu nhập kết quả"
+                              >
+                                <span>Nhập KQ</span>
                               </button>
                             )}
 
