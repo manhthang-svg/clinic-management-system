@@ -9,8 +9,12 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DoctorStatisticsResponse;
+import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.PaymentStatus;
@@ -35,7 +39,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard and UC-27 View Patient Visit Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -59,6 +63,11 @@ class StatisticsServiceImplTest {
 
     record Revenue(long getPaymentCount, BigDecimal getTotalAmount, BigDecimal getInsuranceAmount,
             BigDecimal getPatientAmount) implements StatisticsRepository.RevenueTotals { }
+
+    record DoctorStatus(UUID getDoctorId, VisitStatus getStatus, long getTotal)
+            implements StatisticsRepository.DoctorStatusCount { }
+
+    record DoctorPatients(UUID getDoctorId, long getTotal) implements StatisticsRepository.DoctorPatientCount { }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -258,6 +267,71 @@ class StatisticsServiceImplTest {
         assertThatThrownBy(() -> service.getVisitStatistics(
                 LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2), StatisticsGroupBy.MONTH))
                 .isInstanceOf(AppException.class);
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-28 View Doctor Statistics ----
+
+    private static StaffAccount doctor(UUID id, String title, String name, AccountStatus status) {
+        StaffAccount account = org.mockito.Mockito.mock(StaffAccount.class);
+        lenient().when(account.getId()).thenReturn(id);
+        lenient().when(account.getAcademicTitle()).thenReturn(title);
+        lenient().when(account.getFullName()).thenReturn(name);
+        lenient().when(account.getStatus()).thenReturn(status);
+        return account;
+    }
+
+    @Test
+    void doctorStatisticsCountEachDoctorsVisitsByOutcomeAndPatients() {
+        UUID anId = UUID.randomUUID();
+        UUID binhId = UUID.randomUUID();
+        UUID idleId = UUID.randomUUID();
+        StaffAccount an = doctor(anId, "BSCKII", "Trần Văn An", AccountStatus.ACTIVE);
+        StaffAccount binh = doctor(binhId, null, "Lê Thị Bình", AccountStatus.ACTIVE);
+        StaffAccount idle = doctor(idleId, "ThS", "Phạm Minh Châu", AccountStatus.ACTIVE);
+        when(repository.countVisitsByDoctorAndStatus(any(), any())).thenReturn(List.of(
+                new DoctorStatus(anId, VisitStatus.COMPLETED, 7),
+                new DoctorStatus(anId, VisitStatus.WAITING_CONCLUSION, 2),
+                new DoctorStatus(anId, VisitStatus.IN_EXAMINATION, 1),
+                new DoctorStatus(anId, VisitStatus.ABANDONED, 1),
+                new DoctorStatus(binhId, VisitStatus.COMPLETED, 4)));
+        when(repository.countPatientsByDoctor(any(), any())).thenReturn(List.of(
+                new DoctorPatients(anId, 10), new DoctorPatients(binhId, 4)));
+        when(repository.countVisitsWithoutDoctor(any(), any())).thenReturn(3L);
+        when(repository.doctorsOrAccounts(any())).thenReturn(List.of(idle, binh, an));
+
+        DoctorStatisticsResponse result = service.getDoctorStatistics(null, null);
+
+        assertThat(result.from()).isEqualTo(LocalDate.of(2026, 11, 1));
+        assertThat(result.examinedVisits()).isEqualTo(15);
+        assertThat(result.visitsWithoutDoctor()).isEqualTo(3);
+        assertThat(result.doctors()).containsExactly(
+                new DoctorRow(anId, "BSCKII Trần Văn An", true, 11, 10, 7, 3, 1, 0),
+                new DoctorRow(binhId, "Lê Thị Bình", true, 4, 4, 4, 0, 0, 0),
+                new DoctorRow(idleId, "ThS Phạm Minh Châu", true, 0, 0, 0, 0, 0, 0));
+    }
+
+    @Test
+    void doctorStatisticsKeepAnInactiveDoctorOnlyWhenTheyExaminedPatients() {
+        UUID leftId = UUID.randomUUID();
+        StaffAccount left = doctor(leftId, null, "Đỗ Văn Dũng", AccountStatus.LOCKED);
+        StaffAccount gone = doctor(UUID.randomUUID(), null, "Hồ Thị Em", AccountStatus.LOCKED);
+        when(repository.countVisitsByDoctorAndStatus(any(), any())).thenReturn(List.of(
+                new DoctorStatus(leftId, VisitStatus.COMPLETED, 2)));
+        when(repository.countPatientsByDoctor(any(), any())).thenReturn(List.of(new DoctorPatients(leftId, 2)));
+        when(repository.doctorsOrAccounts(any())).thenReturn(List.of(left, gone));
+
+        DoctorStatisticsResponse result = service.getDoctorStatistics(null, null);
+
+        assertThat(result.doctors()).extracting(DoctorRow::doctorName).containsExactly("Đỗ Văn Dũng");
+        assertThat(result.doctors().get(0).active()).isFalse();
+    }
+
+    @Test
+    void doctorStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getDoctorStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
         verifyNoInteractions(repository);
     }
 }

@@ -6,12 +6,14 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse.DailyVisits;
@@ -19,9 +21,13 @@ import clinic.backend.dto.response.DashboardStatisticsResponse.DiagnosisCount;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RevenueSummary;
 import clinic.backend.dto.response.DashboardStatisticsResponse.RoomVisits;
 import clinic.backend.dto.response.DashboardStatisticsResponse.VisitSummary;
+import clinic.backend.dto.response.DoctorStatisticsResponse;
+import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
+import clinic.backend.entity.StaffAccount;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -108,6 +114,56 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<VisitPeriod> series = new ArrayList<>(byPeriod.size());
         byPeriod.forEach((period, counter) -> series.add(new VisitPeriod(period, counter.toCounts())));
         return new VisitStatisticsResponse(start, end, bucket, summary.toCounts(), series);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DoctorStatisticsResponse getDoctorStatistics(LocalDate from, LocalDate to) {
+        LocalDate start = resolveFrom(from);
+        LocalDate end = resolveTo(to);
+        validatePeriod(start, end);
+
+        Map<UUID, long[]> byDoctor = new HashMap<>(); // completed, inProgress, abandoned, cancelled
+        for (StatisticsRepository.DoctorStatusCount row
+                : statisticsRepository.countVisitsByDoctorAndStatus(start, end)) {
+            long[] counts = byDoctor.computeIfAbsent(row.getDoctorId(), id -> new long[4]);
+            int slot = switch (row.getStatus()) {
+                case COMPLETED -> 0;
+                case ABANDONED -> 2;
+                case CANCELLED -> 3;
+                default -> 1;
+            };
+            counts[slot] += row.getTotal();
+        }
+        Map<UUID, Long> patients = new HashMap<>();
+        statisticsRepository.countPatientsByDoctor(start, end)
+                .forEach(row -> patients.put(row.getDoctorId(), row.getTotal()));
+
+        // An empty IN list is avoided: a random id matches no account.
+        Set<UUID> examiners = byDoctor.isEmpty() ? Set.of(UUID.randomUUID()) : byDoctor.keySet();
+        List<DoctorRow> rows = new ArrayList<>();
+        for (StaffAccount account : statisticsRepository.doctorsOrAccounts(examiners)) {
+            long[] counts = byDoctor.getOrDefault(account.getId(), new long[4]);
+            boolean active = account.getStatus() == AccountStatus.ACTIVE;
+            long visits = counts[0] + counts[1] + counts[2] + counts[3];
+            if (!active && visits == 0) {
+                continue; // a locked or deactivated Doctor without visits in the period is not listed
+            }
+            rows.add(new DoctorRow(account.getId(), displayName(account), active, visits,
+                    patients.getOrDefault(account.getId(), 0L), counts[0], counts[1], counts[2], counts[3]));
+        }
+        rows.sort(Comparator.comparingLong(DoctorRow::visits).reversed()
+                .thenComparing(DoctorRow::doctorName, Comparator.nullsLast(Comparator.naturalOrder())));
+
+        long examined = rows.stream().mapToLong(DoctorRow::visits).sum();
+        return new DoctorStatisticsResponse(
+                start, end, examined, statisticsRepository.countVisitsWithoutDoctor(start, end), rows);
+    }
+
+    /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */
+    private static String displayName(StaffAccount account) {
+        String title = account.getAcademicTitle();
+        return title == null || title.isBlank() ? account.getFullName() : title.strip() + " " + account.getFullName();
     }
 
     private LocalDate resolveFrom(LocalDate from) {
