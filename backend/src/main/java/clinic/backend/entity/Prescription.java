@@ -104,4 +104,38 @@ public class Prescription extends VersionedEntity {
     public List<PrescriptionDiagnosis> getDiagnoses() {
         return Collections.unmodifiableList(diagnoses);
     }
+
+    /** UC-59: a new ordinary prescription (type c) of the visit record; its codes never change (BR-52). */
+    public Prescription(UUID id, Instant createdAt, String sophieu, String madonthuoc, UUID medicalRecordId) {
+        super(id, createdAt);
+        this.sophieu = sophieu;
+        this.madonthuoc = madonthuoc;
+        this.loaidon = "c";
+        this.medicalRecordId = medicalRecordId;
+        this.lienthongStatus = PrescriptionLienthongStatus.PENDING;
+    }
+
+    /** UC-59 step 6: the prescription as the Doctor saved it (header fields). */
+    public void record(
+            UUID doctorAccountId, String chandoansobo, short doituongbn, String luuY, String loiDan, Instant now) {
+        this.doctorAccountId = doctorAccountId;
+        this.chandoansobo = chandoansobo;
+        this.doituongbn = doituongbn;
+        this.luuY = luuY;
+        this.loiDan = loiDan;
+        this.prescribedAt = now;
+        touch(now);
+    }
+
+    /** Replaces the medicine lines, in the order given. */
+    public void replaceDetails(List<PrescriptionDetail> values) {
+        details.clear();
+        details.addAll(values);
+    }
+
+    /** BR-47: once sent to the national prescription system the prescription is not edited here. */
+    public boolean isSent() {
+        return lienthongStatus == PrescriptionLienthongStatus.SENT
+                || lienthongStatus == PrescriptionLienthongStatus.ACCEPTED;
+    }
 }

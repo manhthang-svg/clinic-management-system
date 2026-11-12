@@ -90,10 +90,12 @@ class ConclusionServiceImplTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZONE);
-        service = new ConclusionServiceImpl(
+        ConcludingVisitGuard guard = new ConcludingVisitGuard(
                 visitRepository, patientRepository, roomRepository, staffAccountRepository, assignmentRepository,
                 dutyScheduleRepository, new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
-                medicalRecordRepository, examinationRepository, conclusionRepository, prescriptionRepository,
+                medicalRecordRepository, clock);
+        service = new ConclusionServiceImpl(
+                guard, staffAccountRepository, examinationRepository, conclusionRepository, prescriptionRepository,
                 icd10Repository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 

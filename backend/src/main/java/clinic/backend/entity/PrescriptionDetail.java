@@ -111,4 +111,35 @@ public class PrescriptionDetail extends CreatedOnlyEntity {
     /** CV 365 IV.2.6.12. */
     @Column(name = "ylenhthuocvattu_ghichu")
     private String ylenhthuocvattuGhichu;
+
+    /** UC-59: one medicine line; the catalog fields are copied so later catalog changes do not alter it. */
+    public PrescriptionDetail(
+            UUID id, java.time.Instant createdAt, Prescription prescription, String machidinh, MedicineCatalog medicine,
+            BigDecimal quantity, String dosePerTime, short timesPerDay, short days, String usage, String note,
+            LocalDate prescribedOn) {
+        super(id, createdAt);
+        this.prescription = prescription;
+        this.machidinh = machidinh;
+        this.medicineId = medicine.getId();
+        this.tenthuocvattu = medicine.getTenthuocvattu();
+        this.mathuocvattuBv = medicine.getMathuocvattuBv();
+        this.mathuocvattuByt = medicine.getMathuocvattuByt();
+        this.soDangKy = medicine.getSoDangKy();
+        this.hoatchat = medicine.getHoatchat();
+        this.hamluong = medicine.getHamluong();
+        this.duongdung = medicine.getDuongdung();
+        this.nhomKiemSoat = medicine.getNhomKiemSoat();
+        this.donvitinh = medicine.getDonvitinh();
+        this.nhom = medicine.getNhom();
+        this.loaithuoc = medicine.getLoaithuoc();
+        this.soluongthuocvattu = quantity;
+        this.lieuMoiLan = dosePerTime;
+        this.soLanNgay = timesPerDay;
+        this.soNgayDung = days;
+        this.cachdung = usage;
+        this.ylenhthuocvattuGhichu = note;
+        this.ngaykedonthuoc = prescribedOn;
+        // An outpatient prescription exports day number 1 (see the column comment in V8).
+        this.sothutungaydungthuoc = 1;
+    }
 }
