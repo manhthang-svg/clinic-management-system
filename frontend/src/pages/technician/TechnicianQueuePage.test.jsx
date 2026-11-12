@@ -193,7 +193,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     // In Tab 2, Lê Văn Dũng displays STT #05
     const rowTab2 = await rowOf('Lê Văn Dũng');
     expect(within(rowTab2).getByText('#05')).toBeInTheDocument();
-    expect(within(rowTab2).getByRole('button', { name: 'Gọi số' })).toBeInTheDocument();
+    expect(within(rowTab2).queryByRole('button', { name: 'Gọi số' })).not.toBeInTheDocument();
     expect(within(rowTab2).getByRole('button', { name: 'Tiếp nhận' })).toBeInTheDocument();
   });
 
