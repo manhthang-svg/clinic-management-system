@@ -35,6 +35,15 @@ createRoot(rootElement).render(
             padding: '14px 16px',
             fontSize: '13px',
           },
+          actionButtonStyle: {
+            backgroundColor: '#0d9488',
+            color: '#ffffff',
+            borderRadius: '0.625rem',
+            fontWeight: '700',
+            fontSize: '12px',
+            padding: '6px 12px',
+            boxShadow: '0 1px 2px rgba(13, 148, 136, 0.2)',
+          },
         }}
       />
     </ErrorBoundary>
