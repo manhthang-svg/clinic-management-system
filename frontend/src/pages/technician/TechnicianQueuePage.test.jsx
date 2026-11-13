@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -67,19 +67,25 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     await user.click(within(await rowOf('Nguyễn Văn Bình')).getByRole('button', { name: 'Đã thực hiện' }));
 
     expect(technicianApi.completeOrder).toHaveBeenCalledWith('detail-1');
-    expect(toast.success).toHaveBeenCalledWith(PERFORM_MESSAGES.performed, expect.objectContaining({
-      action: expect.objectContaining({ label: 'Nhập kết quả' }),
-    }));
+    expect(toast.success).toHaveBeenCalledWith(
+      expect.stringContaining('Đã hoàn tất thực hiện kỹ thuật cho bệnh nhân Nguyễn Văn Bình'),
+      expect.objectContaining({
+        action: expect.objectContaining({ label: 'Nhập KQ ngay' }),
+      })
+    );
   });
 
-  it('opens the result form right away when the result can be entered now', async () => {
-    const user = userEvent.setup();
+  it('does not display patients who are already performed (PENDING_RESULT or COMPLETED) in active queue Tab 2', async () => {
+    const pendingResultPatient = { ...inProgress, id: 'detail-2', status: 'PENDING_RESULT' };
+    technicianApi.getQueue.mockResolvedValue({
+      items: [pendingResultPatient], stats: { total: 1, waiting: 0, priority: 0, skipped: 0 }, canManage: true,
+    });
     renderPage();
 
-    await user.click(within(await rowOf('Nguyễn Văn Bình')).getByRole('button', { name: 'Nhập KQ' }));
-
-    expect(await screen.findByText('Màn nhập kết quả')).toBeInTheDocument();
-    expect(technicianApi.completeOrder).toHaveBeenCalledWith('detail-1');
+    await waitFor(() => {
+      expect(screen.getByText('Hàng đợi vào phòng hiện đang trống.')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Nguyễn Văn Bình')).not.toBeInTheDocument();
   });
 
   it('returns the service to the waiting list with a reason', async () => {
@@ -96,7 +102,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Trả về hàng chờ' }));
 
     expect(technicianApi.returnToWaiting).toHaveBeenCalledWith('detail-1', 'Máy siêu âm mất nguồn');
-    expect(toast.info).toHaveBeenCalledWith(PERFORM_MESSAGES.returned);
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining('Nguyễn Văn Bình'));
     expect(screen.queryByRole('dialog', { name: 'Trả chỉ định về hàng chờ' })).not.toBeInTheDocument();
   });
 
@@ -287,7 +293,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(within(rows[1]).getByText('Mai Thanh Hoàng')).toBeInTheDocument();
   });
 
-  it('keeps a patient whose services were all performed out of "Tiếp nhận" and offers to enter the result', async () => {
+  it('keeps a patient whose services were all performed out of Tab 2 active queue', async () => {
     const performed = (id, serviceName) => ({
       ...inProgress, id, serviceName, status: 'PENDING_RESULT', queueNumber: 1, orderCode: 'CD0000000067',
     });
@@ -300,16 +306,12 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
       stats: { total: 3, waiting: 0, priority: 0, skipped: 0 },
       canManage: true,
     });
-    const user = userEvent.setup();
     renderPage();
 
-    const row = await rowOf('Nguyễn Văn Bình');
-    expect(within(row).getByText('Chờ nhập kết quả')).toBeInTheDocument();
-    expect(within(row).queryByRole('button', { name: /Tiếp nhận/ })).not.toBeInTheDocument();
-    expect(within(row).queryByText('Đang chờ gọi')).not.toBeInTheDocument();
-
-    await user.click(within(row).getByRole('button', { name: 'Nhập KQ' }));
-    expect(await screen.findByText('Màn nhập kết quả')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Hàng đợi vào phòng hiện đang trống.')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Nguyễn Văn Bình')).not.toBeInTheDocument();
   });
 
   it('accepts the waiting service of a row even when another service of the row was performed', async () => {
@@ -329,5 +331,200 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     await user.click(within(row).getByRole('button', { name: /Tiếp nhận/ }));
 
     expect(technicianApi.acceptOrder).toHaveBeenCalledWith('detail-next');
+    expect(technicianApi.completeOrder).toHaveBeenCalledWith('detail-next');
+  });
+
+  describe('Tab 3: Đã bỏ qua (Skipped Patients) & UC-46 Tiếp nhận lại', () => {
+    const skipped1 = {
+      ...inProgress,
+      id: 'detail-skip-1',
+      orderId: 'order-skip-1',
+      patientId: 'BN-1062602',
+      patientName: 'Nguyễn Văn An',
+      insuranceType: 'BHYT',
+      insuranceNumber: 'DN47900000001',
+      queueNumber: 3,
+      status: 'SKIPPED',
+      isSkipped: true,
+      skippedAtTime: '08:15',
+      skippedAt: '2026-11-13T08:15:00Z',
+    };
+
+    const skipped2 = {
+      ...inProgress,
+      id: 'detail-skip-2',
+      orderId: 'order-skip-2',
+      patientId: 'BN-2088899',
+      patientName: 'Trần Thị Bích',
+      insuranceType: 'SERVICE',
+      insuranceNumber: null,
+      queueNumber: 5,
+      status: 'PENDING_RESULT',
+      isSkipped: true,
+      skippedAtTime: '09:30',
+      skippedAt: '2026-11-13T09:30:00Z',
+    };
+
+    it('renders skipped patients sorted by skip timestamp ascending (oldest first)', async () => {
+      // Backend returns skipped2 first, but skipped1 is older (08:15 vs 09:30)
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped2, skipped1],
+        stats: { total: 2, waiting: 0, priority: 0, skipped: 2 },
+        canManage: true,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      // Click Tab 3: Đã bỏ qua
+      const skippedTab = await screen.findByRole('button', { name: /Đã bỏ qua/ });
+      await user.click(skippedTab);
+
+      await screen.findByText('Nguyễn Văn An');
+      const rows = screen.getAllByRole('row').slice(1);
+      expect(within(rows[0]).getByText('Nguyễn Văn An')).toBeInTheDocument();
+      expect(within(rows[0]).getByText(/08:15/)).toBeInTheDocument();
+      expect(within(rows[1]).getByText('Trần Thị Bích')).toBeInTheDocument();
+      expect(within(rows[1]).getByText(/09:30/)).toBeInTheDocument();
+    });
+
+    it('searches skipped patients by name without diacritics and by health insurance number', async () => {
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped1, skipped2],
+        stats: { total: 2, waiting: 0, priority: 0, skipped: 2 },
+        canManage: true,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Đã bỏ qua/ }));
+      await screen.findByText('Nguyễn Văn An');
+
+      const searchInput = screen.getByPlaceholderText(/Tìm theo Tên bệnh nhân/);
+
+      // Search "nguyen van an" (no diacritics)
+      await user.clear(searchInput);
+      await user.type(searchInput, 'nguyen van an');
+      expect(screen.getByText('Nguyễn Văn An')).toBeInTheDocument();
+      expect(screen.queryByText('Trần Thị Bích')).not.toBeInTheDocument();
+
+      // Search by insurance number
+      await user.clear(searchInput);
+      await user.type(searchInput, 'DN47900000001');
+      expect(screen.getByText('Nguyễn Văn An')).toBeInTheDocument();
+      expect(screen.queryByText('Trần Thị Bích')).not.toBeInTheDocument();
+    });
+
+    it('filters by exam type (BHYT / Dịch vụ) and resets correctly', async () => {
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped1, skipped2],
+        stats: { total: 2, waiting: 0, priority: 0, skipped: 2 },
+        canManage: true,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Đã bỏ qua/ }));
+      await screen.findByText('Nguyễn Văn An');
+
+      // Filter by exam type: Dịch vụ
+      const insuranceSelect = screen.getByDisplayValue('Tất cả loại khám');
+      await user.selectOptions(insuranceSelect, 'SERVICE');
+      expect(screen.queryByText('Nguyễn Văn An')).not.toBeInTheDocument();
+      expect(screen.getByText('Trần Thị Bích')).toBeInTheDocument();
+
+      // Click "Xóa bộ lọc"
+      const resetBtn = screen.getByRole('button', { name: 'Xóa bộ lọc' });
+      await user.click(resetBtn);
+      expect(screen.getByText('Nguyễn Văn An')).toBeInTheDocument();
+      expect(screen.getByText('Trần Thị Bích')).toBeInTheDocument();
+    });
+
+    it('displays MSG92 when no one is skipped, and MSG01 when search has no results', async () => {
+      // 1. No one skipped in room
+      technicianApi.getQueue.mockResolvedValue({
+        items: [],
+        stats: { total: 0, waiting: 0, priority: 0, skipped: 0 },
+        canManage: true,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Đã bỏ qua/ }));
+      expect(await screen.findByText('Chưa có dữ liệu để hiển thị.')).toBeInTheDocument();
+
+      // 2. Someone skipped but search doesn't match
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped1],
+        stats: { total: 1, waiting: 0, priority: 0, skipped: 1 },
+        canManage: true,
+      });
+      // Switch back and forth to re-fetch
+      await user.click(screen.getByRole('button', { name: /Hàng đợi vào phòng/ }));
+      await user.click(screen.getByRole('button', { name: /Đã bỏ qua/ }));
+
+      await screen.findByText('Nguyễn Văn An');
+      const searchInput = screen.getByPlaceholderText(/Tìm theo Tên bệnh nhân/);
+      await user.type(searchInput, 'Không tồn tại 9999');
+      expect(await screen.findByText('Không tìm thấy kết quả.')).toBeInTheDocument();
+    });
+
+    it('disables "Tiếp nhận lại" button with MSG48 when canManage is false', async () => {
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped1],
+        stats: { total: 1, waiting: 0, priority: 0, skipped: 1 },
+        canManage: false,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Đã bỏ qua/ }));
+      await screen.findByText('Nguyễn Văn An');
+
+      const reacceptBtn = screen.getByRole('button', { name: 'Tiếp nhận lại' });
+      expect(reacceptBtn).toBeDisabled();
+      expect(reacceptBtn).toHaveAttribute('title', 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.');
+    });
+
+    it('opens ReacceptSkippedModal (UC-46) and restores patient upon confirmation', async () => {
+      technicianApi.getQueue.mockResolvedValue({
+        items: [skipped1],
+        stats: { total: 1, waiting: 0, priority: 0, skipped: 1 },
+        canManage: true,
+      });
+      technicianApi.unskipOrder.mockResolvedValue({});
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Đã bỏ qua/ }));
+      await screen.findByText('Nguyễn Văn An');
+
+      // Click "Tiếp nhận lại"
+      await user.click(screen.getByRole('button', { name: 'Tiếp nhận lại' }));
+
+      // Modal appears
+      const modal = await screen.findByRole('dialog', { name: /Tiếp nhận lại bệnh nhân/ });
+      expect(modal).toBeInTheDocument();
+      expect(within(modal).getByText('Nguyễn Văn An')).toBeInTheDocument();
+      expect(within(modal).getByText('#03')).toBeInTheDocument();
+      expect(within(modal).getByText(/Chờ thực hiện cận lâm sàng/)).toBeInTheDocument();
+
+      // Type note and confirm
+      const noteInput = within(modal).getByLabelText(/Ghi chú tiếp nhận lại/);
+      await user.type(noteInput, 'BN đã quay lại');
+
+      await user.click(within(modal).getByRole('button', { name: /Xác nhận tiếp nhận lại/ }));
+
+      expect(technicianApi.unskipOrder).toHaveBeenCalledWith('detail-skip-1');
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringContaining('Đã tiếp nhận lại bệnh nhân Nguyễn Văn An (Số #03) vào hàng đợi! Ghi chú: BN đã quay lại'),
+        expect.any(Object)
+      );
+    });
   });
 });

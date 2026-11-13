@@ -1036,7 +1036,9 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 detail.getCancelReason(),
                 allOrdersToday,
                 detail.isCheckedIn(),
-                detail.getCheckedInAt() != null ? TIME_FORMATTER.format(detail.getCheckedInAt()) : null
+                detail.getCheckedInAt() != null ? TIME_FORMATTER.format(detail.getCheckedInAt()) : null,
+                detail.getSkippedAt() != null ? TIME_FORMATTER.format(detail.getSkippedAt()) : null,
+                detail.getSkippedAt()
         );
     }
 
