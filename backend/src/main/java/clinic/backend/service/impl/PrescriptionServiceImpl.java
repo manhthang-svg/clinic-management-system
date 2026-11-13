@@ -31,6 +31,7 @@ import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
+import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.VitalSign;
 import clinic.backend.enums.ActivationStatus;
@@ -39,6 +40,9 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.MedicineControlGroup;
+import clinic.backend.enums.RecordSignatureDocumentType;
+import clinic.backend.enums.SigningCertificateStatus;
+import clinic.backend.enums.SigningRequestStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.ConclusionRepository;
@@ -47,13 +51,20 @@ import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
+import clinic.backend.repository.PrescriptionSubmissionRepository;
+import clinic.backend.repository.RecordSignatureRepository;
+import clinic.backend.repository.SigningRequestRepository;
+import clinic.backend.repository.StaffSigningCertificateRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PrescriptionService;
+import clinic.backend.service.RemoteSigningGateway;
 import clinic.backend.service.impl.ConcludingVisitGuard.Context;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
@@ -76,6 +87,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String AUDIT_ENTITY = "prescriptions";
     private static final String CODE_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz";
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     // BR-107 / I1-D45 and the column sizes of V55.
     static final int MAX_LINES = 50; // ASSUMPTION: no documented limit; guards against runaway requests.
@@ -102,6 +114,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final VitalSignRepository vitalSignRepository;
     private final FollowUpAppointmentRepository followUpRepository;
     private final AuditLogService auditLogService;
+    private final StaffSigningCertificateRepository signingCertificateRepository;
+    private final SigningRequestRepository signingRequestRepository;
+    private final PrescriptionSubmissionRepository submissionRepository;
+    private final RecordSignatureRepository recordSignatureRepository;
+    private final RemoteSigningGateway signingGateway;
     private final UuidV7Generator ids;
     private final Clock clock;
 
@@ -157,6 +174,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
 
         Instant now = clock.instant();
+        if (prescription != null) {
+            cancelPendingSignature(prescription, now);
+        }
         Map<String, Object> oldValues = prescription == null ? Map.of() : auditValues(prescription);
         if (prescription == null) {
             prescription = new Prescription(
@@ -254,7 +274,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * EF-07 (BR-48, BR-49, BR-65): the Doctor's prescriber link code and the facility's code and prescription link
      * code are needed before a prescription is saved.
      */
-    private ClinicFacility requireLinkCodes(Context context) {
+    public ClinicFacility requireLinkCodes(Context context) {
         if (normalize(context.doctor().getMaLienthongBacsi()) == null) {
             throw new AppException(ErrorCode.PRESCRIBER_LINK_CODE_REQUIRED);
         }
@@ -323,7 +343,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /** TT 26/2025: more than 30 days needs a main or secondary diagnosis of the long-term list. */
-    private boolean longTermAllowed(Conclusion conclusion) {
+    public boolean longTermAllowed(Conclusion conclusion) {
         if (conclusion == null) {
             return false;
         }
@@ -358,6 +378,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             }
         }
         throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
+    }
+
+    /** The prescription form after a change made by UC-90 (no VIEW_RECORD audit row). */
+    public PrescriptionResponse describe(Context context, Prescription prescription) {
+        Conclusion conclusion = conclusionRepository.findByMedicalRecordId(context.record().getId()).orElse(null);
+        return toResponse(context, conclusion, prescription);
     }
 
     private PrescriptionResponse toResponse(Context context, Conclusion conclusion, Prescription prescription) {
@@ -406,7 +432,59 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 normalize(context.doctor().getMaLienthongBacsi()) == null,
                 facilityLinkCodeMissing,
                 followUpDate,
-                childData(context, prescription));
+                childData(context, prescription),
+                prescription == null ? null : prescription.getLienthongStatus().name(),
+                signingCertificateRepository.findByStaffAccountIdAndStatus(
+                        context.doctor().getId(), SigningCertificateStatus.ACTIVE).isPresent(),
+                prescription == null ? null : lastSubmission(prescription));
+    }
+
+    /** UC-91: the latest send, with the signature sent with it. */
+    private PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
+        return submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId())
+                .map(submission -> {
+                    RecordSignature signature = recordSignatureRepository
+                            .findFirstByDocumentTypeAndDocumentIdOrderByCreatedAtDesc(
+                                    RecordSignatureDocumentType.DON_THUOC, prescription.getId())
+                            .orElse(null);
+                    return new PrescriptionResponse.Submission(
+                            submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
+                            submission.getSubmittedAt(), submission.getRespondedAt(),
+                            signature == null ? null : signature.getSignedAt(),
+                            signature == null ? null : signature.getSignerName(),
+                            signature == null ? null : signature.getCertificateSerial(),
+                            signature == null ? null : signature.getCertificateIssuer());
+                })
+                .orElse(null);
+    }
+
+    private List<String> errors(String json) {
+        if (json == null) {
+            return List.of();
+        }
+        try {
+            return List.of(JSON.readValue(json, String[].class));
+        } catch (JsonProcessingException exception) {
+            return List.of(json);
+        }
+    }
+
+    /**
+     * K06: a save creates a new version, so a pending signing request of the old version is cancelled. Withdrawing
+     * it at the CA is best effort; the local state is authoritative.
+     */
+    private void cancelPendingSignature(Prescription prescription, Instant now) {
+        signingRequestRepository.findByDocumentTypeAndDocumentIdAndStatus(
+                        RecordSignatureDocumentType.DON_THUOC, prescription.getId(), SigningRequestStatus.PENDING)
+                .ifPresent(pending -> {
+                    try {
+                        signingGateway.cancel(pending.getProviderTransactionId());
+                    } catch (AppException exception) {
+                        // The CA lets an unanswered request expire.
+                    }
+                    pending.markCancelled(now);
+                    signingRequestRepository.save(pending);
+                });
     }
 
     /**
@@ -414,7 +492,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * months, the latest weight of this visit and the relative as the accompanying person; null otherwise. Missing
      * values stay null; sending (UC-90) requires them.
      */
-    private PrescriptionResponse.Child childData(Context context, Prescription prescription) {
+    public PrescriptionResponse.Child childData(Context context, Prescription prescription) {
         LocalDate birthDate = context.patient().getNgaysinh();
         LocalDate prescribedOn = LocalDate.ofInstant(
                 prescription == null ? clock.instant() : prescription.getPrescribedAt(), CLINIC_ZONE);

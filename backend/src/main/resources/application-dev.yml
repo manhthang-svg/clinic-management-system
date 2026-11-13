@@ -4,3 +4,12 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+
+# Simulated digital signing (UC-90): the simulated CA app at http://localhost:8080/dev/ca-sim/ and the simulated
+# CA certificate as the only trusted CA. The keystore holds test keys only; it is created on first use.
+clinic:
+  signing:
+    trusted-ca-files: ${SIGNING_TRUSTED_CA_FILES:.signing-simulator/trusted-ca.pem}
+  signing-simulator:
+    keystore-password: ${SIGNING_SIMULATOR_KEYSTORE_PASSWORD:dev-simulator-only}
+    console-enabled: true

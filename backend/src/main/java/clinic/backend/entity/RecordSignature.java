@@ -80,6 +80,83 @@ public class RecordSignature extends CreatedOnlyEntity {
     @Column(name = "signed_at", nullable = false, updatable = false)
     private Instant signedAt;
 
+    @Getter(AccessLevel.NONE)
     @Column(name = "timestamp_token", updatable = false)
     private byte[] timestampToken;
+
+    /** The CMS SignedData (DER), detached from the payload. */
+    @Getter(AccessLevel.NONE)
+    @Column(name = "signature_value", updatable = false)
+    private byte[] signatureValue;
+
+    /** The exact bytes that were signed. */
+    @Getter(AccessLevel.NONE)
+    @Column(name = "signed_payload", updatable = false)
+    private byte[] signedPayload;
+
+    /** The signer's certification path up to the trusted CA (PkiPath encoding). */
+    @Getter(AccessLevel.NONE)
+    @Column(name = "certificate_chain", updatable = false)
+    private byte[] certificateChain;
+
+    /** Certificate status answers at the signing time, as JSON. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "verification_evidence", updatable = false)
+    private String verificationEvidence;
+
+    @Column(name = "signing_request_id", updatable = false)
+    private UUID signingRequestId;
+
+    /**
+     * BR-59-10 step 7: a verified digital signature of a staff member, kept with the signed message so it can be
+     * verified again later (Luật GDĐT 2023 Điều 10, 13).
+     */
+    public static RecordSignature staffDigitalSignature(
+            UUID id, Instant now, UUID medicalRecordId, RecordSignatureDocumentType documentType, UUID documentId,
+            long documentVersion, String documentSha256, UUID signerAccountId, String signerName,
+            String certificateSerial, String certificateIssuer, String signatureFormat, Instant signedAt,
+            byte[] timestampToken, byte[] signatureValue, byte[] signedPayload, byte[] certificateChain,
+            String verificationEvidence, UUID signingRequestId) {
+        RecordSignature signature = new RecordSignature(id, now);
+        signature.medicalRecordId = medicalRecordId;
+        signature.documentType = documentType;
+        signature.documentId = documentId;
+        signature.documentVersion = documentVersion;
+        signature.documentSha256 = documentSha256;
+        signature.signerType = RecordSignatureSignerType.STAFF;
+        signature.signerAccountId = signerAccountId;
+        signature.signerName = signerName;
+        signature.signatureMethod = RecordSignatureMethod.DIGITAL_SIGNATURE;
+        signature.certificateSerial = certificateSerial;
+        signature.certificateIssuer = certificateIssuer;
+        signature.signatureFormat = signatureFormat;
+        signature.signedAt = signedAt;
+        signature.timestampToken = timestampToken == null ? null : timestampToken.clone();
+        signature.signatureValue = signatureValue.clone();
+        signature.signedPayload = signedPayload.clone();
+        signature.certificateChain = certificateChain.clone();
+        signature.verificationEvidence = verificationEvidence;
+        signature.signingRequestId = signingRequestId;
+        return signature;
+    }
+
+    private RecordSignature(UUID id, Instant createdAt) {
+        super(id, createdAt);
+    }
+
+    public byte[] getTimestampToken() {
+        return timestampToken == null ? null : timestampToken.clone();
+    }
+
+    public byte[] getSignatureValue() {
+        return signatureValue == null ? null : signatureValue.clone();
+    }
+
+    public byte[] getSignedPayload() {
+        return signedPayload == null ? null : signedPayload.clone();
+    }
+
+    public byte[] getCertificateChain() {
+        return certificateChain == null ? null : certificateChain.clone();
+    }
 }

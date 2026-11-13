@@ -51,4 +51,21 @@ public class PrescriptionSubmission extends CreatedOnlyEntity {
     /** Null when the system did not answer. */
     @Column(name = "responded_at", updatable = false)
     private Instant respondedAt;
+
+    /**
+     * UC-90 steps 5-7: one signed send and its answer; {@code errors} is the JSON array of a rejection,
+     * {@code respondedAt} is null when the system did not answer.
+     */
+    public PrescriptionSubmission(
+            UUID id, Instant createdAt, UUID prescriptionId, short attemptNo, UUID submittedByAccountId,
+            Instant submittedAt, PrescriptionSubmissionResult result, String errors, Instant respondedAt) {
+        super(id, createdAt);
+        this.prescriptionId = prescriptionId;
+        this.attemptNo = attemptNo;
+        this.submittedByAccountId = submittedByAccountId;
+        this.submittedAt = submittedAt;
+        this.result = result;
+        this.errors = errors;
+        this.respondedAt = respondedAt;
+    }
 }
