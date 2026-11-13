@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, LoaderCircle, Lock, Pill, Save, Search, Trash2 } from 'lucide-react';
+import {
+    AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, FileSignature, LoaderCircle, Lock, Pill, RotateCcw, Save, Search, Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
@@ -7,6 +9,8 @@ import {
     LIMITS, MSG, formFromResponse, newLine, prescriptionError, samePrescription, suggestedQuantity, toPayload,
     validatePrescription,
 } from './prescriptionForm';
+import { PrescriptionSigningDialog } from './PrescriptionSigningDialog';
+import { SIGNING_MSG } from './prescriptionSigning';
 
 const inputClass = 'w-full rounded-lg border bg-white px-2.5 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
 
@@ -261,7 +265,48 @@ function moved(lines, from, to) {
     return next;
 }
 
-/** UC-59 Prescribe Medication: one ordinary prescription per visit; the record stays open after saving. */
+/** UC-91: the latest send and its answer; the signature of an accepted send (BR-59-16). */
+function SubmissionResult({ data, onResend }) {
+    const submission = data?.lastSubmission;
+    if (!submission) return null;
+    if (submission.result === 'ACCEPTED') {
+        return (
+            <section role="status" aria-label="Kết quả gửi đơn thuốc" className="space-y-1 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <p className="font-semibold">{SIGNING_MSG.ACCEPTED(data.prescriptionCode)}</p>
+                {submission.signedAt && (
+                    <p className="flex flex-wrap items-center gap-1 text-xs">
+                        <BadgeCheck aria-hidden="true" className="h-4 w-4" />
+                        <span className="font-semibold">{SIGNING_MSG.SIGNATURE_VALID}</span>
+                        <span>· {submission.signerName} · ký lúc {formatDateTime(submission.signedAt)} · chứng thư {submission.certificateSerial} ({submission.certificateIssuer})</span>
+                    </p>
+                )}
+            </section>
+        );
+    }
+    if (submission.result === 'REJECTED') {
+        return (
+            <section role="alert" aria-label="Kết quả gửi đơn thuốc" className="space-y-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <p className="font-semibold">{SIGNING_MSG.REJECTED}</p>
+                <ul className="list-inside list-disc text-xs">
+                    {submission.errors.map((error) => <li key={error}>{error}</li>)}
+                </ul>
+            </section>
+        );
+    }
+    return (
+        <section role="alert" aria-label="Kết quả gửi đơn thuốc" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>{SIGNING_MSG.NO_ANSWER}</span>
+            <button type="button" onClick={onResend} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-100">
+                <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Gửi lại
+            </button>
+        </section>
+    );
+}
+
+/**
+ * UC-59 Prescribe Medication: one ordinary prescription per visit; the record stays open after saving. UC-90: a saved
+ * prescription is signed with the Doctor's digital signature and sent; UC-91 shows the answer.
+ */
 export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -272,6 +317,9 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     const [pageError, setPageError] = useState('');
     const [saving, setSaving] = useState(false);
     const [checked, setChecked] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
+    // UC-90: the signing dialog, with a pending request to resume (AF-06) or null.
+    const [signing, setSigning] = useState(null);
     const titleId = useId();
     const dirty = !samePrescription(form, savedForm);
 
@@ -283,6 +331,12 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                 setData(response);
                 setForm(loaded);
                 setSavedForm(loaded);
+                // AF-06: a request still waiting for the Doctor's approval reopens the dialog.
+                if (response?.prescriptionId && response.status !== 'ACCEPTED' && api.getCurrentPrescriptionSigning) {
+                    api.getCurrentPrescriptionSigning(response.prescriptionId, controller.signal)
+                        .then((pending) => { if (pending) setSigning({ resume: pending }); })
+                        .catch(() => undefined);
+                }
             })
             .catch((error) => {
                 if (error?.name !== 'AbortError') setLoadError(prescriptionError(error).message);
@@ -291,7 +345,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                 if (!controller.signal.aborted) setLoading(false);
             });
         return () => controller.abort();
-    }, [api, visitId]);
+    }, [api, visitId, reloadKey]);
 
     // MSG38: warn before leaving the page with unsaved changes.
     useEffect(() => {
@@ -352,6 +406,28 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
         data?.facilityLinkCodeMissing && MSG.LINK_CODE_MISSING(MSG.FACILITY),
     ].filter(Boolean);
     const locked = Boolean(data?.sent) || !data?.conclusionSaved || linkCodeMessages.length > 0;
+    const accepted = data?.status ? data.status === 'ACCEPTED' : Boolean(data?.sent);
+    // UC-90 step 1: a saved, unchanged prescription that is pending, rejected or sent without an answer.
+    const canSign = Boolean(data?.prescriptionId) && !accepted && !dirty && Boolean(data?.conclusionSaved)
+        && linkCodeMessages.length === 0;
+    const finishSigning = (prescription) => {
+        setSigning(null);
+        if (!prescription) {
+            setReloadKey((key) => key + 1); // AF-02: reload to show the attempt without an answer.
+            return;
+        }
+        const values = formFromResponse(prescription);
+        setData(prescription);
+        setForm(values);
+        setSavedForm(values);
+        if (prescription.lastSubmission?.result === 'ACCEPTED') {
+            toast.success(SIGNING_MSG.ACCEPTED(prescription.prescriptionCode));
+        }
+    };
+    const closeSigning = () => {
+        setSigning(null);
+        setReloadKey((key) => key + 1); // The request copied the diagnoses, which changed the version.
+    };
     return (
         <form
             noValidate
@@ -391,7 +467,8 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
 
             {!data?.conclusionSaved && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{MSG.CONCLUSION_REQUIRED}</p>}
             {linkCodeMessages.map((message) => <p key={message} role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{message}</p>)}
-            {data?.sent && <p role="status" className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock aria-hidden="true" className="h-4 w-4" />{MSG.SENT}</p>}
+            <SubmissionResult data={data} onResend={() => setSigning({ resume: null })} />
+            {accepted && <p role="status" className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock aria-hidden="true" className="h-4 w-4" />{MSG.SENT}</p>}
 
             <section aria-labelledby={`${titleId}`} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -407,17 +484,31 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                             )
                             : <p className="mt-0.5 text-xs text-slate-500">Mã đơn thuốc được tạo khi lưu đơn lần đầu.</p>}
                     </div>
-                    {!locked && (
-                        <button
-                            type="submit"
-                            disabled={saving}
-                            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
-                            {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
-                        </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {!locked && (
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
+                                {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
+                            </button>
+                        )}
+                        {canSign && (
+                            <button
+                                type="button"
+                                onClick={() => setSigning({ resume: null })}
+                                disabled={!data?.signingCertificateRegistered}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 bg-white px-5 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <FileSignature aria-hidden="true" className="h-4 w-4" />Ký và gửi đơn
+                            </button>
+                        )}
+                    </div>
                 </div>
+                {canSign && !data?.signingCertificateRegistered && <p role="status" className="text-xs text-amber-800">{SIGNING_MSG.NOT_REGISTERED}</p>}
+                {data?.prescriptionId && !accepted && dirty && <p className="text-xs text-slate-500">Lưu đơn thuốc trước khi ký và gửi.</p>}
 
                 {pageError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">{pageError}</p>}
 
@@ -484,6 +575,15 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                     <NoteField label="Lời dặn" value={form.advice} onChange={(value) => change({ ...form, advice: value })} error={errors.advice} disabled={locked} />
                 </div>
             </section>
+            {signing && data && (
+                <PrescriptionSigningDialog
+                    prescription={data}
+                    api={api}
+                    resume={signing.resume}
+                    onClose={closeSigning}
+                    onFinished={finishSigning}
+                />
+            )}
         </form>
     );
 }

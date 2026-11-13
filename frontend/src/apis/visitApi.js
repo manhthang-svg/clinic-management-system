@@ -191,6 +191,35 @@ export const visitApi = {
         });
     },
 
+    // UC-90 step 3: re-check the prescription, pre-check the Doctor's certificate and ask the CA for a signature.
+    requestPrescriptionSignature(prescriptionId, version) {
+        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/commands/request-signature`, {
+            method: 'POST',
+            body: { version },
+        });
+    },
+
+    // UC-90 AF-06: the pending signing request of the prescription, or null.
+    getCurrentPrescriptionSigning(prescriptionId, signal) {
+        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/current`, { signal });
+    },
+
+    // UC-90 steps 5-8: asked every few seconds; once signed, the server verifies, stores and sends.
+    completePrescriptionSigning(prescriptionId, requestId) {
+        return apiClient.request(
+            `/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/${encodeURIComponent(requestId)}/commands/complete`,
+            { method: 'POST' },
+        );
+    },
+
+    // UC-90 AF-03.
+    cancelPrescriptionSigning(prescriptionId, requestId) {
+        return apiClient.request(
+            `/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/${encodeURIComponent(requestId)}/commands/cancel`,
+            { method: 'POST' },
+        );
+    },
+
     // UC-59 BR-59-03: at most 20 active ordinary medicines by name, active ingredient, strength, internal code or
     // registration number, ignoring accents.
     searchMedicines(keyword, signal) {

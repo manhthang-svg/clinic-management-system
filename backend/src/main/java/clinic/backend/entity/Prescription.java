@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.enums.PrescriptionLienthongStatus;
+import clinic.backend.enums.PrescriptionSubmissionResult;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -138,5 +139,41 @@ public class Prescription extends VersionedEntity {
     public boolean isSent() {
         return lienthongStatus == PrescriptionLienthongStatus.SENT
                 || lienthongStatus == PrescriptionLienthongStatus.ACCEPTED;
+    }
+
+    /**
+     * UC-90 step 1: a prescription that is pending, rejected or sent without an answer can be signed and sent
+     * (again); an accepted one is locked (P04-P07).
+     */
+    public boolean canBeSubmitted() {
+        return lienthongStatus != PrescriptionLienthongStatus.ACCEPTED;
+    }
+
+    /**
+     * UC-90 step 3 (BR-59-08): the conclusion's diagnoses and the follow-up date as they are sent. Call
+     * {@code replaceDiagnoses(List.of())} and flush first when diagnoses already exist, because their codes and
+     * order numbers are unique per prescription.
+     */
+    public void replaceDiagnoses(List<PrescriptionDiagnosis> values, LocalDate followUpDate, Instant now) {
+        diagnoses.clear();
+        diagnoses.addAll(values);
+        this.ngayTaiKham = followUpDate;
+        touch(now);
+    }
+
+    /** P04-P06: the answer of the national prescription system to a signed send. */
+    public void recordSubmission(PrescriptionSubmissionResult result, Instant now) {
+        if (!canBeSubmitted()) {
+            throw new IllegalStateException("Prescription " + getId() + " was already accepted");
+        }
+        lienthongStatus = switch (result) {
+            case ACCEPTED -> PrescriptionLienthongStatus.ACCEPTED;
+            case REJECTED -> PrescriptionLienthongStatus.REJECTED;
+            case NO_RESPONSE -> PrescriptionLienthongStatus.SENT;
+        };
+        if (result == PrescriptionSubmissionResult.ACCEPTED) {
+            lienthongSentAt = now;
+        }
+        touch(now);
     }
 }

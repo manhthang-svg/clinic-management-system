@@ -37,3 +37,6 @@ Desktop.ini
 image/
 docs/paraclinical-db-guide.md
 docs/paraclinical-results-db.md
+
+# Simulated signing CA keys (UC-90 dev profile); test keys, never committed
+.signing-simulator/

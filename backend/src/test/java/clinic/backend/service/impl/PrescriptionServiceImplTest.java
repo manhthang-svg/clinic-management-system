@@ -43,10 +43,15 @@ import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
+import clinic.backend.repository.PrescriptionSubmissionRepository;
+import clinic.backend.repository.RecordSignatureRepository;
+import clinic.backend.repository.SigningRequestRepository;
+import clinic.backend.repository.StaffSigningCertificateRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.RemoteSigningGateway;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,6 +92,10 @@ class PrescriptionServiceImplTest {
     @Mock private FollowUpAppointmentRepository followUpRepository;
     @Mock private AuditLogService auditLogService;
 
+    @Mock
+    private SigningRequestRepository signingRequestRepository;
+    @Mock
+    private RemoteSigningGateway signingGateway;
     private PrescriptionServiceImpl service;
     private ConcludingVisitGuard.Context context;
     private ClinicFacility facility;
@@ -98,7 +107,10 @@ class PrescriptionServiceImplTest {
         service = new PrescriptionServiceImpl(
                 guard, conclusionRepository, prescriptionRepository, medicineRepository, historyRepository,
                 longTermCodeRepository, clinicFacilityRepository, staffAccountRepository, vitalSignRepository,
-                followUpRepository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
+                followUpRepository, auditLogService, mock(StaffSigningCertificateRepository.class),
+                signingRequestRepository, mock(PrescriptionSubmissionRepository.class),
+                mock(RecordSignatureRepository.class), signingGateway,
+                new UuidV7Generator(clock, new SecureRandom()), clock);
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1990, 1, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "Hà Nội", null, null,

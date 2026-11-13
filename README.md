@@ -47,7 +47,23 @@ Backend environment variables:
 | `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2340000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
 | `VISIT_END_OF_DAY_ENABLED`, `VISIT_END_OF_DAY_CRON`, `VISIT_END_OF_DAY_RUN_ON_STARTUP` | No | End-of-day job (BR-22) that closes unfinished visits of earlier days; defaults `true`, `0 5 0 * * *` (00:05, Asia/Ho_Chi_Minh) and `true` (also run once at startup to catch up). Safe when several backends share one database: a visit is closed once and later runs skip it |
 
+| `SIGNING_SIMULATOR_KEYSTORE_PASSWORD` | To sign e-prescriptions | Password of the simulated signing CA's key file (UC-90); the `dev` profile sets a development value. Without it, signing answers "service unavailable" |
+| `SIGNING_SIMULATOR_KEYSTORE`, `SIGNING_TRUSTED_CA_FILES` | No | Simulated CA key file (default `.signing-simulator/simulator.p12`, created on first use, git-ignored) and comma-separated PEM files of trusted CAs (the `dev` profile trusts `.signing-simulator/trusted-ca.pem`) |
+| `SIGNING_SIMULATOR_FAILURE_MODE`, `SIGNING_SIMULATOR_RESPONSE_DELAY` | No | `NONE`, `UNAVAILABLE` or `BAD_SIGNATURE`, and a delay, to demonstrate UC-90 EF-15 and EF-16 |
+| `NATIONAL_PRESCRIPTION_SIMULATOR_FAILURE_MODE`, `NATIONAL_PRESCRIPTION_SIMULATOR_RESPONSE_DELAY`, `NATIONAL_PRESCRIPTION_SIMULATOR_PRESCRIBER_CODES` | No | Simulated national prescription system: `NONE` or `NO_RESPONSE`, a delay, and the prescriber link codes it knows (empty accepts all) |
+
 Run the backend with `./mvnw spring-boot:run` in `backend/` and the frontend with `npm run dev` in `frontend/` (the dev server proxies `/api` to `http://localhost:8080`). Add `-Dspring-boot.run.profiles=dev` to expose local API documentation.
+
+### Sign an e-prescription in development (UC-90)
+
+The digital signature uses a simulated remote-signing CA (test keys, no legal value; see
+[`docs/uc-59-e-prescription.md`](docs/uc-59-e-prescription.md#signing-simulator)). With the `dev` profile:
+
+1. Open `http://localhost:8080/dev/ca-sim/`, enter a Doctor's user name and a 6-digit PIN, and click
+   "Cấp chứng thư". This issues a test certificate and registers it as the Doctor's signing certificate.
+2. In the clinic app, save the prescription and click "Ký và gửi đơn", then "Ký số".
+3. On the `/dev/ca-sim/` page (another tab or a phone on the same network), sign in with the certificate serial and
+   the PIN, and click "Chấp thuận ký". The clinic app verifies the signature and sends the prescription.
 
 With the `dev` profile, the backend API contract is available at `http://localhost:8080/swagger-ui.html`,
 `http://localhost:8080/v3/api-docs`, and `http://localhost:8080/v3/api-docs.yaml`. OpenAPI remains disabled by

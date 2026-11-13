@@ -20,6 +20,9 @@ import java.util.UUID;
  * @param facilityLinkCodeMissing   EF-07: the facility has no facility code or prescription link code
  * @param followUpDate      the scheduled follow-up date of the visit, if any (BR-59-08)
  * @param child             BR-59-07: present only for a patient under 72 months on the prescribing date
+ * @param status            BR-59-09: PENDING, SENT, ACCEPTED or REJECTED; null before the first save
+ * @param signingCertificateRegistered UC-90 EF-10: the Doctor has a registered signing certificate
+ * @param lastSubmission    UC-91: the latest send and its answer, if any
  */
 public record PrescriptionResponse(
         UUID visitId,
@@ -41,8 +44,34 @@ public record PrescriptionResponse(
         boolean prescriberLinkCodeMissing,
         boolean facilityLinkCodeMissing,
         LocalDate followUpDate,
-        Child child
+        Child child,
+        String status,
+        boolean signingCertificateRegistered,
+        Submission lastSubmission
 ) {
+
+    /**
+     * One send to the national prescription system (UC-91).
+     *
+     * @param result      ACCEPTED, REJECTED or NO_RESPONSE
+     * @param errors      the error list of a rejection (MSG111)
+     * @param respondedAt null when the system did not answer
+     * @param signedAt    time-stamp time of the digital signature of this send
+     * @param signerName  the signing Doctor
+     * @param certificateSerial serial of the signing certificate
+     * @param certificateIssuer issuer of the signing certificate
+     */
+    public record Submission(
+            short attemptNo,
+            String result,
+            List<String> errors,
+            Instant submittedAt,
+            Instant respondedAt,
+            Instant signedAt,
+            String signerName,
+            String certificateSerial,
+            String certificateIssuer) {
+    }
 
     /**
      * Data a prescription for a child under 72 months must carry (TT 26/2025 Điều 6 khoản 4); a null value is
