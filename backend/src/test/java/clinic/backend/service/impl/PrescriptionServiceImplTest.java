@@ -7,19 +7,25 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.dto.request.SavePrescriptionRequest;
+import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.Conclusion;
+import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
+import clinic.backend.entity.PrescriptionDetail;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
+import clinic.backend.entity.VitalSign;
+import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalHistoryType;
@@ -32,17 +38,20 @@ import clinic.backend.enums.VisitStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.ConclusionRepository;
+import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -62,6 +71,7 @@ class PrescriptionServiceImplTest {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Instant NOW = Instant.parse("2026-11-03T03:00:00Z");
+    private static final Instant EARLIER = NOW.minusSeconds(3_600);
     private static final UUID DOCTOR_ID = UUID.randomUUID();
     private static final UUID VISIT_ID = UUID.randomUUID();
 
@@ -73,10 +83,13 @@ class PrescriptionServiceImplTest {
     @Mock private LongTermPrescriptionDiseaseCodeRepository longTermCodeRepository;
     @Mock private ClinicFacilityRepository clinicFacilityRepository;
     @Mock private StaffAccountRepository staffAccountRepository;
+    @Mock private VitalSignRepository vitalSignRepository;
+    @Mock private FollowUpAppointmentRepository followUpRepository;
     @Mock private AuditLogService auditLogService;
 
     private PrescriptionServiceImpl service;
     private ConcludingVisitGuard.Context context;
+    private ClinicFacility facility;
     private final MedicineCatalog amoxicillin = medicine("AMO500", "Amoxicilin 500mg", "Amoxicilin", MedicineControlGroup.THUONG);
 
     @BeforeEach
@@ -84,8 +97,8 @@ class PrescriptionServiceImplTest {
         Clock clock = Clock.fixed(NOW, ZONE);
         service = new PrescriptionServiceImpl(
                 guard, conclusionRepository, prescriptionRepository, medicineRepository, historyRepository,
-                longTermCodeRepository, clinicFacilityRepository, staffAccountRepository, auditLogService,
-                new UuidV7Generator(clock, new SecureRandom()), clock);
+                longTermCodeRepository, clinicFacilityRepository, staffAccountRepository, vitalSignRepository,
+                followUpRepository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1990, 1, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "Hà Nội", null, null,
@@ -98,8 +111,13 @@ class PrescriptionServiceImplTest {
                 UUID.randomUUID(), NOW, VISIT_ID, "BA-DK0001", "NGOAITRU", MedicalRecordStatus.OPEN, NOW, DOCTOR_ID);
         StaffAccount doctor = StaffAccount.create(
                 DOCTOR_ID, "doctor01", "hash", "Bác sĩ An", null, null, null, null, null, null, Role.DOCTOR, null, NOW);
+        doctor.updateMaLienthongBacsi("BS0001", NOW);
+        facility = mock(ClinicFacility.class);
+        lenient().when(facility.getMaCskcb()).thenReturn("79001");
+        lenient().when(facility.getMaLienthongDonthuoc()).thenReturn("LT79001");
+        lenient().when(clinicFacilityRepository.findCurrent()).thenReturn(Optional.of(facility));
         context = new ConcludingVisitGuard.Context(visit, patient, record, doctor);
-        when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
+        lenient().when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
         lenient().when(historyRepository.findAllByPatientIdOrderByCreatedAtAsc(patient.getId())).thenReturn(List.of());
     }
 
@@ -107,7 +125,7 @@ class PrescriptionServiceImplTest {
     void asksForTheConclusionBeforePrescribing() {
         when(conclusionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7), false)))
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7))))
                 .isInstanceOfSatisfying(AppException.class, error ->
                         assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_CONCLUSION_REQUIRED));
     }
@@ -116,13 +134,10 @@ class PrescriptionServiceImplTest {
     void createsTheVisitPrescriptionWithACodeOfTheFacilityAndAuditsIt() {
         stubConclusion();
         stubMedicines(amoxicillin);
-        ClinicFacility facility = mock(ClinicFacility.class);
-        when(facility.getMaCskcb()).thenReturn("79001");
-        when(clinicFacilityRepository.findCurrent()).thenReturn(Optional.of(facility));
         when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
         when(prescriptionRepository.saveAndFlush(any(Prescription.class))).thenAnswer(call -> call.getArgument(0));
 
-        var response = service.save(principal(), VISIT_ID, request(line(amoxicillin, 7), false));
+        var response = service.save(principal(), VISIT_ID, request(line(amoxicillin, 7)));
 
         assertThat(response.prescriptionCode()).matches("^79001[0-9a-z]{7}-c$");
         assertThat(response.slipNumber()).isEqualTo("DT-DK0001");
@@ -143,26 +158,163 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
         when(longTermCodeRepository.existsByMaicdIn(any())).thenReturn(false);
 
-        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 60), false)))
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 60))))
                 .isInstanceOfSatisfying(AppException.class, error ->
                         assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_LONG_TERM_NOT_ALLOWED));
         verify(prescriptionRepository, never()).saveAndFlush(any(Prescription.class));
     }
 
     @Test
-    void asksBeforePrescribingAMedicineTheyAreAllergicTo() {
+    void savesWithoutCheckingTheRecordedDrugAllergiesButStillShowsThem() {
         stubConclusion();
         stubMedicines(amoxicillin);
         when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(prescriptionRepository.saveAndFlush(any(Prescription.class))).thenAnswer(call -> call.getArgument(0));
         when(historyRepository.findAllByPatientIdOrderByCreatedAtAsc(context.patient().getId())).thenReturn(List.of(
                 new MedicalHistory(UUID.randomUUID(), NOW, context.patient().getId(), null,
                         MedicalHistoryType.DRUG_ALLERGY, "Amoxicilin", null, DOCTOR_ID)));
 
-        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7), false)))
-                .isInstanceOfSatisfying(AppException.class, error -> {
-                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_ALLERGY_WARNING);
-                    assertThat(error.getDetails()).containsEntry("allergies", "Amoxicilin (Amoxicilin 500mg)");
-                });
+        var response = service.save(principal(), VISIT_ID, request(line(amoxicillin, 7)));
+
+        assertThat(response.lines()).singleElement().satisfies(item -> assertThat(item.name()).isEqualTo("Amoxicilin 500mg"));
+        assertThat(response.allergies()).containsExactly("Amoxicilin");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void auditsOnlyTheFieldsChangedOnALaterSave() {
+        stubConclusion();
+        stubMedicines(amoxicillin);
+        Prescription existing = existingPrescription();
+        when(prescriptionRepository.saveAndFlush(any(Prescription.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.save(principal(), VISIT_ID, new SavePrescriptionRequest(
+                List.of(line(amoxicillin, 7)), "Tái khám sau 3 ngày", "Uống nhiều nước", existing.getVersion()));
+
+        ArgumentCaptor<Map<String, Object>> before = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> after = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordEntityChange(
+                eq(DOCTOR_ID), eq(existing.getId()), eq(AuditLogAction.UPDATE), eq("prescriptions"),
+                before.capture(), after.capture(), eq(NOW));
+        assertThat(before.getValue()).containsOnlyKeys("notes").containsEntry("notes", "Tái khám nếu sốt");
+        assertThat(after.getValue()).containsOnlyKeys("notes").containsEntry("notes", "Tái khám sau 3 ngày");
+        assertThat(existing.getPrescribedAt()).isEqualTo(EARLIER); // set by the first save only
+    }
+
+    @Test
+    void refusesALaterSaveWithoutTheLoadedVersion() {
+        stubConclusion();
+        existingPrescription();
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7))))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCURRENT_MODIFICATION));
+    }
+
+    @Test
+    void needsThePrescriberLinkCodeOfTheDoctor() {
+        stubConclusion();
+        context.doctor().updateMaLienthongBacsi(null, NOW);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7))))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIBER_LINK_CODE_REQUIRED));
+    }
+
+    @Test
+    void needsThePrescriptionLinkCodeOfTheFacility() {
+        stubConclusion();
+        when(facility.getMaLienthongDonthuoc()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7))))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.FACILITY_LINK_CODE_REQUIRED));
+    }
+
+    @Test
+    void refusesAQuantityThatIsNotAWholeNumberOfTheUnit() {
+        stubConclusion();
+        stubMedicines(amoxicillin);
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+
+        for (String quantity : List.of("0.12", "10.5", "0", "10000")) {
+            assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(amoxicillin, 7, quantity))))
+                    .as(quantity)
+                    .isInstanceOfSatisfying(AppException.class, error -> {
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_INVALID);
+                        assertThat(error.getDetails()).containsEntry("field", "quantity").containsEntry("reason", "RANGE");
+                    });
+        }
+    }
+
+    @Test
+    void acceptsAWholeQuantityWrittenWithZeroDecimals() {
+        stubConclusion();
+        stubMedicines(amoxicillin);
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(prescriptionRepository.saveAndFlush(any(Prescription.class))).thenAnswer(call -> call.getArgument(0));
+
+        var saved = service.save(principal(), VISIT_ID, request(line(amoxicillin, 7, "21.00")));
+
+        assertThat(saved.lines().getFirst().quantity()).isEqualByComparingTo("21");
+    }
+
+    @Test
+    void showsTheChildDataAndTheFollowUpDate() {
+        Patient child = mock(Patient.class);
+        when(child.getId()).thenReturn(context.patient().getId());
+        when(child.getNgaysinh()).thenReturn(LocalDate.of(2025, 5, 3)); // 18 months on 03/11/2026
+        when(child.getHotennguoithan()).thenReturn("Trần Thị Mẹ");
+        context = new ConcludingVisitGuard.Context(context.visit(), child, context.record(), context.doctor());
+        when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        VitalSign vitals = mock(VitalSign.class);
+        when(vitals.getCannang()).thenReturn(new BigDecimal("10.5"));
+        when(vitalSignRepository.findFirstByMedicalRecordIdAndCannangIsNotNullOrderByThoidiemDesc(
+                context.record().getId())).thenReturn(Optional.of(vitals));
+        FollowUpAppointment appointment = mock(FollowUpAppointment.class);
+        when(appointment.getStatus()).thenReturn(FollowUpAppointmentStatus.SCHEDULED);
+        when(appointment.getFollowUpDate()).thenReturn(LocalDate.of(2026, 11, 10));
+        when(followUpRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.of(appointment));
+
+        var response = service.get(principal(), VISIT_ID);
+
+        assertThat(response.child()).isEqualTo(new PrescriptionResponse.Child(18, new BigDecimal("10.5"), "Trần Thị Mẹ"));
+        assertThat(response.followUpDate()).isEqualTo(LocalDate.of(2026, 11, 10));
+        assertThat(response.prescriberLinkCodeMissing()).isFalse();
+        assertThat(response.facilityLinkCodeMissing()).isFalse();
+    }
+
+    @Test
+    void hasNoChildDataFromSeventyTwoMonths() {
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+
+        assertThat(service.get(principal(), VISIT_ID).child()).isNull();
+    }
+
+    @Test
+    void writesNoAuditRowWhenALaterSaveChangesNothing() {
+        stubConclusion();
+        stubMedicines(amoxicillin);
+        Prescription existing = existingPrescription();
+        when(prescriptionRepository.saveAndFlush(any(Prescription.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.save(principal(), VISIT_ID, new SavePrescriptionRequest(
+                List.of(line(amoxicillin, 7)), "Tái khám nếu sốt", "Uống nhiều nước", existing.getVersion()));
+
+        verify(auditLogService, never()).recordEntityChange(any(), any(), any(), any(), anyMap(), anyMap(), any());
+    }
+
+    @Test
+    void doesNotShowTheNoKnownDrugAllergyStatementAsAnAllergy() {
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
+        when(historyRepository.findAllByPatientIdOrderByCreatedAtAsc(context.patient().getId())).thenReturn(List.of(
+                MedicalHistory.noKnownDrugAllergy(UUID.randomUUID(), NOW, context.patient().getId(), null, DOCTOR_ID)));
+
+        assertThat(service.get(principal(), VISIT_ID).allergies()).isEmpty();
     }
 
     @Test
@@ -171,7 +323,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID,
-                new SavePrescriptionRequest(List.of(line(amoxicillin, 7), line(amoxicillin, 5)), null, null, false, null)))
+                new SavePrescriptionRequest(List.of(line(amoxicillin, 7), line(amoxicillin, 5)), null, null, null)))
                 .isInstanceOfSatisfying(AppException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_INVALID);
                     assertThat(error.getDetails()).containsEntry("field", "medicine").containsEntry("line", "1");
@@ -185,9 +337,11 @@ class PrescriptionServiceImplTest {
         stubMedicines(morphine);
         when(prescriptionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(morphine, 3), false)))
-                .isInstanceOfSatisfying(AppException.class, error ->
-                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_MEDICINE_UNAVAILABLE));
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request(line(morphine, 3))))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_MEDICINE_UNAVAILABLE);
+                    assertThat(error.getDetails()).containsEntry("reason", "NOT_ORDINARY"); // MSG106
+                });
     }
 
     private void stubConclusion() {
@@ -198,17 +352,37 @@ class PrescriptionServiceImplTest {
         lenient().when(longTermCodeRepository.existsByMaicdIn(any())).thenReturn(false);
     }
 
+    /** A saved prescription of the visit: amoxicillin for 7 days with the notes and advice of {@link #request}. */
+    private Prescription existingPrescription() {
+        Prescription prescription = new Prescription(
+                UUID.randomUUID(), EARLIER, "DT-DK0001", "79001abc1234-c", context.record().getId());
+        prescription.record(DOCTOR_ID, "Viêm họng cấp", (short) 2, "Tái khám nếu sốt", "Uống nhiều nước", EARLIER);
+        // Quantity 21.00: NUMERIC(10,2) as read back from the database, while a request carries 21.
+        prescription.replaceDetails(List.of(new PrescriptionDetail(
+                UUID.randomUUID(), NOW, prescription, "DT-DK0001-01", amoxicillin, new BigDecimal("21.00"), "1 viên",
+                (short) 3, (short) 7, "Uống sau ăn", null, LocalDate.ofInstant(NOW, ZONE))));
+        // Version 2, as loaded from the database.
+        org.springframework.test.util.ReflectionTestUtils.setField(prescription, "version", 2L);
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId()))
+                .thenReturn(Optional.of(prescription));
+        return prescription;
+    }
+
     private void stubMedicines(MedicineCatalog... medicines) {
         when(medicineRepository.findAllById(any())).thenReturn(List.of(medicines));
     }
 
-    private static SavePrescriptionRequest request(SavePrescriptionRequest.Line line, boolean confirmAllergy) {
-        return new SavePrescriptionRequest(List.of(line), "Tái khám nếu sốt", "Uống nhiều nước", confirmAllergy, null);
+    private static SavePrescriptionRequest request(SavePrescriptionRequest.Line line) {
+        return new SavePrescriptionRequest(List.of(line), "Tái khám nếu sốt", "Uống nhiều nước", null);
     }
 
     private static SavePrescriptionRequest.Line line(MedicineCatalog medicine, int days) {
+        return line(medicine, days, String.valueOf(3L * days));
+    }
+
+    private static SavePrescriptionRequest.Line line(MedicineCatalog medicine, int days, String quantity) {
         return new SavePrescriptionRequest.Line(
-                medicine.getId(), BigDecimal.valueOf(3L * days), "1 viên", (short) 3, (short) days, "Uống sau ăn", null);
+                medicine.getId(), new BigDecimal(quantity), "1 viên", (short) 3, (short) days, "Uống sau ăn", null);
     }
 
     private static MedicineCatalog medicine(String code, String name, String ingredient, MedicineControlGroup group) {

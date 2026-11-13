@@ -2,6 +2,7 @@ package clinic.backend.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,6 +16,10 @@ import java.util.UUID;
  * @param allergies         recorded drug allergies of the patient (red labels, BR-23)
  * @param longTermAllowed   a diagnosis is in the long-term prescription list, so more than 30 days is allowed
  * @param sent              BR-47: the prescription was sent and cannot change here
+ * @param prescriberLinkCodeMissing EF-07: the Doctor has no prescriber link code, so the form is disabled
+ * @param facilityLinkCodeMissing   EF-07: the facility has no facility code or prescription link code
+ * @param followUpDate      the scheduled follow-up date of the visit, if any (BR-59-08)
+ * @param child             BR-59-07: present only for a patient under 72 months on the prescribing date
  */
 public record PrescriptionResponse(
         UUID visitId,
@@ -32,8 +37,23 @@ public record PrescriptionResponse(
         String advice,
         boolean sent,
         String doctorName,
-        Instant prescribedAt
+        Instant prescribedAt,
+        boolean prescriberLinkCodeMissing,
+        boolean facilityLinkCodeMissing,
+        LocalDate followUpDate,
+        Child child
 ) {
+
+    /**
+     * Data a prescription for a child under 72 months must carry (TT 26/2025 Điều 6 khoản 4); a null value is
+     * missing and must be recorded before sending.
+     *
+     * @param ageMonths          age in months on the prescribing date
+     * @param weightKg           latest weight recorded in this visit's vital signs
+     * @param accompanyingPerson the patient's relative (hotennguoithan)
+     */
+    public record Child(int ageMonths, BigDecimal weightKg, String accompanyingPerson) {
+    }
 
     public record Line(
             UUID medicineId,

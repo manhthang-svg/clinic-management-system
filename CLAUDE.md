@@ -20,6 +20,7 @@ This file adds Claude-specific orientation. It does not override `AGENTS.md` or 
 | Database and migrations | [`docs/database-conventions.md`](docs/database-conventions.md) |
 | Authentication, tokens, logging, privacy | [`docs/security.md`](docs/security.md) |
 | Visual design and UI conventions | [`DESIGN.md`](DESIGN.md) |
+| Legal texts cited by the rules (verbatim copies, e.g. TT 26/2025/TT-BYT) | [`docs/reference/`](docs/reference/) |
 
 ## Repository Layout
 

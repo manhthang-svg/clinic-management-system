@@ -5,14 +5,15 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Period;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -22,33 +23,43 @@ import clinic.backend.dto.request.SavePrescriptionRequest;
 import clinic.backend.dto.response.Icd10OptionResponse;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
+import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.Conclusion;
 import clinic.backend.entity.ConclusionSecondaryDiagnosis;
+import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.VitalSign;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.MedicineControlGroup;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.ConclusionRepository;
+import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PrescriptionService;
 import clinic.backend.service.impl.ConcludingVisitGuard.Context;
 import clinic.backend.utils.UuidV7Generator;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +86,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     static final int DOSE_MAX = 50;
     static final int USAGE_MAX = 255;
     static final int NOTES_MAX = 2000;
+    static final int SEARCH_MIN_LENGTH = 2;
+    static final int SEARCH_LIMIT = 20;
+    /** TT 26/2025 Điều 6 khoản 4: a child under 72 months has the age in months, weight and accompanying person. */
+    static final int CHILD_MONTHS = 72;
 
     private final ConcludingVisitGuard guard;
     private final ConclusionRepository conclusionRepository;
@@ -84,6 +99,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final LongTermPrescriptionDiseaseCodeRepository longTermCodeRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
     private final StaffAccountRepository staffAccountRepository;
+    private final VitalSignRepository vitalSignRepository;
+    private final FollowUpAppointmentRepository followUpRepository;
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
     private final Clock clock;
@@ -110,13 +127,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // UC-59 precondition: the conclusion of the visit has been saved.
         Conclusion conclusion = conclusionRepository.findByMedicalRecordId(context.record().getId())
                 .orElseThrow(() -> new AppException(ErrorCode.PRESCRIPTION_CONCLUSION_REQUIRED));
+        ClinicFacility facility = requireLinkCodes(context);
         Prescription prescription = prescriptionRepository.findByMedicalRecordId(context.record().getId())
                 .orElse(null);
         if (prescription != null) {
             if (prescription.isSent()) {
                 throw new AppException(ErrorCode.PRESCRIPTION_ALREADY_SENT);
             }
-            if (request.version() != null && !request.version().equals(prescription.getVersion())) {
+            // EF-09: a save of an existing prescription must name the version the Doctor loaded.
+            if (request.version() == null || !request.version().equals(prescription.getVersion())) {
                 throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
             }
         }
@@ -137,18 +156,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             valid.add(validLine(lines.get(index), index, medicines, longTermAllowed));
         }
 
-        // AF-01 (MSG26): a medicine that matches a recorded drug allergy needs the Doctor's confirmation.
-        List<String> matches = allergyMatches(context, valid);
-        if (!matches.isEmpty() && !request.confirmAllergy()) {
-            throw new AppException(ErrorCode.PRESCRIPTION_ALLERGY_WARNING,
-                    Map.of("allergies", String.join(", ", matches)));
-        }
-
         Instant now = clock.instant();
         Map<String, Object> oldValues = prescription == null ? Map.of() : auditValues(prescription);
         if (prescription == null) {
             prescription = new Prescription(
-                    ids.next(), now, "DT-" + context.visit().getSovaovien(), newPrescriptionCode(),
+                    ids.next(), now, "DT-" + context.visit().getSovaovien(), newPrescriptionCode(facility),
                     context.record().getId());
         }
         prescription.record(principal.accountId(), conclusion.getChandoan(),
@@ -169,30 +181,90 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         prescription.replaceDetails(details);
         Prescription saved = prescriptionRepository.saveAndFlush(prescription);
         Map<String, Object> newValues = auditValues(saved);
-        if (!matches.isEmpty()) {
-            newValues.put("allergyConfirmed", String.join(", ", matches));
+        if (oldValues.isEmpty()) {
+            auditLogService.recordEntityChange(
+                    principal.accountId(), saved.getId(), AuditLogAction.CREATE, AUDIT_ENTITY, oldValues, newValues, now);
+        } else {
+            recordUpdate(principal, saved, oldValues, newValues, now);
         }
-        auditLogService.recordEntityChange(
-                principal.accountId(), saved.getId(), oldValues.isEmpty() ? AuditLogAction.CREATE : AuditLogAction.UPDATE,
-                AUDIT_ENTITY, oldValues, newValues, now);
         return toResponse(context, conclusion, saved);
     }
 
+    /** BR-59-14: an UPDATE row lists only the fields whose value changed; nothing is written when none did. */
+    private void recordUpdate(
+            StaffPrincipal principal, Prescription saved, Map<String, Object> before, Map<String, Object> after,
+            Instant now) {
+        Map<String, Object> oldChanged = new LinkedHashMap<>();
+        Map<String, Object> newChanged = new LinkedHashMap<>();
+        after.forEach((field, value) -> {
+            Object old = before.get(field);
+            if (!Objects.equals(old, value)) {
+                oldChanged.put(field, old);
+                newChanged.put(field, value);
+            }
+        });
+        if (!newChanged.isEmpty()) {
+            auditLogService.recordEntityChange(
+                    principal.accountId(), saved.getId(), AuditLogAction.UPDATE, AUDIT_ENTITY, oldChanged, newChanged,
+                    now);
+        }
+    }
+
+    /**
+     * BR-59-03, BR-110: Active ordinary medicines (every catalog medicine has a registration number, V55) whose name,
+     * active ingredient, strength, internal code or registration number contains the keyword, ignoring case and
+     * Vietnamese accents; at most {@link #SEARCH_LIMIT} ordered by name.
+     */
     @Override
     @Transactional(readOnly = true)
-    public List<PrescribableMedicineResponse> searchMedicines(String keyword, int limit) {
-        String query = keyword == null ? "" : keyword.strip().toLowerCase(Locale.ROOT);
-        if (query.length() < 2) {
+    public List<PrescribableMedicineResponse> searchMedicines(String keyword) {
+        String query = keyword == null ? "" : String.join(" ", keyword.strip().split("\\s+"));
+        if (query.length() < SEARCH_MIN_LENGTH) {
             return List.of();
         }
+        String pattern = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        Specification<MedicineCatalog> prescribable = (root, ignored, cb) -> {
+            Expression<String> term = folded(cb, cb.literal(pattern));
+            return cb.and(
+                    cb.equal(root.get("status"), ActivationStatus.ACTIVE),
+                    cb.equal(root.get("nhomKiemSoat"), MedicineControlGroup.THUONG),
+                    cb.or(
+                            cb.like(folded(cb, root.get("tenthuocvattu")), term, '\\'),
+                            cb.like(folded(cb, root.get("hoatchat")), term, '\\'),
+                            cb.like(folded(cb, root.get("hamluong")), term, '\\'),
+                            cb.like(folded(cb, root.get("mathuocvattuBv")), term, '\\'),
+                            cb.like(folded(cb, root.get("soDangKy")), term, '\\')));
+        };
         return medicineRepository
-                .searchPrescribable("%" + query + "%", PageRequest.of(0, Math.min(Math.max(limit, 1), 30)))
+                .findAll(prescribable, PageRequest.of(0, SEARCH_LIMIT, Sort.by("tenthuocvattu")))
                 .stream()
                 .map(medicine -> new PrescribableMedicineResponse(
-                        medicine.getId(), medicine.getMathuocvattuBv(), medicine.getTenthuocvattu(),
-                        medicine.getHoatchat(), medicine.getHamluong(), medicine.getDuongdung(),
-                        medicine.getDonvitinh()))
+                        medicine.getId(), medicine.getMathuocvattuBv(), medicine.getSoDangKy(),
+                        medicine.getTenthuocvattu(), medicine.getHoatchat(), medicine.getHamluong(),
+                        medicine.getDuongdung(), medicine.getDonvitinh()))
                 .toList();
+    }
+
+    /** Lower case without Vietnamese accents (unaccent extension, V11), as the Admin catalog search (I1-D46). */
+    private static Expression<String> folded(CriteriaBuilder cb, Expression<String> value) {
+        return cb.lower(cb.function("unaccent", String.class, value));
+    }
+
+    /**
+     * EF-07 (BR-48, BR-49, BR-65): the Doctor's prescriber link code and the facility's code and prescription link
+     * code are needed before a prescription is saved.
+     */
+    private ClinicFacility requireLinkCodes(Context context) {
+        if (normalize(context.doctor().getMaLienthongBacsi()) == null) {
+            throw new AppException(ErrorCode.PRESCRIBER_LINK_CODE_REQUIRED);
+        }
+        return clinicFacilityRepository.findCurrent()
+                .filter(PrescriptionServiceImpl::hasFacilityCodes)
+                .orElseThrow(() -> new AppException(ErrorCode.FACILITY_LINK_CODE_REQUIRED));
+    }
+
+    private static boolean hasFacilityCodes(ClinicFacility facility) {
+        return normalize(facility.getMaCskcb()) != null && normalize(facility.getMaLienthongDonthuoc()) != null;
     }
 
     /** BR-33, BR-52: every medicine is an active ordinary medicine of the catalog, and appears once. */
@@ -211,10 +283,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .collect(Collectors.toMap(MedicineCatalog::getId, Function.identity()));
         for (int index = 0; index < lines.size(); index++) {
             MedicineCatalog medicine = found.get(lines.get(index).medicineId());
-            if (medicine == null || medicine.getStatus() != ActivationStatus.ACTIVE
-                    || medicine.getNhomKiemSoat() != MedicineControlGroup.THUONG) {
+            // EF-03: MSG40 for a medicine that is gone or Inactive, MSG106 for one moved out of the ordinary group.
+            String reason = medicine == null || medicine.getStatus() != ActivationStatus.ACTIVE ? "INACTIVE"
+                    : medicine.getNhomKiemSoat() != MedicineControlGroup.THUONG ? "NOT_ORDINARY" : null;
+            if (reason != null) {
                 Map<String, String> details = new LinkedHashMap<>();
                 details.put("line", String.valueOf(index));
+                details.put("reason", reason);
                 if (medicine != null) details.put("medicineName", medicine.getTenthuocvattu());
                 throw new AppException(ErrorCode.PRESCRIPTION_MEDICINE_UNAVAILABLE, details);
             }
@@ -227,8 +302,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             boolean longTermAllowed) {
         BigDecimal quantity = line.quantity();
         if (quantity == null) throw invalid("quantity", index, "REQUIRED");
+        // BR-59-04: a whole number of the dispensing unit from 1 to 9,999 (TT 26/2025 Điều 6 khoản 7a); a split dose
+        // such as "½ viên" belongs to the dose per time.
         if (quantity.signum() <= 0 || quantity.compareTo(MAX_QUANTITY) > 0 || quantity.stripTrailingZeros().scale() > 0) {
-            throw invalid("quantity", index, "RANGE"); // whole number 1-9,999
+            throw invalid("quantity", index, "RANGE");
         }
         String dose = requiredText(line.dosePerTime(), "dosePerTime", index, DOSE_MAX);
         Short times = line.timesPerDay();
@@ -241,7 +318,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new AppException(ErrorCode.PRESCRIPTION_LONG_TERM_NOT_ALLOWED, Map.of("line", String.valueOf(index)));
         }
         String usage = requiredText(line.usage(), "usage", index, USAGE_MAX);
-        return new ValidLine(medicines.get(line.medicineId()), quantity.stripTrailingZeros(), dose, times, days, usage,
+        return new ValidLine(medicines.get(line.medicineId()), quantity.setScale(0), dose, times, days, usage,
                 normalize(line.note()));
     }
 
@@ -256,40 +333,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return longTermCodeRepository.existsByMaicdIn(codes);
     }
 
-    /** Recorded drug allergies whose text matches a prescribed medicine's name or active ingredient. */
-    private List<String> allergyMatches(Context context, List<ValidLine> lines) {
-        List<String> allergies = allergies(context);
-        List<String> matches = new ArrayList<>();
-        for (String allergy : allergies) {
-            String term = allergy.toLowerCase(Locale.ROOT);
-            if (term.length() < 3) continue;
-            for (ValidLine line : lines) {
-                String name = line.medicine().getTenthuocvattu().toLowerCase(Locale.ROOT);
-                String ingredient = line.medicine().getHoatchat().toLowerCase(Locale.ROOT);
-                if (name.contains(term) || ingredient.contains(term) || term.contains(ingredient)) {
-                    matches.add(allergy + " (" + line.medicine().getTenthuocvattu() + ")");
-                }
-            }
-        }
-        return matches;
-    }
-
+    /** Recorded drug allergies, shown in red on the form (BR-23); the prescription is not checked against them. */
     private List<String> allergies(Context context) {
         return historyRepository.findAllByPatientIdOrderByCreatedAtAsc(context.patient().getId()).stream()
                 .filter(item -> item.getHistoryType() == MedicalHistoryType.DRUG_ALLERGY)
+                // UC-39 AF-01: the "no known drug allergy" statement is not an allergy.
+                .filter(item -> !item.isNoKnownDrugAllergy())
                 .map(MedicalHistory::getThongtinNoidung)
                 .map(PrescriptionServiceImpl::normalize)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
     /** BR-52, V55: 5-digit facility code, 7 random characters 0-9 or a-z, "-c"; never changed afterwards. */
-    private String newPrescriptionCode() {
-        String facility = clinicFacilityRepository.findCurrent()
-                .map(value -> value.getMaCskcb())
-                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
+    private String newPrescriptionCode(ClinicFacility facility) {
         for (int attempt = 0; attempt < 10; attempt++) {
-            StringBuilder code = new StringBuilder(facility);
+            StringBuilder code = new StringBuilder(facility.getMaCskcb().strip());
             for (int i = 0; i < 7; i++) {
                 code.append(CODE_CHARACTERS.charAt(RANDOM.nextInt(CODE_CHARACTERS.length())));
             }
@@ -320,6 +379,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String doctorName = prescription == null || prescription.getDoctorAccountId() == null ? null
                 : staffAccountRepository.findById(prescription.getDoctorAccountId())
                         .map(StaffAccount::getFullName).orElse(null);
+        // UC-59 step 2: the scheduled follow-up appointment of the visit, copied onto the prescription when sent.
+        LocalDate followUpDate = followUpRepository.findByMedicalRecordId(context.record().getId())
+                .filter(appointment -> appointment.getStatus() == FollowUpAppointmentStatus.SCHEDULED)
+                .map(FollowUpAppointment::getFollowUpDate)
+                .orElse(null);
+        boolean facilityLinkCodeMissing = clinicFacilityRepository.findCurrent()
+                .filter(PrescriptionServiceImpl::hasFacilityCodes).isEmpty();
         return new PrescriptionResponse(
                 context.visit().getId(),
                 prescription == null ? null : prescription.getId(),
@@ -336,7 +402,35 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescription == null ? null : prescription.getLoiDan(),
                 prescription != null && prescription.isSent(),
                 doctorName,
-                prescription == null ? null : prescription.getPrescribedAt());
+                prescription == null ? null : prescription.getPrescribedAt(),
+                normalize(context.doctor().getMaLienthongBacsi()) == null,
+                facilityLinkCodeMissing,
+                followUpDate,
+                childData(context, prescription));
+    }
+
+    /**
+     * BR-59-07: for a patient under 72 months on the prescribing date (today until the first save), the age in
+     * months, the latest weight of this visit and the relative as the accompanying person; null otherwise. Missing
+     * values stay null; sending (UC-90) requires them.
+     */
+    private PrescriptionResponse.Child childData(Context context, Prescription prescription) {
+        LocalDate birthDate = context.patient().getNgaysinh();
+        LocalDate prescribedOn = LocalDate.ofInstant(
+                prescription == null ? clock.instant() : prescription.getPrescribedAt(), CLINIC_ZONE);
+        if (birthDate == null) {
+            return null;
+        }
+        long months = Period.between(birthDate, prescribedOn).toTotalMonths();
+        if (months >= CHILD_MONTHS) {
+            return null;
+        }
+        BigDecimal weight = vitalSignRepository
+                .findFirstByMedicalRecordIdAndCannangIsNotNullOrderByThoidiemDesc(context.record().getId())
+                .map(VitalSign::getCannang)
+                .orElse(null);
+        return new PrescriptionResponse.Child(
+                (int) Math.max(months, 0), weight, normalize(context.patient().getHotennguoithan()));
     }
 
     private static Map<String, Object> auditValues(Prescription prescription) {
@@ -346,7 +440,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         values.put("lines", prescription.getDetails().stream()
                 .sorted(Comparator.comparing(PrescriptionDetail::getMachidinh))
                 .map(detail -> "%s x%s; %s, %d lần/ngày, %d ngày; %s".formatted(
-                        detail.getTenthuocvattu(), detail.getSoluongthuocvattu().toPlainString(),
+                        // The stored NUMERIC(10,2) reads back as 21.00: compare the value, not its scale.
+                        detail.getTenthuocvattu(), detail.getSoluongthuocvattu().stripTrailingZeros().toPlainString(),
                         detail.getLieuMoiLan(), detail.getSoLanNgay(), detail.getSoNgayDung(), detail.getCachdung()))
                 .toList());
         return values;

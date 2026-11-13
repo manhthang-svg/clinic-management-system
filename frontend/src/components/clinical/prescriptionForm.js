@@ -5,28 +5,33 @@ export const LIMITS = {
     quantity: 9999, timesPerDay: 24, days: 90, daysWithoutLongTerm: 30, dose: 50, usage: 255, notes: 2000,
 };
 
-// MSG93-MSG96 are not in docs/; wording below is an ASSUMPTION where the catalogue has none.
+// Message texts of docs/uc-59-e-prescription.md; MSG106-MSG119 are ASSUMPTION wording there.
 export const MSG = {
     required: (field) => `Trường ${field} là bắt buộc.`, // MSG02
     tooLong: (max) => `Vượt quá độ dài tối đa ${max.toLocaleString('vi-VN')} ký tự.`, // MSG08
     SAVED: 'Đơn thuốc cập nhật thành công.', // MSG03
     NO_LINE: 'Vui lòng thêm ít nhất một thuốc vào đơn.', // MSG02
-    QUANTITY: `Số lượng phải là số nguyên từ 1 đến ${LIMITS.quantity.toLocaleString('vi-VN')}.`,
+    QUANTITY: `Số lượng phải là số nguyên từ 1 đến ${LIMITS.quantity.toLocaleString('vi-VN')}.`, // MSG05
     TIMES: `Số lần mỗi ngày từ 1 đến ${LIMITS.timesPerDay}.`,
     DAYS: `Số ngày dùng từ 1 đến ${LIMITS.days}.`,
-    LONG_TERM: `Kê quá ${LIMITS.daysWithoutLongTerm} ngày chỉ áp dụng cho bệnh thuộc danh mục kê đơn dài ngày (TT 26/2025).`,
+    LONG_TERM: `Số ngày dùng tối đa ${LIMITS.daysWithoutLongTerm} ngày. Chỉ kê đến ${LIMITS.days} ngày khi chẩn đoán thuộc danh mục bệnh được kê dài ngày.`, // MSG114
+    // AF-05 shows "Bệnh được kê dài ngày: {disease}"; the response has no disease name yet, so the rule is stated.
+    LONG_TERM_ALLOWED: `Chẩn đoán thuộc danh mục bệnh được kê dài ngày: được kê đến ${LIMITS.days} ngày.`,
     DUPLICATE: 'Thuốc này đã có trong đơn.',
-    MEDICINE_UNAVAILABLE: (name) => `Thuốc ${name || 'đã chọn'} không còn được phép kê đơn. Vui lòng chọn thuốc khác.`,
-    allergy: (allergies) => `Cảnh báo: bệnh nhân có tiền sử dị ứng với ${allergies}. Bạn vẫn muốn kê thuốc này?`, // MSG26
-    CONCLUSION_REQUIRED: 'Vui lòng lưu kết luận ở tab Kết luận trước khi kê đơn.',
-    SENT: 'Đơn thuốc đã gửi lên hệ thống đơn thuốc quốc gia nên không thể sửa.', // BR-47
+    MEDICINE_INACTIVE: (name) => `${name ? `Thuốc ${name}` : 'Thuốc'} đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.`, // MSG40
+    MEDICINE_NOT_ORDINARY: (name) => `${name || 'Thuốc đã chọn'} không còn thuộc nhóm thuốc thông thường nên không kê được. Vui lòng chọn thuốc khác.`, // MSG106
+    CONCLUSION_REQUIRED: 'Lưu kết luận với chẩn đoán bệnh chính trước khi kê đơn.', // MSG113
+    SENT: 'Đơn thuốc đã gửi thành công nên không sửa hoặc xóa được.', // MSG115
+    LINK_CODE_MISSING: (item) => `Chưa có mã liên thông ${item}. Vui lòng liên hệ quản trị viên.`, // MSG116
+    PRESCRIBER: 'bác sĩ',
+    FACILITY: 'đơn thuốc của cơ sở khám chữa bệnh',
+    CHILD_DATA_MISSING: (item) => `Trẻ dưới 72 tháng tuổi cần có ${item} trước khi gửi đơn thuốc.`, // MSG107
     RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng hoặc bị khóa, không thể chỉnh sửa.', // MSG68
     NOT_ALLOWED: 'Lượt khám chưa thể kê đơn: bệnh nhân không còn đang khám hoặc chưa đủ kết quả cận lâm sàng.',
     OUTSIDE_ROOM_OR_SHIFT: 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.', // MSG48
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.', // MSG13
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
-    CONCURRENT_MODIFICATION: 'Đơn thuốc vừa được cập nhật ở nơi khác. Vui lòng tải lại.',
-    FACILITY_MISSING: 'Chưa cấu hình mã cơ sở khám chữa bệnh nên chưa tạo được mã đơn thuốc.',
+    CONCURRENT_MODIFICATION: 'Đơn thuốc vừa được người khác cập nhật. Vui lòng tải lại và thử lại.', // MSG75
     SYSTEM_ERROR: 'Không thể kết nối hoặc hệ thống đang gặp sự cố. Vui lòng tải lại và thử lại.', // MSG80
     CHECK_FIELDS: 'Vui lòng kiểm tra các trường được đánh dấu.',
 };
@@ -66,15 +71,22 @@ export function samePrescription(left, right) {
 }
 
 /**
- * The quantity to buy from "1 viên" × times a day × days, when the dose starts with a number; otherwise null and the
- * Doctor enters it.
+ * BR-59-04: the quantity to buy, dose × times a day × days, suggested only when the dose is a whole number of the
+ * line's dispensing unit ("1 viên" for Viên, or a bare "2") and the result fits the limit. A dose in another unit
+ * ("500 mg", "5 ml") or a split dose ("½ viên", "0,5 viên") gives null and the Doctor enters the quantity.
  */
 export function suggestedQuantity(line) {
-    const dose = Number.parseFloat(String(line.dosePerTime).replace(',', '.'));
+    const match = /^\s*(\d+)\s*(.*?)\s*$/u.exec(String(line.dosePerTime));
+    if (!match) return null;
+    const unit = String(line.unit ?? '').trim().toLocaleLowerCase('vi');
+    const doseUnit = match[2].toLocaleLowerCase('vi');
+    if (doseUnit !== '' && doseUnit !== unit) return null;
+    const dose = Number(match[1]);
     const times = Number(line.timesPerDay);
     const days = Number(line.days);
     if (!(dose > 0) || !(times > 0) || !(days > 0)) return null;
-    return Math.ceil(dose * times * days);
+    const quantity = dose * times * days;
+    return quantity <= LIMITS.quantity ? quantity : null;
 }
 
 const wholeBetween = (value, min, max) => /^\d+$/.test(String(value).trim()) && Number(value) >= min && Number(value) <= max;
@@ -104,7 +116,7 @@ export function validatePrescription(form, longTermAllowed) {
     return errors;
 }
 
-export function toPayload(form, version, confirmAllergy = false) {
+export function toPayload(form, version) {
     const text = (value) => value.trim() || null;
     return {
         lines: form.lines.map((line) => ({
@@ -118,7 +130,6 @@ export function toPayload(form, version, confirmAllergy = false) {
         })),
         notes: text(form.notes),
         advice: text(form.advice),
-        confirmAllergy,
         version: version ?? null,
     };
 }
@@ -128,8 +139,7 @@ const REASON_MESSAGES = {
 };
 
 /**
- * Where a save failure is shown: `fields` under the inputs, `message` at the top, `allergies` asks MSG26 before
- * saving again. Never the raw backend message.
+ * Where a save failure is shown: `fields` under the inputs, `message` at the top. Never the raw backend message.
  */
 export function prescriptionError(error) {
     const code = error?.errorResponse?.code;
@@ -147,16 +157,21 @@ export function prescriptionError(error) {
         }
         case 'PRESCRIPTION_LONG_TERM_NOT_ALLOWED':
             return { fields: { [lineKey('days')]: MSG.LONG_TERM }, message: MSG.LONG_TERM };
-        case 'PRESCRIPTION_MEDICINE_UNAVAILABLE':
-            return { fields: {}, message: MSG.MEDICINE_UNAVAILABLE(details.medicineName) };
-        case 'PRESCRIPTION_ALLERGY_WARNING':
-            return { fields: {}, message: '', allergies: details.allergies || 'thuốc đã chọn' };
+        case 'PRESCRIPTION_MEDICINE_UNAVAILABLE': {
+            // EF-03: the line must be replaced; MSG106 when the medicine left the ordinary group, else MSG40.
+            const message = details.reason === 'NOT_ORDINARY'
+                ? MSG.MEDICINE_NOT_ORDINARY(details.medicineName)
+                : MSG.MEDICINE_INACTIVE(details.medicineName);
+            return { fields: { [lineKey('medicine')]: message }, message };
+        }
         case 'PRESCRIPTION_CONCLUSION_REQUIRED':
             return { fields: {}, message: MSG.CONCLUSION_REQUIRED };
         case 'PRESCRIPTION_ALREADY_SENT':
             return { fields: {}, message: MSG.SENT };
-        case 'CLINIC_FACILITY_NOT_CONFIGURED':
-            return { fields: {}, message: MSG.FACILITY_MISSING };
+        case 'PRESCRIBER_LINK_CODE_REQUIRED':
+            return { fields: {}, message: MSG.LINK_CODE_MISSING(MSG.PRESCRIBER) };
+        case 'FACILITY_LINK_CODE_REQUIRED':
+            return { fields: {}, message: MSG.LINK_CODE_MISSING(MSG.FACILITY) };
         case 'MEDICAL_RECORD_CLOSED':
             return { fields: {}, message: MSG.RECORD_CLOSED };
         case 'VISIT_NOT_IN_EXAMINATION':
