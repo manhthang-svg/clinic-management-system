@@ -363,7 +363,7 @@ export function TechnicianDashboardPage() {
               </span>
               <span>•</span>
               <span>
-                Phụ trách: <strong className="text-slate-700">{currentRoom.activeTech}</strong>
+                Phụ trách: <strong className="text-slate-700">{currentRoom?.activeTech || 'Chưa có'}</strong>
               </span>
             </div>
           </div>

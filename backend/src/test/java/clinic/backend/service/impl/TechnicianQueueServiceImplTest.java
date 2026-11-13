@@ -14,6 +14,7 @@ import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
+import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.ParaclinicalOrder;
@@ -25,6 +26,7 @@ import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
+import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicalServiceType;
@@ -49,6 +51,7 @@ import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -100,11 +103,13 @@ class TechnicianQueueServiceImplTest {
     private LabResultRepository labResultRepository;
 
     private Clock clock;
+    private DutyShiftConfigServiceImpl dutyShiftConfigService;
     private TechnicianQueueServiceImpl service;
 
     @BeforeEach
     void setUp() {
         clock = Clock.fixed(NOW, CLINIC_ZONE);
+        dutyShiftConfigService = new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules());
         service = new TechnicianQueueServiceImpl(
                 roomRepository,
                 roomQueueCounterRepository,
@@ -118,6 +123,7 @@ class TechnicianQueueServiceImplTest {
                 medicalHistoryRepository,
                 medicalServiceRepository,
                 dutyScheduleRepository,
+                dutyShiftConfigService,
                 imagingResultRepository,
                 labResultRepository,
                 auditLogService,
@@ -405,4 +411,79 @@ class TechnicianQueueServiceImplTest {
                 .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_CHECKED_IN));
     }
 
+    @Test
+    void acceptOrder_whenOffDutyBecauseColleagueIsScheduled_throwsTechnicianNotAssigned() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        UUID colleagueId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        LocalDate today = LocalDate.ofInstant(NOW, CLINIC_ZONE);
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000008", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000008-01", NOW, "Siêu âm", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), roomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+        detail.checkIn(1, technicianId, NOW);
+
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
+        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
+
+        // Phòng hôm nay có lịch trực phân công cho colleagueId (ví dụ Tạ Thị Loan)
+        DutySchedule colleagueSchedule = new DutySchedule(
+                UUID.randomUUID(), NOW, today, DutyShift.AFTERNOON, colleagueId, roomId, null, UUID.randomUUID()
+        );
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of(colleagueSchedule));
+
+        assertThatThrownBy(() -> service.acceptOrder(detailId, technicianId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM));
+    }
+
+    @Test
+    void acceptOrder_whenScheduledOnDuty_succeeds() {
+        UUID detailId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        LocalDate today = LocalDate.ofInstant(NOW, CLINIC_ZONE);
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000009", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000009-01", NOW, "Siêu âm", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), roomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+        detail.checkIn(1, technicianId, NOW);
+
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
+        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
+
+        // KTV được phân công trực đúng ca hiện tại (AFTERNOON)
+        DutySchedule schedule = new DutySchedule(
+                UUID.randomUUID(), NOW, today, DutyShift.AFTERNOON, technicianId, roomId, null, UUID.randomUUID()
+        );
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of(schedule));
+
+        TechnicianQueueItemResponse response = service.acceptOrder(detailId, technicianId);
+
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.IN_PROGRESS);
+        assertThat(detail.getPerformerAccountId()).isEqualTo(technicianId);
+    }
 }

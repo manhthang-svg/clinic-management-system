@@ -36,10 +36,10 @@ import { technicianApi } from '../../apis/technicianApi';
 export function ParaclinicalResultListPage() {
   const navigate = useNavigate();
 
-  // 1. Quản lý danh sách phòng máy cận lâm sàng từ backend
-  const [rooms, setRooms] = useState([]);
-  const [roomsLoading, setRoomsLoading] = useState(true);
-  const [currentRoomId, setCurrentRoomId] = useState(null);
+  // 1. Quản lý danh sách phòng máy cận lâm sàng từ backend (tối ưu hóa: đọc cache phòng & activeRoom để load song song)
+  const [rooms, setRooms] = useState(() => (typeof technicianApi.getCachedRooms === 'function' ? technicianApi.getCachedRooms() : []) || []);
+  const [roomsLoading, setRoomsLoading] = useState(() => !(technicianApi.getCachedRooms?.()?.length));
+  const [currentRoomId, setCurrentRoomId] = useState(() => (typeof technicianApi.getActiveRoomId === 'function' ? technicianApi.getActiveRoomId() : null));
 
   // 2. Nguồn dữ liệu ca chờ nhập & bản nháp CLS từ backend
   const [resultsData, setResultsData] = useState({
@@ -73,7 +73,9 @@ export function ParaclinicalResultListPage() {
     let mounted = true;
     const fetchRooms = async () => {
       try {
-        setRoomsLoading(true);
+        if (!technicianApi.getCachedRooms?.()?.length) {
+          setRoomsLoading(true);
+        }
         const roomList = await technicianApi.getRooms();
         if (mounted) {
           const validRooms = Array.isArray(roomList) ? roomList : [];
@@ -81,9 +83,11 @@ export function ParaclinicalResultListPage() {
           if (validRooms.length > 0) {
             const assignedRoom = validRooms.find((r) => r.isAssigned);
             const defaultRoom = assignedRoom || validRooms[0];
-            setCurrentRoomId((prev) =>
-              prev && validRooms.some((r) => r.id === prev) ? prev : defaultRoom.id
-            );
+            setCurrentRoomId((prev) => {
+              const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
+              technicianApi.setActiveRoomId?.(selected);
+              return selected;
+            });
           }
         }
       } catch (err) {
@@ -183,6 +187,7 @@ export function ParaclinicalResultListPage() {
   // Xử lý chuyển phòng thủ công
   const handleRoomSelect = (roomId) => {
     setCurrentRoomId(roomId);
+    technicianApi.setActiveRoomId?.(roomId);
     const selectedRoom = rooms.find((r) => r.id === roomId);
     setResultsData((prev) => ({
       ...prev,
@@ -349,7 +354,7 @@ export function ParaclinicalResultListPage() {
             </span>
             <span>•</span>
             <span className="text-slate-600">
-              Phụ trách: <strong>{currentRoom ? currentRoom.activeTech : '...'}</strong>
+              Phụ trách: <strong>{currentRoom?.activeTech || 'Chưa có'}</strong>
             </span>
           </div>
         </div>
