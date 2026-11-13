@@ -34,6 +34,7 @@ import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,7 +90,8 @@ class TechnicianQueuePerformOrderTest {
                 roomRepository, roomQueueCounterRepository, staffAccountRepository, staffRoomAssignmentRepository,
                 paraclinicalOrderDetailRepository, medicalRecordRepository, visitRepository, patientRepository,
                 clinicalExaminationRepository, medicalHistoryRepository, medicalServiceRepository,
-                dutyScheduleRepository, imagingResultRepository, labResultRepository,
+                dutyScheduleRepository, new DutyShiftConfigServiceImpl(new ObjectMapper().findAndRegisterModules()),
+                imagingResultRepository, labResultRepository,
                 auditLogService, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
         detail = acceptedDetail();
         when(paraclinicalOrderDetailRepository.findById(detail.getId())).thenReturn(Optional.of(detail));

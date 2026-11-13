@@ -9,15 +9,30 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse.VisitCounts;
+import clinic.backend.entity.Department;
+import clinic.backend.entity.MedicalService;
+import clinic.backend.entity.Room;
+import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.ActivationStatus;
+import clinic.backend.enums.DepartmentType;
+import clinic.backend.enums.RoomType;
 import clinic.backend.enums.ErrorCode;
+import clinic.backend.enums.MedicalServiceType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
+import clinic.backend.enums.PaymentMethod;
 import clinic.backend.enums.PaymentStatus;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
@@ -39,7 +54,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics. */
+/** UC-26 View Statistics Dashboard, UC-27 View Patient Visit Statistics, UC-28 View Doctor Statistics, UC-29 View Department and Room Statistics, UC-30 View Paraclinical Service Statistics, UC-31 View Revenue Statistics, UC-32 View Diagnosis Statistics. */
 @ExtendWith(MockitoExtension.class)
 class StatisticsServiceImplTest {
 
@@ -68,6 +83,32 @@ class StatisticsServiceImplTest {
             implements StatisticsRepository.DoctorStatusCount { }
 
     record DoctorPatients(UUID getDoctorId, long getTotal) implements StatisticsRepository.DoctorPatientCount { }
+
+    record RoomVisits(UUID getRoomId, VisitStatus getStatus, long getTotal)
+            implements StatisticsRepository.RoomVisitCount { }
+
+    record RoomServices(UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
+            implements StatisticsRepository.RoomServiceCount { }
+
+    record Performed(UUID getServiceId, UUID getRoomId, ParaclinicalOrderDetailStatus getStatus, long getTotal)
+            implements StatisticsRepository.PerformedServiceCount { }
+
+    record RevenueLine(String getDay, String getType, String getMethod, long getPayments, BigDecimal getTotalAmount,
+            BigDecimal getInsuranceAmount, BigDecimal getPatientAmount) implements StatisticsRepository.RevenueRow { }
+
+    private static RevenueLine revenue(String day, String type, String method, long payments, long insurance,
+            long patient) {
+        return new RevenueLine(day, type, method, payments, BigDecimal.valueOf(insurance + patient),
+                BigDecimal.valueOf(insurance), BigDecimal.valueOf(patient));
+    }
+
+    record Totals(long getConclusions, long getWithIcd, long getDistinctCodes)
+            implements StatisticsRepository.ConclusionTotals { }
+
+    record MainDiagnosis(String getCode, String getName, long getCases, long getPatients)
+            implements StatisticsRepository.MainDiagnosisCount { }
+
+    record Code(String getCode, String getName, long getCases) implements StatisticsRepository.CodeCount { }
 
     record Breakdown(LocalDate getDay, VisitStatus getStatus, VisitDoituongbnLoai getPatientType, boolean getPriority,
             long getTotal, long getFollowUps) implements StatisticsRepository.VisitBreakdown { }
@@ -332,6 +373,332 @@ class StatisticsServiceImplTest {
         assertThatThrownBy(() -> service.getDoctorStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-29 View Department and Room Statistics ----
+
+    private static Department department(UUID id, String code, String name, DepartmentType type, boolean active) {
+        Department department = org.mockito.Mockito.mock(Department.class);
+        lenient().when(department.getId()).thenReturn(id);
+        lenient().when(department.getDepartmentCode()).thenReturn(code);
+        lenient().when(department.getDepartmentName()).thenReturn(name);
+        lenient().when(department.getType()).thenReturn(type);
+        lenient().when(department.isActive()).thenReturn(active);
+        return department;
+    }
+
+    private static Room room(UUID id, UUID departmentId, String code, RoomType type, ActivationStatus status) {
+        Room room = org.mockito.Mockito.mock(Room.class);
+        lenient().when(room.getId()).thenReturn(id);
+        lenient().when(room.getDepartmentId()).thenReturn(departmentId);
+        lenient().when(room.getRoomCode()).thenReturn(code);
+        lenient().when(room.getRoomName()).thenReturn("Phòng " + code);
+        lenient().when(room.getType()).thenReturn(type);
+        lenient().when(room.getStatus()).thenReturn(status);
+        return room;
+    }
+
+    @Test
+    void departmentStatisticsSumTheWorkloadOfEachRoomByDepartment() {
+        UUID noi = UUID.randomUUID();
+        UUID xn = UUID.randomUUID();
+        UUID pk1 = UUID.randomUUID();
+        UUID pk2 = UUID.randomUUID();
+        UUID sh1 = UUID.randomUUID();
+        UUID closed = UUID.randomUUID();
+        Department clinical = department(noi, "NOI", "Khoa Nội", DepartmentType.CLINICAL, true);
+        Department lab = department(xn, "XN", "Khoa Xét nghiệm", DepartmentType.PARACLINICAL, true);
+        List<Room> rooms = List.of(
+                room(pk1, noi, "PK-1", RoomType.EXAMINATION, ActivationStatus.ACTIVE),
+                room(pk2, noi, "PK-2", RoomType.EXAMINATION, ActivationStatus.ACTIVE),
+                room(sh1, xn, "XN-SH-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(closed, xn, "XN-SH-9", RoomType.PARACLINICAL, ActivationStatus.INACTIVE));
+        when(repository.allDepartments()).thenReturn(List.of(clinical, lab));
+        when(repository.allRooms()).thenReturn(rooms);
+        when(repository.countVisitsByRoomAndStatus(any(), any())).thenReturn(List.of(
+                new RoomVisits(pk1, VisitStatus.COMPLETED, 3),
+                new RoomVisits(pk2, VisitStatus.COMPLETED, 6),
+                new RoomVisits(pk2, VisitStatus.WAITING, 2),
+                new RoomVisits(pk2, VisitStatus.CANCELLED, 1)));
+        when(repository.countServicesByRoomAndStatus(any(), any())).thenReturn(List.of(
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.COMPLETED, 10),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.PENDING_RESULT, 4),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.WAITING, 3),
+                new RoomServices(sh1, ParaclinicalOrderDetailStatus.ABANDONED, 1)));
+
+        DepartmentStatisticsResponse result = service.getDepartmentStatistics(null, null);
+
+        assertThat(result.visits()).isEqualTo(12);
+        assertThat(result.services()).isEqualTo(18);
+        // Busiest first: the lab (18 services) before the clinical department (12 visits).
+        assertThat(result.departments()).extracting(DepartmentRow::departmentCode).containsExactly("XN", "NOI");
+        DepartmentRow clinicalRow = result.departments().get(1);
+        assertThat(clinicalRow.visits()).isEqualTo(12);
+        assertThat(clinicalRow.completedVisits()).isEqualTo(9);
+        assertThat(clinicalRow.rooms()).containsExactly(
+                new DepartmentStatisticsResponse.RoomRow(pk2, "PK-2", "Phòng PK-2", RoomType.EXAMINATION, true, 9, 6, 2, 0, 0, 0, 0),
+                new DepartmentStatisticsResponse.RoomRow(pk1, "PK-1", "Phòng PK-1", RoomType.EXAMINATION, true, 3, 3, 0, 0, 0, 0, 0));
+        // The inactive room without work is not listed.
+        assertThat(result.departments().get(0).rooms()).containsExactly(
+                new DepartmentStatisticsResponse.RoomRow(sh1, "XN-SH-1", "Phòng XN-SH-1", RoomType.PARACLINICAL, true, 0, 0, 0, 18, 14, 3, 1));
+        verify(repository).countServicesByRoomAndStatus(
+                Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"));
+    }
+
+    @Test
+    void departmentStatisticsListActiveRoomsWithoutWorkAndHideIdleInactiveDepartments() {
+        UUID noi = UUID.randomUUID();
+        UUID old = UUID.randomUUID();
+        UUID pk1 = UUID.randomUUID();
+        List<Department> departments = List.of(
+                department(noi, "NOI", "Khoa Nội", DepartmentType.CLINICAL, true),
+                department(old, "CU", "Khoa cũ", DepartmentType.CLINICAL, false));
+        List<Room> rooms = List.of(room(pk1, noi, "PK-1", RoomType.EXAMINATION, ActivationStatus.ACTIVE));
+        when(repository.allDepartments()).thenReturn(departments);
+        when(repository.allRooms()).thenReturn(rooms);
+        when(repository.countVisitsByRoomAndStatus(any(), any())).thenReturn(List.of());
+        when(repository.countServicesByRoomAndStatus(any(), any())).thenReturn(List.of());
+
+        DepartmentStatisticsResponse result = service.getDepartmentStatistics(null, null);
+
+        assertThat(result.departments()).extracting(DepartmentRow::departmentCode).containsExactly("NOI");
+        assertThat(result.departments().get(0).rooms()).extracting(DepartmentStatisticsResponse.RoomRow::visits).containsExactly(0L);
+    }
+
+    @Test
+    void departmentStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getDepartmentStatistics(LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-30 View Paraclinical Service Statistics ----
+
+    private static MedicalService medicalService(UUID id, String code, String name, MedicalServiceType type, UUID groupId) {
+        MedicalService service = org.mockito.Mockito.mock(MedicalService.class);
+        lenient().when(service.getId()).thenReturn(id);
+        lenient().when(service.getCode()).thenReturn(code);
+        lenient().when(service.getTenchidinh()).thenReturn(name);
+        lenient().when(service.getType()).thenReturn(type);
+        lenient().when(service.getServiceGroupId()).thenReturn(groupId);
+        return service;
+    }
+
+    private static ServiceGroup serviceGroup(UUID id, String code, String name) {
+        ServiceGroup group = org.mockito.Mockito.mock(ServiceGroup.class);
+        lenient().when(group.getId()).thenReturn(id);
+        lenient().when(group.getServiceGroupCode()).thenReturn(code);
+        lenient().when(group.getServiceGroupName()).thenReturn(name);
+        return group;
+    }
+
+    @Test
+    void paraclinicalStatisticsCountPerformedServicesByTypeGroupServiceAndRoom() {
+        UUID sinhHoa = UUID.randomUUID();
+        UUID sieuAm = UUID.randomUUID();
+        UUID glucose = UUID.randomUUID();
+        UUID astAlt = UUID.randomUUID();
+        UUID bung = UUID.randomUUID();
+        UUID sh1 = UUID.randomUUID();
+        UUID sh2 = UUID.randomUUID();
+        UUID sa1 = UUID.randomUUID();
+        List<MedicalService> services = List.of(
+                medicalService(glucose, "XN-SH-901", "Bộ đường huyết", MedicalServiceType.LAB, sinhHoa),
+                medicalService(astAlt, "XN-SH-004", "Đo hoạt độ AST, ALT", MedicalServiceType.LAB, sinhHoa),
+                medicalService(bung, "SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, sieuAm));
+        List<ServiceGroup> groups = List.of(
+                serviceGroup(sinhHoa, "BIOCHEMISTRY", "Sinh hóa"), serviceGroup(sieuAm, "ULTRASOUND", "Siêu âm"));
+        List<Room> rooms = List.of(
+                room(sh1, UUID.randomUUID(), "XN-SH-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(sh2, UUID.randomUUID(), "XN-SH-2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE),
+                room(sa1, UUID.randomUUID(), "SA-1", RoomType.PARACLINICAL, ActivationStatus.ACTIVE));
+        when(repository.countPerformedServices(any(), any())).thenReturn(List.of(
+                new Performed(glucose, sh1, ParaclinicalOrderDetailStatus.COMPLETED, 5),
+                new Performed(glucose, sh2, ParaclinicalOrderDetailStatus.PENDING_RESULT, 2),
+                new Performed(astAlt, sh1, ParaclinicalOrderDetailStatus.COMPLETED, 3),
+                new Performed(bung, sa1, ParaclinicalOrderDetailStatus.COMPLETED, 4)));
+        when(repository.servicesByIds(any())).thenReturn(services);
+        when(repository.serviceGroupsByIds(any())).thenReturn(groups);
+        when(repository.roomsByIds(any())).thenReturn(rooms);
+
+        ParaclinicalStatisticsResponse result = service.getParaclinicalStatistics(null, null);
+
+        assertThat(result.performed()).isEqualTo(14);
+        assertThat(result.withResult()).isEqualTo(12);
+        assertThat(result.byType()).containsExactly(
+                new ParaclinicalStatisticsResponse.TypeCount(MedicalServiceType.LAB, 10, 8),
+                new ParaclinicalStatisticsResponse.TypeCount(MedicalServiceType.IMAGING, 4, 4));
+        assertThat(result.byGroup()).containsExactly(
+                new ParaclinicalStatisticsResponse.GroupCount(sinhHoa, "BIOCHEMISTRY", "Sinh hóa", 10, 8),
+                new ParaclinicalStatisticsResponse.GroupCount(sieuAm, "ULTRASOUND", "Siêu âm", 4, 4));
+        assertThat(result.byService()).containsExactly(
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        glucose, "XN-SH-901", "Bộ đường huyết", MedicalServiceType.LAB, "Sinh hóa", 7, 5),
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        bung, "SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, "Siêu âm", 4, 4),
+                new ParaclinicalStatisticsResponse.ServiceCount(
+                        astAlt, "XN-SH-004", "Đo hoạt độ AST, ALT", MedicalServiceType.LAB, "Sinh hóa", 3, 3));
+        assertThat(result.byRoom()).containsExactly(
+                new ParaclinicalStatisticsResponse.RoomCount(sh1, "XN-SH-1", "Phòng XN-SH-1", 8, 8),
+                new ParaclinicalStatisticsResponse.RoomCount(sa1, "SA-1", "Phòng SA-1", 4, 4),
+                new ParaclinicalStatisticsResponse.RoomCount(sh2, "XN-SH-2", "Phòng XN-SH-2", 2, 0));
+        verify(repository).countPerformedServices(
+                Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"));
+    }
+
+    @Test
+    void paraclinicalStatisticsAreEmptyWithoutLookingUpCatalogsWhenNothingWasPerformed() {
+        when(repository.countPerformedServices(any(), any())).thenReturn(List.of());
+
+        ParaclinicalStatisticsResponse result = service.getParaclinicalStatistics(null, null);
+
+        assertThat(result.performed()).isZero();
+        assertThat(result.byService()).isEmpty();
+        verify(repository, org.mockito.Mockito.never()).servicesByIds(any());
+        verify(repository, org.mockito.Mockito.never()).roomsByIds(any());
+    }
+
+    @Test
+    void paraclinicalStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getParaclinicalStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-31 View Revenue Statistics ----
+
+    @Test
+    void revenueStatisticsSeparateInsuranceAndPatientAmountsByDayTypeAndMethod() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of(
+                revenue("2026-11-02", "EXAMINATION_FEE", "CASH", 3, 200000, 250000),
+                revenue("2026-11-02", "PARACLINICAL_FEE", "BANK_TRANSFER", 2, 0, 600000),
+                revenue("2026-11-04", "EXAMINATION_FEE", "BANK_TRANSFER", 1, 100000, 50000)));
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(
+                LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 4), null);
+
+        assertThat(result.groupBy()).isEqualTo(StatisticsGroupBy.DAY);
+        RevenueStatisticsResponse.Amounts summary = result.summary();
+        assertThat(summary.payments()).isEqualTo(6);
+        assertThat(summary.totalAmount()).isEqualByComparingTo("1200000");
+        assertThat(summary.insuranceAmount()).isEqualByComparingTo("300000");
+        assertThat(summary.patientAmount()).isEqualByComparingTo("900000");
+        assertThat(result.series()).extracting(RevenueStatisticsResponse.PeriodAmounts::period).containsExactly(
+                LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 3), LocalDate.of(2026, 11, 4));
+        assertThat(result.series()).extracting(period -> period.amounts().totalAmount().longValue())
+                .containsExactly(1050000L, 0L, 150000L);
+        assertThat(result.byType()).extracting(RevenueStatisticsResponse.TypeAmounts::type)
+                .containsExactly(PaymentType.EXAMINATION_FEE, PaymentType.PARACLINICAL_FEE);
+        assertThat(result.byType().get(0).amounts().insuranceAmount()).isEqualByComparingTo("300000");
+        // Methods are listed by the money the patients paid, largest first.
+        assertThat(result.byMethod()).extracting(RevenueStatisticsResponse.MethodAmounts::method)
+                .containsExactly(PaymentMethod.BANK_TRANSFER, PaymentMethod.CASH);
+        assertThat(result.byMethod().get(0).amounts().patientAmount()).isEqualByComparingTo("650000");
+        verify(repository).revenueByDayTypeAndMethod(
+                Instant.parse("2026-11-01T17:00:00Z"), Instant.parse("2026-11-04T17:00:00Z"));
+    }
+
+    @Test
+    void revenueStatisticsByMonthKeyEachMonthByItsFirstDay() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of(
+                revenue("2026-09-20", "EXAMINATION_FEE", "CASH", 1, 0, 150000),
+                revenue("2026-11-01", "EXAMINATION_FEE", "CASH", 2, 0, 300000)));
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(
+                LocalDate.of(2026, 9, 15), LocalDate.of(2026, 11, 11), StatisticsGroupBy.MONTH);
+
+        assertThat(result.series()).extracting(RevenueStatisticsResponse.PeriodAmounts::period).containsExactly(
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1));
+        assertThat(result.series()).extracting(period -> period.amounts().payments()).containsExactly(1L, 0L, 2L);
+    }
+
+    @Test
+    void revenueStatisticsAreZeroWhenNothingWasPaid() {
+        when(repository.revenueByDayTypeAndMethod(any(), any())).thenReturn(List.of());
+
+        RevenueStatisticsResponse result = service.getRevenueStatistics(null, null, StatisticsGroupBy.DAY);
+
+        assertThat(result.summary()).isEqualTo(RevenueStatisticsResponse.Amounts.zero());
+        assertThat(result.byType()).isEmpty();
+        assertThat(result.byMethod()).isEmpty();
+        assertThat(result.series()).hasSize(11);
+    }
+
+    @Test
+    void revenueStatisticsRejectInvalidPeriods() {
+        assertThatThrownBy(() -> service.getRevenueStatistics(
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2), StatisticsGroupBy.MONTH))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        verifyNoInteractions(repository);
+    }
+
+    // ---- UC-32 View Diagnosis Statistics ----
+
+    @Test
+    void diagnosisStatisticsListTheMostCommonCodesCategoriesAndSecondaryDiagnoses() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(40, 40, 12));
+        when(repository.topMainDiagnoses(any(), any(), any())).thenReturn(List.of(
+                new MainDiagnosis("J06.9", "Nhiễm trùng hô hấp trên cấp", 9, 8),
+                new MainDiagnosis("I10", "Tăng huyết áp vô căn", 6, 6)));
+        when(repository.topDiagnosisCategories(any(), any(), any())).thenReturn(List.of(
+                new Code("J06", "Nhiễm trùng cấp đường hô hấp trên", 11)));
+        when(repository.topSecondaryDiagnoses(any(), any(), any())).thenReturn(List.of(
+                new Code("E11.9", "Đái tháo đường type 2", 4)));
+
+        DiagnosisStatisticsResponse result = service.getDiagnosisStatistics(null, null, null);
+
+        assertThat(result.limit()).isEqualTo(StatisticsServiceImpl.DEFAULT_DIAGNOSIS_LIMIT);
+        assertThat(result.conclusions()).isEqualTo(40);
+        assertThat(result.withIcd()).isEqualTo(40);
+        assertThat(result.withoutIcd()).isZero();
+        assertThat(result.distinctCodes()).isEqualTo(12);
+        assertThat(result.mainDiagnoses()).containsExactly(
+                new DiagnosisStatisticsResponse.DiagnosisRow("J06.9", "Nhiễm trùng hô hấp trên cấp", 9, 8),
+                new DiagnosisStatisticsResponse.DiagnosisRow("I10", "Tăng huyết áp vô căn", 6, 6));
+        assertThat(result.categories()).containsExactly(
+                new DiagnosisStatisticsResponse.CategoryRow("J06", "Nhiễm trùng cấp đường hô hấp trên", 11));
+        assertThat(result.secondaryDiagnoses()).containsExactly(
+                new DiagnosisStatisticsResponse.SecondaryRow("E11.9", "Đái tháo đường type 2", 4));
+        verify(repository).topMainDiagnoses(Instant.parse("2026-10-31T17:00:00Z"), Instant.parse("2026-11-11T17:00:00Z"),
+                Pageable.ofSize(StatisticsServiceImpl.DEFAULT_DIAGNOSIS_LIMIT));
+    }
+
+    @Test
+    void diagnosisStatisticsUseTheRequestedLimit() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(3, 3, 3));
+        when(repository.topMainDiagnoses(any(), any(), any())).thenReturn(List.of());
+        when(repository.topDiagnosisCategories(any(), any(), any())).thenReturn(List.of());
+        when(repository.topSecondaryDiagnoses(any(), any(), any())).thenReturn(List.of());
+
+        service.getDiagnosisStatistics(null, null, 25);
+
+        verify(repository).topMainDiagnoses(any(), any(), eq(Pageable.ofSize(25)));
+        verify(repository).topSecondaryDiagnoses(any(), any(), eq(Pageable.ofSize(25)));
+    }
+
+    @Test
+    void diagnosisStatisticsSkipTheRankingsWhenNoConclusionHasACode() {
+        when(repository.conclusionTotals(any(), any())).thenReturn(new Totals(0, 0, 0));
+
+        DiagnosisStatisticsResponse result = service.getDiagnosisStatistics(null, null, null);
+
+        assertThat(result.mainDiagnoses()).isEmpty();
+        verify(repository, org.mockito.Mockito.never()).topMainDiagnoses(any(), any(), any());
+    }
+
+    @Test
+    void diagnosisStatisticsRejectAnInvalidLimitOrPeriod() {
+        for (int limit : new int[] {0, 101}) {
+            assertThatThrownBy(() -> service.getDiagnosisStatistics(null, null, limit))
+                    .isInstanceOfSatisfying(AppException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
+        }
+        assertThatThrownBy(() -> service.getDiagnosisStatistics(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 1), 10))
+                .isInstanceOf(AppException.class);
         verifyNoInteractions(repository);
     }
 }

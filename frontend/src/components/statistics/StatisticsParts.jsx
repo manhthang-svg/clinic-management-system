@@ -85,7 +85,7 @@ export function DonutWithLegend({ items, label }) {
 /** Segmented single choice, e.g. day / month. */
 export function SegmentedControl({ label, options, value, onChange }) {
   return (
-    <div className="inline-flex p-1 rounded-xl bg-slate-100" role="group" aria-label={label}>
+    <div className="statistics-print-hide inline-flex p-1 rounded-xl bg-slate-100" role="group" aria-label={label}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -106,7 +106,7 @@ export function SegmentedControl({ label, options, value, onChange }) {
 /** Quick periods plus from/to date inputs; `periodError` is shown as the single alert. */
 export function PeriodFilter({ idPrefix, period, presetId, periodError, onPreset, onDateChange }) {
   return (
-    <section className={`${CARD} flex flex-wrap items-end gap-4`} aria-label="Khoảng thời gian">
+    <section className={`${CARD} statistics-print-hide flex flex-wrap items-end gap-4`} aria-label="Khoảng thời gian">
       <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn nhanh">
         {PRESETS.map((preset) => (
           <button
@@ -153,7 +153,7 @@ export function RefreshButton({ loading, disabled, onClick }) {
 
 export function LoadError({ message, onRetry }) {
   return (
-    <div className="space-y-3 max-w-xl">
+    <div className="statistics-print-hide space-y-3 max-w-xl">
       <FormAlert>{message}</FormAlert>
       <button
         type="button"
@@ -169,12 +169,16 @@ export function LoadError({ message, onRetry }) {
 const REPORT_TABS = [
   { to: '/admin/reports', label: 'Lượt khám', end: true },
   { to: '/admin/reports/doctors', label: 'Bác sĩ' },
+  { to: '/admin/reports/departments', label: 'Khoa / Phòng' },
+  { to: '/admin/reports/paraclinical', label: 'Cận lâm sàng' },
+  { to: '/admin/reports/revenue', label: 'Doanh thu' },
+  { to: '/admin/reports/diagnoses', label: 'Bệnh thường gặp' },
 ];
 
 /** Tabs of the "Báo cáo thống kê" section, one per statistics use case. */
 export function ReportTabs() {
   return (
-    <nav aria-label="Loại báo cáo" className="flex flex-wrap gap-1 border-b border-slate-200">
+    <nav aria-label="Loại báo cáo" className="statistics-print-hide flex flex-wrap gap-1 border-b border-slate-200">
       {REPORT_TABS.map((tab) => (
         <NavLink
           key={tab.to}

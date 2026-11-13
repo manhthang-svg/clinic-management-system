@@ -5,9 +5,10 @@ import {
   Clock,
   Building2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   RotateCcw,
   RefreshCw,
-  Megaphone,
   User,
   ShieldCheck,
   MapPin,
@@ -29,53 +30,36 @@ import technicianApi from '../../apis/technicianApi';
 import {
   CheckInTicketModal,
   PatientClinicalDrawer,
+  ReacceptSkippedModal,
   RejectOrderModal,
   ReturnToWaitingDialog,
 } from '../../components/technician';
 import { PERFORM_MESSAGES, performErrorMessage } from '../../components/technician/performOrder';
 import { groupStatusOf, isServiceCheckedIn, serviceForAction } from '../../components/technician/queueGroups';
 
+const MSG01 = 'Không tìm thấy kết quả.';
+const MSG92 = 'Chưa có dữ liệu để hiển thị.';
+const MSG48 = 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.';
+const SKIPPED_PAGE_SIZES = [10, 20, 50];
+
 /**
- * Âm thanh chuông báo gọi số bệnh nhân (Web Audio API Synthesizer)
+ * Xóa dấu tiếng Việt và chuyển thường để tìm kiếm không phân biệt hoa/thường và dấu
  */
-function playChimeSound() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const now = ctx.currentTime;
-
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, now); // D5
-    gain1.gain.setValueAtTime(0.15, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.5);
-
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(880, now + 0.15); // A5
-    gain2.gain.setValueAtTime(0.18, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 0.7);
-  } catch {
-    // AudioContext blocked
-  }
+function removeDiacritics(str) {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
 }
 
 export function TechnicianQueuePage() {
-  // 1. Quản lý danh sách phòng máy thực tế từ backend
-  const [rooms, setRooms] = useState([]);
-  const [currentRoomId, setCurrentRoomId] = useState('');
-  const [roomsLoading, setRoomsLoading] = useState(true);
+  // 1. Quản lý danh sách phòng máy thực tế từ backend (tối ưu hóa: đọc cache phòng & activeRoom để load song song)
+  const [rooms, setRooms] = useState(() => (typeof technicianApi.getCachedRooms === 'function' ? technicianApi.getCachedRooms() : []) || []);
+  const [currentRoomId, setCurrentRoomId] = useState(() => (typeof technicianApi.getActiveRoomId === 'function' ? technicianApi.getActiveRoomId() : ''));
+  const [roomsLoading, setRoomsLoading] = useState(() => !(technicianApi.getCachedRooms?.()?.length));
 
   // 2. Dữ liệu hàng đợi và thống kê từ backend
   const [queueData, setQueueData] = useState({
@@ -87,7 +71,7 @@ export function TechnicianQueuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
-  // Quản lý 2 Tab: 'waiting_unconfirmed' (Chờ tiếp nhận / Chưa đến) & 'active_queue' (Hàng đợi vào phòng)
+  // Quản lý 3 Tab: 'waiting_unconfirmed' (Chờ tiếp nhận), 'active_queue' (Hàng đợi vào phòng) & 'skipped' (Đã bỏ qua)
   const [activeTab, setActiveTab] = useState('waiting_unconfirmed');
   const tabInitializedRef = useRef(false);
 
@@ -98,6 +82,11 @@ export function TechnicianQueuePage() {
   const [doctorRoomFilter, setDoctorRoomFilter] = useState('ALL');
   const [doctorRoomsList, setDoctorRoomsList] = useState([]);
 
+  // Bộ lọc & phân trang dành riêng cho Tab 3 (Đã bỏ qua)
+  const [skippedInsuranceFilter, setSkippedInsuranceFilter] = useState('ALL');
+  const [skippedPage, setSkippedPage] = useState(1);
+  const [skippedPageSize, setSkippedPageSize] = useState(10);
+
   // 4. Drawer & Modal states
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -106,6 +95,8 @@ export function TechnicianQueuePage() {
   const [orderToReturn, setOrderToReturn] = useState(null);
   const [ticketModalData, setTicketModalData] = useState(null);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [reacceptModalOpen, setReacceptModalOpen] = useState(false);
+  const [orderToReaccept, setOrderToReaccept] = useState(null);
   const navigate = useNavigate();
 
   // Debounce tìm kiếm (300ms)
@@ -121,7 +112,9 @@ export function TechnicianQueuePage() {
     let mounted = true;
     const fetchRooms = async () => {
       try {
-        setRoomsLoading(true);
+        if (!technicianApi.getCachedRooms?.()?.length) {
+          setRoomsLoading(true);
+        }
         const roomList = await technicianApi.getRooms();
         if (mounted) {
           const validRooms = Array.isArray(roomList) ? roomList : [];
@@ -129,7 +122,11 @@ export function TechnicianQueuePage() {
           if (validRooms.length > 0) {
             const assignedRoom = validRooms.find((r) => r.isAssigned);
             const defaultRoom = assignedRoom || validRooms[0];
-            setCurrentRoomId((prev) => (prev && validRooms.some((r) => r.id === prev) ? prev : defaultRoom.id));
+            setCurrentRoomId((prev) => {
+              const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
+              technicianApi.setActiveRoomId?.(selected);
+              return selected;
+            });
           }
         }
       } catch (err) {
@@ -169,8 +166,8 @@ export function TechnicianQueuePage() {
         const response = await technicianApi.getQueue(
           {
             roomId,
-            search: debouncedSearch,
-            status: statusFilter,
+            search: activeTab === 'skipped' ? undefined : debouncedSearch,
+            status: activeTab === 'active_queue' ? statusFilter : 'ALL',
             doctorRoom: doctorRoomFilter,
           },
           signal
@@ -213,7 +210,7 @@ export function TechnicianQueuePage() {
         setRefreshing(false);
       }
     },
-    [debouncedSearch, statusFilter, doctorRoomFilter]
+    [debouncedSearch, statusFilter, doctorRoomFilter, activeTab]
   );
 
   // Tải dữ liệu và đặt lịch tự động làm mới nền mỗi 10 giây (chỉ khi tab đang active)
@@ -254,6 +251,7 @@ export function TechnicianQueuePage() {
   // Xử lý đổi phòng thủ công
   const handleRoomSelect = (roomId) => {
     setCurrentRoomId(roomId);
+    technicianApi.setActiveRoomId?.(roomId);
     const selectedRoom = rooms.find((r) => r.id === roomId);
     // Cập nhật ngay canManage theo phòng vừa chọn để UI phản hồi tức thì
     setQueueData((prev) => ({
@@ -263,7 +261,7 @@ export function TechnicianQueuePage() {
     toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom?.code || ''} - ${selectedRoom?.name || ''}`);
   };
 
-  const isInitialLoading = roomsLoading || !currentRoomId || queueData.stats === null;
+  const isInitialLoading = !currentRoomId || queueData.stats === null;
   const stats = queueData.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
   // Chỉ hiển thị những ca đã thanh toán (loại bỏ PENDING_PAYMENT)
   const orders = useMemo(() => {
@@ -283,6 +281,8 @@ export function TechnicianQueuePage() {
           ...item,
           isCheckedIn: isItemCheckedIn,
           roomServices: [item],
+          skippedAt: item.skippedAt || null,
+          skippedAtTime: item.skippedAtTime || null,
         });
       } else {
         const existing = groups.get(groupKey);
@@ -298,24 +298,31 @@ export function TechnicianQueuePage() {
           existing.isCheckedIn = true;
           existing.checkedInAtTime = item.checkedInAtTime;
         }
+        if (item.skippedAt && !existing.skippedAt) {
+          existing.skippedAt = item.skippedAt;
+        }
+        if (item.skippedAtTime && !existing.skippedAtTime) {
+          existing.skippedAtTime = item.skippedAtTime;
+        }
       }
     }
 
     return Array.from(groups.values()).map((group) => {
       const status = groupStatusOf(group.roomServices);
+      const isSkipped = status === 'SKIPPED' || group.roomServices.some((s) => Boolean(s.isSkipped) || s.status === 'SKIPPED');
       return {
         ...group,
         status,
         isCheckedIn: group.roomServices.some(isServiceCheckedIn),
-        isSkipped: status === 'SKIPPED',
+        isSkipped,
       };
     });
   }, [orders]);
 
-  // Tab 1: Bệnh nhân chưa có mặt (chưa check-in, chưa có STT) - Sắp xếp theo ưu tiên và thời gian chỉ định
+  // Tab 1: Bệnh nhân chưa có mặt (chưa check-in, chưa có STT, chưa bị bỏ qua) - Sắp xếp theo ưu tiên và thời gian chỉ định
   const unconfirmedList = useMemo(() => {
     return groupedOrders
-      .filter((o) => !o.isCheckedIn)
+      .filter((o) => !o.isCheckedIn && !o.isSkipped && o.status !== 'SKIPPED')
       .sort((a, b) => {
         if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
         if (a.priority !== 'PRIORITY' && b.priority === 'PRIORITY') return 1;
@@ -323,10 +330,18 @@ export function TechnicianQueuePage() {
       });
   }, [groupedOrders]);
 
-  // Tab 2: Bệnh nhân đã có mặt ngoài sảnh và đã được cấp số thứ tự - SẮP XẾP SỐ THỨ TỰ TĂNG DẦN (thấp lên trước, cao ở sau: 01, 02, 03...)
+  // Tab 2: Bệnh nhân đã có mặt ngoài sảnh và đã được cấp số thứ tự - SẮP XẾP SỐ THỨ TỰ TĂNG DẦN
+  // Tự động loại bỏ các ca đã thực hiện xong (PENDING_RESULT, COMPLETED) vì đã chuyển sang màn Nhập kết quả
   const activeQueueList = useMemo(() => {
     return groupedOrders
-      .filter((o) => o.isCheckedIn)
+      .filter(
+        (o) =>
+          o.isCheckedIn &&
+          !o.isSkipped &&
+          o.status !== 'SKIPPED' &&
+          o.status !== 'PENDING_RESULT' &&
+          o.status !== 'COMPLETED'
+      )
       .sort((a, b) => {
         if (a.priority === 'PRIORITY' && b.priority !== 'PRIORITY') return -1;
         if (a.priority !== 'PRIORITY' && b.priority === 'PRIORITY') return 1;
@@ -337,13 +352,91 @@ export function TechnicianQueuePage() {
       });
   }, [groupedOrders]);
 
-  // Thống kê chính xác theo lượt bệnh nhân đồng bộ với 2 Tab
+  // Helper lấy timestamp bỏ qua để sắp xếp (cũ nhất lên trước)
+  const getSkipTimestamp = (item) => {
+    if (item.skippedAt) {
+      const t = new Date(item.skippedAt).getTime();
+      if (!isNaN(t)) return t;
+    }
+    return null;
+  };
+
+  // Tab 3: Bệnh nhân / chỉ định bị bỏ qua - Sắp xếp mặc định theo thời điểm bỏ qua (cũ nhất lên trước)
+  const skippedList = useMemo(() => {
+    return groupedOrders
+      .filter((o) => o.isSkipped || o.status === 'SKIPPED')
+      .sort((a, b) => {
+        const timeA = getSkipTimestamp(a);
+        const timeB = getSkipTimestamp(b);
+        if (timeA !== null && timeB !== null) {
+          if (timeA !== timeB) return timeA - timeB;
+        } else if (a.skippedAtTime && b.skippedAtTime) {
+          const cmp = a.skippedAtTime.localeCompare(b.skippedAtTime);
+          if (cmp !== 0) return cmp;
+        }
+        const qA = a.queueNumber != null ? a.queueNumber : Infinity;
+        const qB = b.queueNumber != null ? b.queueNumber : Infinity;
+        if (qA !== qB) return qA - qB;
+        return (a.orderTime || '').localeCompare(b.orderTime || '');
+      });
+  }, [groupedOrders]);
+
+  // Lọc tìm kiếm & phân loại cho danh sách bệnh nhân bỏ qua (Tab 3)
+  const filteredSkippedList = useMemo(() => {
+    return skippedList.filter((item) => {
+      // 1. Ô tìm kiếm tự do theo Tên BN, Mã BN, Số thẻ BHYT (không phân biệt hoa/thường và dấu tiếng Việt)
+      if (searchQuery.trim()) {
+        const q = removeDiacritics(searchQuery.trim());
+        const matchName = removeDiacritics(item.patientName || '').includes(q);
+        const matchId = removeDiacritics(item.patientId || '').includes(q);
+        const matchInsurance = removeDiacritics(
+          item.insuranceNumber || item.insuranceCode || item.healthInsuranceNumber || ''
+        ).includes(q);
+        const matchCccd = removeDiacritics(item.cccd || item.citizenId || '').includes(q);
+        const matchOrderCode = removeDiacritics(item.orderCode || '').includes(q);
+        const matchQueueNumber = item.queueNumber != null && String(item.queueNumber).includes(q.replace('#', ''));
+
+        if (!matchName && !matchId && !matchInsurance && !matchCccd && !matchOrderCode && !matchQueueNumber) {
+          return false;
+        }
+      }
+
+      // 2. Bộ lọc loại khám: Tất cả (ALL), BHYT, Dịch vụ (SERVICE)
+      if (skippedInsuranceFilter === 'BHYT') {
+        if (item.insuranceType !== 'BHYT') return false;
+      } else if (skippedInsuranceFilter === 'SERVICE') {
+        if (item.insuranceType === 'BHYT') return false;
+      }
+
+      // 3. Lọc theo phòng gửi chỉ định
+      if (doctorRoomFilter !== 'ALL' && item.doctorRoom !== doctorRoomFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [skippedList, searchQuery, skippedInsuranceFilter, doctorRoomFilter]);
+
+  // Phân trang cho Tab 3 (Đã bỏ qua)
+  const totalSkippedRecords = filteredSkippedList.length;
+  const totalSkippedPages = Math.max(1, Math.ceil(totalSkippedRecords / skippedPageSize));
+  const validSkippedPage = Math.min(skippedPage, totalSkippedPages);
+
+  const pagedSkippedOrders = useMemo(() => {
+    const start = (validSkippedPage - 1) * skippedPageSize;
+    return filteredSkippedList.slice(start, start + skippedPageSize);
+  }, [filteredSkippedList, validSkippedPage, skippedPageSize]);
+
+  const skippedStartIndex = totalSkippedRecords === 0 ? 0 : (validSkippedPage - 1) * skippedPageSize + 1;
+  const skippedEndIndex = Math.min(validSkippedPage * skippedPageSize, totalSkippedRecords);
+
+  // Thống kê chính xác theo lượt bệnh nhân đồng bộ với 3 Tab
   const patientStats = useMemo(() => {
     const totalPatients = groupedOrders.length;
     const totalServices = orders.length;
     const activeQueueCount = activeQueueList.length;
     const priority = groupedOrders.filter((o) => o.priority === 'PRIORITY' && o.status !== 'CANCELLED').length;
-    const skipped = groupedOrders.filter((o) => o.isSkipped || o.status === 'SKIPPED').length;
+    const skipped = skippedList.length;
     const unconfirmed = unconfirmedList.length;
 
     return {
@@ -354,17 +447,23 @@ export function TechnicianQueuePage() {
       skipped,
       unconfirmed,
     };
-  }, [groupedOrders, orders.length, activeQueueList.length, unconfirmedList.length]);
+  }, [groupedOrders, orders.length, activeQueueList.length, skippedList.length, unconfirmedList.length]);
 
   // Danh sách hiển thị theo tab hiện tại
-  const displayedOrders = activeTab === 'waiting_unconfirmed' ? unconfirmedList : activeQueueList;
+  const displayedOrders = useMemo(() => {
+    if (activeTab === 'waiting_unconfirmed') return unconfirmedList;
+    if (activeTab === 'active_queue') return activeQueueList;
+    return pagedSkippedOrders;
+  }, [activeTab, unconfirmedList, activeQueueList, pagedSkippedOrders]);
 
-  // Đặt lại bộ lọc
+  // Đặt lại bộ lọc & tìm kiếm về mặc định
   const handleResetFilters = () => {
     setSearchQuery('');
     setDebouncedSearch('');
     setStatusFilter('ALL');
     setDoctorRoomFilter('ALL');
+    setSkippedInsuranceFilter('ALL');
+    setSkippedPage(1);
     toast.info('Đã đặt lại bộ lọc danh sách hàng đợi.');
   };
 
@@ -387,12 +486,11 @@ export function TechnicianQueuePage() {
       setActionLoadingId(order.id);
       const targetId = order.roomServices?.[0]?.id || order.id;
       const updated = await technicianApi.checkInOrder(targetId);
-      playChimeSound();
       const numStr = updated?.queueNumber
         ? (updated.queueNumber < 10 ? `0${updated.queueNumber}` : updated.queueNumber)
         : '';
       toast.success(
-        `✓ Đã xác nhận bệnh nhân ${order.patientName} có mặt! Cấp số thứ tự #${numStr}`,
+        `Đã xác nhận bệnh nhân ${order.patientName} có mặt! Cấp số thứ tự #${numStr}`,
         { duration: 4500 }
       );
       if (selectedOrder?.id === order.id || order.roomServices?.some((s) => s.id === selectedOrder?.id)) {
@@ -421,30 +519,32 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Thao tác: Phát loa gọi số bệnh nhân
-  const handleCallQueue = (order, e) => {
-    e?.stopPropagation();
-    playChimeSound();
-    const numStr = order.queueNumber
-      ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber)
-      : '---';
-    const roomName = currentRoom?.name || 'phòng máy';
-    toast.success(
-      `🔔 Đang gọi số #${numStr}: Bệnh nhân ${order.patientName} vào ${roomName}!`,
-      {
-        duration: 4500,
-        className: 'font-semibold text-xs',
-      }
-    );
-  };
-
-  // Thao tác: Tiếp nhận bệnh nhân vào phòng máy
+  // Thao tác: Tiếp nhận & hoàn tất thực hiện kỹ thuật vào phòng máy (chuyển thẳng sang Chờ nhập kết quả)
   const handleStartOrder = async (order, e) => {
     e?.stopPropagation();
     try {
       setActionLoadingId(order.id);
-      await technicianApi.acceptOrder(serviceForAction(order).id);
-      toast.success(`Đã tiếp nhận bệnh nhân ${order.patientName} vào phòng máy!`);
+      const targetService = serviceForAction(order);
+      await technicianApi.acceptOrder(targetService.id);
+      try {
+        await technicianApi.completeOrder(targetService.id);
+      } catch (completeErr) {
+        toast.error(performErrorMessage(completeErr));
+        await loadQueue(currentRoomId, { silent: true });
+        return;
+      }
+
+      toast.success(
+        `Đã tiếp nhận & hoàn tất kỹ thuật cho ${order.patientName}!`,
+        {
+          description: `${order.roomServices?.[0]?.serviceName || order.serviceName} • Chuyển sang chờ nhập kết quả`,
+          action: {
+            label: 'Nhập KQ ngay',
+            onClick: () => openResult(targetService),
+          },
+          duration: 5000,
+        }
+      );
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
@@ -496,9 +596,44 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // UC-66: xác nhận đã thực hiện; openResult = true là AF-01 (nhập kết quả ngay, ví dụ điện tim).
+  // Thao tác: Mở modal Tiếp nhận lại bệnh nhân bị bỏ qua (UC-46)
+  const handleOpenReacceptModal = (order) => {
+    setOrderToReaccept(order);
+    setReacceptModalOpen(true);
+  };
+
+  // Thao tác: Xác nhận tiếp nhận lại bệnh nhân bị bỏ qua (UC-46)
+  const handleConfirmReaccept = async (order, note) => {
+    try {
+      setActionLoadingId(order.id);
+      const targetService = serviceForAction(order);
+      await technicianApi.unskipOrder(targetService.id);
+      const numStr = order.queueNumber != null
+        ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber)
+        : '';
+      toast.success(
+        `Đã tiếp nhận lại bệnh nhân ${order.patientName}${numStr ? ` (Số #${numStr})` : ''} vào hàng đợi!${note ? ` Ghi chú: ${note}` : ''}`,
+        { duration: 4000 }
+      );
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder((prev) => (prev ? { ...prev, isSkipped: false, status: 'WAITING' } : null));
+      }
+      setReacceptModalOpen(false);
+      setOrderToReaccept(null);
+      await loadQueue(currentRoomId, { silent: true });
+      // Tự động chuyển về Tab 2 (Hàng đợi vào phòng)
+      setActiveTab('active_queue');
+    } catch (err) {
+      toast.error(err?.message || 'Không thể tiếp nhận lại bệnh nhân.');
+      throw err;
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // UC-66: xác nhận đã thực hiện xong kỹ thuật, chuyển sang chờ nhập kết quả
   const openResult = (order) => navigate(`/technician/results/${order.id}`);
-  const handleCompleteOrder = async (order, { openResultNow = false } = {}) => {
+  const handleCompleteOrder = async (order) => {
     try {
       setActionLoadingId(order.id);
       await technicianApi.completeOrder(serviceForAction(order).id);
@@ -506,14 +641,17 @@ export function TechnicianQueuePage() {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
       }
-      if (openResultNow) {
-        openResult(serviceForAction(order));
-        return;
-      }
-      toast.success(PERFORM_MESSAGES.performed, {
-        description: `BN ${order.patientName} • ${order.serviceName}`,
-        action: { label: 'Nhập kết quả', onClick: () => openResult(serviceForAction(order)) },
-      });
+      toast.success(
+        `Đã hoàn tất thực hiện kỹ thuật cho bệnh nhân ${order.patientName}!`,
+        {
+          description: `${order.roomServices?.[0]?.serviceName || order.serviceName} • Chuyển sang chờ nhập kết quả`,
+          action: {
+            label: 'Nhập KQ ngay',
+            onClick: () => openResult(serviceForAction(order)),
+          },
+          duration: 5000,
+        }
+      );
       await loadQueue(currentRoomId, { silent: true });
     } catch (err) {
       toast.error(performErrorMessage(err));
@@ -533,7 +671,7 @@ export function TechnicianQueuePage() {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
       }
-      toast.info(PERFORM_MESSAGES.returned);
+      toast.info(`Đã trả bệnh nhân ${order.patientName} về hàng chờ gọi.`);
       await loadQueue(currentRoomId, { silent: true });
     } catch (err) {
       toast.error(performErrorMessage(err));
@@ -628,7 +766,7 @@ export function TechnicianQueuePage() {
             </span>
             <span>•</span>
             <span className="text-slate-600">
-              Phụ trách: <strong>{currentRoom?.activeTech || 'Chưa phân công'}</strong>
+              Phụ trách: <strong>{currentRoom?.activeTech || 'Chưa có'}</strong>
             </span>
           </div>
         </div>
@@ -722,29 +860,37 @@ export function TechnicianQueuePage() {
           footerValueColor="text-amber-700"
         />
 
-        <MetricCard
-          title="Đã bỏ qua"
-          value={patientStats.skipped}
-          icon={SkipForward}
-          iconBg="bg-slate-100 text-slate-700"
-          valueColor="text-slate-800"
-          subtitle="Bệnh nhân tạm thời bỏ qua do vắng mặt"
-          dotColor="bg-slate-400"
-          footerLabel="Trạng thái"
-          footerValue="Vắng mặt"
-          footerValueColor="text-slate-600"
-        />
+        <div
+          onClick={() => {
+            setActiveTab('skipped');
+            setSkippedPage(1);
+          }}
+          className="cursor-pointer"
+        >
+          <MetricCard
+            title="Đã bỏ qua"
+            value={patientStats.skipped}
+            icon={SkipForward}
+            iconBg="bg-slate-100 text-slate-700"
+            valueColor="text-slate-800"
+            subtitle="Bệnh nhân tạm thời bỏ qua do vắng mặt"
+            dotColor="bg-slate-400"
+            footerLabel="Trạng thái"
+            footerValue="Vắng mặt"
+            footerValueColor="text-slate-600"
+          />
+        </div>
       </div>
 
-      {/* 3. BẢNG DANH SÁCH CHỜ CẬN LÂM SÀNG VỚI 2 TABS PHÂN TÁCH (THEO DEPARTMENTMANAGEMENTPAGE) */}
+      {/* 3. BẢNG DANH SÁCH CHỜ CẬN LÂM SÀNG VỚI 3 TABS PHÂN TÁCH */}
       <section className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
         {/* Tabs phân tách ở ngay trên bảng dữ liệu */}
-        <div className="flex items-center gap-2 border-b border-slate-200/80 pb-0">
+        <div className="flex items-center gap-2 border-b border-slate-200/80 pb-0 overflow-x-auto">
           {/* Tab 1: Chờ tiếp nhận / Chưa đến (Chưa có STT) */}
           <button
             type="button"
             onClick={() => setActiveTab('waiting_unconfirmed')}
-            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'waiting_unconfirmed'
                 ? 'border-[#0d9488] text-[#0d9488]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -767,7 +913,7 @@ export function TechnicianQueuePage() {
           <button
             type="button"
             onClick={() => setActiveTab('active_queue')}
-            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'active_queue'
                 ? 'border-[#0d9488] text-[#0d9488]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -785,6 +931,32 @@ export function TechnicianQueuePage() {
               {activeQueueList.length}
             </span>
           </button>
+
+          {/* Tab 3: Đã bỏ qua (Vắng mặt - UC-46) */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('skipped');
+              setSkippedPage(1);
+            }}
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'skipped'
+                ? 'border-[#0d9488] text-[#0d9488]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <SkipForward className="w-4 h-4" />
+            <span>Đã bỏ qua</span>
+            <span
+              className={`ml-1 px-2 py-0.5 text-[11px] rounded-full font-semibold ${
+                activeTab === 'skipped'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200/60'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {skippedList.length}
+            </span>
+          </button>
         </div>
 
         {/* Toolbar lọc & tìm kiếm */}
@@ -795,9 +967,14 @@ export function TechnicianQueuePage() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (activeTab === 'skipped') setSkippedPage(1);
+              }}
               placeholder={
-                activeTab === 'waiting_unconfirmed'
+                activeTab === 'skipped'
+                  ? 'Tìm theo Tên bệnh nhân, Mã BN, Số thẻ BHYT, CCCD...'
+                  : activeTab === 'waiting_unconfirmed'
                   ? 'Tìm theo Mã bệnh nhân (Patient ID), Mã phiếu, Họ tên, CCCD để xác nhận có mặt...'
                   : 'Tìm theo Mã bệnh nhân (Patient ID), STT, Mã phiếu, Họ tên, CCCD...'
               }
@@ -807,7 +984,26 @@ export function TechnicianQueuePage() {
 
           {/* Dropdowns lọc */}
           <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            {/* Bộ lọc trạng thái (chỉ áp dụng ở Tab 2 vì Tab 1 toàn bộ là ca chưa đến) */}
+            {/* Tab 3: Bộ lọc loại khám (Lọc loại khám: Tất cả loại khám, BHYT, Dịch vụ) */}
+            {activeTab === 'skipped' && (
+              <div className="relative min-w-[145px]">
+                <select
+                  value={skippedInsuranceFilter}
+                  onChange={(e) => {
+                    setSkippedInsuranceFilter(e.target.value);
+                    setSkippedPage(1);
+                  }}
+                  className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
+                >
+                  <option value="ALL">Tất cả loại khám</option>
+                  <option value="BHYT">BHYT</option>
+                  <option value="SERVICE">Dịch vụ</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+
+            {/* Bộ lọc trạng thái (chỉ áp dụng ở Tab 2 vì Tab 1 toàn bộ là ca chưa đến, Tab 3 là ca đã bỏ qua) */}
             {activeTab === 'active_queue' && (
               <div className="relative min-w-[145px]">
                 <select
@@ -816,9 +1012,7 @@ export function TechnicianQueuePage() {
                   className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
                 >
                   <option value="ALL">Tất cả trạng thái</option>
-                  <option value="WAITING">Chờ tiếp nhận</option>
-                  <option value="SKIPPED">Đã bỏ qua (Vắng)</option>
-                  <option value="IN_PROGRESS">Đang thực hiện</option>
+                  <option value="WAITING">Đang chờ gọi</option>
                   <option value="CANCELLED">Đã từ chối</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -829,7 +1023,10 @@ export function TechnicianQueuePage() {
             <div className="relative min-w-[170px]">
               <select
                 value={doctorRoomFilter}
-                onChange={(e) => setDoctorRoomFilter(e.target.value)}
+                onChange={(e) => {
+                  setDoctorRoomFilter(e.target.value);
+                  if (activeTab === 'skipped') setSkippedPage(1);
+                }}
                 className="w-full h-10 pl-3 pr-8 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0d9488] cursor-pointer appearance-none shadow-2xs"
               >
                 <option value="ALL">Tất cả phòng gửi chỉ định</option>
@@ -842,15 +1039,15 @@ export function TechnicianQueuePage() {
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
-            {/* Nút Đặt lại bộ lọc */}
+            {/* Nút Đặt lại / Xóa bộ lọc */}
             <button
               type="button"
               onClick={handleResetFilters}
               className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-all cursor-pointer shadow-2xs"
-              title="Xóa nhanh tất cả bộ lọc"
+              title="Xóa nhanh tất cả bộ lọc và quay về trang 1"
             >
               <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Đặt lại</span>
+              <span>{activeTab === 'skipped' ? 'Xóa bộ lọc' : 'Đặt lại'}</span>
             </button>
           </div>
         </div>
@@ -861,16 +1058,18 @@ export function TechnicianQueuePage() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3 px-3.5 whitespace-nowrap">STT / Mã phiếu</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap">STT / Hàng đợi</th>
                   <th className="py-3 px-2.5 whitespace-nowrap text-center">Ưu tiên</th>
                   <th className="py-3 px-3 whitespace-nowrap">Bệnh nhân</th>
                   <th className="py-3 px-2.5 whitespace-nowrap">Mã BN</th>
-                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Đối tượng</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Loại khám</th>
                   <th className="py-3 px-3 min-w-[200px]">Dịch vụ</th>
                   <th className="py-3 px-3 whitespace-nowrap">Bác sĩ & Phòng</th>
-                  <th className="py-3 px-2.5 whitespace-nowrap text-center">Thời gian</th>
+                  <th className="py-3 px-2.5 whitespace-nowrap text-center">
+                    {activeTab === 'skipped' ? 'Thời gian (Gọi / Bỏ qua)' : 'Thời gian'}
+                  </th>
                   <th className="py-3 px-2.5 whitespace-nowrap text-center">Trạng thái</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap text-right">Thao tác</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -905,6 +1104,10 @@ export function TechnicianQueuePage() {
                           {activeTab === 'waiting_unconfirmed' ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 select-none">
                               Chờ có mặt
+                            </span>
+                          ) : activeTab === 'skipped' ? (
+                            <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 text-xs tracking-tight">
+                              #{order.queueNumber != null ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber) : '---'}
                             </span>
                           ) : (
                             <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-xs tracking-tight">
@@ -956,7 +1159,7 @@ export function TechnicianQueuePage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/70">
-                            Viện phí
+                            Dịch vụ
                           </span>
                         )}
                       </td>
@@ -991,12 +1194,24 @@ export function TechnicianQueuePage() {
                         </div>
                       </td>
 
-                      {/* Thời gian gửi chỉ định */}
+                      {/* Thời gian */}
                       <td className="py-3 px-2.5 whitespace-nowrap text-center text-slate-600 font-medium">
-                        <div className="flex items-center justify-center gap-1 text-[11px]">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>{order.orderTime || '--:--'}</span>
-                        </div>
+                        {activeTab === 'skipped' ? (
+                          <div className="flex flex-col items-center justify-center gap-0.5 text-[11px]">
+                            <div className="flex items-center gap-1 text-slate-500 font-medium" title="Thời gian đăng ký / gọi">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{order.orderTime || order.checkedInAtTime || '--:--'}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-rose-600 font-bold" title="Thời điểm hệ thống ghi nhận bỏ qua">
+                              <span>Bỏ qua: {order.skippedAtTime || '--:--'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1 text-[11px]">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{order.orderTime || '--:--'}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Trạng thái tiếp nhận */}
@@ -1006,6 +1221,14 @@ export function TechnicianQueuePage() {
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                             Chưa đến
                           </span>
+                        ) : activeTab === 'skipped' ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              Đã bỏ qua
+                            </span>
+                            <span className="text-[10px] text-slate-400 mt-0.5 font-medium">Chờ thực hiện CLS</span>
+                          </div>
                         ) : (
                           <>
                             {isSkipped && (
@@ -1049,20 +1272,43 @@ export function TechnicianQueuePage() {
                       </td>
 
                       {/* Thao tác */}
-                      <td className="py-3 px-3.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                        {!canManage ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDetail(order)}
-                            className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
-                            title="Xem chi tiết lâm sàng & y lệnh"
-                          >
-                            <Eye className="w-3 h-3 text-slate-500 shrink-0" />
-                            <span>Chi tiết</span>
-                          </button>
+                      <td className="py-3 px-3.5 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+                        {activeTab === 'skipped' ? (
+                          /* Thao tác Tab 3: Tiếp nhận lại (Re-accept UC-46) */
+                          <div className="flex items-center justify-center">
+                            <button
+                              type="button"
+                              disabled={!canManage || isRowBusy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenReacceptModal(order);
+                              }}
+                              className={`h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold rounded-lg shadow-2xs transition-all shrink-0 ${
+                                !canManage
+                                  ? 'opacity-50 cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200'
+                                  : 'text-white bg-[#0d9488] hover:bg-[#0f766e] cursor-pointer active:scale-95'
+                              }`}
+                              title={!canManage ? MSG48 : 'Tiếp nhận lại bệnh nhân quay lại hàng đợi phục vụ (UC-46)'}
+                            >
+                              <RotateCcw className="w-3 h-3 shrink-0" />
+                              <span>Tiếp nhận lại</span>
+                            </button>
+                          </div>
+                        ) : !canManage ? (
+                          <div className="flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDetail(order)}
+                              className="h-7 inline-flex items-center gap-1.5 px-2.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
+                              title="Xem chi tiết lâm sàng & y lệnh"
+                            >
+                              <Eye className="w-3 h-3 text-slate-500 shrink-0" />
+                              <span>Chi tiết</span>
+                            </button>
+                          </div>
                         ) : activeTab === 'waiting_unconfirmed' ? (
                           /* Thao tác Tab 1: Xác nhận có mặt */
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-center">
                             <button
                               type="button"
                               onClick={(e) => handleCheckInOrder(order, e)}
@@ -1074,21 +1320,8 @@ export function TechnicianQueuePage() {
                             </button>
                           </div>
                         ) : (
-                          /* Thao tác Tab 2: Gọi số, Tiếp nhận, Bỏ qua / Nhận lại / Đã thực hiện */
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Nút Gọi số / Gọi lại */}
-                            {(isWaiting || isSkipped) && (
-                              <button
-                                type="button"
-                                onClick={(e) => handleCallQueue(order, e)}
-                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                                title={isSkipped ? 'Phát loa gọi lại bệnh nhân vào phòng' : 'Phát loa gọi số bệnh nhân vào phòng'}
-                              >
-                                <Megaphone className="w-3 h-3 text-amber-600 shrink-0" />
-                                <span>{isSkipped ? 'Gọi lại' : 'Gọi số'}</span>
-                              </button>
-                            )}
-
+                          /* Thao tác Tab 2: Tiếp nhận, Bỏ qua / Nhận lại / Đã thực hiện */
+                          <div className="flex items-center justify-center gap-1.5">
                             {/* Nút Tiếp nhận (khi WAITING) */}
                             {isWaiting && (
                               <button
@@ -1140,26 +1373,17 @@ export function TechnicianQueuePage() {
                               </button>
                             )}
 
-                            {/* UC-66: Đã thực hiện / Nhập KQ ngay / Trả về khi IN_PROGRESS */}
+                            {/* UC-66: Đã thực hiện & Trả về khi IN_PROGRESS (Phương án 2) */}
                             {isInProgress && (
                               <>
                                 <button
                                   type="button"
                                   disabled={actionLoadingId === order.id}
                                   onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
-                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                  className="h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
                                   title="Xác nhận đã thực hiện xong dịch vụ"
                                 >
                                   <span>Đã thực hiện</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={actionLoadingId === order.id}
-                                  onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order, { openResultNow: true }); }}
-                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                  title="Xác nhận đã thực hiện và nhập kết quả ngay"
-                                >
-                                  <span>Nhập KQ</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1183,7 +1407,36 @@ export function TechnicianQueuePage() {
                 {!queueLoading && displayedOrders.length === 0 && (
                   <tr>
                     <td colSpan={10} className="py-12 text-center text-slate-400 space-y-2">
-                      {activeTab === 'waiting_unconfirmed' ? (
+                      {activeTab === 'skipped' ? (
+                        skippedList.length === 0 ? (
+                          <>
+                            <SkipForward className="w-8 h-8 text-slate-300 mx-auto" />
+                            <p className="text-sm font-semibold text-slate-600">
+                              {MSG92}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Phòng máy hôm nay chưa ghi nhận bệnh nhân nào bị bỏ qua do vắng mặt.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-8 h-8 text-slate-300 mx-auto" />
+                            <p className="text-sm font-semibold text-slate-600">
+                              {MSG01}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Không có bệnh nhân bị bỏ qua nào khớp với từ khóa tìm kiếm hoặc bộ lọc hiện tại.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleResetFilters}
+                              className="text-xs text-[#0d9488] font-bold hover:underline cursor-pointer block mx-auto mt-2"
+                            >
+                              Xóa bộ lọc
+                            </button>
+                          </>
+                        )
+                      ) : activeTab === 'waiting_unconfirmed' ? (
                         <>
                           <Clock className="w-8 h-8 text-slate-300 mx-auto" />
                           <p className="text-sm font-semibold">
@@ -1234,15 +1487,80 @@ export function TechnicianQueuePage() {
             </table>
           </div>
 
+          {/* Phân trang dành riêng cho Tab 3 (Đã bỏ qua) */}
+          {activeTab === 'skipped' && totalSkippedRecords > 0 && (
+            <div className="px-5 py-3 bg-white border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="text-slate-600 font-medium">
+                Hiển thị <strong className="text-slate-900">{skippedStartIndex}–{skippedEndIndex}</strong> trên{' '}
+                <strong className="text-slate-900">{totalSkippedRecords}</strong> bệnh nhân bỏ qua
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <span>Số dòng:</span>
+                  <select
+                    value={skippedPageSize}
+                    onChange={(e) => {
+                      setSkippedPageSize(Number(e.target.value));
+                      setSkippedPage(1);
+                    }}
+                    className="h-8 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0d9488] cursor-pointer"
+                  >
+                    {SKIPPED_PAGE_SIZES.map((size) => (
+                      <option key={size} value={size}>
+                        {size} / trang
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSkippedPage((prev) => Math.max(1, prev - 1))}
+                    disabled={validSkippedPage <= 1}
+                    className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Trang trước"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Trước</span>
+                  </button>
+
+                  <span className="px-3 py-1 font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg text-xs">
+                    Trang {validSkippedPage} / {totalSkippedPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setSkippedPage((prev) => Math.min(totalSkippedPages, prev + 1))}
+                    disabled={validSkippedPage >= totalSkippedPages}
+                    className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Trang sau"
+                  >
+                    <span className="hidden sm:inline">Sau</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Footer thống kê số lượng đang hiển thị */}
           <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-medium">
             <div className="flex items-center gap-2">
               <span>
                 Đang hiển thị:{' '}
                 <strong className="text-slate-900">{displayedOrders.length}</strong> bệnh nhân
-                {activeTab === 'waiting_unconfirmed' ? ' (chưa đến phòng)' : ' (trong hàng đợi)'}
+                {activeTab === 'waiting_unconfirmed'
+                  ? ' (chưa đến phòng)'
+                  : activeTab === 'skipped'
+                  ? ' (đã bỏ qua)'
+                  : ' (trong hàng đợi)'}
               </span>
-              {(searchQuery || (activeTab === 'active_queue' && statusFilter !== 'ALL') || doctorRoomFilter !== 'ALL') && (
+              {(searchQuery ||
+                (activeTab === 'active_queue' && statusFilter !== 'ALL') ||
+                (activeTab === 'skipped' && skippedInsuranceFilter !== 'ALL') ||
+                doctorRoomFilter !== 'ALL') && (
                 <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-semibold border border-amber-200/60 text-[11px]">
                   Đang áp dụng bộ lọc tùy chỉnh
                 </span>
@@ -1290,6 +1608,18 @@ export function TechnicianQueuePage() {
         isOpen={isTicketModalOpen}
         onClose={() => setIsTicketModalOpen(false)}
         ticketData={ticketModalData}
+      />
+
+      {/* 8. MODAL TIẾP NHẬN LẠI BỆNH NHÂN BỎ QUA (UC-46) */}
+      <ReacceptSkippedModal
+        isOpen={reacceptModalOpen}
+        onClose={() => {
+          setReacceptModalOpen(false);
+          setOrderToReaccept(null);
+        }}
+        order={orderToReaccept}
+        room={currentRoom}
+        onConfirmReaccept={handleConfirmReaccept}
       />
     </div>
   );

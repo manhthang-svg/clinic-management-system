@@ -37,5 +37,7 @@ public record TechnicianQueueItemResponse(
         String rejectReason,
         List<TechnicianSiblingOrderResponse> allOrdersToday,
         boolean isCheckedIn,
-        String checkedInAtTime
+        String checkedInAtTime,
+        String skippedAtTime,
+        java.time.Instant skippedAt
 ) {}

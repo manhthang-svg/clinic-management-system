@@ -1,8 +1,93 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   WellNest Hospital Management Design Tokens (Centralized CSS System)
+   Sonner Toast - WellNest Medical UI Design Alignment
    ========================================================================== */
+[data-sonner-toaster] {
+  --normal-bg: #ffffff;
+  --normal-border: #e2e8f0;
+  --normal-text: #0f172a;
+  --success-bg: #f0fdfa;
+  --success-border: #99f6e4;
+  --success-text: #0f766e;
+}
+
+[data-sonner-toast] {
+  font-family: var(--font-family-sans, 'Plus Jakarta Sans', system-ui, sans-serif) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 118, 110, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(13, 148, 136, 0.2) !important;
+  padding: 14px 18px !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  background: #f0fdfa !important;
+  border-color: #99f6e4 !important;
+  color: #0f766e !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  color: #115e59 !important;
+}
+
+[data-sonner-toast] [data-description] {
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  color: #0d9488 !important;
+  margin-top: 3px !important;
+  line-height: 1.35 !important;
+}
+
+/* Action button inside toast - styled with WellNest Brand Primary Teal */
+[data-sonner-toast] [data-button] {
+  background-color: #0d9488 !important;
+  color: #ffffff !important;
+  border-radius: 0.625rem !important;
+  font-weight: 700 !important;
+  font-size: 11.5px !important;
+  padding: 6px 12px !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 1px 2px rgba(13, 148, 136, 0.2) !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+[data-sonner-toast] [data-button]:hover {
+  background-color: #0f766e !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(13, 148, 136, 0.3) !important;
+}
+
+[data-sonner-toast] [data-button]:active {
+  transform: scale(0.96) !important;
+}
+
+/* Close button - repositioned to top right with clean styling */
+[data-sonner-toast] [data-close-button] {
+  top: 8px !important;
+  right: 8px !important;
+  left: auto !important;
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #ccfbf1 !important;
+  color: #0d9488 !important;
+  border-radius: 9999px !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background-color: #0d9488 !important;
+  color: #ffffff !important;
+}
+
 :root {
   /* Canvas & Surface Colors */
   --color-page-bg: #f4f8f7;
@@ -853,3 +938,44 @@ p[role='alert']:not(.banner) {
     -webkit-print-color-adjust: exact;
   }
 }
+
+/* UC-33: "In / Lưu PDF" on a statistics report page prints the report itself. Scoped with :has() so it changes
+   nothing for the other printed sheets. The admin shell is one screen high and scrolls inside, which would cut a
+   long report at the first page; in print it flows over as many pages as needed. */
+@media print {
+  body:has(.statistics-report-print) .admin-shell,
+  body:has(.statistics-report-print) .admin-shell-scroll {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body:has(.statistics-report-print) .admin-shell-chrome,
+  body:has(.statistics-report-print) .statistics-print-hide {
+    display: none !important;
+  }
+
+  .statistics-report-print,
+  .statistics-report-print * {
+    visibility: visible !important;
+  }
+
+  .statistics-report-print {
+    padding: 0 !important;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Charts keep their on-screen width; shrink them to the paper instead of running off the page. */
+  .statistics-report-print .recharts-surface {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .statistics-report-print section,
+  .statistics-report-print tr {
+    break-inside: avoid;
+  }
+}
+

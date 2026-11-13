@@ -1,6 +1,10 @@
 export { AdminDashboardPage } from './AdminDashboardPage';
 export { VisitStatisticsPage } from './VisitStatisticsPage';
 export { DoctorStatisticsPage } from './DoctorStatisticsPage';
+export { DepartmentStatisticsPage } from './DepartmentStatisticsPage';
+export { ParaclinicalStatisticsPage } from './ParaclinicalStatisticsPage';
+export { RevenueStatisticsPage } from './RevenueStatisticsPage';
+export { DiagnosisStatisticsPage } from './DiagnosisStatisticsPage';
 export { AccountManagementPage } from './AccountManagementPage';
 export { DepartmentManagementPage } from './DepartmentManagementPage';
 export { ServiceManagementPage } from './ServiceManagementPage';

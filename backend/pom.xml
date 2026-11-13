@@ -127,6 +127,13 @@
             <artifactId>bcpkix-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
         </dependency>
+
+        <!-- UC-33: statistics reports exported as Excel (.xlsx) workbooks -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.4.1</version>
+        </dependency>
     </dependencies>
 
     <build>

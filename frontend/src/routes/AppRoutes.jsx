@@ -6,6 +6,10 @@ import {
   AdminDashboardPage,
   VisitStatisticsPage,
   DoctorStatisticsPage,
+  DepartmentStatisticsPage,
+  ParaclinicalStatisticsPage,
+  RevenueStatisticsPage,
+  DiagnosisStatisticsPage,
   AccountManagementPage,
   DepartmentManagementPage,
   ServiceManagementPage,
@@ -68,6 +72,50 @@ export function AppRoutes({
             path="dashboard"
             element={
               <AdminDashboardPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/diagnoses"
+            element={
+              <DiagnosisStatisticsPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/revenue"
+            element={
+              <RevenueStatisticsPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/paraclinical"
+            element={
+              <ParaclinicalStatisticsPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="reports/departments"
+            element={
+              <DepartmentStatisticsPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

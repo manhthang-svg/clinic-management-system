@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,6 +36,14 @@ class StatisticsApiIT extends PostgresIntegrationTest {
     private static final String DASHBOARD = "/api/v1/statistics/dashboard";
     private static final String VISITS = "/api/v1/statistics/visits";
     private static final String DOCTORS = "/api/v1/statistics/doctors";
+    private static final String DEPARTMENTS = "/api/v1/statistics/departments";
+    private static final String PARACLINICAL = "/api/v1/statistics/paraclinical";
+    private static final String REVENUE = "/api/v1/statistics/revenue";
+    private static final String DIAGNOSES = "/api/v1/statistics/diagnoses";
+    private static final String EXPORT = "/api/v1/statistics/export";
+    private static final UUID LAB_DEPARTMENT = UUID.fromString("0192a000-0001-7000-8000-000000000003");
+    private static final UUID BIOCHEMISTRY = UUID.fromString("0192a000-0002-7000-8000-000000000002");
+    private static final UUID LAB_ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000008");
     private static final UUID RECEPTIONIST = UUID.fromString("0192a000-0005-7000-8000-000000000007");
     private static final UUID ROOM = UUID.fromString("0192a000-0004-7000-8000-000000000004");
 
@@ -170,11 +179,302 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void departmentStatisticsGroupRoomWorkloadByDepartmentOnPostgres() throws Exception {
+        visit("BN00000003", LocalDate.of(2003, 6, 2), "COMPLETED");
+        visit("BN00000004", LocalDate.of(2003, 6, 2), "COMPLETED");
+        visit("BN00000008", LocalDate.of(2003, 6, 3), "WAITING");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(DEPARTMENTS).param("from", "2003-06-01").param("to", "2003-06-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.visits").value(3))
+                .andExpect(jsonPath("$.data.services").value(0))
+                .andExpect(jsonPath("$.data.departments[0].departmentCode").value("TEST-NOI"))
+                .andExpect(jsonPath("$.data.departments[0].type").value("CLINICAL"))
+                .andExpect(jsonPath("$.data.departments[0].visits").value(3))
+                .andExpect(jsonPath("$.data.departments[0].completedVisits").value(2))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].roomCode").value("PK-NOI-TQ"))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].visits").value(3))
+                .andExpect(jsonPath("$.data.departments[0].rooms[0].inProgressVisits").value(1))
+                .andExpect(jsonPath("$.data.departments[0].rooms[1].roomCode").value("PK-NGOAI"))
+                .andExpect(jsonPath("$.data.departments[0].rooms[1].visits").value(0));
+
+        mockMvc.perform(get(DEPARTMENTS)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.TECHNICIAN))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void paraclinicalStatisticsCountPerformedServicesOnPostgres() throws Exception {
+        UUID glucose = labService("XN-GLU", "Định lượng Glucose");
+        UUID order = paraclinicalOrder("BN00000003", LocalDate.of(2003, 7, 1));
+        Instant inPeriod = Instant.parse("2003-07-01T03:00:00Z");
+        performed(order, glucose, "COMPLETED", inPeriod);
+        performed(order, glucose, "PENDING_RESULT", inPeriod);
+        performed(order, glucose, "WAITING", null); // not performed: not counted
+        performed(order, glucose, "COMPLETED", Instant.parse("2003-08-01T03:00:00Z")); // outside the period
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(PARACLINICAL).param("from", "2003-07-01").param("to", "2003-07-31")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.performed").value(2))
+                .andExpect(jsonPath("$.data.withResult").value(1))
+                .andExpect(jsonPath("$.data.byType[0].type").value("LAB"))
+                .andExpect(jsonPath("$.data.byGroup[0].groupName").value("Sinh hóa"))
+                .andExpect(jsonPath("$.data.byService[0].serviceCode").value("XN-GLU"))
+                .andExpect(jsonPath("$.data.byService[0].performed").value(2))
+                .andExpect(jsonPath("$.data.byRoom[0].roomCode").value("XN-SH"))
+                .andExpect(jsonPath("$.data.byRoom[0].withResult").value(1));
+
+        mockMvc.perform(get(PARACLINICAL).param("from", "2001-01-01").param("to", "2001-01-31")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.performed").value(0))
+                .andExpect(jsonPath("$.data.byService", hasSize(0)));
+        mockMvc.perform(get(PARACLINICAL)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.TECHNICIAN))))
+                .andExpect(status().isForbidden());
+    }
+
+    private UUID labService(String code, String name) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into services (id, code, tenchidinh, type, department_id, service_group_id, clinic_price, status,
+                    created_at, updated_at, version)
+                values (?, ?, ?, 'LAB', ?, ?, 50000, 'ACTIVE', now(), now(), 0)
+                """, id, code, name, LAB_DEPARTMENT, BIOCHEMISTRY);
+        return id;
+    }
+
+    /** A completed visit with its medical record and a paid paraclinical order. */
+    private UUID paraclinicalOrder(String mabenhnhan, LocalDate day) {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
+        UUID visit = UUID.randomUUID();
+        jdbc.update("""
+                insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
+                    doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
+                    status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, 'COMPLETED', now(), now(), 0)
+                """, visit, "VV-" + suffix, patient, ROOM, RECEPTIONIST, day, ++queueNumber);
+        String recordType = "TK-" + suffix;
+        jdbc.update("""
+                insert into medical_record_types (loaiba, ten, pham_vi, van_ban, is_default, created_at, updated_at,
+                    version)
+                values (?, 'Bệnh án ngoại trú', 'OUTPATIENT', '32/2023/TT-BYT', false, now(), now(), 0)
+                """, recordType);
+        UUID record = UUID.randomUUID();
+        jdbc.update("""
+                insert into medical_records (id, visit_id, soba, loaiba, status, opened_at, opened_by_account_id,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'OPEN', now(), ?, now(), now(), 0)
+                """, record, visit, "BA-" + suffix, recordType, RECEPTIONIST);
+        UUID payment = UUID.randomUUID();
+        jdbc.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount,
+                    insurance_total_amount, patient_total_amount, paid_at, created_at, updated_at, version)
+                values (?, ?, ?, 'PARACLINICAL_FEE', 'PAID', 50000, 0, 50000, now(), now(), now(), 0)
+                """, payment, "HD-" + suffix, visit);
+        UUID order = UUID.randomUUID();
+        jdbc.update("""
+                insert into paraclinical_orders (id, sophieu, medical_record_id, doctor_account_id, payment_id,
+                    chandoansobo, doituongbn, noichidinh, tongcong, status, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, 'E11', 2, 'Phòng khám Nội', 50000, 'RELEASED', now(), now(), 0)
+                """, order, "PCD-" + suffix, record, RECEPTIONIST, payment);
+        return order;
+    }
+
+    private void performed(UUID order, UUID service, String status, Instant performedAt) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into paraclinical_order_details (id, order_id, service_id, machidinh, ngaychidinh, tenchidinh,
+                    dongia, thanhtien, benhnhanphaitra, room_id, queue_number, status, released_at, accepted_at,
+                    performed_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, now(), 'Định lượng Glucose', 50000, 50000, 50000, ?, 1, ?, now(), now(), ?,
+                    now(), now(), 0)
+                """, id, order, service, "CD-" + id.toString().substring(0, 8), LAB_ROOM, status,
+                performedAt == null ? null : java.sql.Timestamp.from(performedAt));
+    }
+
+    @Test
+    void revenueStatisticsCountPaidReceiptsByClinicDayOnPostgres() throws Exception {
+        UUID first = visit("BN00000003", LocalDate.of(2003, 9, 1), "COMPLETED", null);
+        UUID second = visit("BN00000004", LocalDate.of(2003, 9, 1), "COMPLETED", null);
+        UUID later = visit("BN00000008", LocalDate.of(2003, 10, 5), "COMPLETED", null);
+        payment(first, "EXAMINATION_FEE", "PAID", "CASH", 100000, 50000, Instant.parse("2003-09-01T02:00:00Z"));
+        // 00:30 on 2 September in the clinic, still 1 September in UTC.
+        payment(first, "PARACLINICAL_FEE", "PAID", "BANK_TRANSFER", 0, 200000, Instant.parse("2003-09-01T17:30:00Z"));
+        payment(second, "EXAMINATION_FEE", "PENDING", null, 0, 150000, null);
+        payment(later, "EXAMINATION_FEE", "PAID", "CASH", 0, 150000, Instant.parse("2003-10-05T02:00:00Z"));
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(REVENUE).param("from", "2003-09-01").param("to", "2003-09-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary.payments").value(2))
+                .andExpect(jsonPath("$.data.summary.totalAmount").value(350000))
+                .andExpect(jsonPath("$.data.summary.insuranceAmount").value(100000))
+                .andExpect(jsonPath("$.data.summary.patientAmount").value(250000))
+                .andExpect(jsonPath("$.data.series", hasSize(30)))
+                .andExpect(jsonPath("$.data.series[0].amounts.totalAmount").value(150000))
+                .andExpect(jsonPath("$.data.series[1].period").value("2003-09-02"))
+                .andExpect(jsonPath("$.data.series[1].amounts.totalAmount").value(200000))
+                .andExpect(jsonPath("$.data.byMethod[0].method").value("BANK_TRANSFER"))
+                .andExpect(jsonPath("$.data.byMethod[1].method").value("CASH"))
+                .andExpect(jsonPath("$.data.byType", hasSize(2)));
+
+        mockMvc.perform(get(REVENUE).param("from", "2003-09-01").param("to", "2003-10-31").param("groupBy", "MONTH")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.series", hasSize(2)))
+                .andExpect(jsonPath("$.data.series[1].amounts.patientAmount").value(150000));
+
+        mockMvc.perform(get(REVENUE)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
+    }
+
+    private void payment(UUID visit, String type, String status, String method, long insurance, long patient,
+            Instant paidAt) {
+        UUID id = UUID.randomUUID();
+        String suffix = id.toString().substring(0, 8);
+        jdbc.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount, insurance_total_amount,
+                    patient_total_amount, payment_method, receipt_number, paid_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now(), 0)
+                """, id, "HD-" + suffix, visit, type, status, insurance + patient, insurance, patient, method,
+                paidAt == null ? null : "PT-" + suffix, paidAt == null ? null : java.sql.Timestamp.from(paidAt));
+    }
+
+    @Test
+    void diagnosisStatisticsRankTheMainDiagnosesOfThePeriodOnPostgres() throws Exception {
+        icd("U98", "Nhóm bệnh thử");
+        icd("U98.1", "Bệnh thử một");
+        icd("U98.2", "Bệnh thử hai");
+        icd("U97.0", "Bệnh kèm theo thử");
+        StaffAccount doctor = account(Role.DOCTOR);
+        Instant inPeriod = Instant.parse("2003-11-03T03:00:00Z");
+        UUID first = conclusion("BN00000003", doctor, "U98.1", "Bệnh thử một", inPeriod);
+        conclusion("BN00000004", doctor, "U98.1", "Bệnh thử một", inPeriod);
+        conclusion("BN00000008", doctor, "U98.2", "Bệnh thử hai", inPeriod);
+        conclusion("BN00000003", doctor, "U98.2", "Bệnh thử hai", Instant.parse("2003-12-01T03:00:00Z"));
+        secondary(first, "U97.0", "Bệnh kèm theo thử");
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get(DIAGNOSES).param("from", "2003-11-01").param("to", "2003-11-30")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.conclusions").value(3))
+                .andExpect(jsonPath("$.data.withIcd").value(3))
+                .andExpect(jsonPath("$.data.distinctCodes").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].icdCode").value("U98.1"))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].cases").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[0].patients").value(2))
+                .andExpect(jsonPath("$.data.mainDiagnoses[1].icdCode").value("U98.2"))
+                .andExpect(jsonPath("$.data.categories[0].categoryCode").value("U98"))
+                .andExpect(jsonPath("$.data.categories[0].categoryName").value("Nhóm bệnh thử"))
+                .andExpect(jsonPath("$.data.categories[0].cases").value(3))
+                .andExpect(jsonPath("$.data.secondaryDiagnoses[0].icdCode").value("U97.0"))
+                .andExpect(jsonPath("$.data.secondaryDiagnoses[0].cases").value(1));
+
+        mockMvc.perform(get(DIAGNOSES).param("from", "2003-11-01").param("to", "2003-11-30").param("limit", "1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mainDiagnoses", hasSize(1)));
+        mockMvc.perform(get(DIAGNOSES).param("limit", "0").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(DIAGNOSES).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(doctor)))
+                .andExpect(status().isForbidden());
+    }
+
+    private void icd(String code, String name) {
+        jdbc.update("""
+                insert into icd10 (maicd, tenicd, hieu_luc_tu) values (?, ?, date '2000-01-01')
+                on conflict (maicd) do nothing
+                """, code, name);
+    }
+
+    /** A completed visit, its medical record and the doctor's conclusion saved at {@code concludedAt}. */
+    private UUID conclusion(String mabenhnhan, StaffAccount doctor, String code, String name, Instant concludedAt) {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID visit = visit(mabenhnhan, LocalDate.ofInstant(concludedAt, java.time.ZoneOffset.UTC), "COMPLETED",
+                doctor.getId());
+        String recordType = "KL-" + suffix;
+        jdbc.update("""
+                insert into medical_record_types (loaiba, ten, pham_vi, van_ban, is_default, created_at, updated_at,
+                    version)
+                values (?, 'Bệnh án ngoại trú', 'OUTPATIENT', '32/2023/TT-BYT', false, now(), now(), 0)
+                """, recordType);
+        UUID record = UUID.randomUUID();
+        jdbc.update("""
+                insert into medical_records (id, visit_id, soba, loaiba, status, opened_at, opened_by_account_id,
+                    created_at, updated_at, version)
+                values (?, ?, ?, ?, 'LOCKED', now(), ?, now(), now(), 0)
+                """, record, visit, "BA-" + suffix, recordType, doctor.getId());
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into conclusions (id, medical_record_id, doctor_account_id, chandoan, maicd, tenicd, huongdieutri,
+                    ketquadieutri, loidanbacsi, concluded_at, created_at, updated_at, version)
+                values (?, ?, ?, ?, ?, ?, 'Điều trị ngoại trú', 1, 'Tái khám khi cần', ?, now(), now(), 0)
+                """, id, record, doctor.getId(), name, code, name, java.sql.Timestamp.from(concludedAt));
+        return id;
+    }
+
+    private void secondary(UUID conclusion, String code, String name) {
+        jdbc.update("""
+                insert into conclusion_secondary_diagnoses (id, conclusion_id, maicd, tenicd, thu_tu, created_at)
+                values (?, ?, ?, ?, 1, now())
+                """, UUID.randomUUID(), conclusion, code, name);
+    }
+
+    @Test
+    void adminDownloadsTheStatisticsAsAnExcelWorkbookAndTheExportIsAudited() throws Exception {
+        visit("BN00000003", LocalDate.of(2003, 12, 2), "COMPLETED");
+        StaffAccount admin = account(Role.ADMIN);
+        String token = accessToken(admin);
+
+        byte[] body = mockMvc.perform(get(EXPORT).param("from", "2003-12-01").param("to", "2003-12-31")
+                        .param("reports", "VISITS", "REVENUE")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                        HttpHeaders.CONTENT_TYPE,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"bao-cao-thong-ke_2003-12-01_2003-12-31.xlsx\""))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(body))) {
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(3);
+            assertThat(workbook.getSheetName(1)).isEqualTo("Lượt khám");
+            assertThat(workbook.getSheetName(2)).isEqualTo("Doanh thu");
+        }
+        assertThat(jdbc.queryForObject("""
+                select count(*) from audit_logs
+                where action = 'EXPORT' and entity_type = 'statistics_reports' and actor_account_id = ?
+                """, Integer.class, admin.getId())).isEqualTo(1);
+
+        mockMvc.perform(get(EXPORT).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(EXPORT).param("reports", "UNKNOWN").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(EXPORT).param("from", "2026-11-10").param("to", "2026-11-01")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(EXPORT).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.CASHIER))))
+                .andExpect(status().isForbidden());
+    }
+
     private void visit(String mabenhnhan, LocalDate queueDate, String status) {
         visit(mabenhnhan, queueDate, status, null);
     }
 
-    private void visit(String mabenhnhan, LocalDate queueDate, String status, UUID doctor) {
+    private UUID visit(String mabenhnhan, LocalDate queueDate, String status, UUID doctor) {
         UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = ?", UUID.class, mabenhnhan);
         UUID id = UUID.randomUUID();
         jdbc.update("""
@@ -184,6 +484,7 @@ class StatisticsApiIT extends PostgresIntegrationTest {
                 values (?, ?, ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, ?, ?, ?, now(), now(), 0)
                 """, id, "VV-" + id.toString().substring(0, 12), patient, ROOM, RECEPTIONIST, queueDate,
                 ++queueNumber, status, doctor);
+        return id;
     }
 
     private StaffAccount account(Role role) {

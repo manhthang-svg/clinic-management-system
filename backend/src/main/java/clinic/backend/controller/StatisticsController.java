@@ -1,23 +1,37 @@
 package clinic.backend.controller;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DashboardStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse;
 import clinic.backend.dto.response.DoctorStatisticsResponse;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
+import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
 import clinic.backend.enums.StatisticsGroupBy;
+import clinic.backend.enums.StatisticsReport;
+import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.StatisticsExportService;
 import clinic.backend.service.StatisticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Admin-only statistics (UC-26 → UC-32). Route access is restricted in SecurityConfig. */
+/** Admin-only statistics (UC-26 → UC-32) and their export (UC-33). Route access is restricted in SecurityConfig. */
 @RestController
 @RequestMapping("/api/v1/statistics")
 @RequiredArgsConstructor
@@ -25,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class StatisticsController {
 
     private final StatisticsService statisticsService;
+    private final StatisticsExportService statisticsExportService;
 
     @Operation(summary = "UC-26 Xem bảng thống kê tổng quan trong khoảng ngày (mặc định: đầu tháng đến hôm nay)")
     @GetMapping("/dashboard")
@@ -49,5 +64,57 @@ public class StatisticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.success(statisticsService.getDoctorStatistics(from, to));
+    }
+
+    @Operation(summary = "UC-29 Thống kê khối lượng công việc của từng khoa và từng phòng trong khoảng ngày")
+    @GetMapping("/departments")
+    public ApiResponse<DepartmentStatisticsResponse> getDepartmentStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsService.getDepartmentStatistics(from, to));
+    }
+
+    @Operation(summary = "UC-30 Thống kê dịch vụ cận lâm sàng đã thực hiện theo loại dịch vụ và theo phòng")
+    @GetMapping("/paraclinical")
+    public ApiResponse<ParaclinicalStatisticsResponse> getParaclinicalStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsService.getParaclinicalStatistics(from, to));
+    }
+
+    @Operation(summary = "UC-31 Thống kê doanh thu đã thu, tách phần BHYT chi trả và phần bệnh nhân trả")
+    @GetMapping("/revenue")
+    public ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) StatisticsGroupBy groupBy) {
+        return ApiResponse.success(statisticsService.getRevenueStatistics(from, to, groupBy));
+    }
+
+    @Operation(summary = "UC-32 Thống kê các bệnh thường gặp theo mã ICD-10 trong khoảng ngày")
+    @GetMapping("/diagnoses")
+    public ApiResponse<DiagnosisStatisticsResponse> getDiagnosisStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResponse.success(statisticsService.getDiagnosisStatistics(from, to, limit));
+    }
+
+    @Operation(summary = "UC-33 Xuất báo cáo thống kê ra tệp Excel (.xlsx); mặc định xuất mọi báo cáo")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportStatistics(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Set<StatisticsReport> reports,
+            @RequestParam(required = false) StatisticsGroupBy groupBy,
+            @RequestParam(required = false) Integer limit) {
+        StatisticsExportService.ExportedFile file =
+                statisticsExportService.exportExcel(StaffPrincipal.from(jwt), from, to, reports, groupBy, limit);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(file.fileName()).build().toString())
+                .body(file.content());
     }
 }
