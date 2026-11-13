@@ -191,10 +191,11 @@ export const visitApi = {
         });
     },
 
-    // Active ordinary medicines (BR-33, BR-52) by name, active ingredient or code.
+    // UC-59 BR-59-03: at most 20 active ordinary medicines by name, active ingredient, strength, internal code or
+    // registration number, ignoring accents.
     searchMedicines(keyword, signal) {
-        const query = new URLSearchParams({ keyword, limit: '10' });
-        return apiClient.request(`/prescriptions/medicines?${query.toString()}`, { signal });
+        const query = new URLSearchParams({ keyword });
+        return apiClient.request(`/prescriptions/medicine-search?${query.toString()}`, { signal });
     },
 
     searchIcd10(keyword, signal) {

@@ -17,6 +17,9 @@ public interface FollowUpAppointmentRepository extends JpaRepository<FollowUpApp
     List<FollowUpAppointment> findByPatientIdAndStatusOrderByFollowUpDateAsc(
             UUID patientId, FollowUpAppointmentStatus status);
 
+    /** At most one appointment per visit record (uq_follow_up_appointments_medical_record_id). */
+    Optional<FollowUpAppointment> findByMedicalRecordId(UUID medicalRecordId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select appointment from FollowUpAppointment appointment where appointment.id = :id")
     Optional<FollowUpAppointment> findByIdForUpdate(@Param("id") UUID id);

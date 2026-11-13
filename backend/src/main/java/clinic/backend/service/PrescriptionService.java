@@ -17,6 +17,9 @@ public interface PrescriptionService {
     /** Saves the visit's single prescription; the medical record stays open. */
     PrescriptionResponse save(StaffPrincipal principal, UUID visitId, SavePrescriptionRequest request);
 
-    /** Active ordinary medicines whose name, active ingredient or code contains the keyword. */
-    List<PrescribableMedicineResponse> searchMedicines(String keyword, int limit);
+    /**
+     * Active ordinary medicines whose name, active ingredient, strength, internal code or registration number
+     * contains the keyword, ignoring accents; at most 20 ordered by name.
+     */
+    List<PrescribableMedicineResponse> searchMedicines(String keyword);
 }

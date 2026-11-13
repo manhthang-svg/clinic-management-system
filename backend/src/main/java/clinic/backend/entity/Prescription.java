@@ -113,9 +113,11 @@ public class Prescription extends VersionedEntity {
         this.loaidon = "c";
         this.medicalRecordId = medicalRecordId;
         this.lienthongStatus = PrescriptionLienthongStatus.PENDING;
+        // UC-59 step 9: the prescribing time is set by the first save and kept by later saves.
+        this.prescribedAt = createdAt;
     }
 
-    /** UC-59 step 6: the prescription as the Doctor saved it (header fields). */
+    /** UC-59 step 9: the prescription as the Doctor saved it (header fields). */
     public void record(
             UUID doctorAccountId, String chandoansobo, short doituongbn, String luuY, String loiDan, Instant now) {
         this.doctorAccountId = doctorAccountId;
@@ -123,7 +125,6 @@ public class Prescription extends VersionedEntity {
         this.doituongbn = doituongbn;
         this.luuY = luuY;
         this.loiDan = loiDan;
-        this.prescribedAt = now;
         touch(now);
     }
 

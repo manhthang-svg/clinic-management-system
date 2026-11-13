@@ -179,7 +179,9 @@ class ConclusionServiceImplTest {
         Conclusion saved = new Conclusion(UUID.randomUUID(), NOW, record.getId());
         saved.record(DOCTOR_ID, "Viêm họng", "J02.9", "Bệnh J02.9", "Điều trị", (short) 2, "Dặn", null, null, NOW);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(saved));
-        when(prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(eq(record.getId()), any()))
+        // BR-59-08: only an accepted prescription locks the diagnoses; a sent one without an answer does not.
+        when(prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(
+                record.getId(), java.util.Set.of(clinic.backend.enums.PrescriptionLienthongStatus.ACCEPTED)))
                 .thenReturn(true);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request("J03.9", List.of(), false)))

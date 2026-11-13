@@ -75,8 +75,9 @@ public class ConclusionServiceImpl implements ConclusionService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String AUDIT_ENTITY = "conclusions";
-    private static final Set<PrescriptionLienthongStatus> SENT =
-            Set.of(PrescriptionLienthongStatus.SENT, PrescriptionLienthongStatus.ACCEPTED);
+    /** BR-59-08: the diagnoses are locked once the national system accepted the prescription. */
+    private static final Set<PrescriptionLienthongStatus> DIAGNOSES_LOCKED =
+            Set.of(PrescriptionLienthongStatus.ACCEPTED);
 
     // ASSUMPTION (BR-106 not in docs/): at most 12 secondary diagnoses. The texts have no length limit (TEXT).
     static final int SECONDARY_MAX = 12;
@@ -210,7 +211,7 @@ public class ConclusionServiceImpl implements ConclusionService {
     }
 
     private boolean diagnosesLocked(MedicalRecord record) {
-        return prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(record.getId(), SENT);
+        return prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(record.getId(), DIAGNOSES_LOCKED);
     }
 
     private static boolean diagnosesChanged(Conclusion conclusion, Icd10 main, List<Icd10> secondary) {

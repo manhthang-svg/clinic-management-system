@@ -1,50 +1,60 @@
 import { useEffect, useId, useState } from 'react';
-import { AlertTriangle, LoaderCircle, Lock, Pill, Save, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, LoaderCircle, Lock, Pill, Save, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
-import { ConfirmModal } from '../ui/confirm-modal';
 import {
     LIMITS, MSG, formFromResponse, newLine, prescriptionError, samePrescription, suggestedQuantity, toPayload,
     validatePrescription,
 } from './prescriptionForm';
 
-const inputClass = 'w-full rounded-lg border bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
+const inputClass = 'w-full rounded-lg border bg-white px-2.5 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
 
 function FieldError({ children }) {
     if (!children) return null;
-    return <span className="mt-1 block text-[11px] text-rose-600">{children}</span>;
+    return <span className="mt-1 block text-xs text-rose-600">{children}</span>;
 }
 
-function LineInput({ label, required = false, value, onChange, error, type = 'text', suffix, disabled, placeholder, wide = false }) {
+const cellClass = 'border border-slate-200 px-2 py-1.5 align-top';
+
+/**
+ * An input inside a grid cell: flat until focused, red when invalid. The column header names it on screen; the
+ * visually hidden label names it with the medicine, and the message below the row describes it.
+ */
+function CellInput({ label, value, onChange, invalid, describedBy, type = 'text', disabled, placeholder, align = 'left' }) {
     const id = useId();
     return (
-        <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
-            <label htmlFor={id} className="block text-[11px] font-semibold text-slate-600">
-                {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
-            </label>
-            <span className="mt-1 flex items-center gap-1.5">
-                <input
-                    id={id}
-                    type={type}
-                    inputMode={type === 'number' ? 'numeric' : undefined}
-                    min={type === 'number' ? 1 : undefined}
-                    value={value}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    onChange={(event) => onChange(event.target.value)}
-                    aria-invalid={error ? 'true' : undefined}
-                    className={`${inputClass} h-9 ${error ? 'border-rose-400' : 'border-slate-200'}`}
-                />
-                {suffix && <span className="whitespace-nowrap text-[11px] text-slate-400">{suffix}</span>}
-            </span>
-            <FieldError>{error}</FieldError>
-        </div>
+        <>
+            <label htmlFor={id} className="sr-only">{label}</label>
+            <input
+                id={id}
+                type={type}
+                inputMode={type === 'number' ? 'numeric' : undefined}
+                min={type === 'number' ? 1 : undefined}
+                step={type === 'number' ? 1 : undefined}
+                value={value}
+                disabled={disabled}
+                placeholder={placeholder}
+                onChange={(event) => onChange(event.target.value)}
+                aria-invalid={invalid ? 'true' : undefined}
+                aria-describedby={invalid ? describedBy : undefined}
+                className={`h-8 w-full rounded border px-1.5 text-sm tabular-nums text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100 disabled:bg-transparent ${align === 'right' ? 'text-right' : ''} ${invalid ? 'border-rose-400 bg-rose-50' : 'border-transparent bg-slate-50 hover:border-slate-300'}`}
+            />
+        </>
     );
 }
 
-/** One medicine line: catalog fields copied on save, the dosage entered by the Doctor (BR-107). */
-function MedicineLine({ line, index, errors, disabled, onChange, onRemove }) {
+const LINE_FIELDS = [
+    ['medicine', 'Thuốc'], ['dosePerTime', 'Liều mỗi lần'], ['timesPerDay', 'Số lần/ngày'], ['days', 'Số ngày'],
+    ['quantity', 'Số lượng'], ['usage', 'Cách dùng'],
+];
+
+/**
+ * One medicine of the prescription (BR-59-04) as one grid row, like a hospital prescription grid; the catalog
+ * columns are read-only. Errors and the more-than-30-days notice go in a row below, so the columns stay narrow.
+ */
+function MedicineLine({ line, index, count, errors, disabled, longTermAllowed, onChange, onMove, onRemove }) {
+    const messagesId = useId();
     const key = (field) => `lines.${index}.${field}`;
     const update = (field) => (value) => {
         const next = { ...line, [field]: value };
@@ -56,37 +66,80 @@ function MedicineLine({ line, index, errors, disabled, onChange, onRemove }) {
         }
         onChange(next);
     };
+    const label = (field) => `${field} – ${line.name}`;
+    const messages = LINE_FIELDS
+        .filter(([field]) => errors[key(field)])
+        .map(([field, name]) => ({ key: field, name, text: errors[key(field)], tone: 'error' }));
+    // AF-05 / EF-04: more than 30 days is explained only when it is typed, unless the days field has an error.
+    if (Number(line.days) > LIMITS.daysWithoutLongTerm && !errors[key('days')]) {
+        messages.push(longTermAllowed
+            ? { key: 'longTerm', name: 'Số ngày', text: MSG.LONG_TERM_ALLOWED, tone: 'info' }
+            : { key: 'longTerm', name: 'Số ngày', text: MSG.LONG_TERM, tone: 'warning' });
+    }
+    const input = (field, props) => (
+        <CellInput
+            label={label(props.name)}
+            value={line[field]}
+            onChange={update(field)}
+            invalid={Boolean(errors[key(field)])}
+            describedBy={messagesId}
+            disabled={disabled}
+            {...props}
+        />
+    );
+    const toneClass = { error: 'text-rose-700', warning: 'text-amber-800', info: 'text-teal-800' };
     return (
-        <li className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-bold text-teal-700">{index + 1}</span>
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-800">{line.name}</p>
-                    <p className="text-[11px] text-slate-500">
-                        {[line.activeIngredient, line.strength, line.route, line.unit && `Đơn vị: ${line.unit}`].filter(Boolean).join(' · ')}
-                        {line.code && <span className="ml-1 font-mono text-slate-400">({line.code})</span>}
-                    </p>
-                </div>
-                {!disabled && (
-                    <button type="button" onClick={onRemove} aria-label={`Xóa ${line.name}`} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600">
-                        <Trash2 className="h-4 w-4" />
-                    </button>
-                )}
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <LineInput label="Liều mỗi lần" required value={line.dosePerTime} onChange={update('dosePerTime')} error={errors[key('dosePerTime')]} disabled={disabled} placeholder="VD: 1 viên" />
-                <LineInput label="Số lần/ngày" required type="number" value={line.timesPerDay} onChange={update('timesPerDay')} error={errors[key('timesPerDay')]} disabled={disabled} suffix="lần" />
-                <LineInput label="Số ngày" required type="number" value={line.days} onChange={update('days')} error={errors[key('days')]} disabled={disabled} suffix="ngày" />
-                <LineInput label="Số lượng" required type="number" value={line.quantity} onChange={update('quantity')} error={errors[key('quantity')]} disabled={disabled} suffix={line.unit} />
-                <LineInput label="Cách dùng" required wide value={line.usage} onChange={update('usage')} error={errors[key('usage')]} disabled={disabled} placeholder="VD: Uống sau ăn sáng, chiều" />
-                <LineInput label="Ghi chú" wide value={line.note} onChange={update('note')} disabled={disabled} />
-            </div>
-            <FieldError>{errors[key('medicine')]}</FieldError>
-        </li>
+        <tbody>
+            <tr className="hover:bg-slate-50/60">
+                <td className={`${cellClass} text-center tabular-nums text-slate-600`}>{index + 1}</td>
+                <td className={cellClass}>
+                    <span className="block font-medium text-slate-900">{line.name}</span>
+                    {line.code && <span className="block text-xs text-slate-500">{line.code}</span>}
+                </td>
+                <td className={cellClass}>{[line.activeIngredient, line.strength].filter(Boolean).join(' ')}</td>
+                <td className={`${cellClass} text-center`}>{line.unit}</td>
+                <td className={cellClass}>{line.route}</td>
+                <td className={cellClass}>{input('dosePerTime', { name: 'Liều mỗi lần', placeholder: '1 viên' })}</td>
+                <td className={cellClass}>{input('timesPerDay', { name: 'Số lần/ngày', type: 'number', align: 'right' })}</td>
+                <td className={cellClass}>{input('days', { name: 'Số ngày', type: 'number', align: 'right' })}</td>
+                <td className={cellClass}>{input('quantity', { name: 'Số lượng', type: 'number', align: 'right' })}</td>
+                <td className={cellClass}>{input('usage', { name: 'Cách dùng', placeholder: 'Uống sau ăn sáng, tối' })}</td>
+                <td className={cellClass}>{input('note', { name: 'Ghi chú' })}</td>
+                <td className={`${cellClass} whitespace-nowrap text-center`}>
+                    {!disabled && (
+                        <span className="inline-flex items-center gap-0.5">
+                            <button type="button" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Đưa ${line.name} lên`} className="rounded p-1 text-slate-600 hover:bg-slate-100 disabled:opacity-30">
+                                <ArrowUp aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                            <button type="button" onClick={() => onMove(1)} disabled={index === count - 1} aria-label={`Đưa ${line.name} xuống`} className="rounded p-1 text-slate-600 hover:bg-slate-100 disabled:opacity-30">
+                                <ArrowDown aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                            <button type="button" onClick={onRemove} aria-label={`Xóa ${line.name}`} className="rounded p-1 text-slate-600 hover:bg-rose-50 hover:text-rose-600">
+                                <Trash2 aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                        </span>
+                    )}
+                </td>
+            </tr>
+            {messages.length > 0 && (
+                <tr>
+                    <td className={cellClass} />
+                    <td colSpan={11} className={`${cellClass} bg-slate-50/60`}>
+                        <ul id={messagesId} className="space-y-0.5 text-xs">
+                            {messages.map((message) => (
+                                <li key={message.key} className={toneClass[message.tone]}>
+                                    <span className="font-semibold">{message.name}: </span><span>{message.text}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </td>
+                </tr>
+            )}
+        </tbody>
     );
 }
 
-/** BR-33: active ordinary medicines of the catalog, searched by name, active ingredient or code. */
+/** BR-59-03: active ordinary medicines, searched by name, active ingredient, strength, code or registration number. */
 function MedicineSearch({ searchMedicines, chosenIds, onPick }) {
     const id = useId();
     const [query, setQuery] = useState('');
@@ -122,7 +175,7 @@ function MedicineSearch({ searchMedicines, chosenIds, onPick }) {
                     id={id}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Nhập tên thuốc, hoạt chất hoặc mã thuốc để tìm..."
+                    placeholder="Nhập tên thuốc, hoạt chất, hàm lượng, mã thuốc hoặc số đăng ký để tìm..."
                     className={`${inputClass} h-10 border-slate-200 pl-9`}
                 />
             </span>
@@ -141,7 +194,7 @@ function MedicineSearch({ searchMedicines, chosenIds, onPick }) {
                                 className="block w-full rounded-md px-3 py-2 text-left text-xs hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 <span className="font-semibold text-slate-800">{medicine.name}</span>
-                                <span className="ml-2 text-slate-500">{[medicine.activeIngredient, medicine.strength, medicine.route, medicine.unit].filter(Boolean).join(' · ')}</span>
+                                <span className="ml-2 text-slate-500">{[medicine.activeIngredient, medicine.strength, medicine.route, medicine.unit, medicine.registration && `SĐK ${medicine.registration}`].filter(Boolean).join(' · ')}</span>
                                 {taken && <span className="ml-2 text-teal-700">(đã có trong đơn)</span>}
                             </button>
                         );
@@ -177,7 +230,36 @@ function formatDateTime(value) {
     return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
+/** "2026-11-10" → "10/11/2026" without a time-zone shift. */
+function formatDate(value) {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    return `${day}/${month}/${year}`;
+}
+
+/** BR-59-07: a child under 72 months needs the age in months, weight and accompanying person; missing ones are marked. */
+function ChildData({ child }) {
+    const missing = (label) => <span className="font-semibold text-amber-700">Chưa có — {MSG.CHILD_DATA_MISSING(label)}</span>;
+    return (
+        <section aria-label="Thông tin trẻ dưới 72 tháng tuổi" className="space-y-1 rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs text-slate-700">
+            <h2 className="text-sm font-bold text-sky-900">Trẻ dưới 72 tháng tuổi</h2>
+            <p><span className="font-semibold">Tuổi:</span> {child.ageMonths} tháng</p>
+            <p><span className="font-semibold">Cân nặng:</span> {child.weightKg != null ? `${Number(child.weightKg).toLocaleString('vi-VN')} kg` : missing('cân nặng')}</p>
+            <p><span className="font-semibold">Người đưa trẻ đến khám:</span> {child.accompanyingPerson || missing('thông tin người đưa trẻ đến khám')}</p>
+        </section>
+    );
+}
+
 const EMPTY = { lines: [], notes: '', advice: '' };
+
+/** The lines with the one at {@code from} moved to {@code to}; the saved order is the printed order. */
+function moved(lines, from, to) {
+    if (to < 0 || to >= lines.length) return lines;
+    const next = [...lines];
+    const [line] = next.splice(from, 1);
+    next.splice(to, 0, line);
+    return next;
+}
 
 /** UC-59 Prescribe Medication: one ordinary prescription per visit; the record stays open after saving. */
 export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
@@ -190,7 +272,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     const [pageError, setPageError] = useState('');
     const [saving, setSaving] = useState(false);
     const [checked, setChecked] = useState(false);
-    const [allergyWarning, setAllergyWarning] = useState(null);
+    const titleId = useId();
     const dirty = !samePrescription(form, savedForm);
 
     useEffect(() => {
@@ -229,7 +311,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     };
     const setLine = (index) => (line) => change({ ...form, lines: form.lines.map((item, i) => (i === index ? line : item)) });
 
-    const submit = async (confirmAllergy = false) => {
+    const submit = async () => {
         const found = validatePrescription(form, longTermAllowed);
         setChecked(true);
         setErrors(found);
@@ -240,7 +322,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
         setSaving(true);
         setPageError('');
         try {
-            const saved = await api.savePrescription(visitId, toPayload(form, data?.version, confirmAllergy));
+            const saved = await api.savePrescription(visitId, toPayload(form, data?.version));
             const values = formFromResponse(saved);
             setData(saved);
             setForm(values);
@@ -250,12 +332,8 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
             onSaved?.(saved);
         } catch (error) {
             const result = prescriptionError(error);
-            if (result.allergies) {
-                setAllergyWarning(result.allergies); // AF-01, MSG26
-            } else {
-                setErrors(result.fields);
-                setPageError(result.message);
-            }
+            setErrors(result.fields);
+            setPageError(result.message);
         } finally {
             setSaving(false);
         }
@@ -268,7 +346,12 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
         return <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</p>;
     }
 
-    const locked = Boolean(data?.sent) || !data?.conclusionSaved;
+    // EF-07: without the link codes the form is shown but disabled.
+    const linkCodeMessages = [
+        data?.prescriberLinkCodeMissing && MSG.LINK_CODE_MISSING(MSG.PRESCRIBER),
+        data?.facilityLinkCodeMissing && MSG.LINK_CODE_MISSING(MSG.FACILITY),
+    ].filter(Boolean);
+    const locked = Boolean(data?.sent) || !data?.conclusionSaved || linkCodeMessages.length > 0;
     return (
         <form
             noValidate
@@ -282,7 +365,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                 {data?.diagnoses?.length > 0 && (
                     <ul className="flex flex-wrap gap-2">
                         {data.diagnoses.map((item, index) => (
-                            <li key={item.code} className={`rounded-md border px-2 py-1 text-[11px] ${index === 0 ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                            <li key={item.code} className={`rounded-md border px-2 py-1 text-xs ${index === 0 ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
                                 <strong>{item.code}</strong> {item.name}{index === 0 && ' (bệnh chính)'}
                             </li>
                         ))}
@@ -292,30 +375,51 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                     <span className="font-semibold text-slate-500">Dị ứng thuốc:</span>
                     {data?.allergies?.length
                         ? data.allergies.map((allergy) => (
-                            <span key={allergy} className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-                                <AlertTriangle aria-hidden="true" className="h-3 w-3" />Dị ứng: {allergy}
+                            <span key={allergy} className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700">
+                                <AlertTriangle aria-hidden="true" className="h-3 w-3" />{allergy}
                             </span>
                         ))
-                        : <span className="text-[11px] text-slate-400">Chưa ghi nhận dị ứng thuốc</span>}
+                        : <span className="text-xs text-slate-500">Chưa ghi nhận dị ứng thuốc</span>}
                 </div>
+                <p className="text-xs">
+                    <span className="font-semibold text-slate-500">Ngày tái khám:</span>{' '}
+                    {data?.followUpDate ? formatDate(data.followUpDate) : <span className="text-slate-500">Chưa hẹn tái khám</span>}
+                </p>
             </section>
 
+            {data?.child && <ChildData child={data.child} />}
+
             {!data?.conclusionSaved && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{MSG.CONCLUSION_REQUIRED}</p>}
+            {linkCodeMessages.map((message) => <p key={message} role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{message}</p>)}
             {data?.sent && <p role="status" className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock aria-hidden="true" className="h-4 w-4" />{MSG.SENT}</p>}
 
-            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="flex items-center gap-2 text-sm font-bold"><Pill aria-hidden="true" className="h-4 w-4 text-teal-600" />Đơn thuốc</h2>
-                    {data?.prescriptionCode && (
-                        <span className="text-[11px] text-slate-500">
-                            Mã đơn <strong className="font-mono text-slate-700">{data.prescriptionCode}</strong>
-                            {data.prescribedAt && ` · lưu lúc ${formatDateTime(data.prescribedAt)}`}
-                            {data.doctorName && ` · ${data.doctorName}`}
-                        </span>
+            <section aria-labelledby={`${titleId}`} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 id={titleId} className="flex items-center gap-2 text-base font-bold"><Pill aria-hidden="true" className="h-4 w-4 text-teal-600" />Đơn thuốc</h2>
+                        {data?.prescriptionCode
+                            ? (
+                                <p className="mt-0.5 text-xs text-slate-600">
+                                    Mã đơn thuốc <strong className="font-mono text-sm text-slate-900">{data.prescriptionCode}</strong>
+                                    {data.prescribedAt && ` · kê lúc ${formatDateTime(data.prescribedAt)}`}
+                                    {data.doctorName && ` · ${data.doctorName}`}
+                                </p>
+                            )
+                            : <p className="mt-0.5 text-xs text-slate-500">Mã đơn thuốc được tạo khi lưu đơn lần đầu.</p>}
+                    </div>
+                    {!locked && (
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
+                            {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
+                        </button>
                     )}
                 </div>
 
-                {pageError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800">{pageError}</p>}
+                {pageError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">{pageError}</p>}
 
                 {!locked && (
                     <MedicineSearch
@@ -324,24 +428,54 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                         onPick={(medicine) => change({ ...form, lines: [...form.lines, newLine(medicine)] })}
                     />
                 )}
-                {!longTermAllowed && <p className="text-[11px] text-slate-500">{MSG.LONG_TERM}</p>}
 
                 {form.lines.length === 0
-                    ? <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">Chưa có thuốc nào trong đơn.</p>
+                    ? <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">Chưa có thuốc nào trong đơn.</p>
                     : (
-                        <ol className="space-y-2">
-                            {form.lines.map((line, index) => (
-                                <MedicineLine
-                                    key={line.medicineId}
-                                    line={line}
-                                    index={index}
-                                    errors={errors}
-                                    disabled={locked}
-                                    onChange={setLine(index)}
-                                    onRemove={() => change({ ...form, lines: form.lines.filter((_, i) => i !== index) })}
-                                />
-                            ))}
-                        </ol>
+                        <div className="space-y-1.5">
+                        <p className="text-xs text-slate-600">Liều mỗi lần, số lần/ngày, số ngày, số lượng và cách dùng là bắt buộc; ghi chú không bắt buộc.</p>
+                        <div className="overflow-x-auto border border-slate-200">
+                            <table className="w-full min-w-[80rem] table-fixed border-collapse text-left text-sm text-slate-800">
+                                <caption className="sr-only">Các thuốc trong đơn</caption>
+                                <colgroup>
+                                    <col className="w-10" />
+                                    <col className="w-48" />
+                                    <col className="w-40" />
+                                    <col className="w-16" />
+                                    <col className="w-24" />
+                                    <col className="w-32" />
+                                    <col className="w-20" />
+                                    <col className="w-20" />
+                                    <col className="w-20" />
+                                    <col className="w-44" />
+                                    <col className="w-28" />
+                                    <col className="w-24" />
+                                </colgroup>
+                                <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+                                    <tr>
+                                        {['STT', 'Tên thuốc', 'Hoạt chất', 'ĐVT', 'Đường dùng', 'Liều mỗi lần', 'Lần/ngày', 'Số ngày', 'SL', 'Cách dùng', 'Ghi chú'].map((title) => (
+                                            <th key={title} scope="col" className="border border-slate-200 px-2 py-2 text-center">{title}</th>
+                                        ))}
+                                        <th scope="col" className="border border-slate-200 px-2 py-2"><span className="sr-only">Thao tác</span></th>
+                                    </tr>
+                                </thead>
+                                {form.lines.map((line, index) => (
+                                    <MedicineLine
+                                        key={line.medicineId}
+                                        line={line}
+                                        index={index}
+                                        count={form.lines.length}
+                                        errors={errors}
+                                        disabled={locked}
+                                        longTermAllowed={longTermAllowed}
+                                        onChange={setLine(index)}
+                                        onMove={(delta) => change({ ...form, lines: moved(form.lines, index, index + delta) })}
+                                        onRemove={() => change({ ...form, lines: form.lines.filter((_, i) => i !== index) })}
+                                    />
+                                ))}
+                            </table>
+                        </div>
+                        </div>
                     )}
                 <FieldError>{errors.lines}</FieldError>
 
@@ -350,30 +484,6 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                     <NoteField label="Lời dặn" value={form.advice} onChange={(value) => change({ ...form, advice: value })} error={errors.advice} disabled={locked} />
                 </div>
             </section>
-
-            {!locked && (
-                <div className="flex justify-end">
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
-                        {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
-                    </button>
-                </div>
-            )}
-
-            <ConfirmModal
-                isOpen={Boolean(allergyWarning)}
-                title="Cảnh báo dị ứng thuốc"
-                description={allergyWarning ? MSG.allergy(allergyWarning) : ''}
-                confirmText="Vẫn kê thuốc này"
-                cancelText="Đổi thuốc"
-                variant="destructive"
-                onConfirm={() => { setAllergyWarning(null); void submit(true); }}
-                onClose={() => setAllergyWarning(null)}
-            />
         </form>
     );
 }

@@ -11,8 +11,7 @@ import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.PrescriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -51,11 +50,10 @@ public class PrescriptionController {
         return ApiResponse.success(prescriptionService.save(StaffPrincipal.from(jwt), visitId, request));
     }
 
-    @GetMapping("/medicines")
-    @Operation(summary = "Tìm thuốc thường đang hoạt động để kê đơn")
+    @GetMapping("/medicine-search")
+    @Operation(summary = "Tìm thuốc thường đang hoạt động để kê đơn (tối đa 20, không phân biệt dấu)")
     public ApiResponse<List<PrescribableMedicineResponse>> searchMedicines(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "10") @Min(1) @Max(30) int limit) {
-        return ApiResponse.success(prescriptionService.searchMedicines(keyword, limit));
+            @RequestParam @Size(max = 100) String keyword) {
+        return ApiResponse.success(prescriptionService.searchMedicines(keyword));
     }
 }
