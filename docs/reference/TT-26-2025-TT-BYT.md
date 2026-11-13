@@ -30,7 +30,7 @@ Quy định về đơn thuốc và việc kê đơn thuốc hóa dược, sinh p
 | Điều 6 khoản 7 điểm a | Số lượng dưới 10 ghi số 0 phía trước | UC-60 bản in |
 | Điều 6 khoản 8 | Tối đa 30 ngày; đến 90 ngày với bệnh thuộc Phụ lục VII | BR-107, I1-D45 |
 | Điều 6 khoản 9 | Sửa đơn bằng cách kê đơn mới thay thế đơn cũ | Chưa có trong UC-92 (xem ghi chú) |
-| Điều 10 | Đơn điện tử được lập, hiển thị, **ký số**, chia sẻ, lưu trữ; giá trị pháp lý như đơn giấy | BR-47 hiện ghi "không làm ký điện tử" (xem ghi chú) |
+| Điều 10 | Đơn điện tử được lập, hiển thị, **ký số**, chia sẻ, lưu trữ; giá trị pháp lý như đơn giấy | BR-47 hiện ghi "không làm ký điện tử" (xem ghi chú). Đề xuất 13/11/2026: ký số từ xa, [uc-59-e-prescription.md](../uc-59-e-prescription.md) BR-59-10, theo Luật GDĐT 2023 và NĐ 23/2025 |
 | Điều 12 khoản 6 điểm d | Cơ sở gửi đơn lên Hệ thống đơn thuốc quốc gia ngay sau khi kết thúc quy trình khám | BR-32, BR-47, UC-90 |
 | Điều 12 khoản 6 điểm đ | Gửi đơn hoặc mã đơn điện tử cho người bệnh | UC-60 |
 | Điều 13 khoản 3 điểm b | Cơ sở không phải bệnh viện phải kê đơn điện tử trước 01/01/2026 | Phạm vi đồ án |
@@ -38,7 +38,7 @@ Quy định về đơn thuốc và việc kê đơn thuốc hóa dược, sinh p
 | Phụ lục I chú thích 3 | Công dân cung cấp số định danh cá nhân không cần kê khai giới tính, ngày sinh, địa chỉ thường trú | UC-60 bản in |
 | Phụ lục I chú thích 7 | Lời dặn gồm dinh dưỡng, sinh hoạt, lịch tái khám, thời hạn tốt nhất mua thuốc | BR-107 (lời dặn) |
 
-Ghi chú: Điều 6 khoản 9 và Điều 10 chưa được phản ánh trong quy trình đã chốt (BR-47, UC-92). Cần một quyết định của nhóm trước khi thay đổi; xem thảo luận ngày 12/11/2026.
+Ghi chú: Điều 6 khoản 9 và Điều 10 chưa được phản ánh trong quy trình đã chốt (BR-47, UC-92). Cần một quyết định của nhóm trước khi thay đổi; xem thảo luận ngày 12/11/2026. Điều 10 là quy định riêng cho đơn thuốc nên áp dụng thay cho TT 13/2025 Điều 3 (cho phép cả hình thức xác nhận điện tử khác); đề xuất ký số ngày 13/11/2026 nằm ở mục *Decisions needed* số 1 của [uc-59-e-prescription.md](../uc-59-e-prescription.md).
 
 ---
 
