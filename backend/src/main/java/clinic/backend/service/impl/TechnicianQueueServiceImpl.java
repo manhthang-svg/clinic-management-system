@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -10,11 +11,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -44,8 +47,10 @@ import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
+import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -68,6 +73,7 @@ import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.service.TechnicianQueueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -93,6 +99,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     private final MedicalHistoryRepository medicalHistoryRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final DutyScheduleRepository dutyScheduleRepository;
+    private final DutyShiftConfigService dutyShiftConfigService;
     private final ImagingResultRepository imagingResultRepository;
     private final LabResultRepository labResultRepository;
     private final AuditLogService auditLogService;
@@ -104,60 +111,117 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                 RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
 
-        List<StaffRoomAssignment> activeAssignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
-        Set<UUID> assignedStaffIds = activeAssignments.stream()
-                .map(StaffRoomAssignment::getStaffAccountId)
-                .collect(Collectors.toSet());
-        Map<UUID, StaffAccount> assignedStaffMap = staffAccountRepository.findAllById(assignedStaffIds).stream()
-                .collect(Collectors.toMap(StaffAccount::getId, Function.identity()));
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+        LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
+        Optional<DutyShift> currentShift = dutyShiftConfigService != null
+                ? dutyShiftConfigService.shiftAt(today, localTime)
+                : Optional.empty();
 
         Map<UUID, String> roomTechMap = new HashMap<>();
-        for (StaffRoomAssignment assignment : activeAssignments) {
-            StaffAccount staff = assignedStaffMap.get(assignment.getStaffAccountId());
-            if (staff != null && staff.getRole() == Role.TECHNICIAN) {
-                roomTechMap.putIfAbsent(assignment.getRoomId(), staffDisplayName(staff.getAcademicTitle(), staff.getFullName()));
-            }
-        }
 
-        boolean isAdmin = false;
-        UUID userAssignedRoomId = null;
-        Set<UUID> todayDutyRoomIds = Collections.emptySet();
+        // Kiểm tra xem hệ thống có thiết lập lịch trực cho ngày hôm nay không (DutySchedule - BR-55)
+        List<DutySchedule> todaySchedules = dutyScheduleRepository
+                .findByWorkDateBetweenOrderByWorkDateAscShiftAsc(today, today);
 
-        if (currentUserId != null) {
-            StaffAccount currentStaff = staffAccountRepository.findById(currentUserId).orElse(null);
-            if (currentStaff != null) {
-                if (currentStaff.getRole() == Role.ADMIN) {
-                    isAdmin = true;
-                } else if (currentStaff.getRole() == Role.TECHNICIAN) {
-                    userAssignedRoomId = staffRoomAssignmentRepository
-                            .findByStaffAccountIdAndRemovedAtIsNull(currentUserId)
-                            .map(StaffRoomAssignment::getRoomId)
-                            .orElse(null);
+        Set<UUID> roomsWithScheduleToday = todaySchedules.stream()
+                .map(DutySchedule::getRoomId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-                    LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
-                    todayDutyRoomIds = dutyScheduleRepository
-                            .findByStaffAccountIdAndWorkDate(currentUserId, today)
-                            .stream()
-                            .map(DutySchedule::getRoomId)
-                            .collect(Collectors.toSet());
+        // 1. Với các phòng có lịch trực: lấy đúng KTV đang trực trong ca hiện tại
+        if (currentShift.isPresent() && !todaySchedules.isEmpty()) {
+            Set<UUID> onDutyStaffIds = todaySchedules.stream()
+                    .filter(s -> s.getShift() == currentShift.get())
+                    .map(DutySchedule::getStaffAccountId)
+                    .collect(Collectors.toSet());
+            Map<UUID, StaffAccount> onDutyStaffMap = staffAccountRepository.findAllById(onDutyStaffIds).stream()
+                    .collect(Collectors.toMap(StaffAccount::getId, Function.identity()));
+
+            for (DutySchedule schedule : todaySchedules) {
+                if (schedule.getShift() == currentShift.get() && schedule.getRoomId() != null) {
+                    StaffAccount staff = onDutyStaffMap.get(schedule.getStaffAccountId());
+                    if (staff != null && staff.getStatus() == AccountStatus.ACTIVE) {
+                        roomTechMap.put(schedule.getRoomId(), staffDisplayName(staff.getAcademicTitle(), staff.getFullName()));
+                    }
                 }
             }
         }
 
+        // 2. Với các phòng chưa cấu hình lịch trực hôm nay: fallback phân công phòng cố định nếu trong ca làm việc
+        boolean hasShiftOrNoConfig = currentShift.isPresent() || dutyShiftConfigService == null;
+        List<StaffRoomAssignment> activeAssignments = null;
+        boolean hasRoomsWithoutSchedule = rooms.stream().anyMatch(r -> !roomsWithScheduleToday.contains(r.getId()));
+        if (hasRoomsWithoutSchedule && hasShiftOrNoConfig) {
+            activeAssignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
+            Set<UUID> assignedStaffIds = activeAssignments.stream()
+                    .map(StaffRoomAssignment::getStaffAccountId)
+                    .collect(Collectors.toSet());
+            Map<UUID, StaffAccount> assignedStaffMap = staffAccountRepository.findAllById(assignedStaffIds).stream()
+                    .collect(Collectors.toMap(StaffAccount::getId, Function.identity()));
+
+            for (StaffRoomAssignment assignment : activeAssignments) {
+                if (!roomsWithScheduleToday.contains(assignment.getRoomId())) {
+                    StaffAccount staff = assignedStaffMap.get(assignment.getStaffAccountId());
+                    if (staff != null && staff.getRole() == Role.TECHNICIAN) {
+                        roomTechMap.putIfAbsent(assignment.getRoomId(), staffDisplayName(staff.getAcademicTitle(), staff.getFullName()));
+                    }
+                }
+            }
+        }
+
+        boolean isAdmin = false;
+        StaffAccount currentStaff = null;
+        if (currentUserId != null) {
+            currentStaff = staffAccountRepository.findById(currentUserId).orElse(null);
+            if (currentStaff != null && currentStaff.getRole() == Role.ADMIN) {
+                isAdmin = true;
+            }
+        }
+
         final boolean userIsAdmin = isAdmin;
-        final UUID finalUserAssignedRoomId = userAssignedRoomId;
-        final Set<UUID> finalTodayDutyRoomIds = todayDutyRoomIds;
+        final Set<UUID> manageableRoomIds = new HashSet<>();
+
+        // Tối ưu hóa: tính toán trước quyền quản lý phòng trong bộ nhớ, loại bỏ N+1 truy vấn DB lặp lại
+        if (!userIsAdmin && currentStaff != null && currentStaff.getRole() == Role.TECHNICIAN) {
+            // Phòng có lịch trực: KTV phải trực đúng ca hiện tại
+            if (currentShift.isPresent()) {
+                for (DutySchedule s : todaySchedules) {
+                    if (s.getShift() == currentShift.get() && currentUserId.equals(s.getStaffAccountId()) && s.getRoomId() != null) {
+                        manageableRoomIds.add(s.getRoomId());
+                    }
+                }
+            }
+            // Phòng chưa có lịch trực: xét phân công phòng cố định nếu trong ca làm việc
+            if (hasShiftOrNoConfig) {
+                UUID userAssignedRoomId = null;
+                if (activeAssignments != null) {
+                    for (StaffRoomAssignment a : activeAssignments) {
+                        if (currentUserId.equals(a.getStaffAccountId())) {
+                            userAssignedRoomId = a.getRoomId();
+                            break;
+                        }
+                    }
+                } else {
+                    userAssignedRoomId = staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(currentUserId)
+                            .map(StaffRoomAssignment::getRoomId)
+                            .orElse(null);
+                }
+                if (userAssignedRoomId != null && !roomsWithScheduleToday.contains(userAssignedRoomId)) {
+                    manageableRoomIds.add(userAssignedRoomId);
+                }
+            }
+        }
 
         return rooms.stream()
                 .map(room -> {
-                    boolean canManage = userIsAdmin ||
-                            (room.getId() != null && (room.getId().equals(finalUserAssignedRoomId) || finalTodayDutyRoomIds.contains(room.getId())));
+                    boolean canManage = userIsAdmin || manageableRoomIds.contains(room.getId());
                     return new TechnicianRoomResponse(
                             room.getId(),
                             room.getRoomCode(),
                             room.getRoomName(),
                             room.getLocation(),
-                            roomTechMap.getOrDefault(room.getId(), "Chưa phân công"),
+                            roomTechMap.getOrDefault(room.getId(), "Chưa có"),
                             canManage
                     );
                 })
@@ -217,8 +281,26 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         Map<UUID, StaffAccount> doctorMap = staffAccountRepository.findAllById(doctorAccountIds).stream()
                 .collect(Collectors.toMap(StaffAccount::getId, Function.identity()));
 
-        Map<UUID, Room> allRoomsMap = roomRepository.findAll().stream()
-                .collect(Collectors.toMap(Room::getId, Function.identity()));
+        Map<UUID, List<ParaclinicalOrderDetail>> siblingOrdersMap = orderIds.isEmpty() ? Collections.emptyMap() :
+                paraclinicalOrderDetailRepository.findByOrderIdIn(orderIds).stream()
+                        .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
+
+        Set<UUID> neededRoomIds = new HashSet<>();
+        if (targetRoomId != null) {
+            neededRoomIds.add(targetRoomId);
+        }
+        siblingOrdersMap.values().forEach(list -> {
+            for (ParaclinicalOrderDetail sib : list) {
+                if (sib.getRoomId() != null) {
+                    neededRoomIds.add(sib.getRoomId());
+                }
+            }
+        });
+
+        // Tối ưu hóa: chỉ fetch những phòng liên quan thay vì findAll toàn bộ phòng trong viện
+        Map<UUID, Room> allRoomsMap = neededRoomIds.isEmpty() ? Collections.emptyMap() :
+                roomRepository.findAllById(neededRoomIds).stream()
+                        .collect(Collectors.toMap(Room::getId, Function.identity()));
 
         // Tối ưu hóa: Batch fetch tất cả thông tin lâm sàng, tiền sử và y lệnh liên quan tránh lỗi N+1 truy vấn
         Map<UUID, ClinicalExamination> examMap = recordIds.isEmpty() ? Collections.emptyMap() :
@@ -228,10 +310,6 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         Map<UUID, List<MedicalHistory>> historiesMap = patientIds.isEmpty() ? Collections.emptyMap() :
                 medicalHistoryRepository.findByPatientIdInOrderByCreatedAtAsc(patientIds).stream()
                         .collect(Collectors.groupingBy(MedicalHistory::getPatientId));
-
-        Map<UUID, List<ParaclinicalOrderDetail>> siblingOrdersMap = orderIds.isEmpty() ? Collections.emptyMap() :
-                paraclinicalOrderDetailRepository.findByOrderIdIn(orderIds).stream()
-                        .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
 
         List<TechnicianQueueItemResponse> allItems = new ArrayList<>();
         for (ParaclinicalOrderDetail detail : details) {
@@ -859,21 +937,39 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             return false;
         }
 
-        // 1. Phân công cố định (StaffRoomAssignment)
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+        LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
+        Optional<DutyShift> currentShift = dutyShiftConfigService != null
+                ? dutyShiftConfigService.shiftAt(today, localTime)
+                : Optional.empty();
+
+        // 1. Kiểm tra lịch trực trong ngày hôm nay của phòng này (DutySchedule - BR-55)
+        List<DutySchedule> roomSchedulesToday = dutyScheduleRepository
+                .findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today);
+
+        if (!roomSchedulesToday.isEmpty()) {
+            // Khi phòng đã có lịch trực được cấu hình trong ngày:
+            // KTV phải đang trong khung giờ ca trực hợp lệ và được phân công đúng ca trực đó
+            if (currentShift.isEmpty()) {
+                return false; // Ngoài khung giờ ca trực (ví dụ nửa đêm, sáng sớm ngoài giờ làm việc)
+            }
+            return roomSchedulesToday.stream()
+                    .anyMatch(schedule -> schedule.getShift() == currentShift.get() && currentUserId.equals(schedule.getStaffAccountId()));
+        }
+
+        // 2. Nếu phòng hôm nay chưa có lịch trực nào được cấu hình:
+        // Xét theo phân công phòng cố định (StaffRoomAssignment) trong khung giờ làm việc
         boolean hasAssignment = staffRoomAssignmentRepository
                 .findByStaffAccountIdAndRemovedAtIsNull(currentUserId)
                 .map(assignment -> roomId.equals(assignment.getRoomId()))
                 .orElse(false);
+
         if (hasAssignment) {
-            return true;
+            return currentShift.isPresent() || dutyShiftConfigService == null;
         }
 
-        // 2. Lịch trực trong ngày hôm nay (DutySchedule)
-        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
-        return dutyScheduleRepository
-                .findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today)
-                .stream()
-                .anyMatch(schedule -> currentUserId.equals(schedule.getStaffAccountId()));
+        return false;
     }
 
     private TechnicianQueueItemResponse mapToItemResponse(

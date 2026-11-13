@@ -56,10 +56,10 @@ function removeDiacritics(str) {
 }
 
 export function TechnicianQueuePage() {
-  // 1. Quản lý danh sách phòng máy thực tế từ backend
-  const [rooms, setRooms] = useState([]);
-  const [currentRoomId, setCurrentRoomId] = useState('');
-  const [roomsLoading, setRoomsLoading] = useState(true);
+  // 1. Quản lý danh sách phòng máy thực tế từ backend (tối ưu hóa: đọc cache phòng & activeRoom để load song song)
+  const [rooms, setRooms] = useState(() => (typeof technicianApi.getCachedRooms === 'function' ? technicianApi.getCachedRooms() : []) || []);
+  const [currentRoomId, setCurrentRoomId] = useState(() => (typeof technicianApi.getActiveRoomId === 'function' ? technicianApi.getActiveRoomId() : ''));
+  const [roomsLoading, setRoomsLoading] = useState(() => !(technicianApi.getCachedRooms?.()?.length));
 
   // 2. Dữ liệu hàng đợi và thống kê từ backend
   const [queueData, setQueueData] = useState({
@@ -112,7 +112,9 @@ export function TechnicianQueuePage() {
     let mounted = true;
     const fetchRooms = async () => {
       try {
-        setRoomsLoading(true);
+        if (!technicianApi.getCachedRooms?.()?.length) {
+          setRoomsLoading(true);
+        }
         const roomList = await technicianApi.getRooms();
         if (mounted) {
           const validRooms = Array.isArray(roomList) ? roomList : [];
@@ -120,7 +122,11 @@ export function TechnicianQueuePage() {
           if (validRooms.length > 0) {
             const assignedRoom = validRooms.find((r) => r.isAssigned);
             const defaultRoom = assignedRoom || validRooms[0];
-            setCurrentRoomId((prev) => (prev && validRooms.some((r) => r.id === prev) ? prev : defaultRoom.id));
+            setCurrentRoomId((prev) => {
+              const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
+              technicianApi.setActiveRoomId?.(selected);
+              return selected;
+            });
           }
         }
       } catch (err) {
@@ -245,6 +251,7 @@ export function TechnicianQueuePage() {
   // Xử lý đổi phòng thủ công
   const handleRoomSelect = (roomId) => {
     setCurrentRoomId(roomId);
+    technicianApi.setActiveRoomId?.(roomId);
     const selectedRoom = rooms.find((r) => r.id === roomId);
     // Cập nhật ngay canManage theo phòng vừa chọn để UI phản hồi tức thì
     setQueueData((prev) => ({
@@ -254,7 +261,7 @@ export function TechnicianQueuePage() {
     toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom?.code || ''} - ${selectedRoom?.name || ''}`);
   };
 
-  const isInitialLoading = roomsLoading || !currentRoomId || queueData.stats === null;
+  const isInitialLoading = !currentRoomId || queueData.stats === null;
   const stats = queueData.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
   // Chỉ hiển thị những ca đã thanh toán (loại bỏ PENDING_PAYMENT)
   const orders = useMemo(() => {
@@ -759,7 +766,7 @@ export function TechnicianQueuePage() {
             </span>
             <span>•</span>
             <span className="text-slate-600">
-              Phụ trách: <strong>{currentRoom?.activeTech || 'Chưa phân công'}</strong>
+              Phụ trách: <strong>{currentRoom?.activeTech || 'Chưa có'}</strong>
             </span>
           </div>
         </div>

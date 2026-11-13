@@ -10,9 +10,59 @@ function buildQueueQuery({ roomId, search, status, doctorRoom }) {
   return str ? `?${str}` : '';
 }
 
+// In-memory cache & active room selection cho khối kỹ thuật viên
+let cachedRooms = null;
+let cachedRoomsPromise = null;
+let lastRoomsFetchTime = 0;
+const ROOMS_CACHE_TTL = 30_000; // 30s
+const ACTIVE_ROOM_KEY = 'technician_active_room_id';
+
 export const technicianApi = {
-  async getRooms(signal) {
-    return apiClient.request('/technician/rooms', { signal });
+  getActiveRoomId() {
+    try {
+      return sessionStorage.getItem(ACTIVE_ROOM_KEY) || '';
+    } catch {
+      return '';
+    }
+  },
+
+  setActiveRoomId(roomId) {
+    try {
+      if (roomId) {
+        sessionStorage.setItem(ACTIVE_ROOM_KEY, roomId);
+      } else {
+        sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  },
+
+  getCachedRooms() {
+    return cachedRooms;
+  },
+
+  async getRooms(signal, { force = false } = {}) {
+    const now = Date.now();
+    if (!force && cachedRooms && now - lastRoomsFetchTime < ROOMS_CACHE_TTL) {
+      return cachedRooms;
+    }
+    if (cachedRoomsPromise && !force) {
+      return cachedRoomsPromise;
+    }
+
+    cachedRoomsPromise = apiClient
+      .request('/technician/rooms', { signal })
+      .then((data) => {
+        cachedRooms = Array.isArray(data) ? data : [];
+        lastRoomsFetchTime = Date.now();
+        return cachedRooms;
+      })
+      .finally(() => {
+        cachedRoomsPromise = null;
+      });
+
+    return cachedRoomsPromise;
   },
 
   async getQueue({ roomId, search, status, doctorRoom } = {}, signal) {
