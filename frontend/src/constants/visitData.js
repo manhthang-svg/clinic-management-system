@@ -33,7 +33,7 @@ export const INTAKE_TYPE_LABELS = {
 // TBD: the UC names only the default "Tự đến"; the other referral sources need an approved list.
 export const REFERRAL_SOURCE_LABELS = {
   TU_DEN: 'Tự đến',
-  CO_SO_Y_TE: 'Cơ sở y tế khác giới thiệu',
+  CO_SO_Y_TE: 'Được giới thiệu',
 };
 
 // VisitStatus.

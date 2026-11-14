@@ -15,9 +15,9 @@ describe('UC-40 visit form', () => {
 
   it('requires the fields needed to register a visit', () => {
     expect(validateVisitForm(EMPTY_VISIT_FORM, {})).toEqual({
-      visitType: 'Vui lòng chọn loại lượt khám.',
-      reason: 'Vui lòng nhập lý do khám.',
-      roomId: 'Vui lòng chọn phòng khám.',
+      visitType: 'Loại lượt khám là bắt buộc.',
+      reason: 'Lý do khám là bắt buộc.',
+      roomId: 'Phòng khám là bắt buộc.',
     });
   });
 
@@ -50,6 +50,16 @@ describe('UC-40 visit form', () => {
       followUpAppointmentId: form.followUpAppointmentId,
       followUpAppointmentVersion: 3,
     });
+  });
+
+  it('sends "Tự đến" for a follow-up visit whatever referral source was picked before attaching it', () => {
+    const form = {
+      ...EMPTY_VISIT_FORM, visitType: 'DV', reason: 'Tái khám', roomId: 'room-1', referralSource: 'CO_SO_Y_TE',
+    };
+
+    expect(formToVisitRequest(form, 'p-1', {}).noigioithieuLoai).toBe('CO_SO_Y_TE');
+    expect(formToVisitRequest({ ...form, followUpAppointmentId: 'a-1', followUpAppointmentVersion: 0 }, 'p-1', {})
+      .noigioithieuLoai).toBe('TU_DEN');
   });
 
   it('requires a successful verification when the insurance portal is unavailable', () => {
