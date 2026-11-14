@@ -63,6 +63,7 @@ export const ROUTES = {
     PARACLINICAL_ORDERS: '/doctor/paraclinical-orders',
     ROOM_TRANSFERS: '/doctor/room-transfers',
     SKIPPED_PATIENTS: '/doctor/skipped-patients',
+    EXAMINED_PATIENTS: '/doctor/examined-patients',
   },
 
   TECHNICIAN: {
