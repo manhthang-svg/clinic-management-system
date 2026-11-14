@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -171,10 +172,7 @@ public class VisitServiceImpl implements VisitService {
             appointmentRepository.save(appointment);
         }
 
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.CREATE, VISIT_AUDIT_ENTITY, savedVisit.getId(),
-                savedVisit.getSovaovien(),
-                Map.of("status", savedVisit.getStatus().name(), "roomId", savedVisit.getRoomId()), now);
+        // UC-40 records no audit entry for the registration (the specification has no audit step).
         return toResponse(savedVisit);
     }
 
@@ -801,7 +799,7 @@ public class VisitServiceImpl implements VisitService {
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_AVAILABLE));
         Payment payment = paymentRepository.findByVisitIdAndType(visit.getId(), PaymentType.EXAMINATION_FEE)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        List<String> doctorNames = activeDoctorNames(room.getId());
+        List<String> doctorNames = ticketDoctorName(visit).map(List::of).orElse(List.of());
         ClinicFacility facility = clinicFacilityRepository.findCurrent()
                 .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
         return new VisitTicketResponse(
@@ -843,17 +841,16 @@ public class VisitServiceImpl implements VisitService {
         return VisitStatus.WAITING_FEE_PAYMENT;
     }
 
-    private List<String> activeDoctorNames(UUID roomId) {
-        List<UUID> assignedAccountIds = staffRoomAssignmentRepository
-                .findAllByRoomIdAndRemovedAtIsNull(roomId).stream()
-                .map(StaffRoomAssignment::getStaffAccountId)
-                .toList();
-        return staffAccountRepository.findAllById(assignedAccountIds).stream()
-                .filter(account -> account.getRole() == Role.DOCTOR)
-                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
-                .map(account -> staffDisplayName(account.getAcademicTitle(), account.getFullName()))
-                .sorted()
-                .toList();
+    /**
+     * The one doctor named on the ticket: the doctor who took the visit once examination has started, otherwise
+     * the doctor on duty in the visit's room for the shift the registration fell into (BR-55, BR-96) — not every
+     * doctor assigned to the room.
+     */
+    private Optional<String> ticketDoctorName(Visit visit) {
+        Optional<StaffAccount> doctor = visit.getDoctorAccountId() != null
+                ? staffAccountRepository.findById(visit.getDoctorAccountId())
+                : examinationRoomDuty.onDutyDoctor(visit.getRoomId(), visit.getThoigianvaovien());
+        return doctor.map(ExaminationRoomDuty::displayName);
     }
 
     private static String staffDisplayName(String academicTitle, String fullName) {

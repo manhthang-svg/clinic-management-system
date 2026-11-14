@@ -4,6 +4,8 @@ import clinic.backend.entity.Visit;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -238,4 +240,86 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
 
         long getTotal();
     }
+
+    /** UC-34: one visit the Doctor examined, with its patient, room and main diagnosis (null until concluded). */
+    interface ExaminedVisitRow {
+        UUID getVisitId();
+
+        String getRegistrationCode();
+
+        LocalDate getQueueDate();
+
+        Instant getExaminedAt();
+
+        VisitStatus getStatus();
+
+        VisitDoituongbnLoai getPatientType();
+
+        UUID getPatientId();
+
+        String getPatientCode();
+
+        String getPatientName();
+
+        short getGender();
+
+        LocalDate getDateOfBirth();
+
+        String getRoomName();
+
+        String getIcdCode();
+
+        String getIcdName();
+    }
+
+    /**
+     * UC-34 (BR-39): visits examined by {@code doctorId} in {@code [from, to]} (queue date), newest first.
+     * {@code keyword} ("" for all) matches the patient code, or the name ignoring case and accents.
+     */
+    @Query(value = """
+            select v.id as visitId, v.sovaovien as registrationCode, v.queueDate as queueDate,
+                   v.denkhambenhluc as examinedAt, v.status as status, v.doituongbnLoai as patientType,
+                   p.id as patientId, p.mabenhnhan as patientCode, p.hoten as patientName, p.gioitinh as gender,
+                   p.ngaysinh as dateOfBirth, r.roomName as roomName, c.maicd as icdCode, c.tenicd as icdName
+            from Visit v
+            join Patient p on p.id = v.patientId
+            left join Room r on r.id = v.roomId
+            left join MedicalRecord m on m.visitId = v.id
+            left join Conclusion c on c.medicalRecordId = m.id
+            where v.doctorAccountId = :doctorId and v.queueDate between :from and :to
+              and (lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
+                   or lower(function('unaccent', p.hoten))
+                      like lower(function('unaccent', concat('%', cast(:keyword as String), '%'))))
+            order by v.queueDate desc, v.denkhambenhluc desc nulls last, v.id
+            """,
+            countQuery = """
+            select count(v)
+            from Visit v
+            join Patient p on p.id = v.patientId
+            where v.doctorAccountId = :doctorId and v.queueDate between :from and :to
+              and (lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
+                   or lower(function('unaccent', p.hoten))
+                      like lower(function('unaccent', concat('%', cast(:keyword as String), '%'))))
+            """)
+    Page<ExaminedVisitRow> findExaminedVisits(
+            @Param("doctorId") UUID doctorId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    /** UC-34 totals of the period: examined visits and distinct patients (the keyword does not apply). */
+    interface ExaminedTotals {
+        long getVisits();
+
+        long getPatients();
+    }
+
+    @Query("""
+            select count(v) as visits, count(distinct v.patientId) as patients
+            from Visit v
+            where v.doctorAccountId = :doctorId and v.queueDate between :from and :to
+            """)
+    ExaminedTotals countExamined(
+            @Param("doctorId") UUID doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

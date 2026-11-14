@@ -2,7 +2,6 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CancelFollowUpAppointmentRequest;
@@ -12,7 +11,6 @@ import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.exceptions.AppException;
@@ -22,7 +20,6 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.user.StaffPrincipal;
-import clinic.backend.service.AuditLogService;
 import clinic.backend.service.FollowUpAppointmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,7 +34,6 @@ public class FollowUpAppointmentServiceImpl implements FollowUpAppointmentServic
     private final VisitRepository visitRepository;
     private final RoomRepository roomRepository;
     private final StaffAccountRepository accountRepository;
-    private final AuditLogService auditLogService;
     private final Clock clock;
 
     @Override
@@ -61,9 +57,6 @@ public class FollowUpAppointmentServiceImpl implements FollowUpAppointmentServic
         Instant now = clock.instant();
         appointment.cancel(request.reason(), now);
         appointmentRepository.save(appointment);
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.CANCEL, "follow_up_appointments",
-                appointment.getId(), null, Map.of("status", "CANCELLED"), now);
         return toResponse(appointment);
     }
 

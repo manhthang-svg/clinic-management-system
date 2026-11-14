@@ -16,7 +16,6 @@ import {
 } from '../../components/visits';
 import {
   EMPTY_VISIT_FORM,
-  MAX_REASON_LENGTH,
   MAX_REFERRAL_DIAGNOSIS_LENGTH,
   NO_INSURANCE_CHECK,
   REFERRAL_HEALTH_FACILITY,
@@ -25,11 +24,13 @@ import {
   isCardNumberFormatValid,
   validateVisitForm,
 } from '../../components/visits/visitForm';
+import { needsPaymentGuide } from '../../components/visits/visitFormat';
 import {
   MSG17,
   insuranceErrorKind,
   loadErrorMessage,
   ticketErrorMessage,
+  msg21,
   msg22,
   msg56,
   visitCreateError,
@@ -47,12 +48,16 @@ const { RECEPTIONIST } = ROUTES;
 // UC-42 step 3: queue counts refresh at least every 10 seconds (UI-04).
 const QUEUE_REFRESH_MS = 10000;
 
-function countByRoom(visits) {
+/**
+ * UC-40 step 8: per room, the number of patients the doctor still has to examine, i.e. today's visits of the room
+ * that have a queue number and have not ended. From the UC-42 queue-status summary: every unfinished status except
+ * "Chờ thanh toán" (no queue number yet), skipped visits included (they keep their number).
+ */
+function countByRoom(statuses) {
   const counts = {};
-  visits.forEach((visit) => {
-    const room = (counts[visit.roomId] ??= { waiting: 0, inExamination: 0 });
-    if (visit.status === 'WAITING') room.waiting += 1;
-    if (visit.status === 'IN_EXAMINATION') room.inExamination += 1;
+  statuses.forEach((status) => {
+    counts[status.roomId] = (status.waitingCount ?? 0) + (status.inExaminationCount ?? 0)
+      + (status.waitingParaclinicalCount ?? 0) + (status.waitingConclusionCount ?? 0) + (status.skippedCount ?? 0);
   });
   return counts;
 }
@@ -134,7 +139,8 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   const today = clinicToday();
 
   const [patientState, setPatientState] = useState({ id: null, patient: null, error: null });
-  const [todayVisits, setTodayVisits] = useState({ loaded: false, list: [] });
+  // null until the queue status is loaded; failed when no answer has come yet.
+  const [roomStatuses, setRoomStatuses] = useState({ list: null, failed: false });
   const [activeVisitState, setActiveVisitState] = useState({ loaded: false, visit: null });
   const [queueKey, setQueueKey] = useState(0);
   const [rooms, setRooms] = useState({ loading: true, list: [], error: null });
@@ -162,17 +168,17 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     return () => controller.abort();
   }, [patientApi, patientId]);
 
-  // Today's visits give the BR-17 check and the UC-42 queue counts.
-  // ASSUMPTION: an active visit is always from today, since BR-22 closes visits at day end.
+  // UC-42 queue counts per room for the room picker. They do not hold the form back: the counts fill in when ready.
   useEffect(() => {
     const controller = new AbortController();
-    visitApi.getQueue({ date: today }, controller.signal)
-      .then((list) => setTodayVisits({ loaded: true, list: Array.isArray(list) ? list : [] }))
+    visitApi.getQueueStatus(controller.signal)
+      .then((list) => setRoomStatuses({ list: Array.isArray(list) ? list : [], failed: false }))
       .catch((error) => {
-        if (error.name !== 'AbortError') setTodayVisits((prev) => ({ ...prev, loaded: true }));
+        // Keep the last counts on a failed refresh; without any, the picker says the counts are unavailable.
+        if (error?.name !== 'AbortError') setRoomStatuses((prev) => ({ ...prev, failed: true }));
       });
     return () => controller.abort();
-  }, [visitApi, today, queueKey]);
+  }, [visitApi, queueKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -214,7 +220,10 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   const patient = patientState.id === patientId ? patientState.patient : null;
   const patientError = patientState.id === patientId ? patientState.error : null;
   const activeVisit = activeVisitState.visit;
-  const counts = useMemo(() => countByRoom(todayVisits.list), [todayVisits.list]);
+  const counts = useMemo(
+    () => (roomStatuses.list ? countByRoom(roomStatuses.list) : null),
+    [roomStatuses.list],
+  );
   const selectedRoom = rooms.list.find((room) => room.id === form.roomId);
 
   const errors = validateVisitForm(form, insurance);
@@ -320,10 +329,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     try {
       const visit = await visitApi.create(formToVisitRequest(form, patientId, insurance));
       // MSG21; a visit that must pay first has no queue number yet (I1-D48).
-      const roomName = visit.roomName ?? selectedRoom?.name;
-      toast.success(visit.queueNumber != null
-        ? `Đã tạo lượt khám ${visit.sovaovien}. Số thứ tự ${visit.queueNumber} – ${roomName}.`
-        : `Đã tạo lượt khám ${visit.sovaovien} – ${roomName}. Số thứ tự được cấp sau khi thanh toán phí khám.`);
+      toast.success(msg21(visit));
       setCreated({ visit, ticket: null, loading: true, error: null });
       setConfirm(null);
       try {
@@ -339,7 +345,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     } catch (error) {
       const result = visitCreateError(error);
       if (result.kind === 'activeVisit') {
-        // EF-01: the screen reloads today's visits and shows MSG22.
+        // EF-01: the screen reloads the active visit and shows MSG22.
         setConfirm(null);
         setQueueKey((key) => key + 1);
       } else if (result.kind === 'room') {
@@ -394,6 +400,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
 
   const printTicket = async () => {
     if (!created?.ticket) return;
+    // A payment guide is not a ticket print, so the Cashier's first ticket is not marked "IN LẠI".
+    if (needsPaymentGuide(created.ticket)) {
+      window.print();
+      return;
+    }
     setCreated((current) => ({ ...current, loading: true, error: null }));
     try {
       const ticket = await visitApi.prepareTicketPrint(created.visit.id);
@@ -436,7 +447,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         onAction={goToPatients}
       />
     );
-  } else if (!patient || !todayVisits.loaded || !activeVisitState.loaded) {
+  } else if (!patient || !activeVisitState.loaded) {
     content = <p role="status" className="p-10 text-center text-sm text-slate-400">Đang tải thông tin bệnh nhân…</p>;
   } else if (activeVisit) {
     // EF-01 / MSG22
@@ -544,7 +555,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                   required
                   inline
                   error={shownErrors.reason}
-                  hint={`${form.reason.trim().length}/${MAX_REASON_LENGTH} ký tự`}
+                  hint={`${form.reason.trim().length} ký tự`}
                 >
                   <textarea
                     id="visit-reason"
@@ -554,7 +565,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                     placeholder="VD: Đau đầu, sốt nhẹ 2 ngày"
                     aria-invalid={Boolean(shownErrors.reason)}
                     aria-describedby={shownErrors.reason ? 'visit-reason-error' : undefined}
-                    className={`${INPUT_CLASS} resize-none md:max-w-3xl`}
+                    className={`${INPUT_CLASS} resize-y md:max-w-3xl`}
                   />
                 </Field>
 
@@ -614,6 +625,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                 <VisitRoomPicker
                   rooms={rooms.list}
                   counts={counts}
+                  countsFailed={roomStatuses.failed && !roomStatuses.list}
                   value={form.roomId}
                   onChange={(roomId) => {
                     update({ roomId });

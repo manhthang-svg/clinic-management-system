@@ -1,6 +1,6 @@
 import { CheckCircle2, Printer, Users } from 'lucide-react';
 import { PRIORITY_REASON_LABELS, VISIT_STATUS_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
-import { ageText, formatDate, formatDateTime, formatMoney } from './visitFormat';
+import { ageText, formatDate, formatDateTime, formatMoney, needsPaymentGuide } from './visitFormat';
 
 function Row({ label, children }) {
   return (
@@ -19,8 +19,11 @@ function ticketGuidance(ticket, loading) {
   if (ticket.visitType === 'BHYT') {
     return 'Hướng dẫn bệnh nhân đến khu chờ của phòng khám. Phí khám được thanh toán tại quầy thu ngân sau khi có kết luận.';
   }
+  if (needsPaymentGuide(ticket)) {
+    return 'Đưa phiếu hướng dẫn thanh toán cho bệnh nhân. Bệnh nhân thanh toán phí khám tại quầy thu ngân và nhận phiếu khám có số thứ tự tại đó.';
+  }
   if (ticket.patientAmount > 0) {
-    return 'Đưa phiếu cho bệnh nhân và hướng dẫn ra quầy thu ngân thanh toán phí khám trước khi vào khu chờ.';
+    return 'Phí khám đã được thanh toán – hướng dẫn bệnh nhân đến khu chờ của phòng khám.';
   }
   return 'Phí khám đã được chi trả toàn bộ – hướng dẫn bệnh nhân đến khu chờ của phòng khám.';
 }
@@ -33,6 +36,7 @@ export function VisitTicket({
   visit, ticket, loading, error, onReload, onPrint, onDone, title = 'Đăng ký khám thành công',
 }) {
   const guidance = ticketGuidance(ticket, loading);
+  const paymentGuide = needsPaymentGuide(ticket);
 
   return (
     <div className="space-y-5">
@@ -69,7 +73,7 @@ export function VisitTicket({
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Printer className="w-4 h-4" />
-            In phiếu khám
+            {paymentGuide ? 'In phiếu hướng dẫn thanh toán' : 'In phiếu khám'}
           </button>
         </div>
         {error && (
@@ -82,7 +86,7 @@ export function VisitTicket({
 
       {ticket && (
         <div className="flex justify-center rounded-2xl bg-slate-100 px-2 py-6 sm:px-6 sm:py-8">
-          <VisitTicketA5 ticket={ticket} />
+          {paymentGuide ? <PaymentGuideA5 ticket={ticket} /> : <VisitTicketA5 ticket={ticket} />}
         </div>
       )}
     </div>
@@ -126,6 +130,76 @@ function PaymentNote({ ticket }) {
       {/* I1-D48: the queue number is issued with the payment. */}
       <p className="text-[12px] italic text-slate-500">Sau khi thanh toán sẽ nhận số thứ tự khám tại quầy thu ngân.</p>
     </div>
+  );
+}
+
+/**
+ * UC-41 AF: payment guide for a Dịch vụ visit that has not paid the examination fee. It is not an examination
+ * ticket: it has no queue number and cannot be used to enter the examination room.
+ * ASSUMPTION: the cashier counter has no recorded location yet, so the guide names "Quầy thu ngân".
+ */
+export function PaymentGuideA5({ ticket }) {
+  const registeredAt = ticket.registeredAt ? new Date(ticket.registeredAt) : null;
+  return (
+    <article
+      aria-label="Phiếu hướng dẫn thanh toán"
+      className="visit-ticket-a5-print relative flex w-full max-w-[148mm] flex-col bg-white text-[13px] leading-5 text-slate-800 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 p-[9mm] sm:aspect-[148/210]"
+    >
+      <header className="flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-3">
+        <div className="min-w-0">
+          <p className="font-bold uppercase leading-tight text-slate-900">{ticket.facilityName}</p>
+          {ticket.facilityAddress && <p className="mt-0.5 text-[11px] text-slate-500">{ticket.facilityAddress}</p>}
+        </div>
+        <div className="shrink-0 text-right text-[11px] text-slate-600">
+          <p>Mã lượt khám</p>
+          <p className="font-mono text-[13px] font-bold text-slate-900">{ticket.registrationCode}</p>
+        </div>
+      </header>
+
+      <div className="mt-4 text-center">
+        <h3 className="text-xl! font-extrabold! uppercase tracking-wide text-slate-900">Phiếu hướng dẫn thanh toán</h3>
+        <p className="text-xs text-slate-500">Phí khám bệnh – lượt khám dịch vụ</p>
+        {ticket.reprint && (
+          <p className="mt-1 inline-block rounded border-2 border-rose-600 px-2 text-xs font-extrabold text-rose-700">IN LẠI</p>
+        )}
+      </div>
+
+      <div className="mt-5 rounded-xl border-2 border-[#127e7a] px-4 py-3 text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#127e7a]">Số tiền cần thanh toán</p>
+        <p className="text-3xl font-extrabold text-[#127e7a]">{formatMoney(ticket.patientAmount)}</p>
+        <p className="mt-1 text-xs font-semibold text-slate-700">Nơi thanh toán: Quầy thu ngân</p>
+      </div>
+
+      <dl className="mt-5">
+        <A5Row label="Họ và tên"><span className="uppercase">{ticket.patientName}</span></A5Row>
+        <A5Row label="Mã bệnh nhân"><span className="font-mono">{ticket.patientCode}</span></A5Row>
+        <A5Row label="Ngày sinh">{birthText(ticket)}</A5Row>
+        <A5Row label="Phòng khám">
+          {ticket.roomName ?? '—'}
+          {ticket.roomLocation && <span className="block text-[11px] font-normal text-slate-500">{ticket.roomLocation}</span>}
+        </A5Row>
+        <A5Row label="Thời điểm đăng ký">{formatDateTime(ticket.registeredAt)}</A5Row>
+      </dl>
+
+      <p role="note" className="mt-5 rounded-lg border-2 border-dashed border-rose-400 bg-rose-50 px-3 py-2.5 text-center text-[13px] font-bold text-rose-700">
+        Chưa có số thứ tự. Phiếu này không dùng để vào khám.
+        <span className="mt-1 block text-[12px] font-semibold text-rose-600">
+          Số thứ tự và phiếu khám được cấp tại quầy thu ngân sau khi thanh toán.
+        </span>
+      </p>
+
+      <footer className="mt-auto flex justify-end pt-6">
+        <div className="w-48 text-center text-[12px]">
+          <p className="italic text-slate-600">
+            {registeredAt
+              ? `Ngày ${registeredAt.getDate()} tháng ${registeredAt.getMonth() + 1} năm ${registeredAt.getFullYear()}`
+              : 'Ngày … tháng … năm …'}
+          </p>
+          <p className="mt-1 font-bold uppercase text-slate-800">Người tiếp đón</p>
+          <p className="mt-2 font-semibold text-slate-900">{ticket.registeredByName || '—'}</p>
+        </div>
+      </footer>
+    </article>
   );
 }
 

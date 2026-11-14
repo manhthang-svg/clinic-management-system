@@ -25,7 +25,6 @@ public record CreateVisitRequest(
         String mabhyt,
 
         @NotBlank(message = "Vui lòng nhập lý do vào viện")
-        @Size(max = 500, message = "Lý do vào viện không được vượt quá 500 ký tự")
         String lydovaovien,
 
         @Size(max = 255, message = "Lý do tiếp nhận không được vượt quá 255 ký tự")

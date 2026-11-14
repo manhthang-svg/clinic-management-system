@@ -2,10 +2,13 @@ import { RefreshCw } from 'lucide-react';
 import { FieldError } from '../shared/FormFields';
 
 /**
- * UC-40 steps 8-9 with UC-42: active examination rooms and today's queue counts.
+ * UC-40 steps 8-9 with UC-42: active examination rooms with the number of patients the doctor still has to examine
+ * (today's visits of the room that have a queue number and have not ended). `counts` maps a room id to that number.
  * The backend only returns active examination rooms that have an active assigned doctor.
  */
-export function VisitRoomPicker({ rooms, counts, value, onChange, error, loading, loadError, onReload, suggestedRoomId }) {
+export function VisitRoomPicker({
+  rooms, counts, countsFailed = false, value, onChange, error, loading, loadError, onReload, suggestedRoomId,
+}) {
   if (loading && rooms.length === 0) {
     return <p role="status" className="p-6 text-center text-sm text-slate-400">Đang tải danh sách phòng khám…</p>;
   }
@@ -45,13 +48,15 @@ export function VisitRoomPicker({ rooms, counts, value, onChange, error, loading
               <th className="px-3 py-3">Chuyên khoa</th>
               <th className="px-3 py-3">Vị trí</th>
               <th className="px-3 py-3">Bác sĩ trong ca</th>
-              <th className="px-3 py-3 text-right">Số bệnh nhân đang chờ và khám</th>
+              <th className="px-3 py-3 text-right">Bác sĩ còn phải khám</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {rooms.map((room) => {
               const selected = room.id === value;
-              const roomCounts = counts[room.id] ?? { waiting: 0, inExamination: 0 };
+              // No counts yet (or they failed to load): show no number rather than a misleading 0.
+              const known = Boolean(counts);
+              const remaining = counts?.[room.id] ?? 0;
               const inputId = `visit-room-${room.id}`;
               return (
                 <tr
@@ -85,12 +90,17 @@ export function VisitRoomPicker({ rooms, counts, value, onChange, error, loading
                   </td>
                   <td className="px-3 py-3 text-slate-600">{room.departmentName || '—'}</td>
                   <td className="px-3 py-3 text-slate-600">{room.location || '—'}</td>
-                  <td className="px-3 py-3 text-slate-600">{room.doctorName || '—'}</td>
+                  <td className="px-3 py-3 text-slate-600">
+                    {room.doctorName || '—'}
+                  </td>
                   <td className="px-3 py-3 text-right">
-                    <span className="font-semibold text-slate-800">{roomCounts.waiting + roomCounts.inExamination}</span>
-                    <span className="block text-[11px] text-slate-400">
-                      Chờ {roomCounts.waiting} · Đang khám {roomCounts.inExamination}
-                    </span>
+                    {known ? (
+                      <span className="font-semibold text-slate-800">{remaining}</span>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">
+                        {countsFailed ? 'Không tải được số liệu' : 'Đang tải…'}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

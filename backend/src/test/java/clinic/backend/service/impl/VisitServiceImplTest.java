@@ -17,6 +17,8 @@ import clinic.backend.entity.MedicalService;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.Room;
+import clinic.backend.entity.ClinicFacility;
+import clinic.backend.enums.PaymentType;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.Department;
 import clinic.backend.entity.StaffAccount;
@@ -490,6 +492,37 @@ class VisitServiceImplTest {
         service.getRoomQueueStatus(null);
 
         verify(visitRepository).countRoomQueues(today);
+    }
+
+    @Test
+    void ticketNamesOnlyTheDoctorOnDutyInTheRegistrationShift() {
+        UUID visitId = UUID.randomUUID();
+        Instant registeredAt = clock.instant().minusSeconds(600);
+        Visit visit = mock(Visit.class);
+        when(visit.getId()).thenReturn(visitId);
+        when(visit.getPatientId()).thenReturn(UUID.randomUUID());
+        when(visit.getRoomId()).thenReturn(BUSY_ROOM_ID);
+        when(visit.getThoigianvaovien()).thenReturn(registeredAt);
+        when(visit.getQueueNumber()).thenReturn(1);
+        Patient patient = mock(Patient.class);
+        when(patient.getNgaysinh()).thenReturn(LocalDate.of(1990, 1, 1));
+        when(patient.getGioitinh()).thenReturn((short) 2);
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng khám 01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = mock(StaffAccount.class);
+        when(doctor.getAcademicTitle()).thenReturn("ThS.BS");
+        when(doctor.getFullName()).thenReturn("Lê Thị Bình");
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+        when(patientRepository.findById(any())).thenReturn(Optional.of(patient));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(paymentRepository.findByVisitIdAndType(visitId, PaymentType.EXAMINATION_FEE))
+                .thenReturn(Optional.of(mock(Payment.class)));
+        when(clinicFacilityRepository.findCurrent()).thenReturn(Optional.of(mock(ClinicFacility.class)));
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, registeredAt)).thenReturn(Optional.of(doctor));
+
+        assertThat(service.getTicket(visitId).doctorNames()).containsExactly("ThS.BS Lê Thị Bình");
+        verifyNoInteractions(staffRoomAssignmentRepository);
     }
 
     @Test

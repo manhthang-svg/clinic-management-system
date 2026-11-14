@@ -111,6 +111,33 @@ describe('ReceptionistPatientDetailPage (UC-36)', () => {
         expect(visitApi.getTicket).toHaveBeenCalledWith('v-2');
     });
 
+    it('prints the payment guide of an unpaid self-paid visit without recording a ticket print', async () => {
+        const user = userEvent.setup();
+        const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+        const patientApi = {
+            overview: vi.fn().mockResolvedValue(overview({
+                activeVisit: {
+                    visitId: 'v-3', registrationCode: 'VV003', status: 'WAITING_FEE_PAYMENT',
+                    roomName: 'Phòng khám Nội 1', examinationFeeStatus: 'PENDING',
+                },
+            })),
+        };
+        const visitApi = {
+            ...noAppointment(),
+            getTicket: vi.fn().mockResolvedValue({ visitType: 'DV', queueNumber: null, patientAmount: 150000 }),
+            prepareTicketPrint: vi.fn(),
+        };
+        renderPage({ patientApi, visitApi });
+
+        const active = await screen.findByRole('region', { name: 'Lượt khám đang mở' });
+        await user.click(within(active).getByRole('button', { name: 'In lại phiếu khám' }));
+        await user.click(await screen.findByRole('button', { name: 'In phiếu hướng dẫn thanh toán' }));
+
+        expect(print).toHaveBeenCalled();
+        expect(visitApi.prepareTicketPrint).not.toHaveBeenCalled();
+        print.mockRestore();
+    });
+
     it('shows a follow-up appointment of today (AF-03)', async () => {
         const visitApi = {
             getFollowUpAppointment: vi.fn().mockResolvedValue({

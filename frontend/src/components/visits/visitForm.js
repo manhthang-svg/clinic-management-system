@@ -1,7 +1,6 @@
 // UC-40 Register Examination: form state, client checks, and the POST /visits body.
 // Client checks mirror CreateVisitRequest for feedback only; the backend decides.
 
-export const MAX_REASON_LENGTH = 500;
 export const CARD_NUMBER_LENGTH = 15;
 // BR-129: chẩn đoán của nơi giới thiệu, 2–1.000 ký tự.
 export const MIN_REFERRAL_DIAGNOSIS_LENGTH = 2;
@@ -64,8 +63,8 @@ export function validateVisitForm(form, insurance) {
   }
 
   const reason = form.reason.trim();
+  // No length limit: visits.lydovaovien is TEXT.
   if (!reason) errors.reason = 'Vui lòng nhập lý do khám.';
-  else if (reason.length > MAX_REASON_LENGTH) errors.reason = `Vượt quá độ dài tối đa ${MAX_REASON_LENGTH} ký tự.`;
 
   // BR-129: required when referred by a health facility; the field is hidden for "Tự đến".
   if (form.referralSource === REFERRAL_HEALTH_FACILITY) {

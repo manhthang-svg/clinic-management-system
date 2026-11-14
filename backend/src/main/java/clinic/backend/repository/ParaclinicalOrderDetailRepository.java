@@ -12,8 +12,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ParaclinicalOrderDetailRepository extends JpaRepository<ParaclinicalOrderDetail, UUID> {
+    // đếm số lượng dịch vụ cls theo id của ktv
     long countByPerformerAccountIdAndStatus(UUID performerAccountId, ParaclinicalOrderDetailStatus status);
 
+    // đếm số lượng dịch vụ theo phòng
     long countByRoomIdAndStatus(UUID roomId, ParaclinicalOrderDetailStatus status);
 
     /** Number of services per room in a status, for many rooms in one query. */
@@ -32,6 +34,7 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
             @Param("roomIds") Collection<UUID> roomIds,
             @Param("status") ParaclinicalOrderDetailStatus status);
 
+    // kiem tra xem phong co nhan dich vụ nao ko truoc khi xoa phong
     boolean existsByRoomIdAndStatusIn(UUID roomId, Collection<ParaclinicalOrderDetailStatus> statuses);
 
     long countByServiceIdAndStatusIn(

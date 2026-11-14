@@ -70,7 +70,7 @@ describe('VisitTicket', () => {
     expect(screen.getByText('BS Nguyễn An')).toBeInTheDocument();
   });
 
-  it('sends a self-paid patient to the cashier before the waiting area (BR-16)', () => {
+  it('gives an unpaid self-paid patient a payment guide, not an examination ticket (BR-16, I1-D48)', () => {
     render(
       <VisitTicket
         visit={visit}
@@ -80,9 +80,12 @@ describe('VisitTicket', () => {
       />,
     );
 
+    expect(screen.getByRole('article', { name: 'Phiếu hướng dẫn thanh toán' })).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: 'Phiếu khám bệnh' })).toBeNull();
     expect(screen.getByText('150.000 đ')).toBeInTheDocument();
-    expect(screen.getByText('Thanh toán tại quầy thu ngân trước khi vào khu chờ')).toBeInTheDocument();
-    expect(screen.getByText('Sau khi thanh toán sẽ nhận số thứ tự khám tại quầy thu ngân.')).toBeInTheDocument();
+    expect(screen.getByText('Nơi thanh toán: Quầy thu ngân')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Chưa có số thứ tự. Phiếu này không dùng để vào khám.');
+    expect(screen.getByRole('button', { name: 'In phiếu hướng dẫn thanh toán' })).toBeInTheDocument();
     // I1-D48: the queue number is issued with the payment.
     expect(screen.queryByText('Số thứ tự')).toBeNull();
   });
