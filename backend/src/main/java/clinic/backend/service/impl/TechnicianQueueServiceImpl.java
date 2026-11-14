@@ -105,6 +105,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     private final AuditLogService auditLogService;
     private final Clock clock;
 
+    // Lấy danh sách phòng cận lâm sàng kèm thông tin KTV trực ca và quyền thao tác (canManage)
     @Override
     @Transactional(readOnly = true)
     public List<TechnicianRoomResponse> getTechnicianRooms(UUID currentUserId) {
@@ -228,6 +229,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 .toList();
     }
 
+    // Tải danh sách hàng đợi theo phòng và tính toán 4 thẻ số liệu KPI (chờ, ưu tiên, bỏ qua)
     @Override
     @Transactional(readOnly = true)
     public TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
@@ -249,6 +251,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
         Instant startOfDay = today.atStartOfDay(CLINIC_ZONE).toInstant();
 
+        // lay chi dinh da thanh toan
         List<ParaclinicalOrderDetail> details = paraclinicalOrderDetailRepository.findQueueDetails(targetRoomId, startOfDay);
 
         if (details.isEmpty()) {
@@ -289,6 +292,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         if (targetRoomId != null) {
             neededRoomIds.add(targetRoomId);
         }
+        // gom dich vu cung dot chi dinh vao phong lien quan
         siblingOrdersMap.values().forEach(list -> {
             for (ParaclinicalOrderDetail sib : list) {
                 if (sib.getRoomId() != null) {
@@ -405,6 +409,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return new TechnicianQueueResponse(statsResponse, filtered, canManage);
     }
 
+    // Tải danh sách các ca đã thực hiện xong đang chờ nhập kết luận hoặc đang lưu nháp
     @Override
     @Transactional(readOnly = true)
     public TechnicianPendingResultResponse getPendingResults(
@@ -594,6 +599,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return new TechnicianPendingResultResponse(statsResponse, filtered, canManage);
     }
 
+    // Lấy thông tin chi tiết một y lệnh cận lâm sàng kèm hồ sơ bệnh án và tiền sử bệnh
     @Override
     @Transactional(readOnly = true)
     public TechnicianQueueItemResponse getQueueDetail(UUID detailId) {
@@ -637,6 +643,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         );
     }
 
+    // Xác nhận bệnh nhân có mặt tại phòng và cấp phát số thứ tự (STT) hàng đợi tự động
     @Override
     @Transactional
     public TechnicianQueueItemResponse checkInOrder(UUID detailId, UUID technicianAccountId) {
@@ -700,6 +707,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Tiếp nhận bệnh nhân vào phòng thực hiện kỹ thuật và chuyển trạng thái sang IN_PROGRESS
     @Override
     @Transactional
     public TechnicianQueueItemResponse acceptOrder(UUID detailId, UUID technicianAccountId) {
@@ -746,6 +754,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Đánh dấu tạm bỏ qua bệnh nhân vắng mặt khi gọi tên và chuyển vào tab Đã bỏ qua
     @Override
     @Transactional
     public TechnicianQueueItemResponse skipOrder(UUID detailId, UUID technicianAccountId) {
@@ -779,6 +788,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Tiếp nhận lại bệnh nhân vắng mặt quay lại phòng và khôi phục vào hàng đợi
     @Override
     @Transactional
     public TechnicianQueueItemResponse unskipOrder(UUID detailId, UUID technicianAccountId) {
@@ -812,6 +822,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Xác nhận KTV đã làm xong kỹ thuật trên người bệnh nhân, chuyển sang chờ nhập kết quả
     @Override
     @Transactional
     public TechnicianQueueItemResponse completeOrder(UUID detailId, UUID technicianAccountId) {
@@ -855,6 +866,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Trả y lệnh đang làm về trạng thái chờ tiếp nhận kèm lý do khi gặp sự cố kỹ thuật
     @Override
     @Transactional
     public TechnicianQueueItemResponse returnToWaiting(
@@ -881,7 +893,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    /** UC-66 EF-01: only the technician who accepted the service, while it is In Progress (MSG13). */
+    // Kiểm tra điều kiện y lệnh phải đang IN_PROGRESS và do đúng KTV tiếp nhận thực hiện
     private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
         if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
@@ -891,6 +903,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         }
     }
 
+    // Từ chối thực hiện y lệnh do chống chỉ định y khoa hoặc bệnh nhân không hợp tác
     @Override
     @Transactional
     public TechnicianQueueItemResponse rejectOrder(UUID detailId, UUID technicianAccountId, RejectParaclinicalOrderRequest request) {
@@ -914,6 +927,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
+    // Kiểm tra quyền phụ trách phòng máy của KTV, ném lỗi 403 nếu không có thẩm quyền
     private void verifyRoomPermission(UUID roomId, UUID technicianAccountId) {
         if (!canManageRoom(roomId, technicianAccountId)) {
             throw new AppException(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM,
@@ -922,6 +936,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         }
     }
 
+    // Xác định KTV có quyền quản lý phòng theo ca trực (DutySchedule) hoặc phân công cố định
     private boolean canManageRoom(UUID roomId, UUID currentUserId) {
         if (currentUserId == null || roomId == null) {
             return false;
@@ -972,6 +987,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return false;
     }
 
+    // Ánh xạ thực thể chỉ định và các bảng liên quan trong RAM thành DTO hoàn chỉnh cho Frontend
     private TechnicianQueueItemResponse mapToItemResponse(
             ParaclinicalOrderDetail detail,
             MedicalService service,
@@ -1138,6 +1154,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         );
     }
 
+    // Ghép học hàm/học vị với họ tên nhân viên để hiển thị chuẩn định dạng
     private static String staffDisplayName(String academicTitle, String fullName) {
         return academicTitle == null || academicTitle.isBlank()
                 ? fullName
