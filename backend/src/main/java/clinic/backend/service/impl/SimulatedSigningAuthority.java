@@ -48,7 +48,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.DERSet;
+import org.bouncycastle.asn1.cms.Attribute;
 import org.bouncycastle.asn1.cms.AttributeTable;
+import org.bouncycastle.asn1.ess.ESSCertIDv2;
+import org.bouncycastle.asn1.ess.SigningCertificateV2;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
@@ -71,6 +76,7 @@ import org.bouncycastle.cms.DefaultSignedAttributeTableGenerator;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoGeneratorBuilder;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
@@ -96,7 +102,7 @@ import org.springframework.stereotype.Component;
  * the three service interfaces and the dev console; it never reads a private key. Signing transactions are kept in
  * memory and lost on restart, which the clinic side sees as an expired request. The CA certificate is written to
  * {@code trusted-ca.pem} beside the keystore so the dev profile can trust it. Test keys only: no legal value
- * (Luật GDĐT 2023 Điều 28 khoản 3). RSA 2048 with SHA-256 (ASSUMPTION).
+ * (Luật GDĐT 2023 Điều 28 khoản 3). RSA 2048, RSASSA-PSS with SHA-256 (TT 15/2025/TT-BKHCN Phụ lục I).
  */
 @Slf4j
 @Component
@@ -106,7 +112,10 @@ public class SimulatedSigningAuthority {
     static final String NATIONAL_RESPONDER = "Trung tâm Chứng thực điện tử quốc gia (giả lập)";
     static final String CA_RESPONDER = "Dịch vụ OCSP của CA ký số từ xa (giả lập)";
 
-    private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
+    /** RSASSA-PSS with SHA-256 (TT 15/2025/TT-BKHCN Phụ lục I mục 1.2: PKCS #1 v2.1, RSASSA-PSS to sign). */
+    private static final String SIGNATURE_ALGORITHM = "SHA256withRSAandMGF1";
+    /** BouncyCastle for RSASSA-PSS signing, passed to each builder; not registered as a JVM-wide provider. */
+    private static final BouncyCastleProvider BC = new BouncyCastleProvider();
     private static final String ROOT_ALIAS = "root";
     private static final String CA_ALIAS = "ca";
     private static final String TSA_ALIAS = "tsa";
@@ -241,7 +250,7 @@ public class SimulatedSigningAuthority {
         try {
             DigestCalculatorProvider digests = new JcaDigestCalculatorProviderBuilder().build();
             TimeStampTokenGenerator generator = new TimeStampTokenGenerator(
-                    new JcaSimpleSignerInfoGeneratorBuilder()
+                    new JcaSimpleSignerInfoGeneratorBuilder().setProvider(BC)
                             .build(SIGNATURE_ALGORITHM, current.tsa.key(), current.tsa.certificate()),
                     digests.get(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)),
                     TSA_POLICY);
@@ -356,11 +365,18 @@ public class SimulatedSigningAuthority {
             // UC-90 EF-16 demonstration: a signature made with another key does not match the certificate.
             PrivateKey key = properties.failureMode() == FailureMode.BAD_SIGNATURE
                     ? newKeyPair().getPrivate() : subscriber.key();
-            ContentSigner signer = new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).build(key);
+            ContentSigner signer = new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).setProvider(BC).build(key);
             // The CA receives only the hash: the messageDigest attribute is set to it, and the signature covers the
-            // signed attributes, so the result verifies against the clinic's payload (detached CMS).
+            // signed attributes, so the result verifies against the clinic's payload (detached CMS). CAdES baseline
+            // (TT 15/2025/TT-BKHCN Phụ lục I mục 1.7) also binds the signer certificate (signing-certificate-v2).
+            AttributeTable cadesAttributes = new AttributeTable(new Attribute(
+                    PKCSObjectIdentifiers.id_aa_signingCertificateV2,
+                    new DERSet(new SigningCertificateV2(new ESSCertIDv2[] {
+                            new ESSCertIDv2(MessageDigest.getInstance("SHA-256")
+                                    .digest(subscriber.certificate().getEncoded()))}))));
             CMSAttributeTableGenerator attributes = new CMSAttributeTableGenerator() {
-                private final DefaultSignedAttributeTableGenerator defaults = new DefaultSignedAttributeTableGenerator();
+                private final DefaultSignedAttributeTableGenerator defaults =
+                        new DefaultSignedAttributeTableGenerator(cadesAttributes);
 
                 @Override
                 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -519,7 +535,7 @@ public class SimulatedSigningAuthority {
         }
         PrivateKey signingKey = issuer == null ? pair.getPrivate() : issuer.key();
         return new JcaX509CertificateConverter()
-                .getCertificate(builder.build(new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).build(signingKey)));
+                .getCertificate(builder.build(new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).setProvider(BC).build(signingKey)));
     }
 
     private Keys load(Path store, char[] password) throws GeneralSecurityException, IOException {

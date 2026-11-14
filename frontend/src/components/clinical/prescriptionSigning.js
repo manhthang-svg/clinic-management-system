@@ -34,6 +34,7 @@ const SIGNATURE_REASONS = {
     SIGNATURE_MISMATCH: 'chữ ký không khớp với nội dung đơn thuốc',
     MALFORMED_SIGNATURE: 'dữ liệu chữ ký không đúng định dạng',
     SIGNER_CERTIFICATE_MISSING: 'thiếu chứng thư của người ký',
+    SIGNING_CERTIFICATE_ATTRIBUTE_INVALID: 'chữ ký không gắn với chứng thư của người ký',
     CERTIFICATE_NOT_REGISTERED_FOR_SIGNER: 'chữ ký không được tạo bằng chứng thư đã đăng ký của bạn',
     TIMESTAMP_INVALID: 'dấu thời gian không hợp lệ',
     CHAIN_NOT_TRUSTED: 'chứng thư không do tổ chức tin cậy cấp',
