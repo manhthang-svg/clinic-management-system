@@ -125,7 +125,7 @@ export function VisitInsuranceField({
               Xác minh lại
             </button>
             <button type="button" onClick={onSwitchToSelfPaid} className={`${SMALL_BUTTON_CLASS} bg-amber-600 text-white hover:bg-amber-700`}>
-              Chuyển sang Tự trả
+              Chuyển sang Dịch vụ
             </button>
           </div>
         </Panel>

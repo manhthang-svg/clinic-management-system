@@ -20,6 +20,7 @@ import {
   clinicToday,
   formToVisitRequest,
   isCardNumberFormatValid,
+  referralSourceOf,
   validateVisitForm,
 } from '../../components/visits/visitForm';
 import { needsPaymentGuide } from '../../components/visits/visitFormat';
@@ -92,9 +93,9 @@ function StatusCard({ title, message, actionLabel, onAction, secondaryLabel, onS
 }
 
 /** A required radio group laid out like an inline field: label on the left, options in one row. */
-function RadioRow({ name, label, options, value, onChange, error }) {
+function RadioRow({ name, label, options, value, onChange, error, disabled = false, hint }) {
   return (
-    <fieldset className="flex flex-col md:flex-row gap-1.5 md:gap-4">
+    <fieldset disabled={disabled} className="flex flex-col md:flex-row gap-1.5 md:gap-4">
       <legend className="sr-only">{label}</legend>
       <span aria-hidden="true" className={`block text-sm font-semibold text-slate-700 ${INLINE_LABEL_CLASS}`}>
         {label}<span className="text-rose-500 ml-0.5">*</span>
@@ -104,7 +105,9 @@ function RadioRow({ name, label, options, value, onChange, error }) {
           {Object.entries(options).map(([optionValue, optionLabel]) => (
             <label
               key={optionValue}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                disabled ? 'cursor-not-allowed' : 'cursor-pointer'
+              } ${disabled && value !== optionValue ? 'opacity-50' : ''} ${
                 value === optionValue
                   ? 'border-[#127e7a] bg-[#f0f9f8] text-[#127e7a] ring-2 ring-[#127e7a]/15'
                   : error
@@ -118,12 +121,13 @@ function RadioRow({ name, label, options, value, onChange, error }) {
                 value={optionValue}
                 checked={value === optionValue}
                 onChange={() => onChange(optionValue)}
-                className="w-4 h-4 accent-[#127e7a] cursor-pointer"
+                className={`w-4 h-4 accent-[#127e7a] ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
               />
               {optionLabel}
             </label>
           ))}
         </div>
+        {hint && <p className="text-xs text-slate-500">{hint}</p>}
         {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
       </div>
     </fieldset>
@@ -283,13 +287,6 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
       followUpAppointmentVersion: appointment.version,
       ...(suggested ? { roomId: appointment.suggestedRoomId } : {}),
     });
-  };
-
-  const cancelAppointment = async (reason) => {
-    await visitApi.cancelFollowUpAppointment(appointment.id, reason, appointment.version);
-    toast.success('Đã hủy lịch hẹn tái khám');
-    update({ followUpAppointmentId: null, followUpAppointmentVersion: null });
-    setAppointment(null);
   };
 
   const openConfirm = async () => {
@@ -452,7 +449,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
     content = (
       <StatusCard
         title="Không thể đăng ký khám"
-        message={msg22(activeVisit, VISIT_STATUS_LABELS[activeVisit.status] ?? activeVisit.status)}
+        message={msg22(activeVisit)}
         actionLabel="Về danh sách bệnh nhân"
         onAction={goToPatients}
         secondaryLabel="In lại phiếu khám"
@@ -473,7 +470,6 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
             attached={form.followUpAppointmentId === appointment.id}
             onAttach={attachAppointment}
             onDetach={() => update({ followUpAppointmentId: null, followUpAppointmentVersion: null })}
-            onCancel={cancelAppointment}
           />
         )}
 
@@ -571,8 +567,10 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                   name="visit-referral"
                   label="Nơi giới thiệu"
                   options={REFERRAL_SOURCE_LABELS}
-                  value={form.referralSource}
+                  value={referralSourceOf(form)}
                   onChange={(referralSource) => update({ referralSource })}
+                  disabled={intakeType === 'FOLLOW_UP'}
+                  hint={intakeType === 'FOLLOW_UP' ? 'Lượt tái khám theo lịch hẹn: nơi giới thiệu là Tự đến.' : undefined}
                 />
               </div>
             </FormSection>

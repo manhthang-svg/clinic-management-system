@@ -44,25 +44,33 @@ export function isInsuranceSettled(form, insurance) {
   return insurance.cardNumber === form.cardNumber && insurance.status === 'VALID';
 }
 
+/** MSG02: a required field is empty (UC-40 EF-02). */
+const msg02 = (fieldName) => `${fieldName} là bắt buộc.`;
+
 export function validateVisitForm(form, insurance) {
   const errors = {};
 
-  if (form.isPriority && !form.priorityReason) errors.priorityReason = 'Vui lòng chọn lý do ưu tiên.';
+  if (form.isPriority && !form.priorityReason) errors.priorityReason = msg02('Lý do ưu tiên');
 
-  if (!form.visitType) errors.visitType = 'Vui lòng chọn loại lượt khám.';
+  if (!form.visitType) errors.visitType = msg02('Loại lượt khám');
   else if (form.visitType === 'BHYT') {
-    if (!form.cardNumber) errors.cardNumber = 'Vui lòng nhập số thẻ BHYT.';
+    if (!form.cardNumber) errors.cardNumber = msg02('Số thẻ BHYT');
     else if (!isCardNumberFormatValid(form.cardNumber)) errors.cardNumber = 'Số thẻ BHYT không đúng định dạng.';
     else if (!isInsuranceSettled(form, insurance)) errors.cardNumber = 'Vui lòng xác minh thẻ BHYT.';
   }
 
   const reason = form.reason.trim();
   // No length limit: visits.lydovaovien is TEXT.
-  if (!reason) errors.reason = 'Vui lòng nhập lý do khám.';
+  if (!reason) errors.reason = msg02('Lý do khám');
 
-  if (!form.roomId) errors.roomId = 'Vui lòng chọn phòng khám.';
+  if (!form.roomId) errors.roomId = msg02('Phòng khám');
 
   return errors;
+}
+
+/** A follow-up visit comes on the clinic's own appointment, so its referral source is always "Tự đến". */
+export function referralSourceOf(form) {
+  return form.followUpAppointmentId ? 'TU_DEN' : form.referralSource;
 }
 
 /** Body of POST /visits (CreateVisitRequest). */
@@ -75,7 +83,7 @@ export function formToVisitRequest(form, patientId, insurance) {
     mabhyt: insured ? form.cardNumber : null,
     lydovaovien: form.reason.trim(),
     lydotiepnhan: form.followUpAppointmentId ? 'FOLLOW_UP' : 'EXAMINATION',
-    noigioithieuLoai: form.referralSource,
+    noigioithieuLoai: referralSourceOf(form),
     isPriority: form.isPriority,
     priorityReason: form.isPriority ? form.priorityReason : null,
     followUpAppointmentId: form.followUpAppointmentId,

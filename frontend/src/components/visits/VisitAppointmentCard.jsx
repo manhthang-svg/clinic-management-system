@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { CalendarClock, CalendarCheck2, Info, Link2Off } from 'lucide-react';
-import { INPUT_CLASS, Field } from '../shared/FormFields';
 import { daysBetween } from './visitForm';
 import { formatDate } from './visitFormat';
-
-const MAX_CANCEL_REASON_LENGTH = 255;
 
 const OUTLINE_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
@@ -15,12 +12,9 @@ const PRIMARY_BUTTON_CLASS =
  * UC-40 AF-04 / AF-05 / AF-06: the patient's scheduled follow-up appointment.
  * Shows no clinical content (diagnosis, advice).
  */
-export function VisitAppointmentCard({ appointment, today, attached, onAttach, onDetach, onCancel }) {
-  // null | 'other' | 'cancelling'
+export function VisitAppointmentCard({ appointment, today, attached, onAttach, onDetach }) {
+  // null | 'other'
   const [decision, setDecision] = useState(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelError, setCancelError] = useState(null);
-  const [cancelling, setCancelling] = useState(false);
 
   const daysLate = daysBetween(appointment.appointmentDate, today);
 
@@ -33,22 +27,6 @@ export function VisitAppointmentCard({ appointment, today, attached, onAttach, o
       </p>
     );
   }
-
-  const submitCancel = async () => {
-    const reason = cancelReason.trim();
-    if (!reason) {
-      setCancelError('Vui lòng nhập lý do.');
-      return;
-    }
-    setCancelling(true);
-    setCancelError(null);
-    try {
-      await onCancel(reason);
-    } catch {
-      setCancelError('Không hủy được lịch hẹn. Vui lòng thử lại.');
-      setCancelling(false);
-    }
-  };
 
   return (
     <section className="rounded-2xl border border-[#e2d9fb] bg-[#f8f6fe] p-5 space-y-4">
@@ -111,37 +89,6 @@ export function VisitAppointmentCard({ appointment, today, attached, onAttach, o
             Chọn lại
           </button>
         </div>
-      ) : decision === 'cancelling' ? (
-        <div className="space-y-3">
-          <Field id="cancel-appointment-reason" label="Lý do không tái khám" required error={cancelError}>
-            <textarea
-              id="cancel-appointment-reason"
-              rows={2}
-              value={cancelReason}
-              maxLength={MAX_CANCEL_REASON_LENGTH}
-              onChange={(e) => {
-                setCancelReason(e.target.value);
-                setCancelError(null);
-              }}
-              aria-invalid={Boolean(cancelError)}
-              aria-describedby={cancelError ? 'cancel-appointment-reason-error' : undefined}
-              className={`${INPUT_CLASS} resize-none`}
-            />
-          </Field>
-          <div className="flex flex-wrap justify-end gap-2.5">
-            <button type="button" onClick={() => setDecision(null)} disabled={cancelling} className={OUTLINE_BUTTON_CLASS}>
-              Quay lại
-            </button>
-            <button
-              type="button"
-              onClick={submitCancel}
-              disabled={cancelling}
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {cancelling ? 'Đang hủy…' : 'Hủy lịch hẹn'}
-            </button>
-          </div>
-        </div>
       ) : (
         <div className="flex flex-wrap gap-2.5">
           <button type="button" onClick={onAttach} className={PRIMARY_BUTTON_CLASS}>
@@ -150,13 +97,6 @@ export function VisitAppointmentCard({ appointment, today, attached, onAttach, o
           </button>
           <button type="button" onClick={() => setDecision('other')} className={OUTLINE_BUTTON_CLASS}>
             Khám vấn đề khác
-          </button>
-          <button
-            type="button"
-            onClick={() => setDecision('cancelling')}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-semibold text-rose-600 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 cursor-pointer"
-          >
-            Bệnh nhân không tái khám nữa
           </button>
         </div>
       )}
