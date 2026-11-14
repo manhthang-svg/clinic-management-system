@@ -10,6 +10,16 @@ export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt
 
 export const NETWORK_MESSAGE = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
 
+/**
+ * MSG21: registration confirmed. A Dịch vụ visit that still has to pay has no queue number yet (I1-D48), so the
+ * message says when it is issued instead.
+ */
+export function msg21(visit) {
+  return visit.queueNumber != null
+    ? `Đã đăng ký lượt khám ${visit.sovaovien}. Số thứ tự: ${visit.queueNumber}.`
+    : `Đã đăng ký lượt khám ${visit.sovaovien}. Số thứ tự được cấp sau khi thanh toán phí khám.`;
+}
+
 export function msg22(visit, statusLabel) {
   return `Bệnh nhân đang có lượt khám chưa kết thúc (${visit.sovaovien} – ${visit.roomName ?? 'phòng khám'} – ${statusLabel}).`;
 }

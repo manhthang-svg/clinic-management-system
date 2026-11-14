@@ -40,7 +40,7 @@ describe('QueueTicketDialog (I1-D48)', () => {
     render(<QueueTicketDialog visitId="v1" onClose={vi.fn()} visitApi={fakeVisitApi()} />);
 
     expect(await screen.findByText('7')).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Phiếu số thứ tự' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Phiếu khám' })).toBeInTheDocument();
     expect(screen.getByText('Phòng Nội 01')).toBeInTheDocument();
     expect(screen.getByText('Đã thanh toán phí khám – mời đến khu chờ')).toBeInTheDocument();
   });
@@ -51,7 +51,7 @@ describe('QueueTicketDialog (I1-D48)', () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => {});
     render(<QueueTicketDialog visitId="v1" onClose={vi.fn()} visitApi={visitApi} />);
 
-    await user.click(await screen.findByRole('button', { name: 'In phiếu số thứ tự' }));
+    await user.click(await screen.findByRole('button', { name: 'In phiếu khám' }));
 
     expect(visitApi.prepareTicketPrint).toHaveBeenCalledWith('v1');
     expect(await screen.findByText('IN LẠI')).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('QueueTicketDialog (I1-D48)', () => {
     );
 
     expect(await screen.findByText('Lượt khám chưa có số thứ tự vì phí khám chưa được thanh toán.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'In phiếu số thứ tự' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'In phiếu khám' })).toBeDisabled();
   });
 
   it('closes on request', async () => {

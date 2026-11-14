@@ -21,6 +21,14 @@ describe('UC-40 visit form', () => {
     });
   });
 
+  it('has no length limit on the reason for visit (visits.lydovaovien is TEXT)', () => {
+    const form = {
+      ...EMPTY_VISIT_FORM, visitType: 'DV', reason: 'Đau đầu kéo dài. '.repeat(150), roomId: 'room-1',
+    };
+
+    expect(validateVisitForm(form, {})).toEqual({});
+  });
+
   it('keeps the follow-up version and verified insurance state in the command', () => {
     const form = {
       ...EMPTY_VISIT_FORM,
