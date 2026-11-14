@@ -6,6 +6,9 @@ export const ORGAN_FIELDS = [
 
 export const notesKey = (key) => `${key}Notes`;
 
+// BR-94: nơi giới thiệu "Y tế" (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13).
+export const REFERRAL_HEALTH_FACILITY = 'CO_SO_Y_TE';
+
 /** BR-98 ranges; label, unit, minimum, maximum. */
 export const VITAL_RULES = {
     pulse: ['Mạch', 'lần/phút', 20, 250],
@@ -50,6 +53,7 @@ export const MSG = {
     CONCURRENT_MODIFICATION: 'Hồ sơ vừa được cập nhật ở nơi khác. Vui lòng tải lại.',
     INVALID_DATA: 'Dữ liệu khám chưa hợp lệ. Vui lòng kiểm tra các trường được đánh dấu.',
     CHECK_FIELDS: 'Vui lòng kiểm tra các trường được đánh dấu.',
+    REFERRAL_DIAGNOSIS_REQUIRED: 'Chẩn đoán của nơi giới thiệu phải có từ 2 đến 1.000 ký tự.', // BR-129
 };
 
 const CODE_MESSAGES = {
@@ -65,6 +69,7 @@ const CODE_MESSAGES = {
     VITAL_SIGNS_REQUIRED: MSG.VITALS_REQUIRED,
     VITAL_SIGNS_INVALID: MSG.CHECK_FIELDS,
     PRELIMINARY_DIAGNOSIS_REQUIRED: MSG.DIAGNOSIS_REQUIRED,
+    REFERRAL_DIAGNOSIS_REQUIRED: MSG.REFERRAL_DIAGNOSIS_REQUIRED,
     ICD10_INVALID: MSG.ICD10_INVALID,
     ICD10_NOT_DETAILED: MSG.ICD10_NOT_DETAILED,
     ICD10_SEX_MISMATCH: MSG.ICD10_SEX_MISMATCH,
@@ -82,7 +87,7 @@ export function examinationErrorMessage(error) {
 }
 
 const API_FIELDS = {
-    reasonForVisit: 'reason', presentIllness: 'progression', generalFinding: 'generalExam',
+    reasonForVisit: 'reason', referralDiagnosis: 'referralDiagnosis', presentIllness: 'progression', generalFinding: 'generalExam',
     preliminaryDiagnosis: 'preliminaryDiagnosis', preliminaryDiagnosisIcd10Code: 'icd10',
     treatmentCarePerformed: 'treatment',
 };
@@ -91,6 +96,7 @@ const API_FIELDS = {
 export function fieldErrorsFromApi(error) {
     const code = error?.errorResponse?.code;
     if (code === 'PRELIMINARY_DIAGNOSIS_REQUIRED') return { preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED };
+    if (code === 'REFERRAL_DIAGNOSIS_REQUIRED') return { referralDiagnosis: MSG.REFERRAL_DIAGNOSIS_REQUIRED };
     if (code === 'ICD10_INVALID' || code === 'ICD10_NOT_DETAILED' || code === 'ICD10_SEX_MISMATCH') {
         return { icd10: MSG[code] };
     }
@@ -120,6 +126,11 @@ function checkLength(errors, key, value, label, min, max, required) {
 export function validateExamination(form, mode) {
     const errors = {};
     checkLength(errors, 'reason', form.reason, 'Lý do khám', 2, 1000, true);
+    // BR-129: only a visit referred by a health facility carries the referral diagnosis.
+    if (form.referralSource === REFERRAL_HEALTH_FACILITY) {
+        checkLength(errors, 'referralDiagnosis', form.referralDiagnosis ?? '', 'Chẩn đoán của nơi giới thiệu',
+            2, 1000, true);
+    }
     checkLength(errors, 'generalExam', form.generalExam, 'Toàn thân', 0, 4000, false);
 
     const entered = Object.keys(VITAL_RULES).filter((key) => String(form[key] ?? '').trim() !== '');

@@ -17,7 +17,9 @@ import {
 import {
   EMPTY_VISIT_FORM,
   MAX_REASON_LENGTH,
+  MAX_REFERRAL_DIAGNOSIS_LENGTH,
   NO_INSURANCE_CHECK,
+  REFERRAL_HEALTH_FACILITY,
   clinicToday,
   formToVisitRequest,
   isCardNumberFormatValid,
@@ -563,6 +565,29 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                   value={form.referralSource}
                   onChange={(referralSource) => update({ referralSource })}
                 />
+
+                {/* BR-129; TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13: hidden for "Tự đến". */}
+                {form.referralSource === REFERRAL_HEALTH_FACILITY && (
+                  <Field
+                    id="visit-referral-diagnosis"
+                    label="Chẩn đoán của nơi giới thiệu"
+                    required
+                    inline
+                    error={shownErrors.referralDiagnosis}
+                    hint={`${form.referralDiagnosis.trim().length}/${MAX_REFERRAL_DIAGNOSIS_LENGTH} ký tự`}
+                  >
+                    <textarea
+                      id="visit-referral-diagnosis"
+                      rows={2}
+                      value={form.referralDiagnosis}
+                      onChange={(e) => update({ referralDiagnosis: e.target.value })}
+                      placeholder="Ghi theo giấy giới thiệu"
+                      aria-invalid={Boolean(shownErrors.referralDiagnosis)}
+                      aria-describedby={shownErrors.referralDiagnosis ? 'visit-referral-diagnosis-error' : undefined}
+                      className={`${INPUT_CLASS} resize-none md:max-w-3xl`}
+                    />
+                  </Field>
+                )}
               </div>
             </FormSection>
 

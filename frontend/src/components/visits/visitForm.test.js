@@ -21,6 +21,30 @@ describe('UC-40 visit form', () => {
     });
   });
 
+  it('requires the referral diagnosis when referred by a health facility (BR-129)', () => {
+    const form = {
+      ...EMPTY_VISIT_FORM,
+      visitType: 'DV',
+      reason: 'Ho kéo dài',
+      roomId: '0192a000-0004-7000-8000-000000000001',
+      referralSource: 'CO_SO_Y_TE',
+    };
+
+    expect(validateVisitForm(form, {})).toEqual({
+      referralDiagnosis: 'Vui lòng nhập chẩn đoán của nơi giới thiệu.',
+    });
+    expect(validateVisitForm({ ...form, referralDiagnosis: 'V' }, {}).referralDiagnosis)
+      .toBe('Nhập tối thiểu 2 ký tự.');
+    expect(validateVisitForm({ ...form, referralDiagnosis: ' Viêm phổi ' }, {})).toEqual({});
+    expect(formToVisitRequest({ ...form, referralDiagnosis: ' Viêm phổi ' }, 'p', {}))
+      .toMatchObject({ noigioithieuLoai: 'CO_SO_Y_TE', chandoancuanoigioithieu: 'Viêm phổi' });
+  });
+
+  it('sends no referral diagnosis for a self-referred visit', () => {
+    const form = { ...EMPTY_VISIT_FORM, referralSource: 'TU_DEN', referralDiagnosis: 'Viêm phổi' };
+    expect(formToVisitRequest(form, 'p', {}).chandoancuanoigioithieu).toBeNull();
+  });
+
   it('keeps the follow-up version and verified insurance state in the command', () => {
     const form = {
       ...EMPTY_VISIT_FORM,

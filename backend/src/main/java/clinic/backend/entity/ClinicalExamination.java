@@ -37,10 +37,6 @@ public class ClinicalExamination extends VersionedEntity {
     @Column(name = "examined_by_account_id", nullable = false)
     private UUID examinedByAccountId;
 
-    /** CV 365 II.7, III.17. */
-    @Column(name = "chandoancuanoigioithieu")
-    private String chandoancuanoigioithieu;
-
     /** CV 365 II.17. */
     @Column(name = "quatrinhbenhly")
     private String quatrinhbenhly;

@@ -30,10 +30,10 @@ export const INTAKE_TYPE_LABELS = {
   FOLLOW_UP: 'Tái khám',
 };
 
-// TBD: the UC names only the default "Tự đến"; the other referral sources need an approved list.
+// BR-94; labels follow TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13 ("1. Y tế  2. Tự đến").
 export const REFERRAL_SOURCE_LABELS = {
   TU_DEN: 'Tự đến',
-  CO_SO_Y_TE: 'Cơ sở y tế khác giới thiệu',
+  CO_SO_Y_TE: 'Y tế',
 };
 
 // VisitStatus.
