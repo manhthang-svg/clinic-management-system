@@ -48,3 +48,11 @@ export function ageText(dateOfBirth, at = new Date()) {
   if (years === 0) return `${rest} tháng`;
   return rest === 0 ? `${years} tuổi` : `${years} tuổi ${rest} tháng`;
 }
+
+/**
+ * I1-D48, BR-16: a Dịch vụ visit that still has to pay has no queue number, so the reception desk prints a payment
+ * guide instead of an examination ticket; the Cashier prints the examination ticket after payment (UC-71).
+ */
+export function needsPaymentGuide(ticket) {
+  return Boolean(ticket) && ticket.visitType !== 'BHYT' && ticket.queueNumber == null;
+}

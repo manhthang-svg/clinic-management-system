@@ -78,13 +78,17 @@ export function VisitInsuranceField({
       </Field>
 
       {current === 'VALID' && (
-        // MSG16
+        // MSG16, with the card validity and coverage rate (UC-40 step 6, BR-13, BR-50).
         <Panel
           className={offset}
           tone="success"
           icon={ShieldCheck}
-          title={`Thẻ BHYT có giá trị đến ${formatDate(card?.validTo)}. Mức hưởng: ${coverageRateOf(card) ?? '—'}%.`}
+          title="Thẻ BHYT hợp lệ."
         >
+          <p className="text-xs">
+            Hạn thẻ: {card?.validFrom ? `${formatDate(card.validFrom)} – ` : 'đến '}{formatDate(card?.validTo)}
+            {' · '}Mức hưởng: {coverageRateOf(card) ?? '—'}%
+          </p>
           {card?.primaryCareFacility && (
             <p className="text-xs">Nơi đăng ký KCB ban đầu: {card.primaryCareFacility}</p>
           )}

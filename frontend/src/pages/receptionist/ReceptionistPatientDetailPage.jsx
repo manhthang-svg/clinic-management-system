@@ -5,6 +5,7 @@ import defaultPatientApi from '../../apis/patientApi';
 import defaultVisitApi from '../../apis/visitApi';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { VisitTicket } from '../../components/visits';
+import { needsPaymentGuide } from '../../components/visits/visitFormat';
 import { clinicToday } from '../../components/visits/visitForm';
 import { loadErrorMessage } from '../../components/visits/visitErrors';
 import { VISIT_STATUS_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
@@ -79,6 +80,11 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
 
     const printTicket = async () => {
         if (!reprint?.ticket) return;
+        // A payment guide is not a ticket print, so the Cashier's first ticket is not marked "IN LẠI".
+        if (needsPaymentGuide(reprint.ticket)) {
+            window.print();
+            return;
+        }
         setReprint((current) => ({ ...current, loading: true, error: null }));
         try {
             const ticket = await visitApi.prepareTicketPrint(reprint.visit.id);

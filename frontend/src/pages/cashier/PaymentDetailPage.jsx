@@ -447,7 +447,7 @@ export default function PaymentDetailPage() {
                                 onClick={openQueueTicket}
                                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#127e7a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0e6b67] shadow-xs"
                             >
-                                <Printer size={16} /> In phiếu số thứ tự
+                                <Printer size={16} /> In phiếu khám
                             </button>
                         )}
                         {!isPrintable && (

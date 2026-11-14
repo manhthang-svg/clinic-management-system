@@ -60,7 +60,7 @@ describe('PaymentDetailPage – after confirming a payment (UC-71)', () => {
 
     await confirmCash(user);
 
-    expect(await screen.findByRole('dialog', { name: 'Phiếu số thứ tự' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Phiếu khám' })).toBeInTheDocument();
     await waitFor(() => expect(visitApi.getTicket).toHaveBeenCalledWith('visit-1', expect.anything()));
     expect(paymentApi.prepareReceiptPrint).not.toHaveBeenCalled();
   });
@@ -76,6 +76,6 @@ describe('PaymentDetailPage – after confirming a payment (UC-71)', () => {
     await confirmCash(user);
 
     await waitFor(() => expect(paymentApi.prepareReceiptPrint).toHaveBeenCalledWith('pay-1'));
-    expect(screen.queryByRole('dialog', { name: 'Phiếu số thứ tự' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Phiếu khám' })).not.toBeInTheDocument();
   });
 });
