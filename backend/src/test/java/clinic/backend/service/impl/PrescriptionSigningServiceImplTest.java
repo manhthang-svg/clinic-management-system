@@ -89,6 +89,8 @@ class PrescriptionSigningServiceImplTest {
     private static final UUID DOCTOR_ID = UUID.randomUUID();
     private static final UUID VISIT_ID = UUID.randomUUID();
     private static final byte[] SIGNED_DATA = {1, 2, 3};
+    /** The CMS after the time stamp was added (CAdES-T); this is stored and sent. */
+    private static final byte[] STAMPED_DATA = {4, 5, 6};
 
     @Mock private ConcludingVisitGuard guard;
     @Mock private PrescriptionServiceImpl prescriptions;
@@ -290,7 +292,8 @@ class PrescriptionSigningServiceImplTest {
         verify(recordSignatureRepository).save(signature.capture());
         assertThat(signature.getValue().getSignatureMethod()).isEqualTo(RecordSignatureMethod.DIGITAL_SIGNATURE);
         assertThat(signature.getValue().getSignedPayload()).isEqualTo(pending.getPayload());
-        assertThat(signature.getValue().getSignatureValue()).isEqualTo(SIGNED_DATA);
+        assertThat(signature.getValue().getSignatureValue()).isEqualTo(STAMPED_DATA);
+        assertThat(signature.getValue().getSignatureFormat()).isEqualTo("CAdES-T");
         assertThat(signature.getValue().getCertificateSerial()).isEqualTo("abc123");
         assertThat(signature.getValue().getSigningRequestId()).isEqualTo(pending.getId());
         verify(auditLogService).recordBusinessChange(eq(DOCTOR_ID), eq(AuditLogAction.SIGN), eq("prescriptions"),
@@ -298,7 +301,7 @@ class PrescriptionSigningServiceImplTest {
         ArgumentCaptor<byte[]> sent = ArgumentCaptor.forClass(byte[].class);
         verify(nationalSystem).submit(eq(new NationalPrescriptionSystem.Credentials("79001", "LT79001", "BS0001")),
                 sent.capture());
-        assertThat(new String(sent.getValue(), StandardCharsets.UTF_8)).endsWith(",\"signature\":\"AQID\"}");
+        assertThat(new String(sent.getValue(), StandardCharsets.UTF_8)).endsWith(",\"signature\":\"BAUG\"}");
         ArgumentCaptor<PrescriptionSubmission> submission = ArgumentCaptor.forClass(PrescriptionSubmission.class);
         verify(submissionRepository).save(submission.capture());
         assertThat(submission.getValue().getResult()).isEqualTo(PrescriptionSubmissionResult.ACCEPTED);
@@ -390,7 +393,7 @@ class PrescriptionSigningServiceImplTest {
 
     private void stubValidSignature() {
         when(verifier.verify(any(), any(), any())).thenReturn(new DigitalSignatureVerifier.Verification(
-                null, mock(X509Certificate.class), NOW, new byte[] {7}, new byte[] {8}, "{}"));
+                null, STAMPED_DATA, mock(X509Certificate.class), NOW, new byte[] {7}, new byte[] {8}, "{}"));
     }
 
     private static byte[] payload() {

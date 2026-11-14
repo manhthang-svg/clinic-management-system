@@ -19,6 +19,7 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.service.RemoteSigningGateway.SigningResult;
 import clinic.backend.service.RemoteSigningGateway.Status;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -55,6 +56,33 @@ class DigitalSigningRoundTripTest {
                 .generateCertPath(new java.io.ByteArrayInputStream(verification.certificateChain()), "PkiPath")
                 .getCertificates();
         assertThat(chain).first().isEqualTo(issued.certificate());
+    }
+
+    /** TT 15/2025/TT-BKHCN Phụ lục I mục 1.2 and 1.7: RSASSA-PSS, CAdES baseline B and T. */
+    @Test
+    void signatureIsCadesWithRsassaPssAndTheTimeStampInside() throws Exception {
+        Fixture fixture = fixture(FailureMode.NONE);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+
+        byte[] signed = sign(fixture, issued, PAYLOAD);
+        DigitalSignatureVerifier.Verification verification =
+                fixture.verifier.verify(signed, PAYLOAD, issued.certificate());
+
+        org.bouncycastle.cms.SignerInformation original = signer(signed);
+        assertThat(original.getEncryptionAlgOID()).isEqualTo(PKCSObjectIdentifiers.id_RSASSA_PSS.getId());
+        assertThat(original.getSignedAttributes().get(PKCSObjectIdentifiers.id_aa_signingCertificateV2)).isNotNull();
+        assertThat(original.getUnsignedAttributes()).isNull();
+        org.bouncycastle.cms.SignerInformation stamped = signer(verification.signedData());
+        assertThat(stamped.getUnsignedAttributes().get(PKCSObjectIdentifiers.id_aa_signatureTimeStampToken))
+                .isNotNull();
+        assertThat(stamped.getSignature()).isEqualTo(original.getSignature());
+        // The stored CAdES-T signature verifies again later (Luật GDĐT Điều 10, 13).
+        assertThat(fixture.verifier.verify(verification.signedData(), PAYLOAD, issued.certificate()).isValid())
+                .isTrue();
+    }
+
+    private static org.bouncycastle.cms.SignerInformation signer(byte[] signedData) throws Exception {
+        return new org.bouncycastle.cms.CMSSignedData(signedData).getSignerInfos().getSigners().iterator().next();
     }
 
     @Test

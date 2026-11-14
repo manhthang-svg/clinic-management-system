@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
@@ -36,14 +37,25 @@ import clinic.backend.service.TimestampAuthority;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.asn1.ASN1Primitive;
+import org.bouncycastle.asn1.DERSet;
+import org.bouncycastle.asn1.cms.Attribute;
+import org.bouncycastle.asn1.cms.AttributeTable;
+import org.bouncycastle.asn1.ess.ESSCertIDv2;
+import org.bouncycastle.asn1.ess.SigningCertificateV2;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
+import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.tsp.TSPException;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.util.Selector;
@@ -59,8 +71,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class DigitalSignatureVerifier {
 
-    /** CMS SignedData, detached (BR-59-10 step 4). */
-    static final String SIGNATURE_FORMAT = "CMS";
+    /** Detached CMS SignedData at CAdES baseline level T (BR-59-10 steps 4, 6; TT 15/2025/TT-BKHCN Phụ lục I). */
+    static final String SIGNATURE_FORMAT = "CAdES-T";
+    /** BouncyCastle for RSASSA-PSS verification, passed to each builder; not registered as a JVM-wide provider. */
+    private static final BouncyCastleProvider BC = new BouncyCastleProvider();
 
     private final SigningProperties properties;
     private final CertificateStatusService statusService;
@@ -141,8 +155,12 @@ public class DigitalSignatureVerifier {
         if (!signerCertificate.equals(registered)) {
             return Verification.failed("CERTIFICATE_NOT_REGISTERED_FOR_SIGNER");
         }
+        // CAdES baseline (TT 15/2025/TT-BKHCN Phụ lục I mục 1.7): the signed attributes bind the signer certificate.
+        if (!bindsSigningCertificate(signer, signerCertificate)) {
+            return Verification.failed("SIGNING_CERTIFICATE_ATTRIBUTE_INVALID");
+        }
         try {
-            if (!signer.verify(new JcaSimpleSignerInfoVerifierBuilder().build(signerCertificate))) {
+            if (!signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(signerCertificate))) {
                 return Verification.failed("SIGNATURE_MISMATCH");
             }
         } catch (CMSException | OperatorCreationException exception) {
@@ -161,7 +179,7 @@ public class DigitalSignatureVerifier {
                             sha256(signer.getSignature()))) {
                 return Verification.failed("TIMESTAMP_INVALID");
             }
-            token.validate(new JcaSimpleSignerInfoVerifierBuilder().build(tsaCertificate.get()));
+            token.validate(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(tsaCertificate.get()));
             signedAt = token.getTimeStampInfo().getGenTime().toInstant();
         } catch (CMSException | TSPException | IOException | OperatorCreationException exception) {
             return Verification.failed("TIMESTAMP_INVALID");
@@ -185,10 +203,49 @@ public class DigitalSignatureVerifier {
         if (!issuerStatus.isGood()) {
             return Verification.failed("CA_CERTIFICATE_INVALID");
         }
-        return new Verification(null, signerCertificate, signedAt, tokenBytes,
-                pkiPath(List.of(signerCertificate, issuer.get())),
+        return new Verification(null, withSignatureTimeStamp(signedData, signer, tokenBytes), signerCertificate,
+                signedAt, tokenBytes, pkiPath(List.of(signerCertificate, issuer.get())),
                 evidence(signedAt, Map.of("signer", signerStatus, "issuer", issuerStatus),
                         List.of(signerCertificate, issuer.get())));
+    }
+
+    /** The signing-certificate-v2 attribute names this certificate by its SHA-256 (ETSI EN 319 122-1). */
+    private static boolean bindsSigningCertificate(SignerInformation signer, X509Certificate certificate) {
+        AttributeTable signed = signer.getSignedAttributes();
+        Attribute attribute = signed == null ? null : signed.get(PKCSObjectIdentifiers.id_aa_signingCertificateV2);
+        if (attribute == null || attribute.getAttrValues().size() != 1) {
+            return false;
+        }
+        try {
+            ESSCertIDv2[] ids = SigningCertificateV2.getInstance(attribute.getAttrValues().getObjectAt(0)).getCerts();
+            if (ids.length == 0) {
+                return false;
+            }
+            DigestCalculator digest = new JcaDigestCalculatorProviderBuilder().build().get(ids[0].getHashAlgorithm());
+            try (OutputStream output = digest.getOutputStream()) {
+                output.write(certificate.getEncoded());
+            }
+            return MessageDigest.isEqual(ids[0].getCertHash(), digest.getDigest());
+        } catch (GeneralSecurityException | OperatorCreationException | IOException | IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    /**
+     * CAdES-T (BR-59-10 step 6): the time-stamp token over the signature value becomes the signature-time-stamp
+     * unsigned attribute, so the stored and sent signature carries its own proof of time.
+     */
+    private static byte[] withSignatureTimeStamp(byte[] signedData, SignerInformation signer, byte[] tokenBytes) {
+        try {
+            CMSSignedData cms = new CMSSignedData(signedData);
+            AttributeTable unsigned = new AttributeTable(new Attribute(
+                    PKCSObjectIdentifiers.id_aa_signatureTimeStampToken,
+                    new DERSet(ASN1Primitive.fromByteArray(tokenBytes))));
+            SignerInformation stamped = SignerInformation.replaceUnsignedAttributes(signer, unsigned);
+            return CMSSignedData.replaceSigners(cms, new SignerInformationStore(stamped)).getEncoded();
+        } catch (CMSException | IOException exception) {
+            throw new IllegalStateException("The time stamp cannot be added to the signature", exception);
+        }
     }
 
     /** {@code SIGNING_CERTIFICATE_INVALID} with the reason of MSG118. */
@@ -322,16 +379,18 @@ public class DigitalSignatureVerifier {
     /**
      * The outcome of {@link #verify}: {@code failureReason} is null when the signature is valid.
      *
+     * @param signedData       the verified CMS with the time stamp added as an unsigned attribute (CAdES-T); this is
+     *                         what is stored and sent
      * @param signedAt         the time-stamp time
      * @param certificateChain signer certificate and its CA (PkiPath)
      * @param evidence         status answers at the signing time, as JSON
      */
     public record Verification(
-            String failureReason, X509Certificate signerCertificate, Instant signedAt, byte[] timestampToken,
-            byte[] certificateChain, String evidence) {
+            String failureReason, byte[] signedData, X509Certificate signerCertificate, Instant signedAt,
+            byte[] timestampToken, byte[] certificateChain, String evidence) {
 
         static Verification failed(String reason) {
-            return new Verification(reason, null, null, null, null, null);
+            return new Verification(reason, null, null, null, null, null, null);
         }
 
         public boolean isValid() {

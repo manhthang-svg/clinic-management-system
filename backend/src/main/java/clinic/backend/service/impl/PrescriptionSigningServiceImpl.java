@@ -257,7 +257,8 @@ public class PrescriptionSigningServiceImpl implements PrescriptionSigningServic
                 signing.getDocumentVersion(), signing.getDocumentSha256(), principal.accountId(),
                 context.doctor().getFullName(), registered.getSerialNumber(), registered.getIssuerDn(),
                 DigitalSignatureVerifier.SIGNATURE_FORMAT, verification.signedAt(), verification.timestampToken(),
-                signedData, payload, verification.certificateChain(), verification.evidence(), signing.getId()));
+                verification.signedData(), payload, verification.certificateChain(), verification.evidence(),
+                signing.getId()));
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("signingRequestId", signing.getId().toString());
         audit.put("documentVersion", signing.getDocumentVersion());
@@ -278,7 +279,8 @@ public class PrescriptionSigningServiceImpl implements PrescriptionSigningServic
         Instant submittedAt = clock.instant();
         NationalPrescriptionSystem.Answer answer;
         try {
-            answer = nationalSystem.submit(credentials, PrescriptionPayloadBuilder.withSignature(payload, signedData));
+            answer = nationalSystem.submit(credentials,
+                    PrescriptionPayloadBuilder.withSignature(payload, verification.signedData()));
         } catch (AppException exception) {
             if (exception.getErrorCode() != ErrorCode.NATIONAL_PRESCRIPTION_SYSTEM_UNAVAILABLE) {
                 throw exception;
