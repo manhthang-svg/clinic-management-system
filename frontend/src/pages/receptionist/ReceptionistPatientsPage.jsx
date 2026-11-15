@@ -55,6 +55,13 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         [navigate]
     );
 
+    const clearResults = useCallback(() => {
+        setPatients([]);
+        setTotalElements(0);
+        setPageNumber(0);
+        setLastSearch(null);
+    }, []);
+
     // Without a search the page lists all patients; a search sends its type (UC-35). Both are paged.
     const fetchPatients = useCallback(async (search, pageToLoad = 0) => {
         setLoading(true);
@@ -70,12 +77,16 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
             setLastSearch(search);
         } catch (err) {
             const message = searchErrorMessage(err);
-            if (err?.errorResponse?.details?.keyword) setKeywordError(message);
-            else setLoadError(message);
+            if (err?.errorResponse?.details?.keyword) {
+                setKeywordError(message);
+                clearResults();
+            } else {
+                setLoadError(message);
+            }
         } finally {
             setLoading(false);
         }
-    }, [patientApi]);
+    }, [clearResults, patientApi]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -88,7 +99,11 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         event.preventDefault();
         const error = validateKeyword(searchType, keyword);
         setKeywordError(error);
-        if (error) return;
+        if (error) {
+            // The rows of the previous search would read as results of the wrong keyword.
+            clearResults();
+            return;
+        }
         void fetchPatients({ type: searchType, keyword: keyword.trim() });
     };
 
@@ -359,7 +374,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                             {filteredPatients.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="px-5 py-12 text-center text-sm text-slate-500">
-                                        {loading ? 'Đang tải danh sách bệnh nhân…' : (
+                                        {loading ? 'Đang tải danh sách bệnh nhân…' : keywordError ? (
+                                            'Sửa từ khóa ở trên để tìm kiếm.'
+                                        ) : (
                                             <span className="inline-flex flex-col items-center gap-3">
                                                 <span>{MSG.NO_RESULT}</span>
                                                 {lastSearch && (

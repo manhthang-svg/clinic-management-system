@@ -74,6 +74,22 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'CITIZEN_ID', keyword: '012345678901' });
     });
 
+    it('clears the previous results when the new keyword is invalid', async () => {
+        const user = userEvent.setup();
+        const patientApi = { list: vi.fn().mockResolvedValue(page([patient()])) };
+        renderPage(patientApi);
+        await screen.findByText('Nguyễn Văn An');
+
+        await user.selectOptions(screen.getByLabelText('Tìm theo'), 'PHONE');
+        await user.type(screen.getByLabelText('Từ khóa'), '09');
+        await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
+
+        expect(screen.getByRole('alert')).toHaveTextContent(MSG.INVALID_FORMAT);
+        expect(screen.queryByText('Nguyễn Văn An')).not.toBeInTheDocument();
+        expect(screen.getByText('Sửa từ khóa ở trên để tìm kiếm.')).toBeInTheDocument();
+        expect(patientApi.list).toHaveBeenCalledTimes(1);
+    });
+
     it('finds patients by part of the patient code', async () => {
         const user = userEvent.setup();
         const patientApi = {

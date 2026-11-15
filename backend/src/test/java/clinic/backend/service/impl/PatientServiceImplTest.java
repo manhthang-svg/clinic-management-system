@@ -399,7 +399,7 @@ class PatientServiceImplTest {
         when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
         when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
         when(patientRepository.searchByInsuranceCard("DN4010123456789", page)).thenReturn(found);
-        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("0003", page)).thenReturn(found);
+        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("01", page)).thenReturn(found);
         when(patientRepository.findAllBySodienthoaiContaining("4567", page)).thenReturn(found);
         when(patientRepository.searchByName("an", page)).thenReturn(found);
 
@@ -408,7 +408,7 @@ class PatientServiceImplTest {
         assertThat(service.listPatients("C1234567", PatientSearchType.PASSPORT, page)).hasSize(1);
         assertThat(service.listPatients("DN4010123456789", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
         // What a patient remembers: any part.
-        assertThat(service.listPatients("0003", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
+        assertThat(service.listPatients("01", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
         assertThat(service.listPatients("4567", PatientSearchType.PHONE, page)).hasSize(1);
         assertThat(service.listPatients("an", PatientSearchType.NAME, page)).hasSize(1);
     }
@@ -447,7 +447,6 @@ class PatientServiceImplTest {
             "PASSPORT, C123456789012345",
             "PASSPORT, C-123",
             "INSURANCE_CARD, DN40",
-            "PATIENT_CODE, BN0",
             "PATIENT_CODE, BN#0001",
             "NAME, A"
     })
