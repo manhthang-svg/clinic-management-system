@@ -10,6 +10,7 @@ import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrd
 import { cancelledMessage, createdMessage } from '../../components/paraclinical/paraclinicalOrder';
 import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
 import ConclusionPanel from '../../components/clinical/ConclusionPanel';
+import FollowUpPanel from '../../components/clinical/FollowUpPanel';
 import PrescriptionPanel from '../../components/clinical/PrescriptionPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
@@ -377,7 +378,7 @@ export default function ClinicalExaminationPage() {
     let shownSection = activeSection;
     if (activeSection === 'transfer' && !transferable) shownSection = 'clinical';
     if (activeSection === 'paraclinical' && readOnly) shownSection = 'orders';
-    if ((activeSection === 'conclusion' || activeSection === 'prescription') && !concludable) shownSection = 'clinical';
+    if ((activeSection === 'conclusion' || activeSection === 'prescription' || activeSection === 'follow-up') && !concludable) shownSection = 'clinical';
     const openConclusion = () => {
         if (shownSection === 'conclusion') return;
         if (readOnly) {
@@ -419,7 +420,7 @@ export default function ClinicalExaminationPage() {
         // UC-56 Conclude Examination, UC-59 Prescribe Medication, UC-61 Create Follow-up Appointment.
         [FileCheck2, 'Kết luận', 'conclusion', concludable ? openConclusion : null],
         [Pill, 'Kê đơn', 'prescription', concludable ? () => setActiveSection('prescription') : null],
-        [CalendarDays, 'Hẹn tái khám', 'follow-up', null],
+        [CalendarDays, 'Hẹn tái khám', 'follow-up', concludable ? () => setActiveSection('follow-up') : null],
         // UC-48: only before the examination is saved the first time (OQ-05, Q-33).
         [ArrowRightLeft, 'Chuyển phòng', 'transfer', transferable ? openTransfer : null],
     ];
@@ -465,6 +466,8 @@ export default function ClinicalExaminationPage() {
 
             {shownSection === 'prescription' ? (
                 <PrescriptionPanel visitId={visit.id} />
+            ) : shownSection === 'follow-up' ? (
+                <FollowUpPanel visitId={visit.id} />
             ) : shownSection === 'conclusion' ? (
                 <ConclusionPanel visitId={visit.id} />
             ) : shownSection === 'transfer' ? (

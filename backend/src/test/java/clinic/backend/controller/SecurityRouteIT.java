@@ -62,6 +62,17 @@ class SecurityRouteIT extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/v1/prescriptions/{id}/submissions", UUID.randomUUID())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isNotFound());
+        // UC-61, UC-62: the Doctor's follow-up routes reach the service.
+        mockMvc.perform(get("/api/v1/follow-up-appointments/visits/{id}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
+        mockMvc.perform(get("/api/v1/follow-up-appointments/{id}/print", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/follow-up-appointments/{id}/commands/prepare-print", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
         // UC-60: the print routes too.
         mockMvc.perform(get("/api/v1/prescriptions/{id}/print", UUID.randomUUID())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

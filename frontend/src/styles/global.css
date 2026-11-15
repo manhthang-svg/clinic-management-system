@@ -845,8 +845,26 @@ p[role='alert']:not(.banner) {
   .paraclinical-order-print,
   .paraclinical-order-print *,
   .prescription-print,
-  .prescription-print * {
+  .prescription-print *,
+  .follow-up-print,
+  .follow-up-print * {
     visibility: visible !important;
+  }
+
+  /* UC-62: the Phiếu hẹn khám lại of TT 01/2025 Phụ lục V across the printable width. */
+  .follow-up-print {
+    position: absolute;
+    inset: 0 0 auto 0;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .follow-up-print .follow-up-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
   }
 
   /* UC-60: the prescription of TT 26/2025 Phụ lục I across the printable width, like the paraclinical order. */
