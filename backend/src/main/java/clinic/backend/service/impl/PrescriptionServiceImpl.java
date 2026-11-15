@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 import clinic.backend.dto.request.SavePrescriptionRequest;
 import clinic.backend.dto.response.Icd10OptionResponse;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
-import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.Conclusion;
@@ -31,14 +30,11 @@ import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalHistory;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicineCatalog;
-import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
-import clinic.backend.entity.PrescriptionDiagnosis;
 import clinic.backend.entity.PrescriptionSubmission;
 import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.StaffAccount;
-import clinic.backend.entity.Visit;
 import clinic.backend.entity.VitalSign;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
@@ -486,124 +482,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()));
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public PrescriptionPrintResponse printPreview(StaffPrincipal principal, UUID prescriptionId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        Context context = guard.require(principal, visitId(prescription));
-        requirePrintable(prescription);
-        return printForm(context, prescription, null, null);
-    }
-
-    @Override
-    @Transactional
-    public PrescriptionPrintResponse preparePrint(StaffPrincipal principal, UUID prescriptionId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        Context context = guard.require(principal, visitId(prescription));
-        requirePrintable(prescription);
-        Instant now = clock.instant();
-        boolean reprint = prescription.getPrintedAt() != null;
-        if (!reprint) {
-            prescription.markPrinted(now);
-            prescriptionRepository.save(prescription);
-        }
-        // BR-59-14: every print is audited; the first one also sets printed_at.
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("prescriptionCode", prescription.getMadonthuoc());
-        audit.put("reprint", reprint);
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.PRINT, AUDIT_ENTITY, prescription.getId(),
-                context.visit().getSovaovien(), audit, now);
-        return printForm(context, prescription, now, displayName(context.doctor()));
-    }
-
-    /** UC-60 AF-01 (MSG112): only an accepted prescription is printed. */
-    private static void requirePrintable(Prescription prescription) {
-        if (!prescription.isPrintable()) {
-            throw new AppException(ErrorCode.PRESCRIPTION_NOT_PRINTABLE,
-                    Map.of("status", prescription.getLienthongStatus().name()));
-        }
-    }
-
-    /**
-     * BR-59-13: the form of TT 26/2025 Phụ lục I with the data sent to the national system (diagnoses and follow-up
-     * date copied at send time, BR-59-08) and the signature of the accepted send, verified again (BR-59-16). An
-     * accepted prescription is never sent again, so its last send is the accepted one. Reprinting from a closed
-     * record (UC-52, "Bản sao") is not implemented yet, so {@code copy} is false.
-     */
-    private PrescriptionPrintResponse printForm(
-            Context context, Prescription prescription, Instant printedAt, String printedBy) {
-        ClinicFacility facility = clinicFacilityRepository.findCurrent()
-                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
-        Patient patient = context.patient();
-        Visit visit = context.visit();
-        String phone = normalize(patient.getSodienthoai());
-        PrescriptionPrintResponse.PatientInfo patientInfo = new PrescriptionPrintResponse.PatientInfo(
-                patient.getHoten(),
-                patient.getNgaysinh(),
-                switch (patient.getGioitinh()) {
-                    case 1 -> "Nam";
-                    case 2 -> "Nữ";
-                    default -> null;
-                },
-                normalize(PrescriptionPayloadBuilder.address(patient)),
-                // TT 26 Phụ lục I chú thích 8: the patient's phone, or the accompanying person's.
-                phone != null ? phone : normalize(patient.getSodienthoainguoithan()),
-                normalize(patient.getCccdSo()),
-                normalize(patient.getHochieuSo()),
-                // The insurance number as sent (BR-59-11 ma_so_bao_hiem_y_te).
-                visit.isInsuranceCovered() ? normalize(visit.getInsuranceSocialNumber()) : null);
-        List<Icd10OptionResponse> diagnoses = prescription.getDiagnoses().stream()
-                .sorted(Comparator.comparingInt(PrescriptionDiagnosis::getThuTu))
-                .map(diagnosis -> new Icd10OptionResponse(diagnosis.getMaicd(), diagnosis.getTenicd()))
-                .toList();
-        List<PrescriptionPrintResponse.Line> lines = prescription.getDetails().stream()
-                .sorted(Comparator.comparing(PrescriptionDetail::getMachidinh))
-                .map(detail -> new PrescriptionPrintResponse.Line(
-                        detail.getHoatchat(), detail.getTenthuocvattu(), detail.getHamluong(), detail.getDuongdung(),
-                        detail.getDonvitinh(), detail.getSoluongthuocvattu().stripTrailingZeros(),
-                        detail.getLieuMoiLan(), detail.getSoLanNgay(), detail.getSoNgayDung(), detail.getCachdung(),
-                        detail.getYlenhthuocvattuGhichu()))
-                .toList();
-        String doctorName = staffAccountRepository.findById(prescription.getDoctorAccountId())
-                .map(PrescriptionServiceImpl::displayName)
-                .orElse(null);
-        return new PrescriptionPrintResponse(
-                prescription.getId(),
-                prescription.getMadonthuoc(),
-                false,
-                printedAt,
-                printedBy,
-                new PrescriptionPrintResponse.Facility(
-                        facility.getTenCskcb(), facility.getDiachi(), facility.getSodienthoai()),
-                patientInfo,
-                childData(context, prescription),
-                diagnoses,
-                lines,
-                prescription.getLuuY(),
-                prescription.getLoiDan(),
-                prescription.getNgayTaiKham(),
-                prescription.getPrescribedAt(),
-                doctorName,
-                lastSubmission(prescription));
-    }
-
-    /** BR-59-13: the Doctor's academic title and name. */
-    private static String displayName(StaffAccount account) {
-        String title = normalize(account.getAcademicTitle());
-        return title == null ? account.getFullName() : title + " " + account.getFullName();
-    }
-
-    private UUID visitId(Prescription prescription) {
+    /** The visit of the prescription's medical record (UC-59 AF-03, UC-91, UC-60). */
+    UUID visitId(Prescription prescription) {
         return medicalRecordRepository.findById(prescription.getMedicalRecordId())
                 .map(MedicalRecord::getVisitId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
     }
 
     /** UC-91: the latest send, with the signature sent with it. */
-    private PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
+    PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
         return submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId())
                 .map(submission -> submissionViews(prescription, List.of(submission)).getFirst())
                 .orElse(null);

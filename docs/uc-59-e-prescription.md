@@ -295,6 +295,29 @@ The first three rows and the withdrawal of the PIN columns are applied in V58 (a
 
 ## Decisions needed
 
+**Product-owner choices of 15/11/2026 (PO 15/11).** The product owner accepted the proposals below for every open item; they still need the team's decision record (`iteration-1-decisions.md`) and, where a source document changes, an update of that document. Until then the numbered items keep their text as the background of each choice.
+
+| # | Item | Choice (PO 15/11) |
+| --- | --- | --- |
+| 1 | Signing | Public digital signature by remote signing (BR-59-10), schema V58, `bcpkix-jdk18on` (as PO 13/11) |
+| 2 | Corrections | Only a rejected prescription is corrected; the replacement prescription of TT 26 Điều 6 khoản 9 is out of scope (as PO 12/11) |
+| 3 | ID number | Optional on the prescription, as TT 26 says ("nếu có"); this supersedes the V9 comment (applied migrations are not edited) and the UC-59 change log in `usecases.xlsx` |
+| 4 | `hinh_thuc_dieu_tri` | Fixed to outpatient (1) until the Ministry's code list is added (as PO 12/11) |
+| 5 | Type suffix | `c` stored and sent (QĐ 808, V55); the printout shows the stored code |
+| 6 | Messages | MSG106 → MSG124 as listed under [Messages](#messages) become the official wording, with the I1-D45 correction |
+| 7 | Permissions | Doctor rows added to `permission-matrix.md` (search medicines; sign and send, resend, history, correct, delete a never-sent prescription; print an accepted one) |
+| 8 | Drug allergies | No automatic check; allergies shown only (as PO 13/11) |
+| 9 | Printed name | "{hoatchat} ({tenthuocvattu}) {hamluong}" for every line; no multi-ingredient flag |
+| 10 | Certificates and trusted CAs | Deployment configuration for the project (trusted CA files; registration through the dev CA console); no Admin use case |
+| 11 | `signature` format | CMS / CAdES-T as implemented; JWS only if the national system requires it once a facility account exists |
+| 12 | Printed-copy mark | "Bản in từ đơn thuốc điện tử {code} lưu tại {facility}; người in {name}, {time}." until the Government's detailed rules are in `docs/reference/` |
+| 13 | Who signs | Form 2 of QĐ 425 Điều 11: the prescriber's own digital signature |
+| 14 | Delete a never-sent prescription (UC-59 AF-03) | Allowed; refused with MSG115 once sent, rejected or unanswered; message "Đã xóa đơn thuốc." |
+| 15 | UC-92 AF-01 guidance | Shown on every rejection, because the national system's errors are free text |
+| 16 | QR code | The prescription code only; pharmacies and patients look the prescription up on the national system by its code (QĐ 808). No public lookup page in the clinic system |
+| 17 | Draft print preview in UC-90 | Not built; the dialog keeps its summary with the "BẢN NHÁP" watermark |
+| 18 | UC-58 and BR-59-09 | UC-58 (confirm the conclusion, close the record) and the `PRESCRIPTION_NOT_ACCEPTED` check are owned by Phùng Mạnh Thắng, outside this document's implementation |
+
 1. **Digital signature instead of the signing PIN (revised 13/11, replaces PO 12/11).** Record that the e-prescription is signed with the Doctor's public digital signature by remote signing (BR-59-10) because TT 26 Điều 10 requires "ký số"; update BR-47 and the Actors sheet (signing gateway and CA as secondary actors); drop the PIN use case (old UC76); approve the schema changes above and the new dependency `org.bouncycastle:bcpkix-jdk18on` (CMS, certificate paths, OCSP, RFC 3161 time stamps; the JDK has no CMS API).
 2. **Correct only rejected prescriptions (PO 12/11).** QĐ 425/QĐ-BYT Điều 9 khoản 3 điểm c says the same as TT 26 Điều 6 khoản 9: a sent prescription is never changed; a change is a new prescription that replaces it, and the old one stays on the national system but is not dispensed. Record that TT 26 Điều 6 khoản 9 (replacement prescription) is out of scope because the record is closed right after the conclusion, so a replacement would need a new visit; BR-33 stays "one per visit".
 3. **ID number optional** on the prescription (TT 26) versus the V9 comment and the 2025 change log of UC-59 ("yêu cầu người bệnh có số định danh hoặc hộ chiếu").

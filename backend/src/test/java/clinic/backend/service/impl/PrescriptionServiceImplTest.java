@@ -22,7 +22,6 @@ import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
-import clinic.backend.entity.PrescriptionDiagnosis;
 import clinic.backend.entity.PrescriptionSubmission;
 import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.SigningRequest;
@@ -455,93 +454,6 @@ class PrescriptionServiceImplTest {
         assertThat(history.get(1).signatureValid()).isFalse();
         assertThat(history.get(1).signatureFailureReason()).isEqualTo("CERTIFICATE_REVOKED");
         assertThat(history.get(1).errors()).containsExactly("Sai mã bác sĩ");
-    }
-
-    @Test
-    void printsTheAcceptedPrescriptionWithTheSentDiagnosesAndTheVerifiedSignature() {
-        Prescription prescription = acceptedPrescriptionById();
-        when(facility.getTenCskcb()).thenReturn("Phòng khám METPH");
-        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(context.doctor()));
-
-        var form = service.preparePrint(principal(), prescription.getId());
-
-        assertThat(form.prescriptionCode()).isEqualTo("79001abc1234-c");
-        assertThat(form.facility().name()).isEqualTo("Phòng khám METPH");
-        assertThat(form.patient().fullName()).isEqualTo("Nguyễn Văn An");
-        assertThat(form.patient().gender()).isEqualTo("Nam");
-        assertThat(form.diagnoses()).extracting(item -> item.code()).containsExactly("J02.9");
-        assertThat(form.followUpDate()).isEqualTo(LocalDate.of(2026, 11, 10));
-        assertThat(form.lines()).singleElement().satisfies(line -> {
-            assertThat(line.activeIngredient()).isEqualTo("Amoxicilin");
-            assertThat(line.name()).isEqualTo("Amoxicilin 500mg");
-            assertThat(line.quantity()).isEqualByComparingTo("21");
-        });
-        assertThat(form.signature().certificateSerial()).isEqualTo("02");
-        assertThat(form.signature().signatureValid()).isTrue();
-        assertThat(form.printedAt()).isEqualTo(NOW);
-        assertThat(form.printedBy()).isEqualTo("Bác sĩ An");
-        assertThat(prescription.getPrintedAt()).isEqualTo(NOW);
-        verify(auditLogService).recordBusinessChange(
-                eq(DOCTOR_ID), eq(AuditLogAction.PRINT), eq("prescriptions"), eq(prescription.getId()), eq("DK0001"),
-                eq(Map.of("prescriptionCode", "79001abc1234-c", "reprint", false)), eq(NOW));
-    }
-
-    @Test
-    void keepsTheFirstPrintTimeAndAuditsAReprint() {
-        Prescription prescription = acceptedPrescriptionById();
-        prescription.markPrinted(EARLIER);
-
-        service.preparePrint(principal(), prescription.getId());
-
-        assertThat(prescription.getPrintedAt()).isEqualTo(EARLIER);
-        verify(prescriptionRepository, never()).save(any());
-        verify(auditLogService).recordBusinessChange(
-                eq(DOCTOR_ID), eq(AuditLogAction.PRINT), eq("prescriptions"), eq(prescription.getId()), eq("DK0001"),
-                eq(Map.of("prescriptionCode", "79001abc1234-c", "reprint", true)), eq(NOW));
-    }
-
-    @Test
-    void previewsWithoutRecordingAPrint() {
-        Prescription prescription = acceptedPrescriptionById();
-
-        var form = service.printPreview(principal(), prescription.getId());
-
-        assertThat(form.printedAt()).isNull();
-        assertThat(form.printedBy()).isNull();
-        assertThat(prescription.getPrintedAt()).isNull();
-        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
-    }
-
-    @Test
-    void refusesToPrintAPrescriptionThatWasNotAccepted() {
-        Prescription prescription = prescriptionById();
-        prescription.recordSubmission(PrescriptionSubmissionResult.REJECTED, NOW);
-
-        assertThatThrownBy(() -> service.preparePrint(principal(), prescription.getId()))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getErrorCode())
-                .isEqualTo(ErrorCode.PRESCRIPTION_NOT_PRINTABLE);
-        assertThat(prescription.getPrintedAt()).isNull();
-        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
-    }
-
-    /** A prescription accepted on its second send, with the diagnoses and follow-up date sent with it. */
-    private Prescription acceptedPrescriptionById() {
-        Prescription prescription = prescriptionById();
-        prescription.replaceDiagnoses(List.of(new PrescriptionDiagnosis(
-                UUID.randomUUID(), NOW, prescription, "J02.9", "Viêm họng cấp", (short) 1)),
-                LocalDate.of(2026, 11, 10), NOW);
-        prescription.recordSubmission(PrescriptionSubmissionResult.ACCEPTED, NOW);
-        PrescriptionSubmission accepted = new PrescriptionSubmission(UUID.randomUUID(), NOW, prescription.getId(),
-                (short) 2, DOCTOR_ID, NOW, PrescriptionSubmissionResult.ACCEPTED, null, NOW);
-        lenient().when(submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()))
-                .thenReturn(Optional.of(accepted));
-        RecordSignature signature = signature(NOW, "02");
-        lenient().when(recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
-                RecordSignatureDocumentType.DON_THUOC, prescription.getId())).thenReturn(List.of(signature));
-        lenient().when(staffAccountRepository.findAllById(any())).thenReturn(List.of(context.doctor()));
-        lenient().when(signatureVerifier.reverify(any(), any(), eq("02"), any(), any())).thenReturn(null);
-        return prescription;
     }
 
     private static RecordSignature signature(Instant createdAt, String serial) {
