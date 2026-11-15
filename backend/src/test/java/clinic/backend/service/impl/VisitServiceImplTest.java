@@ -586,7 +586,7 @@ class VisitServiceImplTest {
                 new StaffPrincipal(receptionistId, UUID.randomUUID()),
                 new CreateVisitRequest(
                         patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
-                        "Đau đầu", "EXAMINATION", "TU_DEN", false, null,
+                        "Đau đầu", "EXAMINATION", "TU_DEN", null, false, null,
                         null, null));
 
         assertThat(response.sovaovien()).isEqualTo("DK0000000001");
@@ -652,12 +652,37 @@ class VisitServiceImplTest {
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
                 new CreateVisitRequest(
                         patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
-                        "Đau đầu", "EXAMINATION", "TU_DEN", true, "ELDERLY",
+                        "Đau đầu", "EXAMINATION", "TU_DEN", null, true, "ELDERLY",
                         null, null)))
                 .isInstanceOfSatisfying(AppException.class, exception -> {
                     assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
                     assertThat(exception.getDetails()).containsKey("priorityReason");
                 });
+        verifyNoInteractions(paymentRepository);
+    }
+
+    @Test
+    void requiresReferralDiagnosisWhenReferredByAHealthFacility() {
+        UUID patientId = UUID.randomUUID();
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(visitRepository.existsByPatientIdAndStatusNotIn(patientId, VisitRepository.FINISHED_STATUSES))
+                .thenReturn(false);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(mock(Patient.class)));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
+                .thenReturn(Optional.of(mock(StaffAccount.class)));
+
+        // BR-129: "Y tế" requires the referring facility's diagnosis (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13).
+        assertThatThrownBy(() -> service.createVisit(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
+                new CreateVisitRequest(
+                        patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
+                        "Đau đầu", "EXAMINATION", "CO_SO_Y_TE", " x ", false, null,
+                        null, null)))
+                .isInstanceOfSatisfying(AppException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REFERRAL_DIAGNOSIS_REQUIRED));
         verifyNoInteractions(paymentRepository);
     }
 
@@ -671,7 +696,7 @@ class VisitServiceImplTest {
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
                 new CreateVisitRequest(
                         patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
-                        "Đau đầu", "EXAMINATION", "TU_DEN", false, null,
+                        "Đau đầu", "EXAMINATION", "TU_DEN", null, false, null,
                         null, null)))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACTIVE_VISIT_EXISTS));
@@ -883,7 +908,7 @@ class VisitServiceImplTest {
                 new StaffPrincipal(receptionistId, UUID.randomUUID()),
                 new CreateVisitRequest(
                         patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.BHYT, "1234567890",
-                        "Đau đầu", "EXAMINATION", "TU_DEN", false, null, null, null));
+                        "Đau đầu", "EXAMINATION", "TU_DEN", null, false, null, null, null));
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
         return new RegistrationResult(response, captor.getValue());

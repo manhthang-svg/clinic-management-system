@@ -33,6 +33,10 @@ public record CreateVisitRequest(
         @Size(max = 200, message = "Nơi giới thiệu không được vượt quá 200 ký tự")
         String noigioithieuLoai,
 
+        /** BR-129: required (2–1.000 characters) when noigioithieuLoai is CO_SO_Y_TE; ignored otherwise. */
+        @Size(max = 1000, message = "Chẩn đoán của nơi giới thiệu không được vượt quá 1.000 ký tự")
+        String chandoancuanoigioithieu,
+
         Boolean isPriority,
 
         String priorityReason,

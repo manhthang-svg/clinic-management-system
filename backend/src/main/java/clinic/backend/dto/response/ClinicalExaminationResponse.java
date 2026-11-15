@@ -40,6 +40,10 @@ public record ClinicalExaminationResponse(
         String roomName,
         UUID doctorAccountId,
         String doctorName,
+        /** CV 365 I.44; TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13. */
+        String referralSource,
+        /** CV 365 II.7, III.17; BR-129. */
+        String referralDiagnosis,
         String reasonForVisit,
         String presentIllness,
         String generalFinding,

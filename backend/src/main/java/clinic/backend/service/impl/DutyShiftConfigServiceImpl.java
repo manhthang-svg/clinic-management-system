@@ -27,6 +27,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Triển khai dịch vụ quản lý cấu hình khung giờ ca trực (Ca Sáng & Ca Chiều) theo tuần.
+ * 
+ * - Cơ chế lưu trữ: Bộ nhớ tạm thời `ConcurrentHashMap` hỗ trợ truy xuất nhanh trong RAM,
+ *   đồng thời ghi bền vững xuống file JSON tại đường dẫn `data/duty_shift_config.json`.
+ * - Hỗ trợ chuẩn hóa ngày theo Thứ 2 đầu tuần của múi giờ Việt Nam (Asia/Ho_Chi_Minh).
+ */
 @Slf4j
 @Service
 public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
@@ -52,6 +59,11 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         this.storageFile = storageFile;
     }
 
+    /**
+     * Khởi tạo cấu hình ca trực ngay sau khi Spring Bean được tạo (@PostConstruct).
+     * Đọc dữ liệu từ file `data/duty_shift_config.json` (nếu tồn tại) và nạp vào bộ nhớ RAM `configMap`.
+     * Nếu không tìm thấy file hoặc gặp lỗi, hệ thống sẽ sử dụng khung giờ mặc định.
+     */
     @PostConstruct
     public void init() {
         try {
@@ -71,6 +83,10 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         }
     }
 
+    /**
+     * Ghi đồng bộ toàn bộ dữ liệu cấu hình ca trực từ RAM (`configMap`) xuống file JSON trên đĩa lưu trữ.
+     * Tự động tạo thư mục cha (ví dụ `data/`) nếu thư mục chưa tồn tại trên hệ thống tệp.
+     */
     private void persistToFile() {
         try {
             File file = storageFile.toFile();
@@ -84,6 +100,13 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         }
     }
 
+    /**
+     * Tiện ích quy chuẩn một ngày bất kỳ về ngày Thứ 2 đầu tuần (theo múi giờ Việt Nam Asia/Ho_Chi_Minh).
+     * Ngày Thứ 2 này được dùng làm khóa (key dạng "YYYY-MM-DD") để quản lý và tra cứu cấu hình theo từng tuần.
+     *
+     * @param date Ngày cần quy chuẩn (nếu null sẽ lấy ngày hôm nay theo giờ VN)
+     * @return Ngày Thứ 2 đầu tuần tương ứng
+     */
     private LocalDate toMonday(LocalDate date) {
         if (date == null) {
             date = LocalDate.now(VIETNAM_ZONE);
@@ -91,6 +114,20 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 
+    /**
+     * Lấy cấu hình khung giờ ca trực (Ca Sáng & Ca Chiều) áp dụng cho tuần chứa ngày `date`.
+     * 
+     * Logic:
+     * 1. Xác định ngày Thứ 2 của tuần chứa `date`.
+     * 2. Tìm kiếm trong `configMap` theo khóa Thứ 2 đó.
+     * 3. Nếu tuần này đã được Admin tùy chỉnh, trả về cấu hình tùy chỉnh.
+     * 4. Nếu chưa được tùy chỉnh, trả về cấu hình mặc định của hệ thống:
+     *    - Ca Sáng: 08:00 - 11:30
+     *    - Ca Chiều: 13:00 - 17:30
+     *
+     * @param date Ngày cần tra cứu cấu hình ca trực
+     * @return Thông tin khung giờ ca trực áp dụng cho tuần đó
+     */
     @Override
     public DutyShiftConfigResponse getConfigForDate(LocalDate date) {
         LocalDate monday = toMonday(date);
@@ -110,6 +147,19 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
                 .build();
     }
 
+    /**
+     * Cập nhật và lưu trữ cấu hình khung giờ ca trực cho một tuần cụ thể (Admin thực hiện).
+     *
+     * Quy tắc nghiệp vụ kiểm tra (Validation):
+     * 1. Định dạng giờ phải chuẩn `HH:mm`.
+     * 2. Ca sáng: Phải nằm trong khung giờ 00:00 đến 11:59; giờ bắt đầu phải trước giờ kết thúc.
+     * 3. Ca chiều: Phải nằm trong khung giờ 12:00 đến 23:59; giờ bắt đầu phải trước giờ kết thúc.
+     * 4. Sau khi kiểm tra hợp lệ, lưu vào RAM `configMap` và ghi bền vững xuống file JSON.
+     *
+     * @param request Thông tin khung giờ mới do Admin thiết lập
+     * @param currentUserId ID tài khoản Admin thực hiện (để ghi log kiểm toán)
+     * @return Cấu hình khung giờ mới đã được cập nhật thành công
+     */
     @Override
     public DutyShiftConfigResponse updateConfig(DutyShiftConfigRequest request, UUID currentUserId) {
         LocalDate monday = toMonday(request.getStartDate());
@@ -176,6 +226,15 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         return updated;
     }
 
+    /**
+     * Xác định ca trực đang diễn ra tại một mốc thời gian `time` cụ thể trong ngày `date`.
+     * Dùng để kiểm tra quyền tác nghiệp của Bác sĩ và KTV tại phòng khám (BR-19, BR-55):
+     * Chỉ nhân viên có lịch phân công trong ca trực đang diễn ra mới được gọi khám hoặc làm kỹ thuật.
+     *
+     * @param date Ngày làm việc
+     * @param time Giờ phút cần kiểm tra
+     * @return Optional chứa `DutyShift.MORNING`, `DutyShift.AFTERNOON`, hoặc Optional.empty() nếu ngoài giờ
+     */
     @Override
     public Optional<DutyShift> shiftAt(LocalDate date, LocalTime time) {
         DutyShiftConfigResponse config = getConfigForDate(date);
@@ -190,6 +249,19 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         return Optional.empty();
     }
 
+    /**
+     * Xác định ca làm việc mà lượt đăng ký khám của bệnh nhân sẽ được xếp vào.
+     *
+     * Quy tắc phân bổ (Registration Slot Assignment):
+     * 1. Trước hoặc bằng giờ kết thúc ca sáng -> Xếp vào Ca Sáng (MORNING).
+     * 2. Từ sau khi kết thúc ca sáng đến trước hoặc bằng giờ kết thúc ca chiều:
+     *    Bao gồm cả giờ nghỉ trưa (ví dụ 12:15 bệnh nhân đến quầy làm thủ tục) -> Xếp vào Ca Chiều (AFTERNOON).
+     * 3. Sau giờ kết thúc ca chiều -> Không còn ca khám nào trong ngày (Optional.empty()).
+     *
+     * @param date Ngày tiếp nhận bệnh nhân
+     * @param time Thời điểm bệnh nhân đăng ký tại quầy tiếp tân
+     * @return Optional chứa ca làm việc tương ứng
+     */
     @Override
     public Optional<DutyShift> registrationShift(LocalDate date, LocalTime time) {
         DutyShiftConfigResponse config = getConfigForDate(date);
@@ -202,11 +274,26 @@ public class DutyShiftConfigServiceImpl implements DutyShiftConfigService {
         return Optional.empty();
     }
 
+    /**
+     * Kiểm tra một mốc thời gian có nằm trong khoảng thời gian [start, end] (bao gồm cả mốc biên) hay không.
+     *
+     * @param time  Thời gian cần kiểm tra
+     * @param start Thời gian bắt đầu
+     * @param end   Thời gian kết thúc
+     * @return true nếu start <= time <= end
+     */
     private static boolean within(LocalTime time, LocalTime start, LocalTime end) {
         return !time.isBefore(start) && !time.isAfter(end);
     }
 
-    /** Stored values are validated on update; a malformed value loaded from the file falls back to the default. */
+    /**
+     * Phân tích an toàn chuỗi giờ phút ("HH:mm") sang đối tượng LocalTime.
+     * Nếu chuỗi rỗng, null hoặc sai định dạng, hàm sẽ tự động dùng giá trị mặc định `fallback`.
+     *
+     * @param value    Chuỗi giờ phút đầu vào
+     * @param fallback Chuỗi giờ phút dự phòng
+     * @return Đối tượng LocalTime hợp lệ
+     */
     private static LocalTime parse(String value, String fallback) {
         try {
             return LocalTime.parse(value == null ? fallback : value.trim());

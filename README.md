@@ -59,10 +59,13 @@ Run the backend with `./mvnw spring-boot:run` in `backend/` and the frontend wit
 The digital signature uses a simulated remote-signing CA (test keys, no legal value; see
 [`docs/uc-59-e-prescription.md`](docs/uc-59-e-prescription.md#signing-simulator)). With the `dev` profile:
 
-1. Open `http://localhost:8080/dev/ca-sim/`, enter a Doctor's user name and a 6-digit PIN, and click
-   "Cấp chứng thư". This issues a test certificate and registers it as the Doctor's signing certificate.
-2. In the clinic app, save the prescription and click "Ký và gửi đơn", then "Ký số".
-3. On the `/dev/ca-sim/` page (another tab or a phone on the same network), sign in with the certificate serial and
+1. As Admin, open the Doctor's account, click Edit and enter the 12-digit "Số định danh cá nhân"; the
+   certificate is issued for that number.
+2. Open `http://localhost:8080/dev/ca-sim/`, enter the Doctor's 12-digit personal identification number and a
+   6-digit PIN, and click "Cấp chứng thư". This issues a test certificate and registers it as the signing
+   certificate of the Doctor whose account holds that number.
+3. In the clinic app, save the prescription and click "Ký và gửi đơn", then "Ký số".
+4. On the `/dev/ca-sim/` page (another tab or a phone on the same network), sign in with the certificate serial and
    the PIN, and click "Chấp thuận ký". The clinic app verifies the signature and sends the prescription.
 
 With the `dev` profile, the backend API contract is available at `http://localhost:8080/swagger-ui.html`,

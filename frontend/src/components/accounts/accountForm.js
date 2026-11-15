@@ -7,6 +7,7 @@ export const EMPTY_ACCOUNT_FORM = {
   title: '',
   practiceLicenseNo: '',
   maLienthongBacsi: '',
+  citizenId: '',
   dateOfBirth: '',
   gender: '',
   phone: '',
@@ -26,6 +27,8 @@ export const PRACTICE_LICENSE_PATTERN = /^[\p{L}\p{N}/-]{5,50}$/u;
 // BR-49, BR-65: prescriber link code from the national prescription system, letters and digits only (V55).
 export const MA_LIENTHONG_BACSI_PATTERN = /^[A-Za-z0-9]+$/;
 const MA_LIENTHONG_BACSI_MAX = 50;
+// BR-59-16: personal identification number of a Doctor, 12 digits (same rule as the backend).
+export const CITIZEN_ID_PATTERN = /^[0-9]{12}$/;
 export const ACADEMIC_TITLE_PATTERN = /^[\p{L}\p{M} .,]+$/u;
 const FULL_NAME_MAX = 120;
 const PHONE_PATTERN = /^(?:03[2-9]|05[2689]|07[06789]|08[1-689]|09[0-46-9])\d{7}$/;
@@ -62,6 +65,7 @@ export function accountToForm(account) {
     title: account.title || '',
     practiceLicenseNo: account.practiceLicenseNo || '',
     maLienthongBacsi: account.maLienthongBacsi || '',
+    citizenId: account.citizenId || '',
     dateOfBirth: account.dateOfBirth || '',
     gender: account.gender || '',
     phone: account.phone || '',
@@ -124,6 +128,10 @@ export function validateAccountForm(form, { accounts = [], exceptId, fields, tod
   check('maLienthongBacsi', !maLienthongBacsi || form.role !== 'DOCTOR' ? null
     : maLienthongBacsi.length > MA_LIENTHONG_BACSI_MAX ? msg08(MA_LIENTHONG_BACSI_MAX)
       : !MA_LIENTHONG_BACSI_PATTERN.test(maLienthongBacsi) ? msg05('Mã liên thông bác sĩ') : null);
+  // Optional and only for a Doctor; signing certificates are matched against it. The backend checks uniqueness.
+  const citizenId = (form.citizenId || '').trim();
+  check('citizenId', !citizenId || form.role !== 'DOCTOR' || CITIZEN_ID_PATTERN.test(citizenId) ? null
+    : msg05('Số định danh cá nhân'));
   // BR-62: staff must be at least 18 years old (the backend applies the same rule).
   check('dateOfBirth', form.dateOfBirth && form.dateOfBirth > latestAdultBirthDate(today) ? UNDERAGE_MESSAGE : null);
   check('address', form.address.trim().length > 255 ? msg08(255) : null);

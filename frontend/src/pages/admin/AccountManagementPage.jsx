@@ -66,6 +66,7 @@ function fromApi(account) {
     title: account.academicTitle ?? account.title,
     practiceLicenseNo: account.practiceLicenseNo ?? "",
     maLienthongBacsi: account.maLienthongBacsi ?? "",
+    citizenId: account.citizenId ?? "",
     failedLoginCount: account.failedLoginAttempts ?? account.failedLoginCount ?? 0,
   };
 }
@@ -385,6 +386,8 @@ export function AccountManagementPage({
       ...accountRequest(form),
       // Only a Doctor holds a prescriber link code; other roles always send none.
       maLienthongBacsi: account.role === "DOCTOR" ? form.maLienthongBacsi.trim() || null : null,
+      // BR-59-16: likewise only a Doctor holds a personal identification number here.
+      citizenId: account.role === "DOCTOR" ? (form.citizenId || "").trim() || null : null,
       version: account.version,
     }));
     setDetails((prev) => ({ ...prev, [account.id]: updated }));

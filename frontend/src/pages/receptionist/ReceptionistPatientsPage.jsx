@@ -11,6 +11,8 @@ import {
     RefreshCw,
     Building2,
     AlertCircle,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import defaultPatientApi from '../../apis/patientApi';
 import { ROUTES } from '../../routes/routes';
@@ -27,8 +29,9 @@ import {
 const inputClass =
     'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
-const MAX_RESULTS = 50;
-const IDENTIFYING_TYPES = ['CITIZEN_ID', 'PASSPORT', 'PATIENT_CODE'];
+const PAGE_SIZE = 20;
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
 /** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
 export default function ReceptionistPatientsPage({ patientApi = defaultPatientApi }) {
@@ -37,6 +40,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
 
     const [patients, setPatients] = useState([]);
     const [totalElements, setTotalElements] = useState(0);
+    const [pageNumber, setPageNumber] = useState(0);
     const [loading, setLoading] = useState(false);
     const [searchType, setSearchType] = useState(DEFAULT_SEARCH_TYPE);
     const [keyword, setKeyword] = useState('');
@@ -51,31 +55,38 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         [navigate]
     );
 
-    // Without a search the page lists the latest patients; a search sends its type (UC-35).
-    const fetchPatients = useCallback(async (search) => {
+    const clearResults = useCallback(() => {
+        setPatients([]);
+        setTotalElements(0);
+        setPageNumber(0);
+        setLastSearch(null);
+    }, []);
+
+    // Without a search the page lists all patients; a search sends its type (UC-35). Both are paged.
+    const fetchPatients = useCallback(async (search, pageToLoad = 0) => {
         setLoading(true);
         setLoadError('');
         try {
-            const res = await patientApi.list({ size: MAX_RESULTS, ...(search ?? {}) });
+            const res = await patientApi.list({ page: pageToLoad, size: PAGE_SIZE, ...(search ?? {}) });
             const page = res?.data ?? res;
             const list = page?.content || (Array.isArray(page) ? page : []);
-            // AF-04: one profile per identification number (BR-12), so a single match opens UC-36 directly.
-            if (search && IDENTIFYING_TYPES.includes(search.type) && list.length === 1
-                && (page?.totalElements ?? 1) === 1) {
-                navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: list[0].id }));
-                return;
-            }
+            // Even a single match stays in the list: the Receptionist opens the profile from there (UC-36).
             setPatients(list);
             setTotalElements(page?.totalElements ?? list.length);
+            setPageNumber(pageToLoad);
             setLastSearch(search);
         } catch (err) {
             const message = searchErrorMessage(err);
-            if (err?.errorResponse?.details?.keyword) setKeywordError(message);
-            else setLoadError(message);
+            if (err?.errorResponse?.details?.keyword) {
+                setKeywordError(message);
+                clearResults();
+            } else {
+                setLoadError(message);
+            }
         } finally {
             setLoading(false);
         }
-    }, [navigate, patientApi]);
+    }, [clearResults, patientApi]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -88,7 +99,11 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         event.preventDefault();
         const error = validateKeyword(searchType, keyword);
         setKeywordError(error);
-        if (error) return;
+        if (error) {
+            // The rows of the previous search would read as results of the wrong keyword.
+            clearResults();
+            return;
+        }
         void fetchPatients({ type: searchType, keyword: keyword.trim() });
     };
 
@@ -97,6 +112,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         setKeywordError('');
         void fetchPatients(null);
     };
+
+    const openPatientDetail = (patient) =>
+        navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }));
 
     const createFromSearch = () => navigate(ROUTES.RECEPTIONIST.PATIENT_CREATE, {
         state: { prefill: lastSearch ? createPrefill(lastSearch.type, lastSearch.keyword) : {} },
@@ -117,6 +135,10 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     }, [location.state, openRegisterVisit]);
 
     const filteredPatients = patients;
+    const totalPages = Math.max(1, Math.ceil(totalElements / PAGE_SIZE));
+    const firstRow = totalElements === 0 ? 0 : pageNumber * PAGE_SIZE + 1;
+    const lastRow = pageNumber * PAGE_SIZE + filteredPatients.length;
+    const goToPage = (target) => void fetchPatients(lastSearch, target);
 
     // UC-38 has its own page with the full form of UC-37.
     const openEditPatient = (patient) =>
@@ -241,15 +263,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                 <div className="flex items-center justify-between border-b border-slate-100 p-5">
                     <div>
                         <h2 className="font-bold text-slate-800">{lastSearch ? 'Kết quả tìm kiếm' : 'Danh sách bệnh nhân'}</h2>
-                        <p className="mt-1 text-sm text-slate-500">Có {filteredPatients.length} bệnh nhân</p>
+                        <p className="mt-1 text-sm text-slate-500">Có {totalElements} bệnh nhân</p>
                     </div>
                 </div>
-
-                {lastSearch && totalElements > filteredPatients.length && (
-                    <p role="status" className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-                        {MSG.TOO_MANY}
-                    </p>
-                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[1100px] text-left">
@@ -273,9 +289,25 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                                 const phone = patient.sodienthoai || patient.phone || '—';
 
                                 return (
-                                    <tr key={patient.id} className="hover:bg-teal-50/30 transition">
+                                    <tr
+                                        key={patient.id}
+                                        onClick={() => openPatientDetail(patient)}
+                                        title="Xem hồ sơ bệnh nhân"
+                                        className="cursor-pointer transition hover:bg-teal-50/40"
+                                    >
                                         <td className="px-5 py-4 text-sm font-semibold font-mono text-teal-700">{code}</td>
-                                        <td className="px-5 py-4 text-sm font-semibold text-slate-800">{name}</td>
+                                        <td className="px-5 py-4 text-sm font-semibold text-slate-800">
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    openPatientDetail(patient);
+                                                }}
+                                                className="text-left hover:text-teal-700 hover:underline"
+                                            >
+                                                {name}
+                                            </button>
+                                        </td>
                                         <td className="px-5 py-4 text-sm text-slate-600">
                                             {dob ? new Date(`${dob}T00:00:00`).toLocaleDateString('vi-VN') : '—'}
                                         </td>
@@ -301,7 +333,10 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => openRegisterVisit(patient)}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openRegisterVisit(patient);
+                                                    }}
                                                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#0F9D9A] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-700"
                                                     title="Đăng ký khám cho bệnh nhân"
                                                 >
@@ -311,7 +346,10 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                                                 <button
                                                     type="button"
                                                     title="Xem hồ sơ"
-                                                    onClick={() => navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }))}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openPatientDetail(patient);
+                                                    }}
                                                     className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
                                                 >
                                                     <Eye size={15} />
@@ -319,7 +357,10 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                                                 <button
                                                     type="button"
                                                     title="Chỉnh sửa hồ sơ"
-                                                    onClick={() => void openEditPatient(patient)}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        void openEditPatient(patient);
+                                                    }}
                                                     className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
                                                 >
                                                     <Pencil size={15} />
@@ -333,7 +374,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                             {filteredPatients.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="px-5 py-12 text-center text-sm text-slate-500">
-                                        {loading ? 'Đang tải danh sách bệnh nhân…' : (
+                                        {loading ? 'Đang tải danh sách bệnh nhân…' : keywordError ? (
+                                            'Sửa từ khóa ở trên để tìm kiếm.'
+                                        ) : (
                                             <span className="inline-flex flex-col items-center gap-3">
                                                 <span>{MSG.NO_RESULT}</span>
                                                 {lastSearch && (
@@ -354,6 +397,33 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                         </tbody>
                     </table>
                 </div>
+
+                {totalElements > 0 && (
+                    <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:flex-row">
+                        <span>Hiển thị {firstRow}–{lastRow} trên tổng số {totalElements} bệnh nhân</span>
+                        <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                aria-label="Trang trước"
+                                disabled={loading || pageNumber === 0}
+                                onClick={() => goToPage(pageNumber - 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsLeft size={14} />
+                            </button>
+                            <span className="px-2">Trang {pageNumber + 1}/{totalPages}</span>
+                            <button
+                                type="button"
+                                aria-label="Trang sau"
+                                disabled={loading || pageNumber + 1 >= totalPages}
+                                onClick={() => goToPage(pageNumber + 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsRight size={14} />
+                            </button>
+                        </nav>
+                    </div>
+                )}
             </section>
 
         </div>

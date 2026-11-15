@@ -7,9 +7,11 @@ import clinic.backend.dto.request.RequestSignatureRequest;
 import clinic.backend.dto.request.SavePrescriptionRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
+import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.dto.response.SigningRequestResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.PrescriptionPrintService;
 import clinic.backend.service.PrescriptionService;
 import clinic.backend.service.PrescriptionSigningService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +24,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,11 +39,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/prescriptions")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
-@Tag(name = "Kê đơn thuốc", description = "UC-59 Kê đơn thuốc, UC-90 Ký số và gửi đơn thuốc điện tử")
+@Tag(name = "Kê đơn thuốc", description = "UC-59 Kê đơn thuốc, UC-90 Ký số và gửi đơn thuốc điện tử, UC-91 Kết quả gửi đơn, UC-60 In đơn thuốc")
 public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
     private final PrescriptionSigningService signingService;
+    private final PrescriptionPrintService printService;
 
     @GetMapping("/visits/{visitId}")
     @Operation(summary = "Tải đơn thuốc của lượt khám, kèm chẩn đoán kết luận và dị ứng thuốc")
@@ -62,6 +66,34 @@ public class PrescriptionController {
     public ApiResponse<List<PrescribableMedicineResponse>> searchMedicines(
             @RequestParam @Size(max = 100) String keyword) {
         return ApiResponse.success(prescriptionService.searchMedicines(keyword));
+    }
+
+    @DeleteMapping("/{prescriptionId}")
+    @Operation(summary = "UC-59 AF-03: xóa đơn thuốc chưa từng gửi cùng các dòng thuốc")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
+        prescriptionService.delete(StaffPrincipal.from(jwt), prescriptionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{prescriptionId}/submissions")
+    @Operation(summary = "UC-91: lịch sử gửi đơn thuốc, mới nhất trước, kèm chữ ký số và trạng thái chữ ký")
+    public ApiResponse<List<PrescriptionResponse.Submission>> submissions(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
+        return ApiResponse.success(prescriptionService.submissions(StaffPrincipal.from(jwt), prescriptionId));
+    }
+
+    @GetMapping("/{prescriptionId}/print")
+    @Operation(summary = "UC-60: nội dung đơn thuốc in (TT 26 Phụ lục I) để xem trước; chỉ đơn đã được chấp nhận")
+    public ApiResponse<PrescriptionPrintResponse> printPreview(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
+        return ApiResponse.success(printService.printPreview(StaffPrincipal.from(jwt), prescriptionId));
+    }
+
+    @PostMapping("/{prescriptionId}/commands/prepare-print")
+    @Operation(summary = "UC-60: ghi nhận lần in (nhật ký PRINT, printed_at lần đầu) và trả về nội dung đơn in")
+    public ApiResponse<PrescriptionPrintResponse> preparePrint(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
+        return ApiResponse.success(printService.preparePrint(StaffPrincipal.from(jwt), prescriptionId));
     }
 
     @PostMapping("/{prescriptionId}/commands/request-signature")

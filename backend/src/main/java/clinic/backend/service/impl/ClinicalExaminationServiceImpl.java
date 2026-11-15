@@ -129,6 +129,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         validateRequest(request);
+        String referralDiagnosis = referralDiagnosisFor(context.visit(), request.referralDiagnosis());
         Instant now = clock.instant();
         List<String> requestedCodes = request.preliminaryDiagnosisIcd10Codes() == null
                 ? List.of()
@@ -145,6 +146,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         Map<String, Object> oldValues = auditValues(context.visit(), examination);
 
         context.visit().updateReasonForVisit(normalize(request.reasonForVisit()), now);
+        context.visit().updateReferralDiagnosis(referralDiagnosis, now);
         examination.updateClinicalData(
                 principal.accountId(), normalize(request.presentIllness()), normalize(request.generalFinding()),
                 normalize(request.organFinding()),
@@ -310,6 +312,16 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
         }
     }
 
+    /** BR-129: required with 2–1.000 characters when referred by a health facility; dropped otherwise. */
+    private static String referralDiagnosisFor(Visit visit, String diagnosis) {
+        if (!visit.isReferredByHealthFacility()) return null;
+        String value = normalize(diagnosis);
+        if (value == null || value.length() < 2 || value.length() > 1000) {
+            throw new AppException(ErrorCode.REFERRAL_DIAGNOSIS_REQUIRED);
+        }
+        return value;
+    }
+
     private static void validateVitalSigns(VitalSignRequest value) {
         if (value == null || !hasVitalValue(value)) throw new AppException(ErrorCode.VITAL_SIGNS_REQUIRED);
         if (!between(value.pulse(), 20, 250)
@@ -377,7 +389,8 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 patient.getId(), patient.getMabenhnhan(),
                 patient.getHoten(), patient.getNgaysinh(), patientGender(patient), patient.getNghenghiep(),
                 patient.getDantoc(), patient.getDiachi(), room.getId(), room.getRoomCode(), room.getRoomName(),
-                context.doctor().getId(), context.doctor().getFullName(), visit.getLydovaovien(),
+                context.doctor().getId(), context.doctor().getFullName(), visit.getNoigioithieuLoai(),
+                visit.getChandoancuanoigioithieu(), visit.getLydovaovien(),
                 examination.getQuatrinhbenhly(), examination.getKhambenhToanthan(), vitalResponse,
                 examination.getKhambenhBophan(),
                 examination.getChandoansobo(), mapper.toIcd10Option(icd10),
@@ -398,6 +411,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
     private static Map<String, Object> auditValues(Visit visit, ClinicalExamination examination) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("reasonForVisit", visit.getLydovaovien());
+        values.put("referralDiagnosis", visit.getChandoancuanoigioithieu());
         values.put("presentIllness", examination.getQuatrinhbenhly());
         values.put("generalFinding", examination.getKhambenhToanthan());
         values.put("organFinding", examination.getKhambenhBophan());

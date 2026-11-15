@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +52,7 @@ public class PatientServiceImpl implements PatientService {
 
     /** UC-35 step 6: at most 50 results. */
     static final int MAX_SEARCH_RESULTS = 50;
+    static final Sort DEFAULT_SEARCH_SORT = Sort.by("mabenhnhan");
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
@@ -352,10 +354,12 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
-        Pageable limited = pageable.getPageSize() > MAX_SEARCH_RESULTS
-                ? PageRequest.of(pageable.getPageNumber(), MAX_SEARCH_RESULTS, pageable.getSort())
-                : pageable;
+    public Page<PatientResponse>   listPatients(String keyword, PatientSearchType type, Pageable pageable) {
+        // At most 50 patients per page. Without a client sort, pages follow the patient code so paging
+        // neither repeats nor skips a patient.
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : DEFAULT_SEARCH_SORT;
+        Pageable limited = PageRequest.of(
+                pageable.getPageNumber(), Math.min(pageable.getPageSize(), MAX_SEARCH_RESULTS), sort);
         String normalizedKeyword = normalize(keyword);
         Page<Patient> patients;
         if (type == null) {
@@ -372,8 +376,8 @@ public class PatientServiceImpl implements PatientService {
             patients = switch (type) {
                 case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
                 case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
-                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanIgnoreCase(normalizedKeyword, limited);
-                case PHONE -> patientRepository.findAllBySodienthoai(normalizedKeyword, limited);
+                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanContainingIgnoreCase(normalizedKeyword, limited);
+                case PHONE -> patientRepository.findAllBySodienthoaiContaining(normalizedKeyword, limited);
                 case NAME -> patientRepository.searchByName(normalizedKeyword, limited);
                 case INSURANCE_CARD -> patientRepository.searchByInsuranceCard(normalizedKeyword, limited);
             };
@@ -381,15 +385,21 @@ public class PatientServiceImpl implements PatientService {
         return withVisitSummary(patients);
     }
 
-    /** UC-35 step 4: keyword format by search type. */
+    /**
+     * UC-35 step 4: keyword format by search type.
+     * DECISION (team, 2026-11-15): numbers read from a document (citizen ID, passport, insurance card) must be
+     * typed in full and match exactly, so a partial number cannot list other patients' identities. What a
+     * patient says from memory may be partial. The minimum length follows how sensitive the field is: the
+     * internal patient code from 1 character, the phone (personal data) from 4 digits, the name from 2.
+     */
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
             case CITIZEN_ID -> keyword.matches("\\d{12}");
             case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
-            case PHONE -> keyword.matches("\\d{10}");
-            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
             case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
-            case PATIENT_CODE -> true;
+            case PHONE -> keyword.matches("\\d{4,10}");
+            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{1,20}");
+            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
         };
     }
 

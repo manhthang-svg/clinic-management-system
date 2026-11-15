@@ -151,7 +151,8 @@ final class PrescriptionPayloadBuilder {
         return text != null && text.matches("[0-9]{12}") ? text : null;
     }
 
-    private static String address(Patient patient) {
+    /** BR-59-07: the patient's address, ward and province, at most 500 characters (also printed, BR-59-13). */
+    static String address(Patient patient) {
         List<String> parts = Stream.of(patient.getDiachi(), patient.getXaphuong(), patient.getTinhthanh())
                 .map(PrescriptionPayloadBuilder::text)
                 .filter(Objects::nonNull)
