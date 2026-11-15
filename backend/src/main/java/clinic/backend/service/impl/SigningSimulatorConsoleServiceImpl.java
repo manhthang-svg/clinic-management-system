@@ -36,6 +36,8 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
 
     /** ASSUMPTION: the simulated CA app asks for a 6-digit PIN. */
     private static final String PIN_FORMAT = "[0-9]{6}";
+    /** V60: the personal identification number has 12 digits. */
+    private static final String CITIZEN_ID_FORMAT = "[0-9]{12}";
 
     private final SimulatedSigningAuthority authority;
     private final DigitalSignatureVerifier verifier;
@@ -52,8 +54,9 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
                     // The simulated CA knows its subscriber by the identification number (its user id).
                     Optional<StaffAccount> account = staffAccountRepository.findByCitizenId(subscriber.userId());
                     return new SimulatedCertificateResponse(
-                            subscriber.serial(), account.map(StaffAccount::getUsername).orElse(null),
-                            subscriber.subject(), subscriber.validTo(), subscriber.revokedAt(),
+                            subscriber.serial(), account.map(StaffAccount::getFullName).orElse(null),
+                            account.map(value -> mask(value.getCitizenId())).orElse(null),
+                            subscriber.validTo(), subscriber.revokedAt(),
                             account.map(value -> isRegistered(value, subscriber.serial())).orElse(false));
                 })
                 .toList();
@@ -62,15 +65,16 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     @Override
     @Transactional
     public SimulatedCertificateResponse issue(IssueSimulatedCertificateRequest request) {
-        String username = request.username() == null ? "" : request.username().strip();
-        StaffAccount doctor = staffAccountRepository.findByUsername(username)
+        // BR-59-16: like a real CA, the simulator identifies the subscriber by the personal identification number;
+        // the account that holds it (recorded by the Admin, UC-8) receives the registration.
+        String citizenId = request.citizenId() == null ? "" : request.citizenId().strip();
+        if (!citizenId.matches(CITIZEN_ID_FORMAT)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "TWELVE_DIGITS"));
+        }
+        StaffAccount doctor = staffAccountRepository.findByCitizenId(citizenId)
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
         if (doctor.getRole() != Role.DOCTOR) {
-            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("username", "NOT_A_DOCTOR"));
-        }
-        if (doctor.getCitizenId() == null) {
-            // BR-59-16: the certificate names the Doctor by the identification number the Admin recorded.
-            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("username", "CITIZEN_ID_REQUIRED"));
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "NOT_A_DOCTOR"));
         }
         if (request.pin() == null || !request.pin().matches(PIN_FORMAT)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("pin", "SIX_DIGITS"));
@@ -79,8 +83,14 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
                 authority.issue(doctor.getFullName(), doctor.getCitizenId(), request.pin());
         register(doctor, issued);
         X509Certificate certificate = issued.certificate();
-        return new SimulatedCertificateResponse(issued.serial(), username,
-                certificate.getSubjectX500Principal().getName(), certificate.getNotAfter().toInstant(), null, true);
+        return new SimulatedCertificateResponse(issued.serial(), doctor.getFullName(), mask(citizenId),
+                certificate.getNotAfter().toInstant(), null, true);
+    }
+
+    /** BR-59-16: outside the account edit form the number is shown masked, as on the account detail screen. */
+    static String mask(String citizenId) {
+        return citizenId == null || citizenId.length() < 8 ? null
+                : citizenId.substring(0, 4) + "•••••" + citizenId.substring(citizenId.length() - 3);
     }
 
     @Override
