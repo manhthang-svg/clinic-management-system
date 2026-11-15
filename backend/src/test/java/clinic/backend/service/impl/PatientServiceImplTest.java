@@ -396,19 +396,20 @@ class PatientServiceImplTest {
     void searchesByTypeWithTheMatchingQuery() {
         PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
         Page<Patient> found = new PageImpl<>(List.of(patient()));
-        when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
-        when(patientRepository.findAllByMabenhnhanIgnoreCase("bn1234567", page)).thenReturn(found);
-        when(patientRepository.findAllBySodienthoai("0901234567", page)).thenReturn(found);
-        when(patientRepository.searchByName("nguyen", page)).thenReturn(found);
-        when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
-        when(patientRepository.searchByInsuranceCard("DN4010123456789", page)).thenReturn(found);
+        when(patientRepository.findAllByCccdSoContaining("0123", page)).thenReturn(found);
+        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("bn0000", page)).thenReturn(found);
+        when(patientRepository.findAllBySodienthoaiContaining("0901", page)).thenReturn(found);
+        when(patientRepository.searchByName("n", page)).thenReturn(found);
+        when(patientRepository.findAllByHochieuSoContainingIgnoreCase("C12", page)).thenReturn(found);
+        when(patientRepository.searchByInsuranceCard("DN40", page)).thenReturn(found);
 
-        assertThat(service.listPatients(" 012345678901 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
-        assertThat(service.listPatients("bn1234567", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
-        assertThat(service.listPatients("0901234567", PatientSearchType.PHONE, page)).hasSize(1);
-        assertThat(service.listPatients("nguyen", PatientSearchType.NAME, page)).hasSize(1);
-        assertThat(service.listPatients("C1234567", PatientSearchType.PASSPORT, page)).hasSize(1);
-        assertThat(service.listPatients("DN4010123456789", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
+        // Part of a value is enough while the Receptionist is still typing.
+        assertThat(service.listPatients(" 0123 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
+        assertThat(service.listPatients("bn0000", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
+        assertThat(service.listPatients("0901", PatientSearchType.PHONE, page)).hasSize(1);
+        assertThat(service.listPatients("n", PatientSearchType.NAME, page)).hasSize(1);
+        assertThat(service.listPatients("C12", PatientSearchType.PASSPORT, page)).hasSize(1);
+        assertThat(service.listPatients("DN40", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
     }
 
     @Test
@@ -437,14 +438,14 @@ class PatientServiceImplTest {
 
     @ParameterizedTest
     @CsvSource({
-            "CITIZEN_ID, 12345",
-            "CITIZEN_ID, 01234567890A",
-            "PHONE, 090123456",
+            "CITIZEN_ID, 0123456789012",
+            "CITIZEN_ID, 0123A",
             "PHONE, 09012345678",
-            "NAME, A",
+            "PHONE, 090-1",
             "PASSPORT, C123456789012345",
             "PASSPORT, C-123",
-            "INSURANCE_CARD, DN40101234"
+            "INSURANCE_CARD, DN4010123456789X",
+            "PATIENT_CODE, BN#0001"
     })
     void rejectsKeywordWithWrongFormatForItsType(PatientSearchType type, String keyword) {
         assertThatThrownBy(() -> service.listPatients(keyword, type, PageRequest.of(0, 10)))
