@@ -1,10 +1,10 @@
 import { ApiError } from '../../apis/apiError';
 
-// Message texts follow the SRS message list (MSG12, MSG17, MSG20, MSG22, MSG56, MSG99).
+// Message texts follow the SRS message list (MSG12, MSG17, MSG20, MSG22, MSG56, MSG80).
 export const MSG12 = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
 export const MSG17 = 'Thẻ BHYT không hợp lệ hoặc đã hết hạn. Lượt khám sẽ được đăng ký dạng Dịch vụ.';
 export const MSG20 = 'Không thể kết nối với cổng BHYT. Vui lòng thử lại hoặc đăng ký lượt khám theo hình thức dịch vụ.';
-export const MSG99 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+export const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 // ASSUMPTION: MSG91 is not in the SRS message list available in docs/.
 export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt khám khác. Thông tin lịch hẹn đã được tải lại.';
 
@@ -56,7 +56,7 @@ export function visitCreateError(error) {
   if (INSURANCE_CODES.includes(code)) return { kind: 'insurance', message: MSG17 };
   if (code === 'UNAUTHORIZED' || error?.status === 401) return { kind: 'session', message: MSG12 };
   if (isNetworkError(error)) return { kind: 'system', message: NETWORK_MESSAGE };
-  return { kind: 'system', message: MSG99 };
+  return { kind: 'system', message: MSG80 };
 }
 
 // ASSUMPTION: card-not-valid codes of the proposed verification endpoint.
@@ -71,7 +71,7 @@ export function insuranceErrorKind(error) {
 export function loadErrorMessage(error) {
   if (error?.status === 401) return MSG12;
   if (isNetworkError(error)) return NETWORK_MESSAGE;
-  return MSG99;
+  return MSG80;
 }
 
 // UC-41: reasons the examination ticket cannot be assembled (VisitServiceImpl.toTicketResponse).
@@ -91,5 +91,5 @@ export function ticketErrorMessage(error) {
   if (error?.status === 401) return MSG12;
   if (isNetworkError(error)) return NETWORK_MESSAGE;
   const reference = code ?? (error?.status ? `HTTP ${error.status}` : error?.name);
-  return reference ? `${MSG99} (Mã lỗi: ${reference})` : MSG99;
+  return reference ? `${MSG80} (Mã lỗi: ${reference})` : MSG80;
 }
