@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
-import { PrintPrescriptionButton } from './PrescriptionPrint';
+import { PrintPrescriptionButton } from './PrintPrescriptionButton';
 import { PRINT_MSG, medicineLabel, quantityText } from './prescriptionPrintFormat';
 
 const form = {

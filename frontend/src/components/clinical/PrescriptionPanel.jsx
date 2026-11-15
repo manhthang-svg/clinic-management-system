@@ -5,11 +5,12 @@ import {
 import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
+import { BUTTON } from './buttonStyles';
 import {
     LIMITS, MSG, formFromResponse, newLine, prescriptionError, samePrescription, suggestedQuantity, toPayload,
     validatePrescription,
 } from './prescriptionForm';
-import { PrintPrescriptionButton } from './PrescriptionPrint';
+import { PrintPrescriptionButton } from './PrintPrescriptionButton';
 import { PrescriptionSigningDialog } from './PrescriptionSigningDialog';
 import { PrescriptionSubmissionHistory, SignatureStatus } from './PrescriptionSubmissionHistory';
 import { SIGNING_MSG } from './prescriptionSigning';
@@ -290,10 +291,10 @@ function SubmissionResult({ data, onResend, onEdit, canResend, dirty }) {
                 </ul>
                 <p className="text-xs text-rose-900">{SIGNING_MSG.CORRECT_ELSEWHERE}</p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button type="button" onClick={onEdit} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-rose-100">
+                    <button type="button" onClick={onEdit} className={BUTTON.smallRose}>
                         <Pencil aria-hidden="true" className="h-3.5 w-3.5" />Sửa đơn
                     </button>
-                    <button type="button" onClick={onResend} disabled={!canResend} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50">
+                    <button type="button" onClick={onResend} disabled={!canResend} className={BUTTON.smallRose}>
                         <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Gửi lại
                     </button>
                     {dirty && <span className="text-xs">{SIGNING_MSG.SAVE_BEFORE_RESEND}</span>}
@@ -304,7 +305,7 @@ function SubmissionResult({ data, onResend, onEdit, canResend, dirty }) {
     return (
         <section role="alert" aria-label="Kết quả gửi đơn thuốc" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <span>{SIGNING_MSG.NO_ANSWER}</span>
-            <button type="button" onClick={onResend} disabled={!canResend} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={onResend} disabled={!canResend} className={BUTTON.smallAmber}>
                 <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Gửi lại
             </button>
         </section>
@@ -535,7 +536,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={BUTTON.primary}
                             >
                                 {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
                                 {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
@@ -546,7 +547,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                                 type="button"
                                 onClick={() => setSigning({ resume: null })}
                                 disabled={!data?.signingCertificateRegistered}
-                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 bg-white px-5 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={BUTTON.outline}
                             >
                                 <FileSignature aria-hidden="true" className="h-4 w-4" />Ký và gửi đơn
                             </button>
@@ -556,7 +557,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                                 type="button"
                                 onClick={() => setShowHistory((open) => !open)}
                                 aria-expanded={showHistory}
-                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                className={BUTTON.neutral}
                             >
                                 <History aria-hidden="true" className="h-4 w-4" />Kết quả gửi
                             </button>
@@ -569,7 +570,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                                 type="button"
                                 onClick={() => setConfirmDelete(true)}
                                 disabled={deleting || confirmDelete}
-                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={BUTTON.danger}
                             >
                                 <Trash2 aria-hidden="true" className="h-4 w-4" />Xóa đơn
                             </button>

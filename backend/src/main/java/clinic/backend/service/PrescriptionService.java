@@ -5,7 +5,6 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.SavePrescriptionRequest;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
-import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.security.user.StaffPrincipal;
 
@@ -29,10 +28,4 @@ public interface PrescriptionService {
 
     /** UC-91: every send of the prescription, newest first, each with its signature and signature status. */
     List<PrescriptionResponse.Submission> submissions(StaffPrincipal principal, UUID prescriptionId);
-
-    /** UC-60 step 2: the printed form of an accepted prescription, for the preview; nothing is recorded. */
-    PrescriptionPrintResponse printPreview(StaffPrincipal principal, UUID prescriptionId);
-
-    /** UC-60 step 3: records the print ({@code PRINT} audit row, first {@code printed_at}) and returns the form. */
-    PrescriptionPrintResponse preparePrint(StaffPrincipal principal, UUID prescriptionId);
 }

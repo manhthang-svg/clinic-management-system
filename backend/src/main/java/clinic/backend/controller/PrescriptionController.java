@@ -11,6 +11,7 @@ import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.dto.response.SigningRequestResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.PrescriptionPrintService;
 import clinic.backend.service.PrescriptionService;
 import clinic.backend.service.PrescriptionSigningService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +44,7 @@ public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
     private final PrescriptionSigningService signingService;
+    private final PrescriptionPrintService printService;
 
     @GetMapping("/visits/{visitId}")
     @Operation(summary = "Tải đơn thuốc của lượt khám, kèm chẩn đoán kết luận và dị ứng thuốc")
@@ -84,14 +86,14 @@ public class PrescriptionController {
     @Operation(summary = "UC-60: nội dung đơn thuốc in (TT 26 Phụ lục I) để xem trước; chỉ đơn đã được chấp nhận")
     public ApiResponse<PrescriptionPrintResponse> printPreview(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
-        return ApiResponse.success(prescriptionService.printPreview(StaffPrincipal.from(jwt), prescriptionId));
+        return ApiResponse.success(printService.printPreview(StaffPrincipal.from(jwt), prescriptionId));
     }
 
     @PostMapping("/{prescriptionId}/commands/prepare-print")
     @Operation(summary = "UC-60: ghi nhận lần in (nhật ký PRINT, printed_at lần đầu) và trả về nội dung đơn in")
     public ApiResponse<PrescriptionPrintResponse> preparePrint(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
-        return ApiResponse.success(prescriptionService.preparePrint(StaffPrincipal.from(jwt), prescriptionId));
+        return ApiResponse.success(printService.preparePrint(StaffPrincipal.from(jwt), prescriptionId));
     }
 
     @PostMapping("/{prescriptionId}/commands/request-signature")
