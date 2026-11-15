@@ -354,7 +354,7 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<PatientResponse>   listPatients(String keyword, PatientSearchType type, Pageable pageable) {
+    public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
         // At most 50 patients per page. Without a client sort, pages follow the patient code so paging
         // neither repeats nor skips a patient.
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : DEFAULT_SEARCH_SORT;
@@ -374,10 +374,10 @@ public class PatientServiceImpl implements PatientService {
                 throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "INVALID_FORMAT"));
             }
             patients = switch (type) {
-                case CITIZEN_ID -> patientRepository.findAllByCccdSoContaining(normalizedKeyword, limited);
-                case PASSPORT -> patientRepository.findAllByHochieuSoContainingIgnoreCase(normalizedKeyword, limited);
-                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanContainingIgnoreCase(normalizedKeyword, limited);
-                case PHONE -> patientRepository.findAllBySodienthoaiContaining(normalizedKeyword, limited);
+                case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
+                case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
+                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanIgnoreCase(normalizedKeyword, limited);
+                case PHONE -> patientRepository.findAllBySodienthoai(normalizedKeyword, limited);
                 case NAME -> patientRepository.searchByName(normalizedKeyword, limited);
                 case INSURANCE_CARD -> patientRepository.searchByInsuranceCard(normalizedKeyword, limited);
             };
@@ -385,14 +385,15 @@ public class PatientServiceImpl implements PatientService {
         return withVisitSummary(patients);
     }
 
-    /** UC-35 step 4: allowed characters and maximum length by search type; part of a value is enough. */
+    /** UC-35 step 4: keyword format by search type. */
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
-            case CITIZEN_ID -> keyword.matches("\\d{1,12}");
-            case PASSPORT, INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{1,15}");
-            case PHONE -> keyword.matches("\\d{1,10}");
-            case NAME -> keyword.length() <= 100;
-            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{1,20}");
+            case CITIZEN_ID -> keyword.matches("\\d{12}");
+            case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
+            case PHONE -> keyword.matches("\\d{10}");
+            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
+            case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
+            case PATIENT_CODE -> true;
         };
     }
 

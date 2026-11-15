@@ -38,21 +38,20 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     List<Patient> findPossibleDuplicates(@Param("name") String name, @Param("birthDate") LocalDate birthDate);
 
     // UC-35 typed searches.
-    // UC-35 search as you type: every search type matches part of the value.
-    Page<Patient> findAllByCccdSoContaining(String cccdSo, Pageable pageable);
+    Page<Patient> findAllByCccdSo(String cccdSo, Pageable pageable);
 
-    Page<Patient> findAllByMabenhnhanContainingIgnoreCase(String mabenhnhan, Pageable pageable);
+    Page<Patient> findAllByMabenhnhanIgnoreCase(String mabenhnhan, Pageable pageable);
 
-    Page<Patient> findAllBySodienthoaiContaining(String sodienthoai, Pageable pageable);
+    Page<Patient> findAllBySodienthoai(String sodienthoai, Pageable pageable);
 
-    Page<Patient> findAllByHochieuSoContainingIgnoreCase(String hochieuSo, Pageable pageable);
+    Page<Patient> findAllByHochieuSoIgnoreCase(String hochieuSo, Pageable pageable);
 
     /** Patients whose previous visits used the insurance card. */
     @Query("""
             select p from Patient p
             where exists (
                 select v.id from Visit v
-                where v.patientId = p.id and upper(v.mabhyt) like upper(concat('%', cast(:card as String), '%'))
+                where v.patientId = p.id and upper(v.mabhyt) = upper(cast(:card as String))
             )
             """)
     Page<Patient> searchByInsuranceCard(

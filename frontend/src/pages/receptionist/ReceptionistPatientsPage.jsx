@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { generatePath, useLocation, useNavigate } from 'react-router';
 import {
     Search,
@@ -32,8 +32,6 @@ const inputClass =
 const PAGE_SIZE = 20;
 const PAGE_BUTTON_CLASS =
     'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
-// The list follows the keyword as the Receptionist types; this waits for a short pause first.
-const SEARCH_DELAY_MS = 300;
 
 /** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
 export default function ReceptionistPatientsPage({ patientApi = defaultPatientApi }) {
@@ -50,7 +48,6 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     const [loadError, setLoadError] = useState('');
     const [lastSearch, setLastSearch] = useState(null);
     const [notice, setNotice] = useState('');
-    const latestRequest = useRef(0);
 
     // UC-40: đăng ký khám mở trang riêng thay vì popup.
     const openRegisterVisit = useCallback(
@@ -60,47 +57,46 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
 
     // Without a search the page lists all patients; a search sends its type (UC-35). Both are paged.
     const fetchPatients = useCallback(async (search, pageToLoad = 0) => {
-        // Typing fires several requests; only the answer to the latest one is shown.
-        const requestId = latestRequest.current + 1;
-        latestRequest.current = requestId;
         setLoading(true);
         setLoadError('');
         try {
             const res = await patientApi.list({ page: pageToLoad, size: PAGE_SIZE, ...(search ?? {}) });
-            if (requestId !== latestRequest.current) return;
             const page = res?.data ?? res;
             const list = page?.content || (Array.isArray(page) ? page : []);
+            // Even a single match stays in the list: the Receptionist opens the profile from there (UC-36).
             setPatients(list);
             setTotalElements(page?.totalElements ?? list.length);
             setPageNumber(pageToLoad);
             setLastSearch(search);
         } catch (err) {
-            if (requestId !== latestRequest.current) return;
             const message = searchErrorMessage(err);
             if (err?.errorResponse?.details?.keyword) setKeywordError(message);
             else setLoadError(message);
         } finally {
-            if (requestId === latestRequest.current) setLoading(false);
+            setLoading(false);
         }
     }, [patientApi]);
 
-    // No search button: an empty keyword lists every patient, otherwise the list is filtered by type and keyword.
     useEffect(() => {
-        const value = keyword.trim();
         const timer = window.setTimeout(() => {
-            if (!value) {
-                setKeywordError('');
-                void fetchPatients(null);
-                return;
-            }
-            const error = validateKeyword(searchType, value);
-            setKeywordError(error);
-            if (!error) void fetchPatients({ type: searchType, keyword: value });
-        }, value ? SEARCH_DELAY_MS : 0);
+            void fetchPatients(null);
+        }, 0);
         return () => window.clearTimeout(timer);
-    }, [fetchPatients, keyword, searchType]);
+    }, [fetchPatients]);
 
-    const clearSearch = () => setKeyword('');
+    const handleSearch = (event) => {
+        event.preventDefault();
+        const error = validateKeyword(searchType, keyword);
+        setKeywordError(error);
+        if (error) return;
+        void fetchPatients({ type: searchType, keyword: keyword.trim() });
+    };
+
+    const clearSearch = () => {
+        setKeyword('');
+        setKeywordError('');
+        void fetchPatients(null);
+    };
 
     const openPatientDetail = (patient) =>
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }));
@@ -181,7 +177,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
             )}
 
             <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <form onSubmit={(event) => event.preventDefault()} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-[200px_1fr_auto]">
+                <form onSubmit={handleSearch} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-[200px_1fr_auto]">
                     <div>
                         <label htmlFor="patient-search-type" className="text-xs font-semibold text-slate-600">Tìm theo</label>
                         <select
@@ -221,7 +217,14 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                     </div>
 
                     <div className="flex items-end gap-2">
-                        {keyword && (
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="rounded-xl bg-[#0F9D9A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                        >
+                            {loading ? 'Đang tìm…' : 'Tìm kiếm'}
+                        </button>
+                        {lastSearch && (
                             <button
                                 type="button"
                                 onClick={clearSearch}
