@@ -95,6 +95,14 @@ describe('validateAccountForm messages (SRS message templates)', () => {
     expect(validateAccountForm({ ...doctor, maLienthongBacsi }, {}).maLienthongBacsi).toBeUndefined();
   });
 
+  it.each(['07909000123', '0790900012345', '07909000123a'])('rejects the personal identification number %j for a Doctor (BR-59-16)', (citizenId) => {
+    expect(validateAccountForm({ ...doctor, citizenId }, {}).citizenId).toBe('Số định danh cá nhân không đúng định dạng.');
+  });
+
+  it.each(['', '079090001234', ' 079090001234 '])('accepts the personal identification number %j for a Doctor', (citizenId) => {
+    expect(validateAccountForm({ ...doctor, citizenId }, {}).citizenId).toBeUndefined();
+  });
+
   it('uses MSG07 for a username or email already in use', () => {
     const accounts = [{ id: 'other', username: 'lt.hong', email: 'lt.hong@clinic.test' }];
     const errors = validateAccountForm(

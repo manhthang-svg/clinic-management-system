@@ -7,21 +7,26 @@ describe('validateKeyword (UC-35 step 4)', () => {
     it.each([
         ['CITIZEN_ID', '012345678901'],
         ['PASSPORT', 'C1234567'],
-        ['PATIENT_CODE', 'BN1234567'],
-        ['PHONE', '0901234567'],
-        ['NAME', 'An'],
         ['INSURANCE_CARD', 'DN4010123456789'],
+        ['PATIENT_CODE', 'BN0000'],
+        ['PATIENT_CODE', '01'],
+        ['PHONE', '4567'],
+        ['NAME', 'An'],
     ])('accepts a valid %s', (type, keyword) => {
         expect(validateKeyword(type, ` ${keyword} `)).toBe('');
     });
 
     it.each([
-        ['CITIZEN_ID', '12345'],
+        ['CITIZEN_ID', '0790500'],
+        ['CITIZEN_ID', '12345A'],
+        ['CITIZEN_ID', '0123456789012'],
         ['PASSPORT', 'C-123'],
-        ['PHONE', '090123456'],
+        ['INSURANCE_CARD', 'DN40'],
+        ['PATIENT_CODE', 'BN#0001'],
+        ['PHONE', '090'],
+        ['PHONE', '09012345678'],
         ['NAME', 'A'],
         ['NAME', 'A'.repeat(101)],
-        ['INSURANCE_CARD', 'DN40101'],
     ])('rejects an invalid %s', (type, keyword) => {
         expect(validateKeyword(type, keyword)).toBe(MSG.INVALID_FORMAT);
     });

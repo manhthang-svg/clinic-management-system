@@ -22,4 +22,10 @@ public interface PrescriptionService {
      * contains the keyword, ignoring accents; at most 20 ordered by name.
      */
     List<PrescribableMedicineResponse> searchMedicines(String keyword);
+
+    /** UC-59 AF-03: removes a prescription that was never sent, with its lines. */
+    void delete(StaffPrincipal principal, UUID prescriptionId);
+
+    /** UC-91: every send of the prescription, newest first, each with its signature and signature status. */
+    List<PrescriptionResponse.Submission> submissions(StaffPrincipal principal, UUID prescriptionId);
 }

@@ -1,4 +1,4 @@
-import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users, BadgeCheck, Link2 } from 'lucide-react';
+import { User, AtSign, Calendar, Phone, Mail, MapPin, GraduationCap, Users, BadgeCheck, Link2, IdCard } from 'lucide-react';
 import { GENDER_LABELS } from '../../constants/accountData';
 import { FormField, INPUT_CLASS } from './AccountFormParts';
 
@@ -109,6 +109,18 @@ export function AccountPersonalFields({ form, errors, onChange, editable, showUs
           icon={Link2}
         >
           <input type="text" maxLength={50} autoComplete="off" className={WITH_ICON} {...props('maLienthongBacsi')} />
+        </FormField>
+      )}
+
+      {canEdit('citizenId') && form.role === 'DOCTOR' && (
+        <FormField
+          id="account-citizenId"
+          label="Số định danh cá nhân"
+          error={errors.citizenId}
+          hint="12 chữ số trên căn cước. Dùng để đối chiếu chứng thư chữ ký số của bác sĩ."
+          icon={IdCard}
+        >
+          <input type="text" inputMode="numeric" maxLength={12} autoComplete="off" className={WITH_ICON} {...props('citizenId')} />
         </FormField>
       )}
 

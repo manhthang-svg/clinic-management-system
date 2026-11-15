@@ -36,8 +36,11 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
 
     /** ASSUMPTION: the simulated CA app asks for a 6-digit PIN. */
     private static final String PIN_FORMAT = "[0-9]{6}";
+    /** V60: the personal identification number has 12 digits. */
+    private static final String CITIZEN_ID_FORMAT = "[0-9]{12}";
 
     private final SimulatedSigningAuthority authority;
+    private final DigitalSignatureVerifier verifier;
     private final StaffAccountRepository staffAccountRepository;
     private final StaffSigningCertificateRepository certificateRepository;
     private final UuidV7Generator ids;
@@ -47,29 +50,47 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     @Transactional(readOnly = true)
     public List<SimulatedCertificateResponse> certificates() {
         return authority.subscribers().stream()
-                .map(subscriber -> new SimulatedCertificateResponse(
-                        subscriber.serial(), subscriber.userId(), subscriber.subject(), subscriber.validTo(),
-                        subscriber.revokedAt(), isRegistered(subscriber.userId(), subscriber.serial())))
+                .map(subscriber -> {
+                    // The simulated CA knows its subscriber by the identification number (its user id).
+                    Optional<StaffAccount> account = staffAccountRepository.findByCitizenId(subscriber.userId());
+                    return new SimulatedCertificateResponse(
+                            subscriber.serial(), account.map(StaffAccount::getFullName).orElse(null),
+                            account.map(value -> mask(value.getCitizenId())).orElse(null),
+                            subscriber.validTo(), subscriber.revokedAt(),
+                            account.map(value -> isRegistered(value, subscriber.serial())).orElse(false));
+                })
                 .toList();
     }
 
     @Override
     @Transactional
     public SimulatedCertificateResponse issue(IssueSimulatedCertificateRequest request) {
-        String username = request.username() == null ? "" : request.username().strip();
-        StaffAccount doctor = staffAccountRepository.findByUsername(username)
+        // BR-59-16: like a real CA, the simulator identifies the subscriber by the personal identification number;
+        // the account that holds it (recorded by the Admin, UC-8) receives the registration.
+        String citizenId = request.citizenId() == null ? "" : request.citizenId().strip();
+        if (!citizenId.matches(CITIZEN_ID_FORMAT)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "TWELVE_DIGITS"));
+        }
+        StaffAccount doctor = staffAccountRepository.findByCitizenId(citizenId)
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
         if (doctor.getRole() != Role.DOCTOR) {
-            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("username", "NOT_A_DOCTOR"));
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "NOT_A_DOCTOR"));
         }
         if (request.pin() == null || !request.pin().matches(PIN_FORMAT)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("pin", "SIX_DIGITS"));
         }
-        SimulatedSigningAuthority.Issued issued = authority.issue(doctor.getFullName(), username, request.pin());
+        SimulatedSigningAuthority.Issued issued =
+                authority.issue(doctor.getFullName(), doctor.getCitizenId(), request.pin());
         register(doctor, issued);
         X509Certificate certificate = issued.certificate();
-        return new SimulatedCertificateResponse(issued.serial(), username,
-                certificate.getSubjectX500Principal().getName(), certificate.getNotAfter().toInstant(), null, true);
+        return new SimulatedCertificateResponse(issued.serial(), doctor.getFullName(), mask(citizenId),
+                certificate.getNotAfter().toInstant(), null, true);
+    }
+
+    /** BR-59-16: outside the account edit form the number is shown masked, as on the account detail screen. */
+    static String mask(String citizenId) {
+        return citizenId == null || citizenId.length() < 8 ? null
+                : citizenId.substring(0, 4) + "•••••" + citizenId.substring(citizenId.length() - 3);
     }
 
     @Override
@@ -97,13 +118,14 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     }
 
     /**
-     * BR-59-16: the account's single active certificate; a previous one is removed. The subject must name the
-     * Doctor (CN = full name, ASSUMPTION until the identity attribute of real certificates is decided).
+     * BR-59-16: the account's single active certificate; a previous one is removed. The certificate must name the
+     * Doctor by the personal identification number recorded on the account (NĐ 23/2025 Điều 16 khoản 1 điểm a), not
+     * by the name, which two Doctors can share.
      */
     private void register(StaffAccount doctor, SimulatedSigningAuthority.Issued issued) {
         X509Certificate certificate = issued.certificate();
         String subject = certificate.getSubjectX500Principal().getName();
-        if (!subject.contains("CN=" + doctor.getFullName())) {
+        if (!verifier.citizenId(certificate).equals(Optional.ofNullable(doctor.getCitizenId()))) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("certificate", "SUBJECT_MISMATCH"));
         }
         Instant now = clock.instant();
@@ -123,10 +145,8 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
         }
     }
 
-    private boolean isRegistered(String username, String serial) {
-        Optional<StaffAccount> account = staffAccountRepository.findByUsername(username);
-        return account.flatMap(value -> certificateRepository.findByStaffAccountIdAndStatus(
-                        value.getId(), SigningCertificateStatus.ACTIVE))
+    private boolean isRegistered(StaffAccount account, String serial) {
+        return certificateRepository.findByStaffAccountIdAndStatus(account.getId(), SigningCertificateStatus.ACTIVE)
                 .map(certificate -> certificate.getSerialNumber().equals(serial))
                 .orElse(false);
     }

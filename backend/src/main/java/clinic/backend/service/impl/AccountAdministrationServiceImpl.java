@@ -84,6 +84,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
 
     /** Mirrors ck_staff_accounts_ma_lienthong_bacsi (V55). */
     private static final Pattern MA_LIENTHONG_BACSI_FORMAT = Pattern.compile("^[A-Za-z0-9]{1,50}$");
+    private static final Pattern CITIZEN_ID_FORMAT = Pattern.compile("^[0-9]{12}$");
+    /** The number itself never goes into the audit log (docs/security.md): only that it changed. */
+    private static final String MASKED = "***";
 
     /** BR-59: a staff full name has 2–120 characters after trimming and collapsing repeated spaces. */
     private static final int FULL_NAME_MIN_LENGTH = 2;
@@ -199,7 +202,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
         String maLienthongBacsi = normalizeOptional(request.maLienthongBacsi());
         requireValidMaLienthongBacsi(account.getRole(), maLienthongBacsi);
-        checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo, maLienthongBacsi);
+        String citizenId = normalizeOptional(request.citizenId());
+        requireValidCitizenId(account.getRole(), citizenId);
+        checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo, maLienthongBacsi, citizenId);
 
         Map<String, Object> oldValues = editableValues(account);
         Map<String, Object> newValues = editableValues(request, email);
@@ -212,6 +217,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 normalizeFullName(request.fullName()), normalizeOptional(request.academicTitle()), practiceLicenseNo, request.dateOfBirth(),
                 request.gender(), request.phoneNumber(), email, normalizeOptional(request.address()), now);
         account.updateMaLienthongBacsi(maLienthongBacsi, now);
+        account.updateCitizenId(citizenId, now);
         try {
             accountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException exception) {
@@ -563,15 +569,18 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         oldValues.forEach((field, oldValue) -> {
             Map<String, Object> oldField = new LinkedHashMap<>();
             Map<String, Object> newField = new LinkedHashMap<>();
-            oldField.put(field, oldValue);
-            newField.put(field, newValues.get(field));
+            Object newValue = newValues.get(field);
+            boolean sensitive = "citizenId".equals(field);
+            oldField.put(field, sensitive && oldValue != null ? MASKED : oldValue);
+            newField.put(field, sensitive && newValue != null ? MASKED : newValue);
             auditLogService.recordAccountChange(
                     actorAccountId, targetAccountId, AuditLogAction.UPDATE, oldField, newField, occurredAt);
         });
     }
 
     private void checkUniqueForUpdate(
-            StaffAccount account, String phone, String email, String practiceLicenseNo, String maLienthongBacsi) {
+            StaffAccount account, String phone, String email, String practiceLicenseNo, String maLienthongBacsi,
+            String citizenId) {
         Map<String, String> conflicts = new LinkedHashMap<>();
         if (accountRepository.existsByPhoneNumberAndIdNot(phone, account.getId())) {
             conflicts.put("phoneNumber", "ALREADY_EXISTS");
@@ -587,6 +596,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 && accountRepository.existsByMaLienthongBacsiAndIdNot(maLienthongBacsi, account.getId())) {
             conflicts.put("maLienthongBacsi", "ALREADY_EXISTS");
         }
+        if (citizenId != null && accountRepository.existsByCitizenIdAndIdNot(citizenId, account.getId())) {
+            conflicts.put("citizenId", "ALREADY_EXISTS");
+        }
         if (!conflicts.isEmpty()) throw new AppException(ErrorCode.CONCURRENT_MODIFICATION, conflicts);
     }
 
@@ -600,6 +612,17 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         if (!MA_LIENTHONG_BACSI_FORMAT.matcher(maLienthongBacsi).matches()) {
             throw new AppException(
                     ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("maLienthongBacsi", "INVALID_FORMAT"));
+        }
+    }
+
+    /** BR-59-16: only a Doctor signs prescriptions, so only a Doctor account holds the number; 12 digits. */
+    private void requireValidCitizenId(Role role, String citizenId) {
+        if (citizenId == null) return;
+        if (role != Role.DOCTOR) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "NOT_APPLICABLE"));
+        }
+        if (!CITIZEN_ID_FORMAT.matcher(citizenId).matches()) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("citizenId", "INVALID_FORMAT"));
         }
     }
 
@@ -675,6 +698,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         values.put("academicTitle", account.getAcademicTitle());
         values.put("practiceLicenseNo", account.getPracticeLicenseNo());
         values.put("maLienthongBacsi", account.getMaLienthongBacsi());
+        values.put("citizenId", account.getCitizenId());
         values.put("dateOfBirth", account.getDateOfBirth());
         values.put("gender", account.getGender());
         values.put("phoneNumber", account.getPhoneNumber());
@@ -689,6 +713,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         values.put("academicTitle", normalizeOptional(request.academicTitle()));
         values.put("practiceLicenseNo", normalizeOptional(request.practiceLicenseNo()));
         values.put("maLienthongBacsi", normalizeOptional(request.maLienthongBacsi()));
+        values.put("citizenId", normalizeOptional(request.citizenId()));
         values.put("dateOfBirth", request.dateOfBirth());
         values.put("gender", request.gender());
         values.put("phoneNumber", request.phoneNumber());

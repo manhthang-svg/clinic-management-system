@@ -43,6 +43,8 @@ const ACTIVE_VISIT_CODES = ['ACTIVE_VISIT_EXISTS'];
 const ROOM_CODES = ['ROOM_NOT_AVAILABLE', 'ROOM_NOT_ACTIVE', 'ROOM_HAS_NO_DOCTOR'];
 const APPOINTMENT_CODES = ['FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED'];
 const INSURANCE_CODES = ['INSURANCE_CARD_INVALID'];
+// BR-129.
+export const REFERRAL_DIAGNOSIS_MESSAGE = 'Vui lòng nhập chẩn đoán của nơi giới thiệu (2–1.000 ký tự).';
 
 /**
  * Classifies a failed POST /visits:
@@ -54,6 +56,7 @@ export function visitCreateError(error) {
   if (ROOM_CODES.includes(code)) return { kind: 'room' };
   if (APPOINTMENT_CODES.includes(code)) return { kind: 'appointment', message: MSG91 };
   if (INSURANCE_CODES.includes(code)) return { kind: 'insurance', message: MSG17 };
+  if (code === 'REFERRAL_DIAGNOSIS_REQUIRED') return { kind: 'system', message: REFERRAL_DIAGNOSIS_MESSAGE };
   if (code === 'UNAUTHORIZED' || error?.status === 401) return { kind: 'session', message: MSG12 };
   if (isNetworkError(error)) return { kind: 'system', message: NETWORK_MESSAGE };
   return { kind: 'system', message: MSG80 };

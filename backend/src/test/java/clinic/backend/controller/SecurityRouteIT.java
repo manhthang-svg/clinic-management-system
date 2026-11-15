@@ -18,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -54,6 +55,20 @@ class SecurityRouteIT extends PostgresIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
+        // UC-59 AF-03, UC-91: an unknown prescription is not found.
+        mockMvc.perform(delete("/api/v1/prescriptions/{id}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/prescriptions/{id}/submissions", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        // UC-60: the print routes too.
+        mockMvc.perform(get("/api/v1/prescriptions/{id}/print", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/prescriptions/{id}/commands/prepare-print", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
         // UC-56: the conclusion routes reach the service too.
         mockMvc.perform(get("/api/v1/conclusions/visits/{id}", UUID.randomUUID())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

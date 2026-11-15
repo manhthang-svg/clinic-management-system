@@ -28,9 +28,11 @@ import clinic.backend.entity.Conclusion;
 import clinic.backend.entity.ConclusionSecondaryDiagnosis;
 import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalHistory;
+import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
+import clinic.backend.entity.PrescriptionSubmission;
 import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.VitalSign;
@@ -49,6 +51,7 @@ import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
+import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.PrescriptionSubmissionRepository;
@@ -119,6 +122,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final PrescriptionSubmissionRepository submissionRepository;
     private final RecordSignatureRepository recordSignatureRepository;
     private final RemoteSigningGateway signingGateway;
+    private final MedicalRecordRepository medicalRecordRepository;
+    private final DigitalSignatureVerifier signatureVerifier;
     private final UuidV7Generator ids;
     private final Clock clock;
 
@@ -439,23 +444,95 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescription == null ? null : lastSubmission(prescription));
     }
 
+    @Override
+    @Transactional
+    public void delete(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        Context context = guard.require(principal, visitId(prescription));
+        // P03: never sent. A send always leaves a submission and a signature row, which are kept as evidence.
+        if (!prescription.isDeletable()
+                || submissionRepository.existsByPrescriptionId(prescription.getId())
+                || recordSignatureRepository.existsByDocumentTypeAndDocumentId(
+                        RecordSignatureDocumentType.DON_THUOC, prescription.getId())) {
+            throw new AppException(ErrorCode.PRESCRIPTION_ALREADY_SENT);
+        }
+        Instant now = clock.instant();
+        cancelPendingSignature(prescription, now);
+        // BR-59-14: the removed values, so the prescription could be restored from the audit log.
+        Map<String, Object> removed = new LinkedHashMap<>();
+        removed.put("prescriptionCode", prescription.getMadonthuoc());
+        removed.put("visitNumber", context.visit().getSovaovien());
+        removed.putAll(auditValues(prescription));
+        Map<String, Object> after = new LinkedHashMap<>();
+        removed.keySet().forEach(field -> after.put(field, null));
+        prescriptionRepository.delete(prescription);
+        prescriptionRepository.flush();
+        auditLogService.recordEntityChange(
+                principal.accountId(), prescription.getId(), AuditLogAction.DELETE, AUDIT_ENTITY, removed, after, now);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PrescriptionResponse.Submission> submissions(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        guard.require(principal, visitId(prescription));
+        return submissionViews(prescription, submissionRepository
+                .findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()));
+    }
+
+    /** The visit of the prescription's medical record (UC-59 AF-03, UC-91, UC-60). */
+    UUID visitId(Prescription prescription) {
+        return medicalRecordRepository.findById(prescription.getMedicalRecordId())
+                .map(MedicalRecord::getVisitId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    }
+
     /** UC-91: the latest send, with the signature sent with it. */
-    private PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
+    PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
         return submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId())
-                .map(submission -> {
-                    RecordSignature signature = recordSignatureRepository
-                            .findFirstByDocumentTypeAndDocumentIdOrderByCreatedAtDesc(
-                                    RecordSignatureDocumentType.DON_THUOC, prescription.getId())
-                            .orElse(null);
-                    return new PrescriptionResponse.Submission(
-                            submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
-                            submission.getSubmittedAt(), submission.getRespondedAt(),
-                            signature == null ? null : signature.getSignedAt(),
-                            signature == null ? null : signature.getSignerName(),
-                            signature == null ? null : signature.getCertificateSerial(),
-                            signature == null ? null : signature.getCertificateIssuer());
-                })
+                .map(submission -> submissionViews(prescription, List.of(submission)).getFirst())
                 .orElse(null);
+    }
+
+    /**
+     * UC-91 step 2: each send with the signature made for it. The signature row of a send is written just before its
+     * submission (UC-90 step 5), so a send carries the latest signature created no later than it was submitted.
+     */
+    private List<PrescriptionResponse.Submission> submissionViews(
+            Prescription prescription, List<PrescriptionSubmission> submissions) {
+        if (submissions.isEmpty()) {
+            return List.of();
+        }
+        List<RecordSignature> signatures = recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId());
+        Map<UUID, String> senders = staffAccountRepository.findAllById(submissions.stream()
+                        .map(PrescriptionSubmission::getSubmittedByAccountId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(StaffAccount::getId, StaffAccount::getFullName));
+        return submissions.stream().map(submission -> {
+            RecordSignature signature = null;
+            for (RecordSignature candidate : signatures) {
+                if (!candidate.getCreatedAt().isAfter(submission.getSubmittedAt())) {
+                    signature = candidate;
+                }
+            }
+            // BR-59-16: the status is the stored signature verified again, not the result kept at signing time.
+            String failure = signature == null ? null : signatureVerifier.reverify(
+                    signature.getSignatureValue(), signature.getSignedPayload(), signature.getCertificateSerial(),
+                    signature.getCertificateIssuer(), signature.getVerificationEvidence());
+            return new PrescriptionResponse.Submission(
+                    submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
+                    submission.getSubmittedAt(), submission.getRespondedAt(),
+                    signature == null ? null : signature.getSignedAt(),
+                    signature == null ? null : signature.getSignerName(),
+                    signature == null ? null : signature.getCertificateSerial(),
+                    signature == null ? null : signature.getCertificateIssuer(),
+                    senders.get(submission.getSubmittedByAccountId()),
+                    signature == null ? null : failure == null,
+                    failure);
+        }).toList();
     }
 
     private List<String> errors(String json) {

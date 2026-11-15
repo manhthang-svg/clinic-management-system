@@ -152,6 +152,8 @@ export function TechnicianQueuePage() {
   // Ref theo dõi cờ in-flight tránh gọi chồng chéo khi mạng trễ
   const inFlightRef = useRef(false);
 
+  // Giữ cache cái hàm (giữ nguyên địa chỉ bộ nhớ của hàm đó :RAM) 
+  // nếu các biến phụ thuộc bên trong nó không thay đổi.
   // Hàm tải dữ liệu hàng đợi từ backend
   const loadQueue = useCallback(
     async (roomId, options = {}) => {
@@ -320,6 +322,7 @@ export function TechnicianQueuePage() {
   }, [orders]);
 
   // Tab 1: Bệnh nhân chưa có mặt (chưa check-in, chưa có STT, chưa bị bỏ qua) - Sắp xếp theo ưu tiên và thời gian chỉ định
+  // Giữ cache kết quả dữ liệu do hàm đó tính toán ra nếu các biến phụ thuộc không thay đổi.
   const unconfirmedList = useMemo(() => {
     return groupedOrders
       .filter((o) => !o.isCheckedIn && !o.isSkipped && o.status !== 'SKIPPED')
@@ -631,8 +634,10 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // UC-66: xác nhận đã thực hiện xong kỹ thuật, chuyển sang chờ nhập kết quả
+  // Điều hướng sang màn hình form nhập kết quả cận lâm sàng của chỉ định
   const openResult = (order) => navigate(`/technician/results/${order.id}`);
+
+  // Xác nhận KTV đã làm xong kỹ thuật trên người bệnh nhân, chuyển sang chờ nhập kết quả (UC-66)
   const handleCompleteOrder = async (order) => {
     try {
       setActionLoadingId(order.id);
@@ -661,7 +666,7 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // UC-66 AF-02: trả chỉ định về hàng chờ (đúng số thứ tự cũ) kèm lý do.
+  // Trả chỉ định đang làm về hàng chờ kèm lý do khi gặp sự cố kỹ thuật (UC-66 AF-02)
   const handleConfirmReturn = async (order, reason) => {
     try {
       setActionLoadingId(order.id);
@@ -680,13 +685,13 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Thao tác: Mở modal từ chối
+  // Mở modal nhập lý do từ chối thực hiện y lệnh cận lâm sàng
   const handleOpenRejectModal = (order) => {
     setOrderToReject(order);
     setRejectModalOpen(true);
   };
 
-  // Thao tác: Xác nhận từ chối y lệnh kèm lý do
+  // Xác nhận từ chối thực hiện y lệnh do chống chỉ định và gửi phản hồi về bác sĩ
   const handleConfirmReject = async (orderId, reason) => {
     try {
       setActionLoadingId(orderId);
