@@ -31,7 +31,6 @@ import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.utils.UuidV7Generator;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,9 +43,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,9 +93,8 @@ class PatientServiceImplTest {
 
     @Test
     void requiresPhoneFromEighteenYearsOld() {
-        authenticateAs(ACCOUNT_ID);
 
-        assertThatThrownBy(() -> service.createPatient(
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("Nguyễn Văn A", LocalDate.of(2008, 11, 3), null, null, null, null, null)))
                 .isInstanceOfSatisfying(AppException.class, error ->
                         assertThat(error.getDetails()).containsExactly(Map.entry("sodienthoai", "REQUIRED")));
@@ -108,9 +103,8 @@ class PatientServiceImplTest {
 
     @Test
     void requiresGuardianNameAndRelationshipUnderEighteen() {
-        authenticateAs(ACCOUNT_ID);
 
-        assertThatThrownBy(() -> service.createPatient(
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("Nguyễn Bé", LocalDate.of(2008, 11, 4), null, null, null, null, null)))
                 .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getDetails())
                         .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe"));
@@ -118,9 +112,8 @@ class PatientServiceImplTest {
 
     @Test
     void rejectsBirthDateMoreThan120YearsAgo() {
-        authenticateAs(ACCOUNT_ID);
 
-        assertThatThrownBy(() -> service.createPatient(
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("Cụ A", LocalDate.of(1906, 11, 2), null, null, "0901234567", null, null)))
                 .isInstanceOfSatisfying(AppException.class, error ->
                         assertThat(error.getDetails()).containsEntry("ngaysinh", "INVALID_FORMAT"));
@@ -128,10 +121,9 @@ class PatientServiceImplTest {
 
     @Test
     void rejectsExistingPassportWithTheProfileToOpen() {
-        authenticateAs(ACCOUNT_ID);
         when(patientRepository.findFirstByHochieuSoIgnoreCase("C1234567")).thenReturn(Optional.of(patient()));
 
-        assertThatThrownBy(() -> service.createPatient(
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("John Smith", LocalDate.of(1990, 1, 1), null, "C1234567", "0901234567", null, null)))
                 .isInstanceOfSatisfying(AppException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_IDENTIFICATION_EXISTS);
@@ -144,12 +136,11 @@ class PatientServiceImplTest {
 
     @Test
     void drawsAnotherPatientCodeWhileTheCodeIsUsed() {
-        authenticateAs(ACCOUNT_ID);
         when(ids.next()).thenReturn(PATIENT_ID);
         when(patientRepository.existsByMabenhnhan(any())).thenReturn(true, true, false);
         when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.createPatient(createRequest("Nguyễn Văn A", null, null, "0901234567"));
+        service.createPatient(ACCOUNT_ID, createRequest("Nguyễn Văn A", null, null, "0901234567"));
 
         verify(patientRepository, org.mockito.Mockito.times(3)).existsByMabenhnhan(any());
     }
@@ -236,20 +227,14 @@ class PatientServiceImplTest {
         return visit;
     }
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
-    }
-
     @Test
     void createsPatientWithNormalizedOptionalFieldsAndAuthenticatedCreator() {
-        authenticateAs(ACCOUNT_ID);
         when(ids.next()).thenReturn(PATIENT_ID);
         when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.empty());
         when(patientRepository.save(any(Patient.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service.createPatient(createRequest(
+        var response = service.createPatient(ACCOUNT_ID, createRequest(
                 " Nguyễn Văn A ",
                 " 012345678901 ",
                 "  Nghề nghiệp  ",
@@ -268,10 +253,9 @@ class PatientServiceImplTest {
 
     @Test
     void rejectsDuplicateCitizenIdBeforeCreatingPatient() {
-        authenticateAs(ACCOUNT_ID);
         when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient()));
 
-        assertThatThrownBy(() -> service.createPatient(createRequest(
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, createRequest(
                 "Nguyễn Văn A", "012345678901", null, "0901234567")))
                 .isInstanceOfSatisfying(AppException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PATIENT_IDENTIFICATION_EXISTS);
@@ -489,14 +473,6 @@ class PatientServiceImplTest {
         verify(patientRepository, org.mockito.Mockito.times(2)).findAll(pageable.capture());
         assertThat(pageable.getAllValues().get(0)).isEqualTo(PageRequest.of(1, 20, Sort.by("mabenhnhan")));
         assertThat(pageable.getAllValues().get(1).getSort()).isEqualTo(Sort.by("hoten"));
-    }
-
-    private void authenticateAs(UUID accountId) {
-        Jwt jwt = Jwt.withTokenValue("test-token")
-                .header("alg", "none")
-                .subject(accountId.toString())
-                .build();
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
     }
 
     private Patient patient() {

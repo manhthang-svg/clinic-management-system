@@ -14,7 +14,7 @@ import java.util.UUID;
 
 public interface PatientService {
 
-    PatientResponse createPatient(CreatePatientRequest request);
+    PatientResponse createPatient(UUID actorAccountId, CreatePatientRequest request);
 
     /** UC-37 step 7: profiles with the same full name and date of birth. */
     List<PatientResponse> findPossibleDuplicates(String fullName, LocalDate birthDate);
