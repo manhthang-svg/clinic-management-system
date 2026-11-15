@@ -27,6 +27,7 @@ const CERTIFICATE_REASONS = {
     CA_NOT_TRUSTED: 'tổ chức cấp chứng thư không thuộc danh sách tin cậy',
     CA_CERTIFICATE_INVALID: 'chứng thư của tổ chức cấp không còn hiệu lực',
     UNKNOWN_TO_CA: 'tổ chức cấp không nhận ra chứng thư',
+    CERTIFICATE_NOT_DOCTOR: 'chứng thư không mang số định danh cá nhân của bạn',
 };
 
 const SIGNATURE_REASONS = {

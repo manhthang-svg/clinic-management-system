@@ -30,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 class DigitalSigningRoundTripTest {
 
     private static final String PIN = "123456";
+    private static final String DOCTOR_ID_NUMBER = "079090001234";
     private static final byte[] PAYLOAD =
             "{\"loai_don_thuoc\":\"c\",\"ma_don_thuoc\":\"12345abcdefg-c\"}".getBytes(StandardCharsets.UTF_8);
 
@@ -41,7 +42,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void approvedSignatureVerifiesAgainstThePayload() throws Exception {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         fixture.verifier.preCheck(issued.certificate());
 
         byte[] signed = sign(fixture, issued, PAYLOAD);
@@ -58,11 +59,22 @@ class DigitalSigningRoundTripTest {
         assertThat(chain).first().isEqualTo(issued.certificate());
     }
 
+    /** BR-59-16: the certificate names the Doctor by the personal identification number in its UID. */
+    @Test
+    void certificateNamesTheDoctorByTheIdentificationNumber() {
+        Fixture fixture = fixture(FailureMode.NONE);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
+
+        assertThat(issued.certificate().getSubjectX500Principal().getName()).contains("UID=CCCD:079090001234");
+        assertThat(fixture.verifier.citizenId(issued.certificate())).contains(DOCTOR_ID_NUMBER);
+        assertThat(issued.providerUserId()).isEqualTo(DOCTOR_ID_NUMBER);
+    }
+
     /** TT 15/2025/TT-BKHCN Phụ lục I mục 1.2 and 1.7: RSASSA-PSS, CAdES baseline B and T. */
     @Test
     void signatureIsCadesWithRsassaPssAndTheTimeStampInside() throws Exception {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
 
         byte[] signed = sign(fixture, issued, PAYLOAD);
         DigitalSignatureVerifier.Verification verification =
@@ -88,7 +100,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void changedPayloadIsRefused() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         byte[] signed = sign(fixture, issued, PAYLOAD);
 
         byte[] changed = "{\"loai_don_thuoc\":\"c\",\"ma_don_thuoc\":\"12345abcdefg-n\"}"
@@ -101,7 +113,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void signatureWithAnotherKeyIsRefused() {
         Fixture fixture = fixture(FailureMode.BAD_SIGNATURE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
 
         byte[] signed = sign(fixture, issued, PAYLOAD);
 
@@ -112,8 +124,8 @@ class DigitalSigningRoundTripTest {
     @Test
     void signatureOfAnotherCertificateIsRefused() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued doctor = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
-        SimulatedSigningAuthority.Issued other = fixture.authority.issue("Trần Thị Bình", "bs.binh", PIN);
+        SimulatedSigningAuthority.Issued doctor = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
+        SimulatedSigningAuthority.Issued other = fixture.authority.issue("Trần Thị Bình", "079090005678", PIN);
 
         byte[] signed = sign(fixture, other, PAYLOAD);
 
@@ -124,7 +136,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void revokedCertificateFailsThePreCheck() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
 
         fixture.authority.revoke(issued.serial());
 
@@ -138,7 +150,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void untrustedCaFailsThePreCheck() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         DigitalSignatureVerifier trustingNothing = new DigitalSignatureVerifier(
                 new SigningProperties(Duration.ofMinutes(5), Duration.ofSeconds(10), List.of()),
                 new SimulatedCertificateStatusServiceImpl(fixture.authority),
@@ -152,7 +164,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void declinedAndCancelledRequestsAreNotSigned() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         String declined = request(fixture, issued, PAYLOAD);
         String cancelled = request(fixture, issued, PAYLOAD);
 
@@ -167,7 +179,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void wrongPinIsRefusedByTheCaApp() {
         Fixture fixture = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         String transaction = request(fixture, issued, PAYLOAD);
 
         assertThatThrownBy(() -> fixture.authority.approve(transaction, issued.serial(), "000000"))
@@ -179,7 +191,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void keysSurviveARestart() {
         Fixture first = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = first.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = first.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
 
         Fixture second = fixture(FailureMode.NONE);
         byte[] signed = sign(second, issued, PAYLOAD);
@@ -190,7 +202,7 @@ class DigitalSigningRoundTripTest {
     @Test
     void unavailableSimulatorAnswersAsUnavailable() {
         Fixture working = fixture(FailureMode.NONE);
-        SimulatedSigningAuthority.Issued issued = working.authority.issue("Nguyễn Văn An", "bs.an", PIN);
+        SimulatedSigningAuthority.Issued issued = working.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
         Fixture down = fixture(FailureMode.UNAVAILABLE);
 
         assertThatThrownBy(() -> down.verifier.preCheck(issued.certificate()))
@@ -205,7 +217,7 @@ class DigitalSigningRoundTripTest {
                         FailureMode.NONE, false),
                 clock, new SecureRandom());
 
-        assertThatThrownBy(() -> authority.issue("Nguyễn Văn An", "bs.an", PIN))
+        assertThatThrownBy(() -> authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN))
                 .isInstanceOfSatisfying(AppException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.SIGNING_SERVICE_UNAVAILABLE));
     }
