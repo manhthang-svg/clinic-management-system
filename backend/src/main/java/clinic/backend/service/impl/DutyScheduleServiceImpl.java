@@ -65,7 +65,18 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     public static final LocalTime AFTERNOON_SHIFT_END = LocalTime.of(17, 30);
 
     /**
-     * Kiểm tra xem ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian quá khứ hay chưa theo giờ Việt Nam
+     * Kiểm tra xem ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian quá khứ hay chưa theo giờ Việt Nam.
+     * 
+     * Quy tắc:
+     * - Nếu ngày trực nhỏ hơn ngày hôm nay theo giờ VN: Đã qua (bị khóa).
+     * - Nếu ngày trực lớn hơn ngày hôm nay: Thuộc tương lai (hợp lệ).
+     * - Nếu ngày trực là hôm nay:
+     *   + Ca Sáng: Đã kết thúc nếu hiện tại sau giờ kết thúc ca sáng (hoặc sau 11:59).
+     *   + Ca Chiều: Đã kết thúc nếu hiện tại sau giờ kết thúc ca chiều (hoặc sau 23:59).
+     *
+     * @param workDate Ngày trực cần kiểm tra
+     * @param shift    Ca trực (MORNING hoặc AFTERNOON)
+     * @return true nếu ca trực đã trôi qua / đã kết thúc
      */
     private boolean isPastShift(LocalDate workDate, DutyShift shift) {
         if (workDate == null) return false;
@@ -171,9 +182,15 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         }
     }
 
+    /**
+     * Lấy toàn bộ ma trận phân công lịch trực của tất cả các phòng khám trong 1 tuần (từ Thứ 2 đến Chủ Nhật).
+     *
+     * @param startDate Ngày bắt đầu tuần (mặc định lấy Thứ 2 của tuần hiện tại nếu null)
+     * @param endDate   Ngày kết thúc tuần (mặc định bằng startDate + 6 ngày nếu null)
+     * @return Đối tượng WeeklyScheduleResponse gồm cấu hình giờ ca trực và danh sách các ca trực trong tuần
+     */
     @Override
     @Transactional(readOnly = true)
-    // lay lich truc trong 1 tuan
     public WeeklyScheduleResponse getWeeklySchedule(LocalDate startDate, LocalDate endDate) {
         if (startDate == null) {
             startDate = LocalDate.now(clock).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -186,9 +203,17 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return mapToWeeklyResponse(startDate, endDate, schedules);
     }
 
+    /**
+     * Lấy lịch trực theo tuần nhưng chỉ lọc riêng cho một phòng khám/phòng kỹ thuật cụ thể (UC-19).
+     * Dùng để xác định danh sách bác sĩ/KTV phụ trách phòng đó trong tuần.
+     *
+     * @param roomId    ID định danh của phòng
+     * @param startDate Ngày bắt đầu tuần
+     * @param endDate   Ngày kết thúc tuần
+     * @return Lịch trực tuần của riêng phòng được chỉ định
+     */
     @Override
     @Transactional(readOnly = true)
-    // Lấy lịch trực theo tuần nhưng chỉ lọc riêng cho một phòng cụ thể
     public WeeklyScheduleResponse getWeeklyScheduleByRoom(UUID roomId, LocalDate startDate, LocalDate endDate) {
         if (startDate == null) {
             startDate = LocalDate.now(clock).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -203,8 +228,29 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return mapToWeeklyResponse(startDate, endDate, schedules);
     }
 
+    /**
+     * Phân công mới (Tạo mới) hoặc Cập nhật 1 ca trực đơn lẻ cho nhân viên tại 1 phòng khám.
+     *
+     * Quy trình xử lý & kiểm tra ràng buộc (Business Rules):
+     * 1. Chặn thao tác trên ca trực đã kết thúc hoặc trong quá khứ theo giờ Việt Nam.
+     * 2. Kiểm tra tài khoản nhân viên và phòng khám tồn tại trong hệ thống.
+     * 3. Ràng buộc vai trò: Bác sĩ (DOCTOR) chỉ trực phòng lâm sàng (EXAMINATION);
+     *    Kỹ thuật viên (TECHNICIAN) chỉ trực phòng cận lâm sàng (PARACLINICAL).
+     * 4. Nếu là CẬP NHẬT (id != null):
+     *    - BR-113: Nếu thay đổi Bác sĩ/KTV hoặc đổi phòng trong ngày hôm nay, kiểm tra xem
+     *      nhân viên/phòng đó có lượt khám hoặc dịch vụ dở dang hay không. Nếu có -> từ chối đổi.
+     *    - Kiểm tra nhân viên không bị trùng ca trực khác trong cùng buổi (trừ ca hiện tại).
+     *    - Kiểm tra phòng khám không bị phân 2 người cùng 1 ca (trừ ca hiện tại).
+     * 5. Nếu là TẠO MỚI (id == null):
+     *    - Kiểm tra nhân viên chưa có lịch trực nào khác trong ca này.
+     *    - Kiểm tra phòng khám chưa có ai trực trong ca này.
+     *    - Khởi tạo Entity với UUIDv7 và lưu xuống Database.
+     *
+     * @param request       Dữ liệu yêu cầu phân công ca trực
+     * @param currentUserId ID của Admin đang thực hiện thao tác
+     * @return Bản ghi ca trực chi tiết sau khi đã lưu thành công
+     */
     @Override
-    // Tạo mới hoặc cập nhật 1 ca trực đơn lẻ.
     public DutyScheduleItemResponse saveDuty(DutyScheduleSaveRequest request, UUID currentUserId) {
         if (isPastShift(request.getWorkDate(), request.getShift())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể phân công hoặc chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
@@ -305,6 +351,24 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return toResponse(saved, staffMap, roomMap);
     }
 
+    /**
+     * Lưu hàng loạt lịch trực cho một tuần (thường dùng cho tính năng "Sao chép tuần trước").
+     *
+     * Quy trình xử lý:
+     * 1. Kiểm tra tuần đích không được nằm trọn trong quá khứ.
+     * 2. Xác định mốc xóa an toàn `deleteFrom`: Chỉ xóa các ngày từ hôm nay trở đi,
+     *    tuyệt đối không xóa các ca trực thuộc ngày đã qua trong quá khứ.
+     * 3. BR-113: Kiểm tra các ca trực ngày hôm nay xem có phòng nào đang có bệnh nhân chờ/khám không.
+     *    Nếu có -> từ chối sao chép để tránh ghi đè làm mất phiên trực đang làm việc.
+     * 4. Xóa các ca trực cũ từ mốc `deleteFrom` đến `endDate`.
+     * 5. Lọc và chuẩn hóa danh sách ca mới: Bỏ qua ca quá khứ, kiểm tra vai trò nhân viên - loại phòng,
+     *    kiểm tra không trùng phòng và không trùng người trong cùng buổi.
+     * 6. Lưu danh sách ca trực mới hàng loạt (`saveAll`) và trả về ma trận tuần mới.
+     *
+     * @param request       Yêu cầu lưu hàng loạt kèm danh sách các ca trực
+     * @param currentUserId ID của Admin thực hiện
+     * @return Toàn bộ lịch trực tuần sau khi đã sao chép/cập nhật
+     */
     @Override
     public WeeklyScheduleResponse batchSaveWeeklySchedule(WeeklyBatchScheduleRequest request, UUID currentUserId) {
         LocalDate startDate = request.getStartDate();
@@ -396,6 +460,15 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return getWeeklySchedule(startDate, endDate);
     }
 
+    /**
+     * Xóa / Hủy bỏ phân công một ca trực theo ID (Admin thực hiện).
+     *
+     * Quy tắc an toàn:
+     * 1. Không cho phép xóa ca trực đã kết thúc hoặc trong quá khứ.
+     * 2. BR-113: Từ chối xóa nếu phòng khám đang có bệnh nhân chờ khám hoặc nhân viên đang có lượt khám dở dang.
+     *
+     * @param id ID của bản ghi ca trực cần xóa
+     */
     @Override
     public void deleteDuty(UUID id) {
         DutySchedule schedule = dutyScheduleRepository.findById(id)
@@ -408,6 +481,15 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         dutyScheduleRepository.delete(schedule);
     }
 
+    /**
+     * Chuyển đổi danh sách thực thể DutySchedule sang đối tượng phản hồi tuần WeeklyScheduleResponse.
+     * Tải trước toàn bộ phòng và tài khoản vào Map để tối ưu hiệu năng (tránh N+1 query).
+     *
+     * @param startDate Ngày bắt đầu tuần
+     * @param endDate   Ngày kết thúc tuần
+     * @param schedules Danh sách entity các ca trực truy vấn từ DB
+     * @return Đối tượng response đóng gói đầy đủ dữ liệu cho giao diện ma trận tuần
+     */
     private WeeklyScheduleResponse mapToWeeklyResponse(LocalDate startDate, LocalDate endDate, List<DutySchedule> schedules) {
         Map<UUID, StaffAccount> staffMap = staffAccountRepository.findAll().stream()
                 .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
@@ -427,6 +509,15 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
                 .build();
     }
 
+    /**
+     * Ánh xạ một bản ghi thực thể DutySchedule sang DTO DutyScheduleItemResponse hiển thị trên giao diện.
+     * Ghép học hàm/học vị vào họ tên bác sĩ/KTV, đính kèm tên phòng, mã phòng và người phân công.
+     *
+     * @param schedule Bản ghi ca trực từ database
+     * @param staffMap Bản đồ tra cứu nhanh tài khoản nhân viên theo ID
+     * @param roomMap  Bản đồ tra cứu nhanh phòng theo ID
+     * @return DTO chứa đầy đủ thông tin ca trực
+     */
     private DutyScheduleItemResponse toResponse(
             DutySchedule schedule,
             Map<UUID, StaffAccount> staffMap,
