@@ -374,8 +374,8 @@ public class PatientServiceImpl implements PatientService {
                 throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "INVALID_FORMAT"));
             }
             patients = switch (type) {
-                case CITIZEN_ID -> patientRepository.findAllByCccdSoContaining(normalizedKeyword, limited);
-                case PASSPORT -> patientRepository.findAllByHochieuSoContainingIgnoreCase(normalizedKeyword, limited);
+                case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
+                case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
                 case PATIENT_CODE -> patientRepository.findAllByMabenhnhanContainingIgnoreCase(normalizedKeyword, limited);
                 case PHONE -> patientRepository.findAllBySodienthoaiContaining(normalizedKeyword, limited);
                 case NAME -> patientRepository.searchByName(normalizedKeyword, limited);
@@ -385,14 +385,21 @@ public class PatientServiceImpl implements PatientService {
         return withVisitSummary(patients);
     }
 
-    /** UC-35 step 4: allowed characters and maximum length by search type; part of a value is enough. */
+    /**
+     * UC-35 step 4: keyword format by search type.
+     * DECISION (team, 2026-11-15): numbers read from a document (citizen ID, passport, insurance card) must be
+     * typed in full and match exactly, so a partial number cannot list other patients' identities. What a
+     * patient says from memory (name, phone, patient code) may be partial, with a minimum length so the
+     * result stays meaningful.
+     */
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
-            case CITIZEN_ID -> keyword.matches("\\d{1,12}");
-            case PASSPORT, INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{1,15}");
-            case PHONE -> keyword.matches("\\d{1,10}");
-            case NAME -> keyword.length() <= 100;
-            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{1,20}");
+            case CITIZEN_ID -> keyword.matches("\\d{12}");
+            case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
+            case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
+            case PHONE -> keyword.matches("\\d{4,10}");
+            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{4,20}");
+            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
         };
     }
 

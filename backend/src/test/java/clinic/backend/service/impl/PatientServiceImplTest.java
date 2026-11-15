@@ -396,20 +396,21 @@ class PatientServiceImplTest {
     void searchesByTypeWithTheMatchingQuery() {
         PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
         Page<Patient> found = new PageImpl<>(List.of(patient()));
-        when(patientRepository.findAllByCccdSoContaining("0123", page)).thenReturn(found);
-        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("bn0000", page)).thenReturn(found);
-        when(patientRepository.findAllBySodienthoaiContaining("0901", page)).thenReturn(found);
-        when(patientRepository.searchByName("n", page)).thenReturn(found);
-        when(patientRepository.findAllByHochieuSoContainingIgnoreCase("C12", page)).thenReturn(found);
-        when(patientRepository.searchByInsuranceCard("DN40", page)).thenReturn(found);
+        when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
+        when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
+        when(patientRepository.searchByInsuranceCard("DN4010123456789", page)).thenReturn(found);
+        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("0003", page)).thenReturn(found);
+        when(patientRepository.findAllBySodienthoaiContaining("4567", page)).thenReturn(found);
+        when(patientRepository.searchByName("an", page)).thenReturn(found);
 
-        // Part of a value is enough while the Receptionist is still typing.
-        assertThat(service.listPatients(" 0123 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
-        assertThat(service.listPatients("bn0000", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
-        assertThat(service.listPatients("0901", PatientSearchType.PHONE, page)).hasSize(1);
-        assertThat(service.listPatients("n", PatientSearchType.NAME, page)).hasSize(1);
-        assertThat(service.listPatients("C12", PatientSearchType.PASSPORT, page)).hasSize(1);
-        assertThat(service.listPatients("DN40", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
+        // Document numbers in full, exact match.
+        assertThat(service.listPatients(" 012345678901 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
+        assertThat(service.listPatients("C1234567", PatientSearchType.PASSPORT, page)).hasSize(1);
+        assertThat(service.listPatients("DN4010123456789", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
+        // What a patient remembers: any part.
+        assertThat(service.listPatients("0003", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
+        assertThat(service.listPatients("4567", PatientSearchType.PHONE, page)).hasSize(1);
+        assertThat(service.listPatients("an", PatientSearchType.NAME, page)).hasSize(1);
     }
 
     @Test
@@ -438,14 +439,17 @@ class PatientServiceImplTest {
 
     @ParameterizedTest
     @CsvSource({
+            "CITIZEN_ID, 0790500",
             "CITIZEN_ID, 0123456789012",
-            "CITIZEN_ID, 0123A",
+            "CITIZEN_ID, 01234567890A",
+            "PHONE, 090",
             "PHONE, 09012345678",
-            "PHONE, 090-1",
             "PASSPORT, C123456789012345",
             "PASSPORT, C-123",
-            "INSURANCE_CARD, DN4010123456789X",
-            "PATIENT_CODE, BN#0001"
+            "INSURANCE_CARD, DN40",
+            "PATIENT_CODE, BN0",
+            "PATIENT_CODE, BN#0001",
+            "NAME, A"
     })
     void rejectsKeywordWithWrongFormatForItsType(PatientSearchType type, String keyword) {
         assertThatThrownBy(() -> service.listPatients(keyword, type, PageRequest.of(0, 10)))

@@ -52,13 +52,13 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void searchesByPartOfCitizenIdPatientCodeAndPhone() throws Exception {
+    void searchesByFullCitizenIdAndByPartOfPatientCodeAndPhone() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
         String citizenId = digits(12);
         String phone = "09" + digits(8);
         String code = insertPatient(receptionist, "Trần Văn " + suffix(), citizenId, phone);
 
-        mockMvc.perform(search(receptionist, "CITIZEN_ID", citizenId.substring(1)))
+        mockMvc.perform(search(receptionist, "CITIZEN_ID", citizenId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(code)));
         mockMvc.perform(search(receptionist, "PATIENT_CODE", code.toLowerCase()))
@@ -82,7 +82,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         mockMvc.perform(search(receptionist, "PASSPORT", passport.toLowerCase()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(passportCode)));
-        mockMvc.perform(search(receptionist, "INSURANCE_CARD", card.substring(4)))
+        mockMvc.perform(search(receptionist, "INSURANCE_CARD", card))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(cardCode)));
     }
@@ -269,6 +269,9 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     void rejectsKeywordWithWrongFormatForItsType() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
 
+        mockMvc.perform(search(receptionist, "CITIZEN_ID", "07905"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.keyword").value("INVALID_FORMAT"));
         mockMvc.perform(search(receptionist, "CITIZEN_ID", "12345A"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_FAILED"))

@@ -6,24 +6,28 @@ import { MSG, createPrefill, searchErrorMessage, validateKeyword } from './patie
 describe('validateKeyword (UC-35 step 4)', () => {
     it.each([
         ['CITIZEN_ID', '012345678901'],
-        ['CITIZEN_ID', '0123'],
-        ['PASSPORT', 'C12'],
+        ['PASSPORT', 'C1234567'],
+        ['INSURANCE_CARD', 'DN4010123456789'],
         ['PATIENT_CODE', 'BN0000'],
-        ['PHONE', '0901'],
-        ['NAME', 'A'],
-        ['INSURANCE_CARD', 'DN40'],
-    ])('accepts part of a %s while typing', (type, keyword) => {
+        ['PATIENT_CODE', '0003'],
+        ['PHONE', '4567'],
+        ['NAME', 'An'],
+    ])('accepts a valid %s', (type, keyword) => {
         expect(validateKeyword(type, ` ${keyword} `)).toBe('');
     });
 
     it.each([
+        ['CITIZEN_ID', '0790500'],
         ['CITIZEN_ID', '12345A'],
         ['CITIZEN_ID', '0123456789012'],
         ['PASSPORT', 'C-123'],
+        ['INSURANCE_CARD', 'DN40'],
+        ['PATIENT_CODE', 'BN0'],
         ['PATIENT_CODE', 'BN#0001'],
+        ['PHONE', '090'],
         ['PHONE', '09012345678'],
+        ['NAME', 'A'],
         ['NAME', 'A'.repeat(101)],
-        ['INSURANCE_CARD', 'DN4010123456789X'],
     ])('rejects an invalid %s', (type, keyword) => {
         expect(validateKeyword(type, keyword)).toBe(MSG.INVALID_FORMAT);
     });
