@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -22,14 +23,20 @@ import clinic.backend.dto.response.DutyScheduleItemResponse;
 import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.Visit;
 import clinic.backend.enums.DutyShift;
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
+import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.DutyScheduleService;
 import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.utils.UuidV7Generator;
@@ -50,6 +57,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     private final DutyShiftConfigService dutyShiftConfigService;
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
+    private final VisitRepository visitRepository;
+    private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
 
     public static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     public static final LocalTime MORNING_SHIFT_END = LocalTime.of(11, 30);
@@ -80,6 +89,86 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
             }
         }
         return false;
+    }
+
+    /**
+     * BR-113: Kiểm tra phòng khám hoặc nhân viên có lượt khám / dịch vụ đang chờ hoặc dở dang hay không
+     * trước khi xóa hoặc thay đổi nhân sự ca trực trong ngày hiện tại.
+     */
+    private void checkWorkInProgress(DutySchedule schedule, String actionDescription) {
+        if (schedule == null || schedule.getWorkDate() == null) {
+            return;
+        }
+        ZonedDateTime nowVN = clock.instant().atZone(VIETNAM_ZONE);
+        LocalDate todayVN = nowVN.toLocalDate();
+        if (!schedule.getWorkDate().isEqual(todayVN)) {
+            return;
+        }
+
+        // 1. Kiểm tra nhân viên có lượt khám hoặc dịch vụ dở dang không
+        if (schedule.getStaffAccountId() != null) {
+            long visitsInProgress = visitRepository.countByDoctorAccountIdAndStatus(
+                    schedule.getStaffAccountId(), VisitStatus.IN_EXAMINATION);
+            long ordersInProgress = paraclinicalOrderDetailRepository.countByPerformerAccountIdAndStatus(
+                    schedule.getStaffAccountId(), ParaclinicalOrderDetailStatus.IN_PROGRESS);
+
+            if (visitsInProgress > 0 || ordersInProgress > 0) {
+                StaffAccount staff = staffAccountRepository.findById(schedule.getStaffAccountId()).orElse(null);
+                String staffName = staff != null ? staff.getFullName() : "Nhân viên";
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        staffName + " đang có lượt khám hoặc dịch vụ đang thực hiện dở dang. Vui lòng hoàn tất trước khi " + actionDescription + ".");
+            }
+        }
+
+        // 2. Kiểm tra phòng khám có bệnh nhân đang chờ hoặc đang khám trong ca trực này không
+        if (schedule.getRoomId() == null) {
+            return;
+        }
+        Room room = roomRepository.findById(schedule.getRoomId()).orElse(null);
+        if (room == null) {
+            return;
+        }
+        String roomName = room.getRoomName() != null ? room.getRoomName() : "phòng khám";
+
+        LocalTime currentTimeVN = nowVN.toLocalTime();
+        Optional<DutyShift> currentShiftOpt = dutyShiftConfigService.shiftAt(todayVN, currentTimeVN);
+        Optional<DutyShift> regShiftOpt = dutyShiftConfigService.registrationShift(todayVN, currentTimeVN);
+
+        boolean isCurrentOrRegShift = (currentShiftOpt.isPresent() && currentShiftOpt.get() == schedule.getShift())
+                || (regShiftOpt.isPresent() && regShiftOpt.get() == schedule.getShift());
+
+        if (isCurrentOrRegShift) {
+            if (room.getType() == RoomType.EXAMINATION) {
+                List<VisitStatus> activeStatuses = List.of(
+                        VisitStatus.WAITING,
+                        VisitStatus.IN_EXAMINATION,
+                        VisitStatus.WAITING_PARACLINICAL,
+                        VisitStatus.WAITING_CONCLUSION
+                );
+                List<Visit> activeVisits = visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
+                        schedule.getRoomId(), todayVN, activeStatuses
+                );
+                if (!activeVisits.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Phòng " + roomName + " đang có " + activeVisits.size()
+                                    + " bệnh nhân đang chờ hoặc đang khám trong ca trực này. Không thể " + actionDescription + ".");
+                }
+            } else if (room.getType() == RoomType.PARACLINICAL) {
+                Instant startOfDay = todayVN.atStartOfDay(VIETNAM_ZONE).toInstant();
+                List<ParaclinicalOrderDetail> queueDetails = paraclinicalOrderDetailRepository.findQueueDetails(
+                        schedule.getRoomId(), startOfDay
+                );
+                long activeOrders = queueDetails.stream()
+                        .filter(d -> d.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                                || d.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS)
+                        .count();
+                if (activeOrders > 0) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Phòng " + roomName + " đang có " + activeOrders
+                                    + " dịch vụ cận lâm sàng đang chờ hoặc đang thực hiện trong ca trực này. Không thể " + actionDescription + ".");
+                }
+            }
+        }
     }
 
     @Override
@@ -155,6 +244,13 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
             }
 
+            // BR-113: Nếu thay đổi nhân viên hoặc thay đổi phòng trong ngày hôm nay, kiểm tra xem có bệnh nhân hoặc công việc dở dang không
+            boolean isStaffChanged = !schedule.getStaffAccountId().equals(request.getStaffAccountId());
+            boolean isRoomChanged = !schedule.getRoomId().equals(request.getRoomId());
+            if (isStaffChanged || isRoomChanged) {
+                checkWorkInProgress(schedule, "thay đổi nhân sự hoặc phòng trực");
+            }
+
             // Kiểm tra nhân viên không trùng ca trong ngày
             boolean existsDuplicateStaff = dutyScheduleRepository.existsByWorkDateAndShiftAndStaffAccountIdAndIdNot(
                     request.getWorkDate(), request.getShift(), request.getStaffAccountId(), request.getId()
@@ -226,6 +322,14 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
 
         LocalDate deleteFrom = startDate.isBefore(todayVN) ? todayVN : startDate;
         List<DutySchedule> existing = dutyScheduleRepository.findByWorkDateBetweenOrderByWorkDateAscShiftAsc(deleteFrom, endDate);
+
+        // BR-113: Kiểm tra xem các ca trực bị xóa đè trong ngày hôm nay có ca nào đang có bệnh nhân dở dang không
+        for (DutySchedule s : existing) {
+            if (s.getWorkDate().isEqual(todayVN)) {
+                checkWorkInProgress(s, "sao chép lịch trực đè lên ngày hôm nay");
+            }
+        }
+
         dutyScheduleRepository.deleteAll(existing);
         dutyScheduleRepository.flush();
 
@@ -299,6 +403,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         if (isPastShift(schedule.getWorkDate(), schedule.getShift())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xoá ca trực đã kết thúc hoặc trong quá khứ");
         }
+        // BR-113: Kiểm tra phòng khám hoặc nhân viên có bệnh nhân/công việc dở dang không
+        checkWorkInProgress(schedule, "xoá ca trực");
         dutyScheduleRepository.delete(schedule);
     }
 

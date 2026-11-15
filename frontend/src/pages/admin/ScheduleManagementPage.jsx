@@ -725,7 +725,11 @@ export function ScheduleManagementPage({
         <ConfirmModal
           isOpen={deleteConfirmOpen}
           title="Xác nhận xoá ca trực"
-          description={`Bạn có chắc chắn muốn huỷ phân công ca trực của ${itemToDelete?.staffName || 'nhân viên này'} vào ngày ${itemToDelete?.workDate || ''}?`}
+          description={`Bạn có chắc chắn muốn huỷ phân công ca trực của ${itemToDelete?.staffName || 'nhân viên này'} vào ngày ${itemToDelete?.workDate || ''}?${
+            itemToDelete?.workDate === todayStr
+              ? '\n\nLưu ý: Nếu phòng khám đang có bệnh nhân chờ hoặc đang có lượt khám/dịch vụ dở dang trong ca trực hôm nay (BR-113), hệ thống sẽ từ chối xoá.'
+              : ''
+          }`}
           confirmText="Xoá ca trực"
           cancelText="Hủy"
           variant="destructive"
@@ -742,7 +746,7 @@ export function ScheduleManagementPage({
         <ConfirmModal
           isOpen={copyConfirmOpen}
           title="Sao chép lịch trực tuần trước"
-          description={`Hệ thống sẽ sao chép toàn bộ phân công ca trực từ tuần trước (${prevWeekDisplayStr}) sang tuần này (${days[0].displayDate} - ${days[6].displayDate}/${days[6].date.getFullYear()}).\n\nLưu ý: Các ca trực thuộc ngày đã qua trong quá khứ sẽ được giữ nguyên không thay đổi.`}
+          description={`Hệ thống sẽ sao chép toàn bộ phân công ca trực từ tuần trước (${prevWeekDisplayStr}) sang tuần này (${days[0].displayDate} - ${days[6].displayDate}/${days[6].date.getFullYear()}).\n\nLưu ý: Các ca trực đã phân công trước đó trong tuần này (từ hôm nay trở đi) sẽ bị thay thế hoàn toàn. Các ca trực thuộc ngày đã qua trong quá khứ hoặc ca đang có bệnh nhân khám hôm nay sẽ được giữ nguyên không thay đổi.`}
           confirmText="Sao chép ngay"
           cancelText="Hủy"
           variant="mint"
