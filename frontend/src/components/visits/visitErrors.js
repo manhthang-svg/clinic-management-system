@@ -5,6 +5,8 @@ export const MSG12 = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nh
 export const MSG17 = 'Thẻ BHYT không hợp lệ hoặc đã hết hạn. Lượt khám sẽ được đăng ký dạng Dịch vụ.';
 export const MSG20 = 'Không thể kết nối với cổng BHYT. Vui lòng thử lại hoặc đăng ký lượt khám theo hình thức dịch vụ.';
 export const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+// MSG102: no examination room can receive patients now (UC-40 step 8, UC-42 EF-01).
+export const MSG102 = 'Không có phòng khám nào đang hoạt động có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.';
 // ASSUMPTION: MSG91 is not in the SRS message list available in docs/.
 export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt khám khác. Thông tin lịch hẹn đã được tải lại.';
 

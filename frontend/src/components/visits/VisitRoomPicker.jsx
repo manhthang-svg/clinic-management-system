@@ -1,5 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { FieldError } from '../shared/FormFields';
+import { MSG102 } from './visitErrors';
 
 /**
  * UC-40 steps 8-9 with UC-42: active examination rooms with the number of patients the doctor still has to examine
@@ -17,7 +18,7 @@ export function VisitRoomPicker({
     return (
       <div role="alert" className="p-6 rounded-xl border border-dashed border-slate-200 text-center space-y-3">
         <p className="text-sm text-slate-500">
-          {loadError ?? 'Không có phòng khám nào đang hoạt động có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.'}
+          {loadError ?? MSG102}
         </p>
         <button
           type="button"

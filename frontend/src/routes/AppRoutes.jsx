@@ -339,6 +339,7 @@ export function AppRoutes({
 
           {/* Tình trạng hàng đợi phòng khám (UC-42) */}
           <Route path="room-queue" element={<ReceptionistRoomQueuePage />} />
+          <Route path="room-queue/:roomId" element={<ReceptionistRoomQueuePage />} />
           <Route
             path="schedules"
             element={
