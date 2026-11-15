@@ -197,6 +197,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponse updatePatient(UUID actorAccountId, UUID id, UpdatePatientRequest request) {
         Patient patient = requiredPatient(id);
+        // check chong race condition
         if (!patient.getVersion().equals(request.version())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
