@@ -51,7 +51,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         renderPage(patientApi);
 
         expect(await screen.findByText('Nguyễn Văn An')).toBeInTheDocument();
-        expect(patientApi.list).toHaveBeenCalledWith({ size: 50 });
+        expect(patientApi.list).toHaveBeenCalledWith({ page: 0, size: 20 });
     });
 
     it('searches by citizen ID by default after checking the format', async () => {
@@ -71,7 +71,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.type(screen.getByLabelText('Từ khóa'), '012345678901');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
-        expect(patientApi.list).toHaveBeenLastCalledWith({ size: 50, type: 'CITIZEN_ID', keyword: '012345678901' });
+        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'CITIZEN_ID', keyword: '012345678901' });
     });
 
     it('shows the last visit and the active visit of each result', async () => {
@@ -94,9 +94,14 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         expect(within(row).getByText(new Date('2026-11-01T02:00:00Z').toLocaleDateString('vi-VN'))).toBeInTheDocument();
     });
 
-    it('asks to refine the keyword when more than 50 patients match', async () => {
+    it('pages through search results and keeps the search on every page', async () => {
         const user = userEvent.setup();
-        const patientApi = { list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient()], 72)) };
+        const patientApi = {
+            list: vi.fn()
+                .mockResolvedValueOnce(page([]))
+                .mockResolvedValueOnce(page([patient()], 45))
+                .mockResolvedValueOnce(page([patient({ id: 'p-2', hoten: 'Nguyễn Thị Bình' })], 45)),
+        };
         renderPage(patientApi);
         await screen.findByText(MSG.NO_RESULT);
 
@@ -104,7 +109,15 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.type(screen.getByLabelText('Từ khóa'), 'Nguyễn');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
-        expect(await screen.findByText(MSG.TOO_MANY)).toBeInTheDocument();
+        expect(await screen.findByText('Trang 1/3')).toBeInTheDocument();
+        expect(screen.getByText('Có 45 bệnh nhân')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Trang trước' })).toBeDisabled();
+
+        await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+        expect(await screen.findByText('Nguyễn Thị Bình')).toBeInTheDocument();
+        expect(screen.getByText('Trang 2/3')).toBeInTheDocument();
+        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 1, size: 20, type: 'NAME', keyword: 'Nguyễn' });
     });
 
     it('offers to create a profile pre-filled with the keyword when nothing matches', async () => {

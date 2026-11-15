@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +52,7 @@ public class PatientServiceImpl implements PatientService {
 
     /** UC-35 step 6: at most 50 results. */
     static final int MAX_SEARCH_RESULTS = 50;
+    static final Sort DEFAULT_SEARCH_SORT = Sort.by("mabenhnhan");
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
@@ -353,9 +355,11 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
-        Pageable limited = pageable.getPageSize() > MAX_SEARCH_RESULTS
-                ? PageRequest.of(pageable.getPageNumber(), MAX_SEARCH_RESULTS, pageable.getSort())
-                : pageable;
+        // At most 50 patients per page. Without a client sort, pages follow the patient code so paging
+        // neither repeats nor skips a patient.
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : DEFAULT_SEARCH_SORT;
+        Pageable limited = PageRequest.of(
+                pageable.getPageNumber(), Math.min(pageable.getPageSize(), MAX_SEARCH_RESULTS), sort);
         String normalizedKeyword = normalize(keyword);
         Page<Patient> patients;
         if (type == null) {
