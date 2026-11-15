@@ -4,8 +4,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.StaffAccount;
@@ -39,6 +43,29 @@ public class ExaminationRoomDuty {
                 .map(DutySchedule::getStaffAccountId)
                 .flatMap(staffAccountRepository::findById)
                 .filter(account -> account.getRole() == Role.DOCTOR && account.getStatus() == AccountStatus.ACTIVE);
+    }
+
+    /**
+     * The active doctor on duty in each examination room for the shift {@code now} falls into, keyed by room
+     * (UC-42). Same shift rule as {@link #onDutyDoctor}, in two queries for all rooms.
+     */
+    public Map<UUID, StaffAccount> onDutyDoctorsByRoom(Instant now) {
+        LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+        List<DutySchedule> schedules = dutyShiftConfigService
+                .registrationShift(today, LocalTime.ofInstant(now, CLINIC_ZONE))
+                .map(shift -> dutyScheduleRepository.findByWorkDateAndShift(today, shift))
+                .orElse(List.of());
+        Map<UUID, StaffAccount> doctors = staffAccountRepository.findAllById(schedules.stream()
+                        .map(DutySchedule::getStaffAccountId)
+                        .collect(Collectors.toSet()))
+                .stream()
+                .filter(account -> account.getRole() == Role.DOCTOR && account.getStatus() == AccountStatus.ACTIVE)
+                .collect(Collectors.toMap(StaffAccount::getId, account -> account));
+        Map<UUID, StaffAccount> byRoom = new HashMap<>();
+        schedules.stream()
+                .filter(schedule -> schedule.getRoomId() != null && doctors.containsKey(schedule.getStaffAccountId()))
+                .forEach(schedule -> byRoom.putIfAbsent(schedule.getRoomId(), doctors.get(schedule.getStaffAccountId())));
+        return byRoom;
     }
 
     /** Doctor name as shown to staff, with the academic title when there is one. */

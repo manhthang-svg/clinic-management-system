@@ -333,11 +333,29 @@ public class VisitServiceImpl implements VisitService {
             }
         } else {
             targetRoomId = roomId;
+            if (roomId != null) {
+                requireViewableQueueRoom(roomId);
+            }
         }
         List<Visit> visits = targetRoomId == null
                 ? visitRepository.findAllByQueueDate(queryDate)
                 : visitRepository.findRoomQueue(targetRoomId, queryDate);
         return visits.stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * UC-42 AF-03: the Receptionist sees a room's waiting list only for a room listed on the overview, an active
+     * examination room with a doctor on duty now (BR-96). An unknown room answers ROOM_NOT_FOUND (MSG39), any other
+     * room ROOM_NOT_AVAILABLE (MSG53).
+     */
+    private void requireViewableQueueRoom(UUID roomId) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+        if (room.getStatus() != ActivationStatus.ACTIVE
+                || room.getType() != RoomType.EXAMINATION
+                || examinationRoomDuty.onDutyDoctor(roomId, clock.instant()).isEmpty()) {
+            throw new AppException(ErrorCode.ROOM_NOT_AVAILABLE);
+        }
     }
 
     /** I1-D48: the Cashier prints the queue-number ticket, so only for a visit that already has its number. */
@@ -725,49 +743,29 @@ public class VisitServiceImpl implements VisitService {
         LocalDate queryDate = date != null ? date : LocalDate.now(clock.withZone(CLINIC_ZONE));
         Map<UUID, List<VisitRepository.RoomQueueCount>> countsByRoom = visitRepository.countRoomQueues(queryDate)
                 .stream().collect(Collectors.groupingBy(VisitRepository.RoomQueueCount::getRoomId));
+        // UC-42: only rooms with a doctor on duty in the current shift, named by that doctor (BR-96).
+        Map<UUID, StaffAccount> doctorsByRoom = examinationRoomDuty.onDutyDoctorsByRoom(clock.instant());
         List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
-                RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+                        RoomType.EXAMINATION, ActivationStatus.ACTIVE).stream()
+                .filter(room -> doctorsByRoom.containsKey(room.getId()))
+                .toList();
         Map<UUID, String> departmentNames = departmentRepository.findAllById(rooms.stream()
                         .map(Room::getDepartmentId)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(Department::getId, Department::getDepartmentName));
-        Map<UUID, List<String>> doctorsByRoom = activeDoctorNamesByRoom();
         // UC-42 bước 2: nhóm theo khoa (tên khoa A–Z), trong khoa giữ thứ tự mã phòng.
         return rooms.stream()
                 .map(room -> toQueueStatus(
                         room,
                         departmentNames.get(room.getDepartmentId()),
-                        doctorsByRoom.getOrDefault(room.getId(), List.of()),
+                        List.of(ExaminationRoomDuty.displayName(doctorsByRoom.get(room.getId()))),
                         countsByRoom.getOrDefault(room.getId(), List.of())))
                 .sorted(Comparator.comparing(
                         RoomQueueStatusResponse::departmentName,
                         Comparator.nullsLast(Comparator.<String>naturalOrder())))
                 .toList();
-    }
-
-    /** Active doctors currently assigned to each room, as "academic title + full name" (UC-42 bước 2). */
-    private Map<UUID, List<String>> activeDoctorNamesByRoom() {
-        List<StaffRoomAssignment> assignments = staffRoomAssignmentRepository.findByRemovedAtIsNull();
-        Map<UUID, String> doctorNames = staffAccountRepository.findAllById(assignments.stream()
-                        .map(StaffRoomAssignment::getStaffAccountId)
-                        .collect(Collectors.toSet()))
-                .stream()
-                .filter(account -> account.getRole() == Role.DOCTOR)
-                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
-                .collect(Collectors.toMap(
-                        StaffAccount::getId,
-                        account -> staffDisplayName(account.getAcademicTitle(), account.getFullName())));
-        return assignments.stream()
-                .filter(assignment -> doctorNames.containsKey(assignment.getStaffAccountId()))
-                .collect(Collectors.groupingBy(
-                        StaffRoomAssignment::getRoomId,
-                        Collectors.collectingAndThen(
-                                Collectors.mapping(
-                                        assignment -> doctorNames.get(assignment.getStaffAccountId()),
-                                        Collectors.toList()),
-                                names -> names.stream().sorted().toList())));
     }
 
     @Override
