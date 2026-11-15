@@ -772,7 +772,7 @@ export function TechnicianDashboardPage() {
                 Lịch trực cá nhân sắp tới
               </h2>
               <p className="text-[11px] text-slate-500">
-                Phân công ca trực của bạn trong 4 ngày tới (theo phân bổ Admin BR-55)
+                Phân công ca trực của bạn trong 4 ngày tới (theo phân bổ của Quản trị viên)
               </p>
             </div>
           </div>

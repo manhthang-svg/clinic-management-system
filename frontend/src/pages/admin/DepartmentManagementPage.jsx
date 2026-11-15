@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
@@ -44,6 +44,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
 
   // Filter & Search states cho TAB 2: CHUYÊN KHOA
   const [deptSearchQuery, setDeptSearchQuery] = useState('');
+  const [deptTypeFilter, setDeptTypeFilter] = useState('ALL');
   const [deptStatusFilter, setDeptStatusFilter] = useState('ALL');
   const [deptPage, setDeptPage] = useState(1);
   const [deptPageSize, setDeptPageSize] = useState(10);
@@ -63,74 +64,73 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [staffLoading, setStaffLoading] = useState(false);
 
-  // Fetch data từ backend (setState chỉ chạy sau await, không đồng bộ trong effect)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const todayStr = getVietnamTodayStr();
-        const [fetchedItems, dutyData] = await Promise.all([
-          departmentApi.getItems(),
-          dutyScheduleApi.getWeeklySchedule(todayStr, todayStr).catch((scheduleErr) => {
-            console.warn('Không thể tải lịch trực hôm nay:', scheduleErr);
-            return null;
-          }),
-        ]);
-        if (cancelled) return;
+  // Fetch data từ backend
+  const fetchData = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const todayStr = getVietnamTodayStr();
+      const [fetchedItems, dutyData] = await Promise.all([
+        departmentApi.getItems(),
+        dutyScheduleApi.getWeeklySchedule(todayStr, todayStr).catch((scheduleErr) => {
+          console.warn('Không thể tải lịch trực hôm nay:', scheduleErr);
+          return null;
+        }),
+      ]);
 
-        // Xây dựng map nhân sự (bác sĩ & KTV) trực hôm nay theo phòng
-        const staffDutyMap = {};
-        if (dutyData?.items && Array.isArray(dutyData.items)) {
-          dutyData.items.forEach((item) => {
-            if (
-              item.roomId &&
-              item.workDate === todayStr &&
-              (item.staffRole === 'DOCTOR' || item.staffRole === 'TECHNICIAN')
-            ) {
-              if (!staffDutyMap[item.roomId]) {
-                staffDutyMap[item.roomId] = [];
-              }
-              if (item.staffName && !staffDutyMap[item.roomId].includes(item.staffName)) {
-                staffDutyMap[item.roomId].push(item.staffName);
-              }
+      // Xây dựng map nhân sự (bác sĩ & KTV) trực hôm nay theo phòng
+      const staffDutyMap = {};
+      if (dutyData?.items && Array.isArray(dutyData.items)) {
+        dutyData.items.forEach((item) => {
+          if (
+            item.roomId &&
+            item.workDate === todayStr &&
+            (item.staffRole === 'DOCTOR' || item.staffRole === 'TECHNICIAN')
+          ) {
+            if (!staffDutyMap[item.roomId]) {
+              staffDutyMap[item.roomId] = [];
             }
-          });
-        }
-
-        if (Array.isArray(fetchedItems)) {
-          const mergedItems = fetchedItems.map((it) => {
-            if (it.unitType !== 'ROOM') return it;
-            const scheduledStaff = staffDutyMap[it.id];
-            const hasStaffScheduled = Boolean(
-              it.hasDoctorOnDutyToday || (scheduledStaff && scheduledStaff.length > 0)
-            );
-            const staffName =
-              (scheduledStaff && scheduledStaff.length > 0
-                ? scheduledStaff.join(', ')
-                : null) || it.doctorOnDutyToday;
-            return {
-              ...it,
-              hasDoctorOnDutyToday: hasStaffScheduled,
-              doctorOnDutyToday: staffName,
-            };
-          });
-          setItems(mergedItems);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        console.error('Lỗi tải dữ liệu khoa/phòng:', err);
-        toast.error(describeApiError(err, 'Không thể tải danh sách khoa/phòng'));
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+            if (item.staffName && !staffDutyMap[item.roomId].includes(item.staffName)) {
+              staffDutyMap[item.roomId].push(item.staffName);
+            }
+          }
+        });
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+
+      if (Array.isArray(fetchedItems)) {
+        const mergedItems = fetchedItems.map((it) => {
+          if (it.unitType !== 'ROOM') return it;
+          const scheduledStaff = staffDutyMap[it.id];
+          const hasStaffScheduled = Boolean(
+            it.hasDoctorOnDutyToday || (scheduledStaff && scheduledStaff.length > 0)
+          );
+          const staffName =
+            (scheduledStaff && scheduledStaff.length > 0
+              ? scheduledStaff.join(', ')
+              : null) || it.doctorOnDutyToday;
+          return {
+            ...it,
+            hasDoctorOnDutyToday: hasStaffScheduled,
+            doctorOnDutyToday: staffName,
+          };
+        });
+        setItems(mergedItems);
+      }
+    } catch (err) {
+      console.error('Lỗi tải dữ liệu khoa/phòng:', err);
+      toast.error(describeApiError(err, 'Không thể tải danh sách khoa/phòng'));
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchData(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchData]);
 
   // Danh sách các chuyên khoa để hiển thị dropdown
   const departmentsList = useMemo(() => {
@@ -222,12 +222,15 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
         dept.name?.toLowerCase().includes(query) ||
         dept.description?.toLowerCase().includes(query);
 
+      // Lọc theo Loại khoa (RỦI RO 6 / UC-12)
+      const matchType = deptTypeFilter === 'ALL' || dept.type === deptTypeFilter;
+
       // Lọc theo Trạng thái
       const matchStatus = deptStatusFilter === 'ALL' || dept.status === deptStatusFilter;
 
-      return matchSearch && matchStatus;
+      return matchSearch && matchType && matchStatus;
     });
-  }, [departmentsList, deptSearchQuery, deptStatusFilter]);
+  }, [departmentsList, deptSearchQuery, deptTypeFilter, deptStatusFilter]);
 
   // Phân trang cho Chuyên khoa
   const totalDeptPages = Math.max(1, Math.ceil(filteredDepartments.length / deptPageSize));
@@ -249,6 +252,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   // Đặt lại bộ lọc Tab 2 (Khoa)
   const handleResetDeptFilters = () => {
     setDeptSearchQuery('');
+    setDeptTypeFilter('ALL');
     setDeptStatusFilter('ALL');
     setDeptPage(1);
   };
@@ -313,10 +317,20 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
     const staff = staffOptions.find((option) => option.id === selectedStaffId);
     try {
       await accountApi.assignRoom(selectedStaffId, { roomId: roomAssignment.id });
-      toast.success(`Đã phân ${staff?.fullName || staff?.username || 'nhân sự'} vào phòng "${roomAssignment.name}"`);
+      const assignedName = staff?.fullName || staff?.username || 'nhân sự';
+      toast.success(`Đã phân ${assignedName} vào phòng "${roomAssignment.name}"`);
+      // Cập nhật ngay Người phụ trách (headPerson) trên bảng phòng và đồng bộ dữ liệu
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === roomAssignment.id && i.unitType === 'ROOM'
+            ? { ...i, headPerson: assignedName }
+            : i
+        )
+      );
       setRoomAssignment(null);
       setSelectedStaffId('');
       setStaffOptions([]);
+      fetchData();
     } catch (err) {
       toast.error(describeApiError(err, 'Không thể phân phòng'));
     }
@@ -339,27 +353,53 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       const activeDeptRoomsCount = deptRooms.filter((r) => r.status === 'ACTIVE').length;
 
       if (isDeactivating) {
-        // Cảnh báo khi ngưng hoạt động khoa
+        // RỦI RO 3: Chặn nếu ngưng chuyên khoa làm tắt toàn bộ phòng khám lâm sàng còn lại trong cơ sở
+        const activeExamRoomsInDept = deptRooms.filter(
+          (r) => r.type === 'EXAMINATION' && r.status === 'ACTIVE'
+        ).length;
+        const totalActiveExamRooms = allRoomsList.filter(
+          (r) => r.type === 'EXAMINATION' && r.status === 'ACTIVE'
+        ).length;
+        if (activeExamRoomsInDept > 0 && totalActiveExamRooms <= activeExamRoomsInDept) {
+          toast.error(
+            `Không thể tạm ngưng chuyên khoa "${item.name}": thao tác này sẽ ngừng hoạt động toàn bộ phòng khám lâm sàng còn lại trong cơ sở.`
+          );
+          return;
+        }
+
+        // Cảnh báo khi ngưng hoạt động khoa (Cascade ngưng hoạt động toàn bộ phòng trực thuộc)
         setConfirmDialog({
           title: 'Khóa chuyên khoa',
-          description: `Khoa này đang có ${activeDeptRoomsCount} phòng hoạt động. Khi tạm ngưng chuyên khoa, bạn sẽ không thể tạo thêm phòng mới thuộc khoa này. Bạn có chắc chắn muốn tiếp tục?`,
+          description: activeDeptRoomsCount > 0
+            ? `Chuyên khoa "${item.name}" đang có ${activeDeptRoomsCount} phòng hoạt động.\n\nKhi tạm ngưng chuyên khoa, toàn bộ các phòng trực thuộc sẽ tự động tạm ngưng hoạt động.\nLưu ý: Hệ thống sẽ từ chối nếu có bất kỳ phòng nào đang có bệnh nhân chờ, đang khám dở hoặc còn lịch trực trong các ngày tới.\n\nBạn có chắc chắn muốn tiếp tục?`
+            : `Bạn có chắc muốn tạm ngưng chuyên khoa "${item.name}"?\nBạn sẽ không thể tạo thêm phòng mới thuộc chuyên khoa này.`,
           confirmText: 'Khóa chuyên khoa',
           variant: 'destructive',
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-              // Chỉ chuyển chuyên khoa sang INACTIVE, không khóa các phòng liên quan
+              // Cập nhật chuyên khoa và toàn bộ phòng trực thuộc sang INACTIVE trên giao diện
               setItems((prev) =>
-                prev.map((i) =>
-                  i.id === item.id && i.unitType === 'DEPARTMENT'
-                    ? { ...i, status: 'INACTIVE' }
-                    : i
-                )
+                prev.map((i) => {
+                  if (i.id === item.id && i.unitType === 'DEPARTMENT') {
+                    return { ...i, status: 'INACTIVE' };
+                  }
+                  if (
+                    i.unitType === 'ROOM' &&
+                    (i.departmentId === item.id ||
+                      i.departmentId === item.departmentId ||
+                      i.departmentName === item.name)
+                  ) {
+                    return { ...i, status: 'INACTIVE' };
+                  }
+                  return i;
+                })
               );
               toast.success(
-                `Đã tạm ngưng chuyên khoa "${item.name}"!`
+                `Đã tạm ngưng chuyên khoa "${item.name}" và các phòng trực thuộc!`
               );
               setConfirmDialog(null);
+              fetchData();
             } catch (err) {
               console.error('Lỗi tạm ngưng chuyên khoa:', err);
               toast.error(describeApiError(err, 'Không thể tạm ngưng chuyên khoa'));
@@ -377,7 +417,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
           onConfirm: async () => {
             try {
               await departmentApi.toggleDepartmentStatus(item.id);
-              // Chỉ chuyển chuyên khoa sang ACTIVE, không thay đổi các phòng liên quan
+              // Chuyển chuyên khoa sang ACTIVE trên giao diện
               setItems((prev) =>
                 prev.map((i) =>
                   i.id === item.id && i.unitType === 'DEPARTMENT'
@@ -385,10 +425,9 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                     : i
                 )
               );
-              toast.success(
-                `Đã kích hoạt lại chuyên khoa "${item.name}"!`
-              );
+              toast.success(`Đã kích hoạt lại chuyên khoa "${item.name}"!`);
               setConfirmDialog(null);
+              fetchData();
             } catch (err) {
               console.error('Lỗi kích hoạt chuyên khoa:', err);
               toast.error(describeApiError(err, 'Không thể kích hoạt lại chuyên khoa'));
@@ -411,10 +450,23 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       return;
     }
 
+    // RỦI RO 3 (EF-06 / MSG94): Chặn nếu là phòng khám lâm sàng duy nhất còn hoạt động
+    if (isDeactivating && item.type === 'EXAMINATION') {
+      const activeExamRooms = allRoomsList.filter(
+        (r) => r.type === 'EXAMINATION' && r.status === 'ACTIVE'
+      );
+      if (activeExamRooms.length <= 1) {
+        toast.error(
+          `Không thể tạm ngưng phòng "${item.name}": đây là phòng khám duy nhất còn hoạt động nên không thể ngừng hoạt động.`
+        );
+        return;
+      }
+    }
+
     setConfirmDialog({
       title: isDeactivating ? 'Tạm ngưng hoạt động phòng' : 'Kích hoạt lại phòng khám',
       description: isDeactivating
-        ? `Bạn có chắc muốn tạm ngưng "${item.name}" (${item.code})?\nĐơn vị sẽ không hiển thị khi phân bổ lịch khám mới.`
+        ? `Bạn có chắc muốn tạm ngưng "${item.name}" (${item.code})?\nĐơn vị sẽ không hiển thị khi phân bổ lịch khám mới.\n\nLưu ý: Hệ thống sẽ từ chối nếu phòng đang có bệnh nhân chờ, đang khám dở hoặc vẫn còn ca trực trong các ngày tới.`
         : `Kích hoạt lại "${item.name}" (${item.code}) để sẵn sàng phục vụ tiếp nhận bệnh nhân?`,
       confirmText: isDeactivating ? 'Tạm ngưng' : 'Kích hoạt',
       variant: isDeactivating ? 'destructive' : 'mint',
@@ -715,12 +767,18 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
                   setDeptSearchQuery(val);
                   setDeptPage(1);
                 }}
+                typeFilter={deptTypeFilter}
+                setTypeFilter={(val) => {
+                  setDeptTypeFilter(val);
+                  setDeptPage(1);
+                }}
                 statusFilter={deptStatusFilter}
                 setStatusFilter={(val) => {
                   setDeptStatusFilter(val);
                   setDeptPage(1);
                 }}
                 onReset={handleResetDeptFilters}
+                onAdd={handleOpenCreateDept}
               />
 
               {/* Bảng dữ liệu Khoa */}
