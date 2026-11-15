@@ -25,6 +25,13 @@ import { createAccountApi } from '../../apis/accountApi';
 import { describeApiError } from '../../utils/describeApiError';
 import { getVietnamTodayStr, isShiftPast } from '../../utils/vietnamTimeUtils';
 
+/**
+ * Tiện ích xác định ngày Thứ 2 đầu tuần của một mốc ngày bất kỳ.
+ * Hỗ trợ nhận diện chuỗi ngày chuẩn ISO ("YYYY-MM-DD") hoặc đối tượng Date.
+ * 
+ * @param {string | Date} d Mốc ngày cần tính toán
+ * @returns {Date} Đối tượng Date đại diện cho ngày Thứ 2 lúc 00:00:00
+ */
 function getMondayOfDate(d) {
   let date;
   if (typeof d === 'string' && d.includes('-')) {
@@ -40,6 +47,12 @@ function getMondayOfDate(d) {
   return monday;
 }
 
+/**
+ * Tiện ích chuyển đổi đối tượng Date sang chuỗi định dạng chuẩn ISO 'YYYY-MM-DD'.
+ *
+ * @param {Date} date Đối tượng ngày
+ * @returns {string} Chuỗi ngày dạng 'YYYY-MM-DD'
+ */
 function formatDateISO(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -47,6 +60,17 @@ function formatDateISO(date) {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Màn hình Quản lý lịch trực nhân viên (ScheduleManagementPage).
+ * 
+ * Chức năng chính:
+ * 1. Hiển thị ma trận tuần (Thứ 2 -> Chủ Nhật) theo Khoa và Phòng khám.
+ * 2. Hỗ trợ lọc ca làm việc: [Tất cả ca], [Ca Sáng], [Ca Chiều].
+ * 3. Cho phép Admin phân công ca trực, đổi nhân viên, chỉnh sửa ghi chú và xóa ca trực.
+ * 4. Tính năng "Sao chép tuần trước" giúp tạo nhanh lịch cho tuần mới chỉ với 1 click.
+ * 5. Tùy chỉnh linh hoạt khung giờ bắt đầu và kết thúc của các ca trực trong tuần.
+ * 6. Tích hợp chặt chẽ quy tắc: Ngăn chặn xóa hoặc đổi ca trực khi phòng đang có bệnh nhân.
+ */
 export function ScheduleManagementPage({
   currentAdmin,
   currentUser,
@@ -116,7 +140,17 @@ export function ScheduleManagementPage({
   const startDateStr = days[0].dateStr;
   const endDateStr = days[6].dateStr;
 
-  // Load Staff & Rooms metadata (Hỗ trợ tất cả role xem lịch trực, chỉ Admin mới tải toàn bộ danh sách account để phân công)
+  // =========================================================================
+  // METADATA LOADING (PHÒNG BAN & NHÂN VIÊN)
+  // =========================================================================
+  /**
+   * Tải dữ liệu metadata danh mục Khoa/Phòng và danh sách Bác sĩ / Kỹ thuật viên.
+   * - Hỗ trợ tất cả role xem lịch trực (phòng ban được hiển thị cho mọi người dùng).
+   * - Phân quyền Admin: Chỉ Admin mới tải toàn bộ tài khoản để phục vụ phân công ca trực trong modal.
+   * - Tự động duyệt hết các trang API của `accountApi.list({ page, size: 50 })`.
+   * - Lọc nhân viên có vai trò DOCTOR hoặc TECHNICIAN ở trạng thái ACTIVE (không lấy tài khoản bị khóa).
+   * - Tự động liên kết nhân viên với phòng khám cố định (theo roomId, roomCode, roomName hoặc headPerson).
+   */
   useEffect(() => {
     let isMounted = true;
     async function loadMetadata() {
@@ -196,7 +230,17 @@ export function ScheduleManagementPage({
     return () => { isMounted = false; };
   }, [isAdmin]);
 
-  // Fetch Schedules for current week (supports silent mode to prevent screen flickering/layout jumps)
+  // =========================================================================
+  // LẤY DỮ LIỆU LỊCH TRỰC TUẦN (DATA FETCHING)
+  // =========================================================================
+  /**
+   * Tải danh sách phân công lịch trực trong tuần (từ Thứ 2 đến Chủ Nhật) và cấu hình ca trực.
+   * 
+   * @param {boolean} isSilent 
+   *        - false: Bật trạng thái loading toàn trang (thường dùng khi chuyển tuần hoặc lần đầu vào trang).
+   *        - true: Chế độ ngầm (silent mode) không bật loading skeleton, giúp cập nhật dữ liệu nền
+   *                sau khi thêm/sửa/xóa mà không làm giật lag hay chớp nháy giao diện.
+   */
   const fetchSchedules = useCallback(async (isSilent = false) => {
     if (!isSilent) {
       setLoading(true);
@@ -223,26 +267,57 @@ export function ScheduleManagementPage({
     return () => window.clearTimeout(timer);
   }, [fetchSchedules]);
 
-  // Week Navigation Handlers
+  // =========================================================================
+  // ĐIỀU HƯỚNG TUẦN (WEEK NAVIGATION)
+  // =========================================================================
+  /**
+   * Lùi về tuần trước (-7 ngày tính từ Thứ 2 hiện tại).
+   */
   const handlePrevWeek = () => {
     const prev = new Date(currentMonday);
     prev.setDate(prev.getDate() - 7);
     setCurrentMonday(prev);
   };
 
+  /**
+   * Tiến tới tuần sau (+7 ngày tính từ Thứ 2 hiện tại).
+   */
   const handleNextWeek = () => {
     const next = new Date(currentMonday);
     next.setDate(next.getDate() + 7);
     setCurrentMonday(next);
   };
 
+  /**
+   * Nhảy về tuần hiện tại (chứa ngày hôm nay theo múi giờ Việt Nam).
+   */
   const handleCurrentWeek = () => {
     setCurrentMonday(getMondayOfDate(getVietnamTodayStr()));
   };
 
   const todayStr = getVietnamTodayStr();
 
-  // Open Add Duty Modal for a specific room and shift slot (Admin: phân công, Role khác: xem chi tiết)
+  // =========================================================================
+  // XỬ LÝ PHÂN CÔNG & XEM CHI TIẾT CA TRỰC (CRUD MODALS)
+  // =========================================================================
+  /**
+   * Mở modal thêm phân công ca trực mới tại một ô cụ thể (Phòng khám, Ngày trực, Ca trực).
+   * 
+   * Quy trình nghiệp vụ:
+   * 1. Kiểm tra ca quá khứ: Nếu ca đã kết thúc hoặc rơi vào ngày quá khứ -> chặn và cảnh báo toast.
+   * 2. Kiểm tra trạng thái phòng: Nếu phòng khám tạm ngưng hoạt động (INACTIVE) -> chặn phân công.
+   * 3. Phân quyền:
+   *    - Nhân viên thường (readOnly / non-Admin): Chỉ mở modal ở chế độ xem chi tiết.
+   *    - Admin: Tiến hành phân loại phòng để chuẩn bị danh sách nhân sự phù hợp:
+   *      + Phòng Khám bệnh -> Yêu cầu vai trò Bác sĩ (DOCTOR).
+   *      + Phòng Cận lâm sàng / CDHA / Xét nghiệm -> Yêu cầu vai trò Kỹ thuật viên (TECHNICIAN).
+   *    - Lọc nghiêm ngặt nhân sự: Chỉ nhân sự được chỉ định vào đúng phòng này (hoặc phụ trách phòng này)
+   *      mới xuất hiện trong danh sách lựa chọn.
+   * 
+   * @param {string | number} roomId ID phòng khám cần phân công
+   * @param {string} dateStr Ngày trực dạng YYYY-MM-DD
+   * @param {'MORNING' | 'AFTERNOON'} shift Ca trực (Sáng hoặc Chiều)
+   */
   const handleOpenAddForSlot = (roomId, dateStr, shift) => {
     if (isShiftPast(dateStr, shift, shiftConfig)) {
       toast.error('Ca trực trong quá khứ chưa phân công không thể thao tác');
@@ -334,7 +409,11 @@ export function ScheduleManagementPage({
     setModalOpen(true);
   };
 
-  // Open Edit / View Detail Duty Modal (Admin: sửa/gỡ ca trực, Role khác: chỉ xem chi tiết)
+  /**
+   * Mở modal chỉnh sửa ca trực (Admin) hoặc xem chi tiết ca trực đã phân công (Role khác).
+   * 
+   * @param {Object} item Thông tin ca trực được click từ ma trận lịch
+   */
   const handleOpenEdit = (item) => {
     setEditingItem({
       ...item,
@@ -344,7 +423,20 @@ export function ScheduleManagementPage({
     setModalOpen(true);
   };
 
-  // Save Duty Handler (Admin only)
+  /**
+   * Lưu phân công ca trực (Thêm mới hoặc Cập nhật ca trực đã có).
+   * 
+   * Quy trình:
+   * 1. Kiểm tra quyền Admin và đảm bảo ca trực không phải ca đã qua giờ/kết thúc.
+   * 2. Gọi API `dutyScheduleApi.saveDuty(formData)`.
+   * 3. Thực hiện Optimistic Update: Cập nhật ngay bản ghi vừa lưu vào mảng `scheduleItems` trên giao diện
+   *    giúp người dùng thấy kết quả ngay tức khắc không có độ trễ.
+   * 4. Gọi `fetchSchedules(true)` chạy ngầm (silent) để đồng bộ hoàn chỉnh dữ liệu từ máy chủ.
+   * 5. Tự động xử lý lỗi nghiệp vụ BR-113: Nếu phòng khám đang có bệnh nhân chờ hoặc khám dở,
+   *    backend từ chối và hiển thị thông báo lỗi rõ ràng qua `describeApiError`.
+   * 
+   * @param {Object} formData Dữ liệu ca trực từ DutyScheduleModal (id, workDate, shift, roomId, staffAccountId, notes)
+   */
   const handleSaveDuty = async (formData) => {
     if (!isAdmin) return;
     if (isShiftPast(formData.workDate, formData.shift, shiftConfig)) {
@@ -378,7 +470,15 @@ export function ScheduleManagementPage({
     }
   };
 
-  // Delete Duty Handlers (Admin only)
+  // =========================================================================
+  // XỬ LÝ XOÁ CA TRỰC (DELETE HANDLERS - ADMIN ONLY)
+  // =========================================================================
+  /**
+   * Bước 1: Kiểm tra hợp lệ và mở hộp thoại xác nhận xoá ca trực.
+   * - Chặn ngay nếu ca trực đã qua giờ hoặc nằm trong quá khứ.
+   * 
+   * @param {Object} item Ca trực cần xoá
+   */
   const handleConfirmDelete = (item) => {
     if (!isAdmin) return;
     if (isShiftPast(item.workDate, item.shift, shiftConfig)) {
@@ -390,6 +490,14 @@ export function ScheduleManagementPage({
     setDeleteConfirmOpen(true);
   };
 
+  /**
+   * Bước 2: Thực thi lệnh xoá ca trực trên Backend sau khi người dùng xác nhận.
+   * - Áp dụng cơ chế Optimistic UI: Tạm thời loại bỏ item khỏi danh sách hiển thị trên client.
+   * - Gọi API `dutyScheduleApi.deleteDuty(targetId)`.
+   * - Nếu thành công: Hiển thị toast thành công và gọi đồng bộ ngầm `fetchSchedules(true)`.
+   * - Nếu thất bại (VD: vi phạm BR-113 do phòng đang có bệnh nhân chờ/khám dở):
+   *   Hiển thị thông báo lỗi chi tiết và gọi `fetchSchedules(true)` để khôi phục lại ca trực trên UI.
+   */
   const executeDeleteDuty = async () => {
     if (!isAdmin || !itemToDelete) return;
     if (isShiftPast(itemToDelete.workDate, itemToDelete.shift, shiftConfig)) {
@@ -418,7 +526,9 @@ export function ScheduleManagementPage({
     }
   };
 
-  // Copy previous week handlers (Admin only)
+  // =========================================================================
+  // SAO CHÉP LỊCH TRỰC TỪ TUẦN TRƯỚC (COPY PREVIOUS WEEK - ADMIN ONLY)
+  // =========================================================================
   const prevMondayDate = useMemo(() => {
     const d = new Date(currentMonday);
     d.setDate(d.getDate() - 7);
@@ -439,6 +549,10 @@ export function ScheduleManagementPage({
     return `${d1}/${m1} - ${d2}/${m2}`;
   }, [prevMondayDate, prevSundayDate]);
 
+  /**
+   * Mở modal xác nhận sao chép ca trực từ tuần trước sang tuần này.
+   * - Chặn thao tác nếu tuần hiện tại đang xem đã trôi qua hoàn toàn trong quá khứ.
+   */
   const handleRequestCopy = () => {
     if (!isAdmin) return;
     if (endDateStr < todayStr) {
@@ -448,6 +562,16 @@ export function ScheduleManagementPage({
     setCopyConfirmOpen(true);
   };
 
+  /**
+   * Thực thi sao chép toàn bộ phân công của tuần trước sang tuần hiện tại:
+   * 1. Tải danh sách ca trực của 7 ngày tuần trước qua `dutyScheduleApi.getWeeklySchedule`.
+   * 2. Tự động dịch chuyển ngày của từng ca trực: `itemDate + 7 ngày`.
+   * 3. Lọc bỏ các ca không hợp lệ:
+   *    - Ca rơi vào ngày/giờ đã qua trong tuần này (`isShiftPast`).
+   *    - Ca thuộc phòng khám đang tạm ngừng hoạt động (`INACTIVE`).
+   * 4. Gọi API `dutyScheduleApi.batchSaveWeeklySchedule` để lưu hàng loạt các ca trực mới.
+   * 5. Làm mới lại danh sách lịch trực hiển thị trên giao diện.
+   */
   const executeCopyPreviousWeek = async () => {
     if (!isAdmin) return;
     setCopyConfirmOpen(false);
@@ -511,7 +635,14 @@ export function ScheduleManagementPage({
     }
   };
 
-  // Handler cập nhật cấu hình khung giờ ca trực cho tuần
+  // =========================================================================
+  // CẤU HÌNH KHUNG GIỜ CA TRỰC (SHIFT CONFIG - ADMIN ONLY)
+  // =========================================================================
+  /**
+   * Lưu cấu hình khung giờ làm việc ca sáng và ca chiều trong tuần.
+   * 
+   * @param {Object} newConfig Cấu hình mới gồm { morningStartTime, morningEndTime, afternoonStartTime, afternoonEndTime }
+   */
   const handleSaveShiftConfig = async (newConfig) => {
     try {
       const updated = await dutyScheduleApi.updateShiftConfig(newConfig);
@@ -727,7 +858,7 @@ export function ScheduleManagementPage({
           title="Xác nhận xoá ca trực"
           description={`Bạn có chắc chắn muốn huỷ phân công ca trực của ${itemToDelete?.staffName || 'nhân viên này'} vào ngày ${itemToDelete?.workDate || ''}?${
             itemToDelete?.workDate === todayStr
-              ? '\n\nLưu ý: Nếu phòng khám đang có bệnh nhân chờ hoặc đang có lượt khám/dịch vụ dở dang trong ca trực hôm nay (BR-113), hệ thống sẽ từ chối xoá.'
+              ? '\n\nLưu ý: Nếu phòng khám đang có bệnh nhân chờ hoặc đang có lượt khám/dịch vụ dở dang trong ca trực hôm nay, hệ thống sẽ từ chối xoá.'
               : ''
           }`}
           confirmText="Xoá ca trực"

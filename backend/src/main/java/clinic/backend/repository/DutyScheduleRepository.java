@@ -36,4 +36,7 @@ public interface DutyScheduleRepository extends JpaRepository<DutySchedule, UUID
 
     // Kiểm tra phòng đã có người trực chưa
     boolean existsByRoomIdAndWorkDateAndShiftAndIdNot(UUID roomId, LocalDate workDate, DutyShift shift, UUID id);
+
+    // Kiểm tra phòng có ca trực nào trong tương lai (sau ngày chỉ định)
+    boolean existsByRoomIdAndWorkDateAfter(UUID roomId, LocalDate workDate);
 }

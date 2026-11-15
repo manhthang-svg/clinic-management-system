@@ -29,4 +29,6 @@ public interface RoomRepository extends JpaRepository<Room, UUID> {
 
     List<Room> findByTypeAndStatusOrderByRoomCodeAsc(
             RoomType type, ActivationStatus status);
+
+    long countByTypeAndStatus(RoomType type, ActivationStatus status);
 }
