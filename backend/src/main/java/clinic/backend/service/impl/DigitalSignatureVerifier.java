@@ -35,6 +35,7 @@ import clinic.backend.service.CertificateStatusService;
 import clinic.backend.service.CertificateStatusService.CertificateStatus;
 import clinic.backend.service.TimestampAuthority;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1Primitive;
@@ -194,31 +195,16 @@ public class DigitalSignatureVerifier {
 
         // BR-59-10 step 6: the time stamp over the signature value fixes the signing time.
         byte[] tokenBytes = timestampAuthority.timestamp(signer.getSignature());
-        Instant signedAt;
-        try {
-            TimeStampToken token = new TimeStampToken(new CMSSignedData(tokenBytes));
-            Optional<X509Certificate> tsaCertificate = timeStampCertificate(token);
-            if (tsaCertificate.isEmpty()
-                    || trustedIssuer(tsaCertificate.get()).isEmpty()
-                    || !MessageDigest.isEqual(token.getTimeStampInfo().getMessageImprintDigest(),
-                            sha256(signer.getSignature()))) {
-                return Verification.failed("TIMESTAMP_INVALID");
-            }
-            token.validate(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(tsaCertificate.get()));
-            signedAt = token.getTimeStampInfo().getGenTime().toInstant();
-        } catch (CMSException | TSPException | IOException | OperatorCreationException exception) {
+        Optional<Instant> stampedAt = timeStampTime(tokenBytes, signer.getSignature());
+        if (stampedAt.isEmpty()) {
             return Verification.failed("TIMESTAMP_INVALID");
         }
+        Instant signedAt = stampedAt.get();
 
         Optional<X509Certificate> issuer = trustedIssuer(signerCertificate);
-        if (issuer.isEmpty() || !validPath(signerCertificate, issuer.get(), signedAt)) {
-            return Verification.failed("CHAIN_NOT_TRUSTED");
-        }
-        if (validityProblem(signerCertificate, signedAt) != null) {
-            return Verification.failed("CERTIFICATE_NOT_VALID_AT_SIGNING_TIME");
-        }
-        if (validityProblem(issuer.get(), signedAt) != null) {
-            return Verification.failed("CA_CERTIFICATE_INVALID");
+        String chainProblem = chainProblem(signerCertificate, issuer, signedAt);
+        if (chainProblem != null) {
+            return Verification.failed(chainProblem);
         }
         CertificateStatus signerStatus = statusService.status(signerCertificate, signedAt);
         CertificateStatus issuerStatus = statusService.status(issuer.get(), signedAt);
@@ -232,6 +218,128 @@ public class DigitalSignatureVerifier {
                 signedAt, tokenBytes, pkiPath(List.of(signerCertificate, issuer.get())),
                 evidence(signedAt, Map.of("signer", signerStatus, "issuer", issuerStatus),
                         List.of(signerCertificate, issuer.get())));
+    }
+
+    /**
+     * BR-59-16: re-runs the checks of BR-59-10 step 5 on a stored CAdES-T signature without asking any service, so the
+     * status can be shown wherever the prescription is shown (UC-91, UC-60). The signature still matches the stored
+     * payload and the certificate named on the signature row, the embedded time stamp covers it, the certificate
+     * chains to a CA that is trusted now and both were valid at the time-stamp time, and the status evidence kept at
+     * signing time says both were good. Returns the failure reason, or null when the signature is valid.
+     */
+    public String reverify(
+            byte[] storedSignedData, byte[] payload, String certificateSerial, String certificateIssuer,
+            String evidence) {
+        if (storedSignedData == null || payload == null) {
+            return "SIGNATURE_MISSING";
+        }
+        SignerInformation signer;
+        X509Certificate signerCertificate;
+        try {
+            CMSSignedData cms = new CMSSignedData(new CMSProcessableByteArray(payload), storedSignedData);
+            Collection<SignerInformation> signers = cms.getSignerInfos().getSigners();
+            if (signers.size() != 1) {
+                return "MALFORMED_SIGNATURE";
+            }
+            signer = signers.iterator().next();
+            @SuppressWarnings("unchecked")
+            Collection<X509CertificateHolder> matches = cms.getCertificates()
+                    .getMatches((Selector<X509CertificateHolder>) (Selector<?>) signer.getSID());
+            if (matches.isEmpty()) {
+                return "SIGNER_CERTIFICATE_MISSING";
+            }
+            signerCertificate = new JcaX509CertificateConverter().getCertificate(matches.iterator().next());
+        } catch (CMSException | GeneralSecurityException | RuntimeException exception) {
+            return "MALFORMED_SIGNATURE";
+        }
+        if (!signerCertificate.getSerialNumber().toString(16).equalsIgnoreCase(certificateSerial)
+                || !signerCertificate.getIssuerX500Principal().getName().equals(certificateIssuer)) {
+            return "CERTIFICATE_NOT_REGISTERED_FOR_SIGNER";
+        }
+        if (!bindsSigningCertificate(signer, signerCertificate)) {
+            return "SIGNING_CERTIFICATE_ATTRIBUTE_INVALID";
+        }
+        try {
+            if (!signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(signerCertificate))) {
+                return "SIGNATURE_MISMATCH";
+            }
+        } catch (CMSException | OperatorCreationException exception) {
+            return "SIGNATURE_MISMATCH";
+        }
+        AttributeTable unsigned = signer.getUnsignedAttributes();
+        Attribute stamp = unsigned == null ? null : unsigned.get(PKCSObjectIdentifiers.id_aa_signatureTimeStampToken);
+        if (stamp == null || stamp.getAttrValues().size() != 1) {
+            return "TIMESTAMP_INVALID";
+        }
+        Optional<Instant> signedAt;
+        try {
+            signedAt = timeStampTime(
+                    stamp.getAttrValues().getObjectAt(0).toASN1Primitive().getEncoded(), signer.getSignature());
+        } catch (IOException exception) {
+            return "TIMESTAMP_INVALID";
+        }
+        if (signedAt.isEmpty()) {
+            return "TIMESTAMP_INVALID";
+        }
+        String chainProblem = chainProblem(signerCertificate, trustedIssuer(signerCertificate), signedAt.get());
+        if (chainProblem != null) {
+            return chainProblem;
+        }
+        return evidenceProblem(evidence);
+    }
+
+    /** The statuses recorded at signing time (BR-59-10 step 7): both certificates were good. */
+    private String evidenceProblem(String evidence) {
+        if (evidence == null) {
+            return "EVIDENCE_MISSING";
+        }
+        try {
+            JsonNode statuses = json.readTree(evidence).path("statuses");
+            if (!CertificateStatusService.State.GOOD.name().equals(statuses.path("signer").path("state").asText())) {
+                return "CERTIFICATE_REVOKED";
+            }
+            if (!CertificateStatusService.State.GOOD.name().equals(statuses.path("issuer").path("state").asText())) {
+                return "CA_CERTIFICATE_INVALID";
+            }
+            return null;
+        } catch (JsonProcessingException exception) {
+            return "EVIDENCE_MISSING";
+        }
+    }
+
+    /**
+     * BR-59-10 step 6: the time of a time-stamp token of a trusted time-stamp unit over this signature value, or empty
+     * when the token is not one.
+     */
+    private Optional<Instant> timeStampTime(byte[] tokenBytes, byte[] signatureValue) {
+        try {
+            TimeStampToken token = new TimeStampToken(new CMSSignedData(tokenBytes));
+            Optional<X509Certificate> tsaCertificate = timeStampCertificate(token);
+            if (tsaCertificate.isEmpty()
+                    || trustedIssuer(tsaCertificate.get()).isEmpty()
+                    || !MessageDigest.isEqual(token.getTimeStampInfo().getMessageImprintDigest(),
+                            sha256(signatureValue))) {
+                return Optional.empty();
+            }
+            token.validate(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(tsaCertificate.get()));
+            return Optional.of(token.getTimeStampInfo().getGenTime().toInstant());
+        } catch (CMSException | TSPException | IOException | OperatorCreationException | RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
+    /** The certificate chains to a trusted CA at the signing time, and it and its CA were valid then. */
+    private static String chainProblem(X509Certificate certificate, Optional<X509Certificate> issuer, Instant at) {
+        if (issuer.isEmpty() || !validPath(certificate, issuer.get(), at)) {
+            return "CHAIN_NOT_TRUSTED";
+        }
+        if (validityProblem(certificate, at) != null) {
+            return "CERTIFICATE_NOT_VALID_AT_SIGNING_TIME";
+        }
+        if (validityProblem(issuer.get(), at) != null) {
+            return "CA_CERTIFICATE_INVALID";
+        }
+        return null;
     }
 
     /** The signing-certificate-v2 attribute names this certificate by its SHA-256 (ETSI EN 319 122-1). */

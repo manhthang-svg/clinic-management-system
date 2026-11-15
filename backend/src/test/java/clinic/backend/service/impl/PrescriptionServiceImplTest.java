@@ -22,6 +22,10 @@ import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
+import clinic.backend.entity.PrescriptionDiagnosis;
+import clinic.backend.entity.PrescriptionSubmission;
+import clinic.backend.entity.RecordSignature;
+import clinic.backend.entity.SigningRequest;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.entity.VitalSign;
@@ -31,7 +35,10 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicineControlGroup;
+import clinic.backend.enums.PrescriptionSubmissionResult;
+import clinic.backend.enums.RecordSignatureDocumentType;
 import clinic.backend.enums.Role;
+import clinic.backend.enums.SigningRequestStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
@@ -41,6 +48,7 @@ import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
+import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.PrescriptionSubmissionRepository;
@@ -96,6 +104,10 @@ class PrescriptionServiceImplTest {
     private SigningRequestRepository signingRequestRepository;
     @Mock
     private RemoteSigningGateway signingGateway;
+    @Mock private PrescriptionSubmissionRepository submissionRepository;
+    @Mock private RecordSignatureRepository recordSignatureRepository;
+    @Mock private MedicalRecordRepository medicalRecordRepository;
+    @Mock private DigitalSignatureVerifier signatureVerifier;
     private PrescriptionServiceImpl service;
     private ConcludingVisitGuard.Context context;
     private ClinicFacility facility;
@@ -108,9 +120,8 @@ class PrescriptionServiceImplTest {
                 guard, conclusionRepository, prescriptionRepository, medicineRepository, historyRepository,
                 longTermCodeRepository, clinicFacilityRepository, staffAccountRepository, vitalSignRepository,
                 followUpRepository, auditLogService, mock(StaffSigningCertificateRepository.class),
-                signingRequestRepository, mock(PrescriptionSubmissionRepository.class),
-                mock(RecordSignatureRepository.class), signingGateway,
-                new UuidV7Generator(clock, new SecureRandom()), clock);
+                signingRequestRepository, submissionRepository, recordSignatureRepository, signingGateway,
+                medicalRecordRepository, signatureVerifier, new UuidV7Generator(clock, new SecureRandom()), clock);
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1990, 1, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "Hà Nội", null, null,
@@ -356,6 +367,191 @@ class PrescriptionServiceImplTest {
                 });
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void deletesAPendingPrescriptionAndAuditsTheRemovedValues() {
+        Prescription prescription = prescriptionById();
+
+        service.delete(principal(), prescription.getId());
+
+        verify(prescriptionRepository).delete(prescription);
+        ArgumentCaptor<Map<String, Object>> before = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> after = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordEntityChange(
+                eq(DOCTOR_ID), eq(prescription.getId()), eq(AuditLogAction.DELETE), eq("prescriptions"),
+                before.capture(), after.capture(), eq(NOW));
+        assertThat(before.getValue())
+                .containsEntry("prescriptionCode", "79001abc1234-c")
+                .containsEntry("notes", "Tái khám nếu sốt")
+                .containsKey("lines");
+        assertThat(after.getValue()).containsOnlyKeys(before.getValue().keySet()).containsValue(null);
+    }
+
+    @Test
+    void cancelsThePendingSigningRequestOfADeletedPrescription() {
+        Prescription prescription = prescriptionById();
+        SigningRequest pending = mock(SigningRequest.class);
+        when(pending.getProviderTransactionId()).thenReturn("tx-1");
+        when(signingRequestRepository.findByDocumentTypeAndDocumentIdAndStatus(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId(), SigningRequestStatus.PENDING))
+                .thenReturn(Optional.of(pending));
+
+        service.delete(principal(), prescription.getId());
+
+        verify(signingGateway).cancel("tx-1");
+        verify(pending).markCancelled(NOW);
+    }
+
+    @Test
+    void refusesToDeleteAPrescriptionThatWasSent() {
+        Prescription prescription = prescriptionById();
+        prescription.recordSubmission(PrescriptionSubmissionResult.REJECTED, NOW);
+
+        assertThatThrownBy(() -> service.delete(principal(), prescription.getId()))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_ALREADY_SENT));
+        verify(prescriptionRepository, never()).delete(any(Prescription.class));
+    }
+
+    @Test
+    void refusesToDeleteAPendingPrescriptionThatHasASignature() {
+        Prescription prescription = prescriptionById();
+        when(recordSignatureRepository.existsByDocumentTypeAndDocumentId(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(principal(), prescription.getId()))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRESCRIPTION_ALREADY_SENT));
+        verify(prescriptionRepository, never()).delete(any(Prescription.class));
+    }
+
+    @Test
+    void listsEverySendNewestFirstWithItsOwnSignatureVerifiedAgain() {
+        Prescription prescription = prescriptionById();
+        Instant firstSent = NOW.minusSeconds(600);
+        PrescriptionSubmission second = new PrescriptionSubmission(UUID.randomUUID(), NOW, prescription.getId(),
+                (short) 2, DOCTOR_ID, NOW, PrescriptionSubmissionResult.ACCEPTED, null, NOW);
+        PrescriptionSubmission first = new PrescriptionSubmission(UUID.randomUUID(), firstSent, prescription.getId(),
+                (short) 1, DOCTOR_ID, firstSent, PrescriptionSubmissionResult.REJECTED, "[\"Sai mã bác sĩ\"]",
+                firstSent);
+        when(submissionRepository.findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()))
+                .thenReturn(List.of(second, first));
+        RecordSignature firstSignature = signature(firstSent, "01");
+        RecordSignature secondSignature = signature(NOW, "02");
+        when(recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId()))
+                .thenReturn(List.of(firstSignature, secondSignature));
+        when(staffAccountRepository.findAllById(any())).thenReturn(List.of(context.doctor()));
+        when(signatureVerifier.reverify(any(), any(), eq("01"), any(), any())).thenReturn("CERTIFICATE_REVOKED");
+        when(signatureVerifier.reverify(any(), any(), eq("02"), any(), any())).thenReturn(null);
+
+        var history = service.submissions(principal(), prescription.getId());
+
+        assertThat(history).extracting(PrescriptionResponse.Submission::attemptNo).containsExactly((short) 2, (short) 1);
+        assertThat(history.get(0).certificateSerial()).isEqualTo("02");
+        assertThat(history.get(0).signatureValid()).isTrue();
+        assertThat(history.get(0).submittedBy()).isEqualTo("Bác sĩ An");
+        assertThat(history.get(1).certificateSerial()).isEqualTo("01");
+        assertThat(history.get(1).signatureValid()).isFalse();
+        assertThat(history.get(1).signatureFailureReason()).isEqualTo("CERTIFICATE_REVOKED");
+        assertThat(history.get(1).errors()).containsExactly("Sai mã bác sĩ");
+    }
+
+    @Test
+    void printsTheAcceptedPrescriptionWithTheSentDiagnosesAndTheVerifiedSignature() {
+        Prescription prescription = acceptedPrescriptionById();
+        when(facility.getTenCskcb()).thenReturn("Phòng khám METPH");
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(context.doctor()));
+
+        var form = service.preparePrint(principal(), prescription.getId());
+
+        assertThat(form.prescriptionCode()).isEqualTo("79001abc1234-c");
+        assertThat(form.facility().name()).isEqualTo("Phòng khám METPH");
+        assertThat(form.patient().fullName()).isEqualTo("Nguyễn Văn An");
+        assertThat(form.patient().gender()).isEqualTo("Nam");
+        assertThat(form.diagnoses()).extracting(item -> item.code()).containsExactly("J02.9");
+        assertThat(form.followUpDate()).isEqualTo(LocalDate.of(2026, 11, 10));
+        assertThat(form.lines()).singleElement().satisfies(line -> {
+            assertThat(line.activeIngredient()).isEqualTo("Amoxicilin");
+            assertThat(line.name()).isEqualTo("Amoxicilin 500mg");
+            assertThat(line.quantity()).isEqualByComparingTo("21");
+        });
+        assertThat(form.signature().certificateSerial()).isEqualTo("02");
+        assertThat(form.signature().signatureValid()).isTrue();
+        assertThat(form.printedAt()).isEqualTo(NOW);
+        assertThat(form.printedBy()).isEqualTo("Bác sĩ An");
+        assertThat(prescription.getPrintedAt()).isEqualTo(NOW);
+        verify(auditLogService).recordBusinessChange(
+                eq(DOCTOR_ID), eq(AuditLogAction.PRINT), eq("prescriptions"), eq(prescription.getId()), eq("DK0001"),
+                eq(Map.of("prescriptionCode", "79001abc1234-c", "reprint", false)), eq(NOW));
+    }
+
+    @Test
+    void keepsTheFirstPrintTimeAndAuditsAReprint() {
+        Prescription prescription = acceptedPrescriptionById();
+        prescription.markPrinted(EARLIER);
+
+        service.preparePrint(principal(), prescription.getId());
+
+        assertThat(prescription.getPrintedAt()).isEqualTo(EARLIER);
+        verify(prescriptionRepository, never()).save(any());
+        verify(auditLogService).recordBusinessChange(
+                eq(DOCTOR_ID), eq(AuditLogAction.PRINT), eq("prescriptions"), eq(prescription.getId()), eq("DK0001"),
+                eq(Map.of("prescriptionCode", "79001abc1234-c", "reprint", true)), eq(NOW));
+    }
+
+    @Test
+    void previewsWithoutRecordingAPrint() {
+        Prescription prescription = acceptedPrescriptionById();
+
+        var form = service.printPreview(principal(), prescription.getId());
+
+        assertThat(form.printedAt()).isNull();
+        assertThat(form.printedBy()).isNull();
+        assertThat(prescription.getPrintedAt()).isNull();
+        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
+    }
+
+    @Test
+    void refusesToPrintAPrescriptionThatWasNotAccepted() {
+        Prescription prescription = prescriptionById();
+        prescription.recordSubmission(PrescriptionSubmissionResult.REJECTED, NOW);
+
+        assertThatThrownBy(() -> service.preparePrint(principal(), prescription.getId()))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.PRESCRIPTION_NOT_PRINTABLE);
+        assertThat(prescription.getPrintedAt()).isNull();
+        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
+    }
+
+    /** A prescription accepted on its second send, with the diagnoses and follow-up date sent with it. */
+    private Prescription acceptedPrescriptionById() {
+        Prescription prescription = prescriptionById();
+        prescription.replaceDiagnoses(List.of(new PrescriptionDiagnosis(
+                UUID.randomUUID(), NOW, prescription, "J02.9", "Viêm họng cấp", (short) 1)),
+                LocalDate.of(2026, 11, 10), NOW);
+        prescription.recordSubmission(PrescriptionSubmissionResult.ACCEPTED, NOW);
+        PrescriptionSubmission accepted = new PrescriptionSubmission(UUID.randomUUID(), NOW, prescription.getId(),
+                (short) 2, DOCTOR_ID, NOW, PrescriptionSubmissionResult.ACCEPTED, null, NOW);
+        lenient().when(submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()))
+                .thenReturn(Optional.of(accepted));
+        RecordSignature signature = signature(NOW, "02");
+        lenient().when(recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId())).thenReturn(List.of(signature));
+        lenient().when(staffAccountRepository.findAllById(any())).thenReturn(List.of(context.doctor()));
+        lenient().when(signatureVerifier.reverify(any(), any(), eq("02"), any(), any())).thenReturn(null);
+        return prescription;
+    }
+
+    private static RecordSignature signature(Instant createdAt, String serial) {
+        RecordSignature signature = mock(RecordSignature.class);
+        when(signature.getCreatedAt()).thenReturn(createdAt);
+        when(signature.getCertificateSerial()).thenReturn(serial);
+        lenient().when(signature.getSignedAt()).thenReturn(createdAt);
+        return signature;
+    }
+
     private void stubConclusion() {
         Conclusion conclusion = new Conclusion(UUID.randomUUID(), NOW, context.record().getId());
         conclusion.record(DOCTOR_ID, "Viêm họng cấp", "J02.9", "Viêm họng cấp", "Điều trị", (short) 2, "Dặn", null,
@@ -366,6 +562,21 @@ class PrescriptionServiceImplTest {
 
     /** A saved prescription of the visit: amoxicillin for 7 days with the notes and advice of {@link #request}. */
     private Prescription existingPrescription() {
+        Prescription prescription = storedPrescription();
+        when(prescriptionRepository.findByMedicalRecordId(context.record().getId()))
+                .thenReturn(Optional.of(prescription));
+        return prescription;
+    }
+
+    /** {@link #existingPrescription()} found by its id (UC-59 AF-03, UC-91). */
+    private Prescription prescriptionById() {
+        Prescription prescription = storedPrescription();
+        when(prescriptionRepository.findById(prescription.getId())).thenReturn(Optional.of(prescription));
+        when(medicalRecordRepository.findById(context.record().getId())).thenReturn(Optional.of(context.record()));
+        return prescription;
+    }
+
+    private Prescription storedPrescription() {
         Prescription prescription = new Prescription(
                 UUID.randomUUID(), EARLIER, "DT-DK0001", "79001abc1234-c", context.record().getId());
         prescription.record(DOCTOR_ID, "Viêm họng cấp", (short) 2, "Tái khám nếu sốt", "Uống nhiều nước", EARLIER);
@@ -375,8 +586,6 @@ class PrescriptionServiceImplTest {
                 (short) 3, (short) 7, "Uống sau ăn", null, LocalDate.ofInstant(NOW, ZONE))));
         // Version 2, as loaded from the database.
         org.springframework.test.util.ReflectionTestUtils.setField(prescription, "version", 2L);
-        when(prescriptionRepository.findByMedicalRecordId(context.record().getId()))
-                .thenReturn(Optional.of(prescription));
         return prescription;
     }
 

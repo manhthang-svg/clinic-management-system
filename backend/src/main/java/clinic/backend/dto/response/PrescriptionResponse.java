@@ -60,6 +60,9 @@ public record PrescriptionResponse(
      * @param signerName  the signing Doctor
      * @param certificateSerial serial of the signing certificate
      * @param certificateIssuer issuer of the signing certificate
+     * @param submittedBy       the Doctor who sent it
+     * @param signatureValid    BR-59-16: the stored signature verified again now; null when the send has none
+     * @param signatureFailureReason why the signature is not valid (MSG124 reasons); null when valid
      */
     public record Submission(
             short attemptNo,
@@ -70,7 +73,10 @@ public record PrescriptionResponse(
             Instant signedAt,
             String signerName,
             String certificateSerial,
-            String certificateIssuer) {
+            String certificateIssuer,
+            String submittedBy,
+            Boolean signatureValid,
+            String signatureFailureReason) {
     }
 
     /**

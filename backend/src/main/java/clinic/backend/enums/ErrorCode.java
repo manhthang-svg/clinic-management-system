@@ -201,6 +201,8 @@ public enum ErrorCode {
             "The prescription was sent to the national prescription system and cannot change.", HttpStatus.CONFLICT),
     PRESCRIPTION_CHILD_DATA_REQUIRED("PRESCRIPTION_CHILD_DATA_REQUIRED",
             "A child under 72 months needs a weight and an accompanying person before sending.", HttpStatus.CONFLICT),
+    PRESCRIPTION_NOT_PRINTABLE("PRESCRIPTION_NOT_PRINTABLE",
+            "Only a prescription accepted by the national prescription system can be printed.", HttpStatus.CONFLICT),
     SIGNING_CERTIFICATE_NOT_REGISTERED("SIGNING_CERTIFICATE_NOT_REGISTERED",
             "The account has no registered signing certificate.", HttpStatus.CONFLICT),
     SIGNING_CERTIFICATE_INVALID("SIGNING_CERTIFICATE_INVALID",

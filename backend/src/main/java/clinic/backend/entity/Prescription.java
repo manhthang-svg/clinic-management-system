@@ -142,6 +142,26 @@ public class Prescription extends VersionedEntity {
     }
 
     /**
+     * UC-59 AF-03 (P03): only a prescription that was never sent can be removed; a rejected one is corrected
+     * instead (UC-92).
+     */
+    public boolean isDeletable() {
+        return lienthongStatus == PrescriptionLienthongStatus.PENDING;
+    }
+
+    /** UC-60 (BR-59-13): only a prescription accepted by the national prescription system is printed. */
+    public boolean isPrintable() {
+        return lienthongStatus == PrescriptionLienthongStatus.ACCEPTED;
+    }
+
+    /** UC-60 step 3: {@code printed_at} keeps the first print; later prints are only audited. */
+    public void markPrinted(Instant now) {
+        if (printedAt == null) {
+            printedAt = now;
+        }
+    }
+
+    /**
      * UC-90 step 1: a prescription that is pending, rejected or sent without an answer can be signed and sent
      * (again); an accepted one is locked (P04-P07).
      */

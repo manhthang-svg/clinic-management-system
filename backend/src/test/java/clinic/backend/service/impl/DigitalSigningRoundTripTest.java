@@ -93,6 +93,48 @@ class DigitalSigningRoundTripTest {
                 .isTrue();
     }
 
+    /** BR-59-16: the stored CAdES-T signature is verified again from what was kept, without any service. */
+    @Test
+    void storedSignatureVerifiesAgainFromTheKeptEvidence() {
+        Fixture fixture = fixture(FailureMode.NONE);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
+        DigitalSignatureVerifier.Verification verification =
+                fixture.verifier.verify(sign(fixture, issued, PAYLOAD), PAYLOAD, issued.certificate());
+        String serial = issued.certificate().getSerialNumber().toString(16);
+        String issuer = issued.certificate().getIssuerX500Principal().getName();
+        byte[] changed = "{\"loai_don_thuoc\":\"c\",\"ma_don_thuoc\":\"12345abcdefg-n\"}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        assertThat(fixture.verifier.reverify(
+                verification.signedData(), PAYLOAD, serial, issuer, verification.evidence())).isNull();
+        assertThat(fixture.verifier.reverify(
+                verification.signedData(), changed, serial, issuer, verification.evidence()))
+                .isEqualTo("SIGNATURE_MISMATCH");
+        assertThat(fixture.verifier.reverify(
+                verification.signedData(), PAYLOAD, "abc", issuer, verification.evidence()))
+                .isEqualTo("CERTIFICATE_NOT_REGISTERED_FOR_SIGNER");
+        assertThat(fixture.verifier.reverify(
+                verification.signedData(), PAYLOAD, serial, issuer,
+                verification.evidence().replaceFirst("\"GOOD\"", "\"REVOKED\"")))
+                .isIn("CERTIFICATE_REVOKED", "CA_CERTIFICATE_INVALID");
+        assertThat(fixture.verifier.reverify(verification.signedData(), PAYLOAD, serial, issuer, null))
+                .isEqualTo("EVIDENCE_MISSING");
+    }
+
+    /** The signature returned by the CA has no time stamp yet, so it is not a stored CAdES-T signature. */
+    @Test
+    void signatureWithoutTheTimeStampDoesNotVerifyAgain() {
+        Fixture fixture = fixture(FailureMode.NONE);
+        SimulatedSigningAuthority.Issued issued = fixture.authority.issue("Nguyễn Văn An", DOCTOR_ID_NUMBER, PIN);
+        DigitalSignatureVerifier.Verification verification =
+                fixture.verifier.verify(sign(fixture, issued, PAYLOAD), PAYLOAD, issued.certificate());
+
+        assertThat(fixture.verifier.reverify(sign(fixture, issued, PAYLOAD), PAYLOAD,
+                issued.certificate().getSerialNumber().toString(16),
+                issued.certificate().getIssuerX500Principal().getName(), verification.evidence()))
+                .isEqualTo("TIMESTAMP_INVALID");
+    }
+
     private static org.bouncycastle.cms.SignerInformation signer(byte[] signedData) throws Exception {
         return new org.bouncycastle.cms.CMSSignedData(signedData).getSignerInfos().getSigners().iterator().next();
     }
