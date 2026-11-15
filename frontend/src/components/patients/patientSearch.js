@@ -4,7 +4,7 @@
 export const SEARCH_TYPES = [
     { value: 'CITIZEN_ID', label: 'CCCD', placeholder: 'Đủ 12 chữ số trên thẻ', prefillField: 'cccdSo' },
     { value: 'PASSPORT', label: 'Hộ chiếu', placeholder: 'Đủ số hộ chiếu (tối đa 15 ký tự)', prefillField: 'hochieuSo' },
-    { value: 'PATIENT_CODE', label: 'Mã bệnh nhân', placeholder: 'Ít nhất 4 ký tự, ví dụ: 0003' },
+    { value: 'PATIENT_CODE', label: 'Mã bệnh nhân', placeholder: 'Một phần mã, ví dụ: 01 hoặc BN0000' },
     { value: 'PHONE', label: 'Số điện thoại', placeholder: 'Ít nhất 4 chữ số, ví dụ: 4 số cuối', prefillField: 'sodienthoai' },
     { value: 'NAME', label: 'Họ tên', placeholder: 'Ít nhất 2 ký tự, có dấu hoặc không dấu', prefillField: 'hoten' },
     { value: 'INSURANCE_CARD', label: 'Số thẻ BHYT', placeholder: 'Đủ 15 ký tự trên thẻ' },
@@ -23,12 +23,13 @@ export const MSG = {
 };
 
 // Document numbers (citizen ID, passport, insurance card) in full; what a patient remembers (name, phone,
-// patient code) may be partial, with a minimum length. Same rules as PatientServiceImpl.isValidKeyword.
+// patient code) may be partial; the minimum length follows how sensitive the field is.
+// Same rules as PatientServiceImpl.isValidKeyword.
 const RULES = {
     CITIZEN_ID: (keyword) => /^\d{12}$/.test(keyword),
     PASSPORT: (keyword) => /^[A-Za-z0-9]{1,15}$/.test(keyword),
     INSURANCE_CARD: (keyword) => /^[A-Za-z0-9]{15}$/.test(keyword),
-    PATIENT_CODE: (keyword) => /^[A-Za-z0-9-]{4,20}$/.test(keyword),
+    PATIENT_CODE: (keyword) => /^[A-Za-z0-9-]{1,20}$/.test(keyword),
     PHONE: (keyword) => /^\d{4,10}$/.test(keyword),
     NAME: (keyword) => keyword.length >= 2 && keyword.length <= 100,
 };

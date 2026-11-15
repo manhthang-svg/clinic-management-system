@@ -389,8 +389,8 @@ public class PatientServiceImpl implements PatientService {
      * UC-35 step 4: keyword format by search type.
      * DECISION (team, 2026-11-15): numbers read from a document (citizen ID, passport, insurance card) must be
      * typed in full and match exactly, so a partial number cannot list other patients' identities. What a
-     * patient says from memory (name, phone, patient code) may be partial, with a minimum length so the
-     * result stays meaningful.
+     * patient says from memory may be partial. The minimum length follows how sensitive the field is: the
+     * internal patient code from 1 character, the phone (personal data) from 4 digits, the name from 2.
      */
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
@@ -398,7 +398,7 @@ public class PatientServiceImpl implements PatientService {
             case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
             case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
             case PHONE -> keyword.matches("\\d{4,10}");
-            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{4,20}");
+            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{1,20}");
             case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
         };
     }

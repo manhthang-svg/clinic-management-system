@@ -9,7 +9,7 @@ describe('validateKeyword (UC-35 step 4)', () => {
         ['PASSPORT', 'C1234567'],
         ['INSURANCE_CARD', 'DN4010123456789'],
         ['PATIENT_CODE', 'BN0000'],
-        ['PATIENT_CODE', '0003'],
+        ['PATIENT_CODE', '01'],
         ['PHONE', '4567'],
         ['NAME', 'An'],
     ])('accepts a valid %s', (type, keyword) => {
@@ -22,7 +22,6 @@ describe('validateKeyword (UC-35 step 4)', () => {
         ['CITIZEN_ID', '0123456789012'],
         ['PASSPORT', 'C-123'],
         ['INSURANCE_CARD', 'DN40'],
-        ['PATIENT_CODE', 'BN0'],
         ['PATIENT_CODE', 'BN#0001'],
         ['PHONE', '090'],
         ['PHONE', '09012345678'],
