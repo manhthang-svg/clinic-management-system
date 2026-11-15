@@ -61,8 +61,9 @@ The digital signature uses a simulated remote-signing CA (test keys, no legal va
 
 1. As Admin, open the Doctor's account, click Edit and enter the 12-digit "Số định danh cá nhân"; the
    certificate is issued for that number.
-2. Open `http://localhost:8080/dev/ca-sim/`, enter the Doctor's user name and a 6-digit PIN, and click
-   "Cấp chứng thư". This issues a test certificate and registers it as the Doctor's signing certificate.
+2. Open `http://localhost:8080/dev/ca-sim/`, enter the Doctor's 12-digit personal identification number and a
+   6-digit PIN, and click "Cấp chứng thư". This issues a test certificate and registers it as the signing
+   certificate of the Doctor whose account holds that number.
 3. In the clinic app, save the prescription and click "Ký và gửi đơn", then "Ký số".
 4. On the `/dev/ca-sim/` page (another tab or a phone on the same network), sign in with the certificate serial and
    the PIN, and click "Chấp thuận ký". The clinic app verifies the signature and sends the prescription.

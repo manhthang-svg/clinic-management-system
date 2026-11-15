@@ -65,8 +65,8 @@
     <h2 id="admin-title">Quản trị CA giả lập</h2>
     <form id="issue" class="row" novalidate>
       <div>
-        <label for="username">Tên đăng nhập của bác sĩ</label>
-        <input id="username" autocomplete="off" required>
+        <label for="citizenId">Số định danh cá nhân của bác sĩ (12 chữ số)</label>
+        <input id="citizenId" inputmode="numeric" maxlength="12" autocomplete="off" required>
       </div>
       <div>
         <label for="newPin">Mã PIN mới (6 chữ số)</label>
@@ -91,13 +91,13 @@
   const errorText = {
     SIGNING_SIMULATOR_CREDENTIALS_INVALID: "Số hiệu chứng thư hoặc mã PIN không đúng.",
     SIGNING_REQUEST_NOT_FOUND: "Yêu cầu ký không còn hiệu lực.",
-    ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản.",
-    REQUEST_VALIDATION_FAILED: "Thông tin chưa hợp lệ (tài khoản phải là bác sĩ, mã PIN gồm 6 chữ số).",
+    ACCOUNT_NOT_FOUND: "Không có tài khoản nào mang số định danh cá nhân này. Admin nhập số này ở màn hình Sửa tài khoản bác sĩ.",
+    REQUEST_VALIDATION_FAILED: "Thông tin chưa hợp lệ (số định danh gồm 12 chữ số, tài khoản phải là bác sĩ, mã PIN gồm 6 chữ số).",
     SIGNING_SERVICE_UNAVAILABLE: "Dịch vụ ký số giả lập đang không phản hồi."
   };
 
   const detailText = {
-    CITIZEN_ID_REQUIRED: "Tài khoản bác sĩ chưa có số định danh cá nhân. Admin nhập số này ở màn hình Sửa tài khoản rồi cấp lại.",
+    TWELVE_DIGITS: "Số định danh cá nhân phải gồm 12 chữ số.",
     NOT_A_DOCTOR: "Chỉ cấp chứng thư cho tài khoản Bác sĩ.",
     SIX_DIGITS: "Mã PIN phải gồm 6 chữ số."
   };
@@ -201,7 +201,8 @@
       for (const certificate of certificates) {
         const row = document.createElement("tr");
         row.append(text("td", certificate.serial, "hash"));
-        row.append(text("td", certificate.username || "—"));
+        row.append(text("td", certificate.doctorName
+          ? certificate.doctorName + " (" + certificate.maskedCitizenId + ")" : "—"));
         row.append(text("td", formatTime(certificate.validTo)));
         const state = document.createElement("td");
         state.append(certificate.revokedAt
@@ -241,10 +242,10 @@
     alert.textContent = status.textContent = "";
     try {
       const issued = await call("/certificates", {
-        username: document.getElementById("username").value.trim(),
+        citizenId: document.getElementById("citizenId").value.trim(),
         pin: document.getElementById("newPin").value
       });
-      status.textContent = "Đã cấp và đăng ký chứng thư " + issued.serial + " cho " + issued.username + ".";
+      status.textContent = "Đã cấp và đăng ký chứng thư " + issued.serial + " cho " + issued.doctorName + " (" + issued.maskedCitizenId + ").";
       document.getElementById("newPin").value = "";
       await loadCertificates();
     } catch (error) {
