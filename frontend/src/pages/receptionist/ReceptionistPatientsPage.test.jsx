@@ -61,7 +61,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await screen.findByText(MSG.NO_RESULT);
 
         expect(screen.getByLabelText('Tìm theo')).toHaveValue('CITIZEN_ID');
-        await user.type(screen.getByLabelText('Từ khóa'), '12345');
+        await user.type(screen.getByLabelText('Từ khóa'), '12a45');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
         expect(screen.getByRole('alert')).toHaveTextContent(MSG.INVALID_FORMAT);
@@ -72,6 +72,22 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
         expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'CITIZEN_ID', keyword: '012345678901' });
+    });
+
+    it('finds patients by part of the patient code', async () => {
+        const user = userEvent.setup();
+        const patientApi = {
+            list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient({ mabenhnhan: 'BN00000003' })])),
+        };
+        renderPage(patientApi);
+        await screen.findByText(MSG.NO_RESULT);
+
+        await user.selectOptions(screen.getByLabelText('Tìm theo'), 'PATIENT_CODE');
+        await user.type(screen.getByLabelText('Từ khóa'), 'BN0000');
+        await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
+
+        expect(await screen.findByText('BN00000003')).toBeInTheDocument();
+        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'PATIENT_CODE', keyword: 'BN0000' });
     });
 
     it('shows the last visit and the active visit of each result', async () => {
@@ -134,7 +150,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         expect(screen.getByText('Trang tạo hồ sơ {"cccdSo":"012345678901"}')).toBeInTheDocument();
     });
 
-    it('opens the profile when exactly one patient matches the citizen ID (AF-04)', async () => {
+    it('keeps a single match in the list and opens the profile only when its row is clicked', async () => {
         const user = userEvent.setup();
         const patientApi = { list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient()])) };
         renderPage(patientApi);
@@ -142,6 +158,11 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
 
         await user.type(screen.getByLabelText('Từ khóa'), '012345678901');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
+
+        const row = (await screen.findByText('Nguyễn Văn An')).closest('tr');
+        expect(screen.queryByText('Hồ sơ p-1')).not.toBeInTheDocument();
+
+        await user.click(within(row).getByText('012345678901'));
 
         expect(await screen.findByText('Hồ sơ p-1')).toBeInTheDocument();
     });

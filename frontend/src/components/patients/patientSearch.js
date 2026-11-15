@@ -2,12 +2,12 @@
 // only; the backend repeats every check.
 
 export const SEARCH_TYPES = [
-    { value: 'CITIZEN_ID', label: 'CCCD', placeholder: '12 chữ số', prefillField: 'cccdSo' },
-    { value: 'PASSPORT', label: 'Hộ chiếu', placeholder: 'Tối đa 15 ký tự', prefillField: 'hochieuSo' },
-    { value: 'PATIENT_CODE', label: 'Mã bệnh nhân', placeholder: 'Ví dụ: BN1234567' },
-    { value: 'PHONE', label: 'Số điện thoại', placeholder: '10 chữ số', prefillField: 'sodienthoai' },
-    { value: 'NAME', label: 'Họ tên', placeholder: 'Từ 2 đến 100 ký tự', prefillField: 'hoten' },
-    { value: 'INSURANCE_CARD', label: 'Số thẻ BHYT', placeholder: '15 ký tự' },
+    { value: 'CITIZEN_ID', label: 'CCCD', placeholder: 'Đủ 12 chữ số trên thẻ', prefillField: 'cccdSo' },
+    { value: 'PASSPORT', label: 'Hộ chiếu', placeholder: 'Đủ số hộ chiếu (tối đa 15 ký tự)', prefillField: 'hochieuSo' },
+    { value: 'PATIENT_CODE', label: 'Mã bệnh nhân', placeholder: 'Ít nhất 4 ký tự, ví dụ: 0003' },
+    { value: 'PHONE', label: 'Số điện thoại', placeholder: 'Ít nhất 4 chữ số, ví dụ: 4 số cuối', prefillField: 'sodienthoai' },
+    { value: 'NAME', label: 'Họ tên', placeholder: 'Ít nhất 2 ký tự, có dấu hoặc không dấu', prefillField: 'hoten' },
+    { value: 'INSURANCE_CARD', label: 'Số thẻ BHYT', placeholder: 'Đủ 15 ký tự trên thẻ' },
 ];
 
 export const DEFAULT_SEARCH_TYPE = 'CITIZEN_ID';
@@ -22,13 +22,15 @@ export const MSG = {
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
 };
 
+// Document numbers (citizen ID, passport, insurance card) in full; what a patient remembers (name, phone,
+// patient code) may be partial, with a minimum length. Same rules as PatientServiceImpl.isValidKeyword.
 const RULES = {
     CITIZEN_ID: (keyword) => /^\d{12}$/.test(keyword),
     PASSPORT: (keyword) => /^[A-Za-z0-9]{1,15}$/.test(keyword),
-    PATIENT_CODE: () => true,
-    PHONE: (keyword) => /^\d{10}$/.test(keyword),
-    NAME: (keyword) => keyword.length >= 2 && keyword.length <= 100,
     INSURANCE_CARD: (keyword) => /^[A-Za-z0-9]{15}$/.test(keyword),
+    PATIENT_CODE: (keyword) => /^[A-Za-z0-9-]{4,20}$/.test(keyword),
+    PHONE: (keyword) => /^\d{4,10}$/.test(keyword),
+    NAME: (keyword) => keyword.length >= 2 && keyword.length <= 100,
 };
 
 /** Returns a Vietnamese error message, or '' when the keyword is valid for the type. */

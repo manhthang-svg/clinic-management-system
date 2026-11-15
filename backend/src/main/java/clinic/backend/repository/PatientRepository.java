@@ -37,14 +37,15 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             """)
     List<Patient> findPossibleDuplicates(@Param("name") String name, @Param("birthDate") LocalDate birthDate);
 
-    // UC-35 typed searches.
+    // UC-35 typed searches. Numbers read from a document match exactly; what a patient says from memory
+    // (patient code, phone) matches any part.
     Page<Patient> findAllByCccdSo(String cccdSo, Pageable pageable);
 
-    Page<Patient> findAllByMabenhnhanIgnoreCase(String mabenhnhan, Pageable pageable);
-
-    Page<Patient> findAllBySodienthoai(String sodienthoai, Pageable pageable);
-
     Page<Patient> findAllByHochieuSoIgnoreCase(String hochieuSo, Pageable pageable);
+
+    Page<Patient> findAllByMabenhnhanContainingIgnoreCase(String mabenhnhan, Pageable pageable);
+
+    Page<Patient> findAllBySodienthoaiContaining(String sodienthoai, Pageable pageable);
 
     /** Patients whose previous visits used the insurance card. */
     @Query("""
