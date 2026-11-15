@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,7 @@ import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.enums.AccountStatus;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.Role;
@@ -318,7 +320,7 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Updated User", null, null, null, null, null, "0909876543", null, null, target.getVersion()));
+                "Updated User", null, null, null, null, null, null, "0909876543", null, null, target.getVersion()));
 
         verify(auditLogService, times(2)).recordAccountChange(
                 any(UUID.class), any(UUID.class), any(), anyMap(), anyMap(), any(Instant.class));
@@ -332,7 +334,7 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, null, null,
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, null, null, null,
                 "0901234567", null, null, target.getVersion()));
 
         assertThat(target.getPracticeLicenseNo()).isEqualTo("000123/HCM-CCHN");
@@ -348,7 +350,7 @@ class AccountAdministrationServiceImplTest {
         when(clock.instant()).thenReturn(NOW.plusSeconds(60));
 
         service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
-                "Test User", "Bác sĩ", "000123/HCM-CCHN", " BS0001 ", null, null,
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", " BS0001 ", null, null, null,
                 "0901234567", null, null, target.getVersion()));
 
         assertThat(target.getMaLienthongBacsi()).isEqualTo("BS0001");
@@ -363,7 +365,7 @@ class AccountAdministrationServiceImplTest {
 
         assertThatThrownBy(() -> service.updateAccount(
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
-                        "Test User", "KTV", "000123/HCM-CCHN", "BS0001", null, null,
+                        "Test User", "KTV", "000123/HCM-CCHN", "BS0001", null, null, null,
                         "0901234567", null, null, target.getVersion())))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "NOT_APPLICABLE"));
@@ -378,11 +380,70 @@ class AccountAdministrationServiceImplTest {
 
         assertThatThrownBy(() -> service.updateAccount(
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
-                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS0001", null, null,
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS0001", null, null, null,
                         "0901234567", null, null, target.getVersion())))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "ALREADY_EXISTS"));
         assertThat(target.getMaLienthongBacsi()).isNull();
+    }
+
+    @Test
+    void doctorCitizenIdIsSavedAndTheAuditRowHidesTheNumber() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+
+        service.updateAccount(admin, target.getId(), new UpdateAccountRequest(
+                "Test User", "Bác sĩ", "000123/HCM-CCHN", null, " 079090001234 ", null, null,
+                "0901234567", null, null, target.getVersion()));
+
+        assertThat(target.getCitizenId()).isEqualTo("079090001234");
+        verify(auditLogService).recordAccountChange(
+                eq(admin.accountId()), eq(target.getId()), eq(AuditLogAction.UPDATE),
+                eq(java.util.Collections.singletonMap("citizenId", null)), eq(Map.of("citizenId", "***")),
+                any(Instant.class));
+    }
+
+    @Test
+    void citizenIdIsRejectedForANonDoctor() {
+        StaffAccount target = account(Role.TECHNICIAN);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "KTV", "000123/HCM-CCHN", null, "079090001234", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("citizenId", "NOT_APPLICABLE"));
+        assertThat(target.getCitizenId()).isNull();
+    }
+
+    @Test
+    void citizenIdUsedByAnotherAccountIsRejected() {
+        StaffAccount target = account(Role.DOCTOR);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(accountRepository.existsByCitizenIdAndIdNot("079090001234", target.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", null, "079090001234", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("citizenId", "ALREADY_EXISTS"));
+    }
+
+    @Test
+    void citizenIdThatIsNotTwelveDigitsIsRejected() {
+        StaffAccount target = account(Role.DOCTOR);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", null, "07909000123", null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getDetails()).containsEntry("citizenId", "INVALID_FORMAT"));
     }
 
     @Test
@@ -392,7 +453,7 @@ class AccountAdministrationServiceImplTest {
 
         assertThatThrownBy(() -> service.updateAccount(
                 new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
-                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS-0001", null, null,
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS-0001", null, null, null,
                         "0901234567", null, null, target.getVersion())))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getDetails()).containsEntry("maLienthongBacsi", "INVALID_FORMAT"));

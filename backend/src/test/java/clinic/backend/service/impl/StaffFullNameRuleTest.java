@@ -64,7 +64,7 @@ class StaffFullNameRuleTest {
 
     private static Set<ConstraintViolation<UpdateAccountRequest>> fullNameViolations(String fullName) {
         UpdateAccountRequest request = new UpdateAccountRequest(
-                fullName, null, null, null, null, null, "0901234567", null, null, 0L);
+                fullName, null, null, null, null, null, null, "0901234567", null, null, 0L);
         return VALIDATOR.validateProperty(request, "fullName");
     }
 }

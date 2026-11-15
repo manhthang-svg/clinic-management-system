@@ -44,6 +44,10 @@ import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.ess.ESSCertIDv2;
 import org.bouncycastle.asn1.ess.SigningCertificateV2;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.x500.RDN;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.x500.style.IETFUtils;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSException;
@@ -73,6 +77,8 @@ public class DigitalSignatureVerifier {
 
     /** Detached CMS SignedData at CAdES baseline level T (BR-59-10 steps 4, 6; TT 15/2025/TT-BKHCN Phụ lục I). */
     static final String SIGNATURE_FORMAT = "CAdES-T";
+    /** Prefix of the personal identification number in a certificate's UID attribute (ASSUMPTION). */
+    static final String CITIZEN_ID_PREFIX = "CCCD:";
     /** BouncyCastle for RSASSA-PSS verification, passed to each builder; not registered as a JVM-wide provider. */
     private static final BouncyCastleProvider BC = new BouncyCastleProvider();
 
@@ -89,6 +95,25 @@ public class DigitalSignatureVerifier {
         this.statusService = statusService;
         this.timestampAuthority = timestampAuthority;
         this.clock = clock;
+    }
+
+    /**
+     * BR-59-16 (NĐ 23/2025 Điều 16 khoản 1 điểm a): the personal identification number a certificate names, from the
+     * subject's UID attribute written as "CCCD:" + 12 digits, or 12 digits alone (ASSUMPTION: the form Vietnamese CAs
+     * commonly use; to confirm against a real certificate). Empty when the subject has no such number.
+     */
+    public Optional<String> citizenId(X509Certificate certificate) {
+        X500Name subject = X500Name.getInstance(certificate.getSubjectX500Principal().getEncoded());
+        for (RDN rdn : subject.getRDNs(BCStyle.UID)) {
+            String value = IETFUtils.valueToString(rdn.getFirst().getValue()).strip();
+            if (value.regionMatches(true, 0, CITIZEN_ID_PREFIX, 0, CITIZEN_ID_PREFIX.length())) {
+                value = value.substring(CITIZEN_ID_PREFIX.length()).strip();
+            }
+            if (value.matches("[0-9]{12}")) {
+                return Optional.of(value);
+            }
+        }
+        return Optional.empty();
     }
 
     /** Reads a DER certificate as stored in {@code staff_signing_certificates}. */

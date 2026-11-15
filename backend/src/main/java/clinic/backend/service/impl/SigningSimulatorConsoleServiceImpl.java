@@ -38,6 +38,7 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     private static final String PIN_FORMAT = "[0-9]{6}";
 
     private final SimulatedSigningAuthority authority;
+    private final DigitalSignatureVerifier verifier;
     private final StaffAccountRepository staffAccountRepository;
     private final StaffSigningCertificateRepository certificateRepository;
     private final UuidV7Generator ids;
@@ -47,9 +48,14 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     @Transactional(readOnly = true)
     public List<SimulatedCertificateResponse> certificates() {
         return authority.subscribers().stream()
-                .map(subscriber -> new SimulatedCertificateResponse(
-                        subscriber.serial(), subscriber.userId(), subscriber.subject(), subscriber.validTo(),
-                        subscriber.revokedAt(), isRegistered(subscriber.userId(), subscriber.serial())))
+                .map(subscriber -> {
+                    // The simulated CA knows its subscriber by the identification number (its user id).
+                    Optional<StaffAccount> account = staffAccountRepository.findByCitizenId(subscriber.userId());
+                    return new SimulatedCertificateResponse(
+                            subscriber.serial(), account.map(StaffAccount::getUsername).orElse(null),
+                            subscriber.subject(), subscriber.validTo(), subscriber.revokedAt(),
+                            account.map(value -> isRegistered(value, subscriber.serial())).orElse(false));
+                })
                 .toList();
     }
 
@@ -62,10 +68,15 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
         if (doctor.getRole() != Role.DOCTOR) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("username", "NOT_A_DOCTOR"));
         }
+        if (doctor.getCitizenId() == null) {
+            // BR-59-16: the certificate names the Doctor by the identification number the Admin recorded.
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("username", "CITIZEN_ID_REQUIRED"));
+        }
         if (request.pin() == null || !request.pin().matches(PIN_FORMAT)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("pin", "SIX_DIGITS"));
         }
-        SimulatedSigningAuthority.Issued issued = authority.issue(doctor.getFullName(), username, request.pin());
+        SimulatedSigningAuthority.Issued issued =
+                authority.issue(doctor.getFullName(), doctor.getCitizenId(), request.pin());
         register(doctor, issued);
         X509Certificate certificate = issued.certificate();
         return new SimulatedCertificateResponse(issued.serial(), username,
@@ -97,13 +108,14 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
     }
 
     /**
-     * BR-59-16: the account's single active certificate; a previous one is removed. The subject must name the
-     * Doctor (CN = full name, ASSUMPTION until the identity attribute of real certificates is decided).
+     * BR-59-16: the account's single active certificate; a previous one is removed. The certificate must name the
+     * Doctor by the personal identification number recorded on the account (NĐ 23/2025 Điều 16 khoản 1 điểm a), not
+     * by the name, which two Doctors can share.
      */
     private void register(StaffAccount doctor, SimulatedSigningAuthority.Issued issued) {
         X509Certificate certificate = issued.certificate();
         String subject = certificate.getSubjectX500Principal().getName();
-        if (!subject.contains("CN=" + doctor.getFullName())) {
+        if (!verifier.citizenId(certificate).equals(Optional.ofNullable(doctor.getCitizenId()))) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("certificate", "SUBJECT_MISMATCH"));
         }
         Instant now = clock.instant();
@@ -123,10 +135,8 @@ public class SigningSimulatorConsoleServiceImpl implements SigningSimulatorConso
         }
     }
 
-    private boolean isRegistered(String username, String serial) {
-        Optional<StaffAccount> account = staffAccountRepository.findByUsername(username);
-        return account.flatMap(value -> certificateRepository.findByStaffAccountIdAndStatus(
-                        value.getId(), SigningCertificateStatus.ACTIVE))
+    private boolean isRegistered(StaffAccount account, String serial) {
+        return certificateRepository.findByStaffAccountIdAndStatus(account.getId(), SigningCertificateStatus.ACTIVE)
                 .map(certificate -> certificate.getSerialNumber().equals(serial))
                 .orElse(false);
     }
