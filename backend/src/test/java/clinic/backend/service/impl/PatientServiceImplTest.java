@@ -43,6 +43,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -393,7 +394,7 @@ class PatientServiceImplTest {
 
     @Test
     void searchesByTypeWithTheMatchingQuery() {
-        PageRequest page = PageRequest.of(0, 10);
+        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
         Page<Patient> found = new PageImpl<>(List.of(patient()));
         when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
         when(patientRepository.findAllByMabenhnhanIgnoreCase("bn1234567", page)).thenReturn(found);
@@ -412,7 +413,7 @@ class PatientServiceImplTest {
 
     @Test
     void addsLastVisitAndActiveVisitToEachResult() {
-        PageRequest page = PageRequest.of(0, 10);
+        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
         when(patientRepository.searchByName("nguyen", page)).thenReturn(new PageImpl<>(List.of(patient())));
         Instant lastVisitAt = Instant.parse("2026-11-01T02:00:00Z");
         VisitRepository.PatientLastVisit lastVisit = mock(VisitRepository.PatientLastVisit.class);
@@ -471,6 +472,19 @@ class PatientServiceImplTest {
         verify(patientRepository).findAll(pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void ordersPagesByPatientCodeUnlessTheClientSorts() {
+        when(patientRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+
+        service.listPatients(null, null, PageRequest.of(1, 20));
+        service.listPatients(null, null, PageRequest.of(0, 20, Sort.by("hoten")));
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(patientRepository, org.mockito.Mockito.times(2)).findAll(pageable.capture());
+        assertThat(pageable.getAllValues().get(0)).isEqualTo(PageRequest.of(1, 20, Sort.by("mabenhnhan")));
+        assertThat(pageable.getAllValues().get(1).getSort()).isEqualTo(Sort.by("hoten"));
     }
 
     private void authenticateAs(UUID accountId) {

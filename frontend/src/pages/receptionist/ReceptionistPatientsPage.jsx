@@ -11,6 +11,8 @@ import {
     RefreshCw,
     Building2,
     AlertCircle,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import defaultPatientApi from '../../apis/patientApi';
 import { ROUTES } from '../../routes/routes';
@@ -27,7 +29,9 @@ import {
 const inputClass =
     'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
-const MAX_RESULTS = 50;
+const PAGE_SIZE = 20;
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 const IDENTIFYING_TYPES = ['CITIZEN_ID', 'PASSPORT', 'PATIENT_CODE'];
 
 /** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
@@ -37,6 +41,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
 
     const [patients, setPatients] = useState([]);
     const [totalElements, setTotalElements] = useState(0);
+    const [pageNumber, setPageNumber] = useState(0);
     const [loading, setLoading] = useState(false);
     const [searchType, setSearchType] = useState(DEFAULT_SEARCH_TYPE);
     const [keyword, setKeyword] = useState('');
@@ -51,22 +56,23 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         [navigate]
     );
 
-    // Without a search the page lists the latest patients; a search sends its type (UC-35).
-    const fetchPatients = useCallback(async (search) => {
+    // Without a search the page lists all patients; a search sends its type (UC-35). Both are paged.
+    const fetchPatients = useCallback(async (search, pageToLoad = 0) => {
         setLoading(true);
         setLoadError('');
         try {
-            const res = await patientApi.list({ size: MAX_RESULTS, ...(search ?? {}) });
+            const res = await patientApi.list({ page: pageToLoad, size: PAGE_SIZE, ...(search ?? {}) });
             const page = res?.data ?? res;
             const list = page?.content || (Array.isArray(page) ? page : []);
             // AF-04: one profile per identification number (BR-12), so a single match opens UC-36 directly.
-            if (search && IDENTIFYING_TYPES.includes(search.type) && list.length === 1
+            if (search && pageToLoad === 0 && IDENTIFYING_TYPES.includes(search.type) && list.length === 1
                 && (page?.totalElements ?? 1) === 1) {
                 navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: list[0].id }));
                 return;
             }
             setPatients(list);
             setTotalElements(page?.totalElements ?? list.length);
+            setPageNumber(pageToLoad);
             setLastSearch(search);
         } catch (err) {
             const message = searchErrorMessage(err);
@@ -117,6 +123,10 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     }, [location.state, openRegisterVisit]);
 
     const filteredPatients = patients;
+    const totalPages = Math.max(1, Math.ceil(totalElements / PAGE_SIZE));
+    const firstRow = totalElements === 0 ? 0 : pageNumber * PAGE_SIZE + 1;
+    const lastRow = pageNumber * PAGE_SIZE + filteredPatients.length;
+    const goToPage = (target) => void fetchPatients(lastSearch, target);
 
     // UC-38 has its own page with the full form of UC-37.
     const openEditPatient = (patient) =>
@@ -241,15 +251,9 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                 <div className="flex items-center justify-between border-b border-slate-100 p-5">
                     <div>
                         <h2 className="font-bold text-slate-800">{lastSearch ? 'Kết quả tìm kiếm' : 'Danh sách bệnh nhân'}</h2>
-                        <p className="mt-1 text-sm text-slate-500">Có {filteredPatients.length} bệnh nhân</p>
+                        <p className="mt-1 text-sm text-slate-500">Có {totalElements} bệnh nhân</p>
                     </div>
                 </div>
-
-                {lastSearch && totalElements > filteredPatients.length && (
-                    <p role="status" className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-                        {MSG.TOO_MANY}
-                    </p>
-                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[1100px] text-left">
@@ -354,6 +358,33 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
                         </tbody>
                     </table>
                 </div>
+
+                {totalElements > 0 && (
+                    <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:flex-row">
+                        <span>Hiển thị {firstRow}–{lastRow} trên tổng số {totalElements} bệnh nhân</span>
+                        <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                aria-label="Trang trước"
+                                disabled={loading || pageNumber === 0}
+                                onClick={() => goToPage(pageNumber - 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsLeft size={14} />
+                            </button>
+                            <span className="px-2">Trang {pageNumber + 1}/{totalPages}</span>
+                            <button
+                                type="button"
+                                aria-label="Trang sau"
+                                disabled={loading || pageNumber + 1 >= totalPages}
+                                onClick={() => goToPage(pageNumber + 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsRight size={14} />
+                            </button>
+                        </nav>
+                    </div>
+                )}
             </section>
 
         </div>

@@ -17,7 +17,6 @@ export const MSG = {
     NO_RESULT: 'Không tìm thấy kết quả.',
     REQUIRED: 'Vui lòng nhập từ khóa tìm kiếm.',
     INVALID_FORMAT: 'Định dạng từ khóa không hợp lệ.',
-    TOO_MANY: 'Có hơn 50 bệnh nhân phù hợp. Hệ thống chỉ hiển thị 50 kết quả đầu tiên, vui lòng nhập từ khóa cụ thể hơn.',
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
