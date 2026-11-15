@@ -22,6 +22,9 @@ export const MSG = {
     MEDICINE_NOT_ORDINARY: (name) => `${name || 'Thuốc đã chọn'} không còn thuộc nhóm thuốc thông thường nên không kê được. Vui lòng chọn thuốc khác.`, // MSG106
     CONCLUSION_REQUIRED: 'Lưu kết luận với chẩn đoán bệnh chính trước khi kê đơn.', // MSG113
     SENT: 'Đơn thuốc đã gửi thành công nên không sửa hoặc xóa được.', // MSG115
+    DELETE_CONFIRM: (code) => `Xóa đơn thuốc này? Mã đơn ${code} sẽ không dùng lại.`, // MSG109
+    // ASSUMPTION: UC-59 AF-03 names no message after the deletion.
+    DELETED: 'Đã xóa đơn thuốc.',
     LINK_CODE_MISSING: (item) => `Chưa có mã liên thông ${item}. Vui lòng liên hệ quản trị viên.`, // MSG116
     PRESCRIBER: 'bác sĩ',
     FACILITY: 'đơn thuốc của cơ sở khám chữa bệnh',

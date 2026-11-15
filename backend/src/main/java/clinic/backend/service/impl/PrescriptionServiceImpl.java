@@ -22,17 +22,23 @@ import java.util.stream.Collectors;
 import clinic.backend.dto.request.SavePrescriptionRequest;
 import clinic.backend.dto.response.Icd10OptionResponse;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
+import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.Conclusion;
 import clinic.backend.entity.ConclusionSecondaryDiagnosis;
 import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalHistory;
+import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicineCatalog;
+import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
+import clinic.backend.entity.PrescriptionDiagnosis;
+import clinic.backend.entity.PrescriptionSubmission;
 import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.StaffAccount;
+import clinic.backend.entity.Visit;
 import clinic.backend.entity.VitalSign;
 import clinic.backend.enums.ActivationStatus;
 import clinic.backend.enums.AuditLogAction;
@@ -49,6 +55,7 @@ import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.LongTermPrescriptionDiseaseCodeRepository;
 import clinic.backend.repository.MedicalHistoryRepository;
+import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.PrescriptionSubmissionRepository;
@@ -119,6 +126,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final PrescriptionSubmissionRepository submissionRepository;
     private final RecordSignatureRepository recordSignatureRepository;
     private final RemoteSigningGateway signingGateway;
+    private final MedicalRecordRepository medicalRecordRepository;
+    private final DigitalSignatureVerifier signatureVerifier;
     private final UuidV7Generator ids;
     private final Clock clock;
 
@@ -439,23 +448,204 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescription == null ? null : lastSubmission(prescription));
     }
 
+    @Override
+    @Transactional
+    public void delete(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        Context context = guard.require(principal, visitId(prescription));
+        // P03: never sent. A send always leaves a submission and a signature row, which are kept as evidence.
+        if (!prescription.isDeletable()
+                || submissionRepository.existsByPrescriptionId(prescription.getId())
+                || recordSignatureRepository.existsByDocumentTypeAndDocumentId(
+                        RecordSignatureDocumentType.DON_THUOC, prescription.getId())) {
+            throw new AppException(ErrorCode.PRESCRIPTION_ALREADY_SENT);
+        }
+        Instant now = clock.instant();
+        cancelPendingSignature(prescription, now);
+        // BR-59-14: the removed values, so the prescription could be restored from the audit log.
+        Map<String, Object> removed = new LinkedHashMap<>();
+        removed.put("prescriptionCode", prescription.getMadonthuoc());
+        removed.put("visitNumber", context.visit().getSovaovien());
+        removed.putAll(auditValues(prescription));
+        Map<String, Object> after = new LinkedHashMap<>();
+        removed.keySet().forEach(field -> after.put(field, null));
+        prescriptionRepository.delete(prescription);
+        prescriptionRepository.flush();
+        auditLogService.recordEntityChange(
+                principal.accountId(), prescription.getId(), AuditLogAction.DELETE, AUDIT_ENTITY, removed, after, now);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PrescriptionResponse.Submission> submissions(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        guard.require(principal, visitId(prescription));
+        return submissionViews(prescription, submissionRepository
+                .findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PrescriptionPrintResponse printPreview(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        Context context = guard.require(principal, visitId(prescription));
+        requirePrintable(prescription);
+        return printForm(context, prescription, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionPrintResponse preparePrint(StaffPrincipal principal, UUID prescriptionId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+        Context context = guard.require(principal, visitId(prescription));
+        requirePrintable(prescription);
+        Instant now = clock.instant();
+        boolean reprint = prescription.getPrintedAt() != null;
+        if (!reprint) {
+            prescription.markPrinted(now);
+            prescriptionRepository.save(prescription);
+        }
+        // BR-59-14: every print is audited; the first one also sets printed_at.
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("prescriptionCode", prescription.getMadonthuoc());
+        audit.put("reprint", reprint);
+        auditLogService.recordBusinessChange(
+                principal.accountId(), AuditLogAction.PRINT, AUDIT_ENTITY, prescription.getId(),
+                context.visit().getSovaovien(), audit, now);
+        return printForm(context, prescription, now, displayName(context.doctor()));
+    }
+
+    /** UC-60 AF-01 (MSG112): only an accepted prescription is printed. */
+    private static void requirePrintable(Prescription prescription) {
+        if (!prescription.isPrintable()) {
+            throw new AppException(ErrorCode.PRESCRIPTION_NOT_PRINTABLE,
+                    Map.of("status", prescription.getLienthongStatus().name()));
+        }
+    }
+
+    /**
+     * BR-59-13: the form of TT 26/2025 Phụ lục I with the data sent to the national system (diagnoses and follow-up
+     * date copied at send time, BR-59-08) and the signature of the accepted send, verified again (BR-59-16). An
+     * accepted prescription is never sent again, so its last send is the accepted one. Reprinting from a closed
+     * record (UC-52, "Bản sao") is not implemented yet, so {@code copy} is false.
+     */
+    private PrescriptionPrintResponse printForm(
+            Context context, Prescription prescription, Instant printedAt, String printedBy) {
+        ClinicFacility facility = clinicFacilityRepository.findCurrent()
+                .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
+        Patient patient = context.patient();
+        Visit visit = context.visit();
+        String phone = normalize(patient.getSodienthoai());
+        PrescriptionPrintResponse.PatientInfo patientInfo = new PrescriptionPrintResponse.PatientInfo(
+                patient.getHoten(),
+                patient.getNgaysinh(),
+                switch (patient.getGioitinh()) {
+                    case 1 -> "Nam";
+                    case 2 -> "Nữ";
+                    default -> null;
+                },
+                normalize(PrescriptionPayloadBuilder.address(patient)),
+                // TT 26 Phụ lục I chú thích 8: the patient's phone, or the accompanying person's.
+                phone != null ? phone : normalize(patient.getSodienthoainguoithan()),
+                normalize(patient.getCccdSo()),
+                normalize(patient.getHochieuSo()),
+                // The insurance number as sent (BR-59-11 ma_so_bao_hiem_y_te).
+                visit.isInsuranceCovered() ? normalize(visit.getInsuranceSocialNumber()) : null);
+        List<Icd10OptionResponse> diagnoses = prescription.getDiagnoses().stream()
+                .sorted(Comparator.comparingInt(PrescriptionDiagnosis::getThuTu))
+                .map(diagnosis -> new Icd10OptionResponse(diagnosis.getMaicd(), diagnosis.getTenicd()))
+                .toList();
+        List<PrescriptionPrintResponse.Line> lines = prescription.getDetails().stream()
+                .sorted(Comparator.comparing(PrescriptionDetail::getMachidinh))
+                .map(detail -> new PrescriptionPrintResponse.Line(
+                        detail.getHoatchat(), detail.getTenthuocvattu(), detail.getHamluong(), detail.getDuongdung(),
+                        detail.getDonvitinh(), detail.getSoluongthuocvattu().stripTrailingZeros(),
+                        detail.getLieuMoiLan(), detail.getSoLanNgay(), detail.getSoNgayDung(), detail.getCachdung(),
+                        detail.getYlenhthuocvattuGhichu()))
+                .toList();
+        String doctorName = staffAccountRepository.findById(prescription.getDoctorAccountId())
+                .map(PrescriptionServiceImpl::displayName)
+                .orElse(null);
+        return new PrescriptionPrintResponse(
+                prescription.getId(),
+                prescription.getMadonthuoc(),
+                false,
+                printedAt,
+                printedBy,
+                new PrescriptionPrintResponse.Facility(
+                        facility.getTenCskcb(), facility.getDiachi(), facility.getSodienthoai()),
+                patientInfo,
+                childData(context, prescription),
+                diagnoses,
+                lines,
+                prescription.getLuuY(),
+                prescription.getLoiDan(),
+                prescription.getNgayTaiKham(),
+                prescription.getPrescribedAt(),
+                doctorName,
+                lastSubmission(prescription));
+    }
+
+    /** BR-59-13: the Doctor's academic title and name. */
+    private static String displayName(StaffAccount account) {
+        String title = normalize(account.getAcademicTitle());
+        return title == null ? account.getFullName() : title + " " + account.getFullName();
+    }
+
+    private UUID visitId(Prescription prescription) {
+        return medicalRecordRepository.findById(prescription.getMedicalRecordId())
+                .map(MedicalRecord::getVisitId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    }
+
     /** UC-91: the latest send, with the signature sent with it. */
     private PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
         return submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId())
-                .map(submission -> {
-                    RecordSignature signature = recordSignatureRepository
-                            .findFirstByDocumentTypeAndDocumentIdOrderByCreatedAtDesc(
-                                    RecordSignatureDocumentType.DON_THUOC, prescription.getId())
-                            .orElse(null);
-                    return new PrescriptionResponse.Submission(
-                            submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
-                            submission.getSubmittedAt(), submission.getRespondedAt(),
-                            signature == null ? null : signature.getSignedAt(),
-                            signature == null ? null : signature.getSignerName(),
-                            signature == null ? null : signature.getCertificateSerial(),
-                            signature == null ? null : signature.getCertificateIssuer());
-                })
+                .map(submission -> submissionViews(prescription, List.of(submission)).getFirst())
                 .orElse(null);
+    }
+
+    /**
+     * UC-91 step 2: each send with the signature made for it. The signature row of a send is written just before its
+     * submission (UC-90 step 5), so a send carries the latest signature created no later than it was submitted.
+     */
+    private List<PrescriptionResponse.Submission> submissionViews(
+            Prescription prescription, List<PrescriptionSubmission> submissions) {
+        if (submissions.isEmpty()) {
+            return List.of();
+        }
+        List<RecordSignature> signatures = recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
+                RecordSignatureDocumentType.DON_THUOC, prescription.getId());
+        Map<UUID, String> senders = staffAccountRepository.findAllById(submissions.stream()
+                        .map(PrescriptionSubmission::getSubmittedByAccountId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(StaffAccount::getId, StaffAccount::getFullName));
+        return submissions.stream().map(submission -> {
+            RecordSignature signature = null;
+            for (RecordSignature candidate : signatures) {
+                if (!candidate.getCreatedAt().isAfter(submission.getSubmittedAt())) {
+                    signature = candidate;
+                }
+            }
+            // BR-59-16: the status is the stored signature verified again, not the result kept at signing time.
+            String failure = signature == null ? null : signatureVerifier.reverify(
+                    signature.getSignatureValue(), signature.getSignedPayload(), signature.getCertificateSerial(),
+                    signature.getCertificateIssuer(), signature.getVerificationEvidence());
+            return new PrescriptionResponse.Submission(
+                    submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
+                    submission.getSubmittedAt(), submission.getRespondedAt(),
+                    signature == null ? null : signature.getSignedAt(),
+                    signature == null ? null : signature.getSignerName(),
+                    signature == null ? null : signature.getCertificateSerial(),
+                    signature == null ? null : signature.getCertificateIssuer(),
+                    senders.get(submission.getSubmittedByAccountId()),
+                    signature == null ? null : failure == null,
+                    failure);
+        }).toList();
     }
 
     private List<String> errors(String json) {
