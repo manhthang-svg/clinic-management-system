@@ -15,9 +15,9 @@ describe('UC-40 visit form', () => {
 
   it('requires the fields needed to register a visit', () => {
     expect(validateVisitForm(EMPTY_VISIT_FORM, {})).toEqual({
-      visitType: 'Vui lòng chọn loại lượt khám.',
-      reason: 'Vui lòng nhập lý do khám.',
-      roomId: 'Vui lòng chọn phòng khám.',
+      visitType: 'Loại lượt khám là bắt buộc.',
+      reason: 'Lý do khám là bắt buộc.',
+      roomId: 'Phòng khám là bắt buộc.',
     });
   });
 
@@ -31,7 +31,7 @@ describe('UC-40 visit form', () => {
     };
 
     expect(validateVisitForm(form, {})).toEqual({
-      referralDiagnosis: 'Vui lòng nhập chẩn đoán của nơi giới thiệu.',
+      referralDiagnosis: 'Chẩn đoán của nơi giới thiệu là bắt buộc.',
     });
     expect(validateVisitForm({ ...form, referralDiagnosis: 'V' }, {}).referralDiagnosis)
       .toBe('Nhập tối thiểu 2 ký tự.');
@@ -43,6 +43,17 @@ describe('UC-40 visit form', () => {
   it('sends no referral diagnosis for a self-referred visit', () => {
     const form = { ...EMPTY_VISIT_FORM, referralSource: 'TU_DEN', referralDiagnosis: 'Viêm phổi' };
     expect(formToVisitRequest(form, 'p', {}).chandoancuanoigioithieu).toBeNull();
+  });
+
+  it('neither requires nor sends a referral diagnosis for a follow-up visit', () => {
+    const form = {
+      ...EMPTY_VISIT_FORM, visitType: 'DV', reason: 'Tái khám', roomId: 'room-1', referralSource: 'CO_SO_Y_TE',
+      followUpAppointmentId: 'a-1', followUpAppointmentVersion: 0,
+    };
+
+    expect(validateVisitForm(form, {})).toEqual({});
+    expect(formToVisitRequest({ ...form, referralDiagnosis: 'Viêm phổi' }, 'p', {}).chandoancuanoigioithieu)
+      .toBeNull();
   });
 
   it('has no length limit on the reason for visit (visits.lydovaovien is TEXT)', () => {
@@ -74,6 +85,16 @@ describe('UC-40 visit form', () => {
       followUpAppointmentId: form.followUpAppointmentId,
       followUpAppointmentVersion: 3,
     });
+  });
+
+  it('sends "Tự đến" for a follow-up visit whatever referral source was picked before attaching it', () => {
+    const form = {
+      ...EMPTY_VISIT_FORM, visitType: 'DV', reason: 'Tái khám', roomId: 'room-1', referralSource: 'CO_SO_Y_TE',
+    };
+
+    expect(formToVisitRequest(form, 'p-1', {}).noigioithieuLoai).toBe('CO_SO_Y_TE');
+    expect(formToVisitRequest({ ...form, followUpAppointmentId: 'a-1', followUpAppointmentVersion: 0 }, 'p-1', {})
+      .noigioithieuLoai).toBe('TU_DEN');
   });
 
   it('requires a successful verification when the insurance portal is unavailable', () => {

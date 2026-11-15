@@ -3,7 +3,7 @@ import { ApiError } from '../../apis/apiError';
 // Message texts follow the SRS message list (MSG12, MSG17, MSG20, MSG22, MSG56, MSG99).
 export const MSG12 = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
 export const MSG17 = 'Thẻ BHYT không hợp lệ hoặc đã hết hạn. Lượt khám sẽ được đăng ký dạng Dịch vụ.';
-export const MSG20 = 'Cổng BHYT không trả lời trong 10 giây. Vui lòng thử lại hoặc chuyển sang Tự trả.';
+export const MSG20 = 'Không thể kết nối với cổng BHYT. Vui lòng thử lại hoặc đăng ký lượt khám theo hình thức dịch vụ.';
 export const MSG99 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 // ASSUMPTION: MSG91 is not in the SRS message list available in docs/.
 export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt khám khác. Thông tin lịch hẹn đã được tải lại.';
@@ -20,8 +20,9 @@ export function msg21(visit) {
     : `Đã đăng ký lượt khám ${visit.sovaovien}. Số thứ tự được cấp sau khi thanh toán phí khám.`;
 }
 
-export function msg22(visit, statusLabel) {
-  return `Bệnh nhân đang có lượt khám chưa kết thúc (${visit.sovaovien} – ${visit.roomName ?? 'phòng khám'} – ${statusLabel}).`;
+/** MSG22: the patient already has an unfinished visit (UC-40 EF-01). */
+export function msg22(visit) {
+  return `Bệnh nhân này đã có lượt khám ${visit.sovaovien} đang hoạt động.`;
 }
 
 // MSG53: the selected room cannot receive patients (inactive, or no doctor on duty; BR-96).
