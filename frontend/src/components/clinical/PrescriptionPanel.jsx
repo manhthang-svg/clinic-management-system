@@ -1,18 +1,15 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
-    AlertTriangle, ArrowDown, ArrowUp, FileSignature, History, LoaderCircle, Lock, Pencil, Pill, RotateCcw, Save, Search, Trash2,
+    AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, FileSignature, LoaderCircle, Lock, Pill, RotateCcw, Save, Search, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
-import { BUTTON } from './buttonStyles';
 import {
     LIMITS, MSG, formFromResponse, newLine, prescriptionError, samePrescription, suggestedQuantity, toPayload,
     validatePrescription,
 } from './prescriptionForm';
-import { PrintPrescriptionButton } from './PrintPrescriptionButton';
 import { PrescriptionSigningDialog } from './PrescriptionSigningDialog';
-import { PrescriptionSubmissionHistory, SignatureStatus } from './PrescriptionSubmissionHistory';
 import { SIGNING_MSG } from './prescriptionSigning';
 
 const inputClass = 'w-full rounded-lg border bg-white px-2.5 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
@@ -268,15 +265,21 @@ function moved(lines, from, to) {
     return next;
 }
 
-/** UC-91 step 3: the latest send and its answer; the signature of an accepted send (BR-59-16). */
-function SubmissionResult({ data, onResend, onEdit, canResend, dirty }) {
+/** UC-91: the latest send and its answer; the signature of an accepted send (BR-59-16). */
+function SubmissionResult({ data, onResend }) {
     const submission = data?.lastSubmission;
     if (!submission) return null;
     if (submission.result === 'ACCEPTED') {
         return (
             <section role="status" aria-label="Kết quả gửi đơn thuốc" className="space-y-1 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                 <p className="font-semibold">{SIGNING_MSG.ACCEPTED(data.prescriptionCode)}</p>
-                {submission.signedAt && <div className="text-xs"><SignatureStatus submission={submission} /></div>}
+                {submission.signedAt && (
+                    <p className="flex flex-wrap items-center gap-1 text-xs">
+                        <BadgeCheck aria-hidden="true" className="h-4 w-4" />
+                        <span className="font-semibold">{SIGNING_MSG.SIGNATURE_VALID}</span>
+                        <span>· {submission.signerName} · ký lúc {formatDateTime(submission.signedAt)} · chứng thư {submission.certificateSerial} ({submission.certificateIssuer})</span>
+                    </p>
+                )}
             </section>
         );
     }
@@ -284,28 +287,16 @@ function SubmissionResult({ data, onResend, onEdit, canResend, dirty }) {
         return (
             <section role="alert" aria-label="Kết quả gửi đơn thuốc" className="space-y-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                 <p className="font-semibold">{SIGNING_MSG.REJECTED}</p>
-                <p className="text-xs">{SIGNING_MSG.REJECTED_ATTEMPT(submission.attemptNo, formatDateTime(submission.respondedAt ?? submission.submittedAt))}</p>
-                {/* UC-92 step 1: the errors of the last rejection stay visible while the Doctor corrects the prescription. */}
                 <ul className="list-inside list-disc text-xs">
                     {submission.errors.map((error) => <li key={error}>{error}</li>)}
                 </ul>
-                <p className="text-xs text-rose-900">{SIGNING_MSG.CORRECT_ELSEWHERE}</p>
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button type="button" onClick={onEdit} className={BUTTON.smallRose}>
-                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" />Sửa đơn
-                    </button>
-                    <button type="button" onClick={onResend} disabled={!canResend} className={BUTTON.smallRose}>
-                        <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Gửi lại
-                    </button>
-                    {dirty && <span className="text-xs">{SIGNING_MSG.SAVE_BEFORE_RESEND}</span>}
-                </div>
             </section>
         );
     }
     return (
         <section role="alert" aria-label="Kết quả gửi đơn thuốc" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <span>{SIGNING_MSG.NO_ANSWER}</span>
-            <button type="button" onClick={onResend} disabled={!canResend} className={BUTTON.smallAmber}>
+            <button type="button" onClick={onResend} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-100">
                 <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Gửi lại
             </button>
         </section>
@@ -329,13 +320,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     const [reloadKey, setReloadKey] = useState(0);
     // UC-90: the signing dialog, with a pending request to resume (AF-06) or null.
     const [signing, setSigning] = useState(null);
-    // UC-91: the submission history, opened from "Kết quả gửi".
-    const [showHistory, setShowHistory] = useState(false);
-    // UC-59 AF-03: the MSG109 confirmation, and the deletion in progress.
-    const [confirmDelete, setConfirmDelete] = useState(false);
-    const [deleting, setDeleting] = useState(false);
     const titleId = useId();
-    const prescriptionRef = useRef(null);
     const dirty = !samePrescription(form, savedForm);
 
     useEffect(() => {
@@ -408,24 +393,6 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
         }
     };
 
-    // UC-59 AF-03: remove a prescription that was never sent; the form starts again empty.
-    const remove = async () => {
-        setDeleting(true);
-        setPageError('');
-        try {
-            await api.deletePrescription(data.prescriptionId);
-            setConfirmDelete(false);
-            setShowHistory(false);
-            toast.success(MSG.DELETED);
-            setReloadKey((key) => key + 1);
-        } catch (error) {
-            setConfirmDelete(false);
-            setPageError(prescriptionError(error).message);
-        } finally {
-            setDeleting(false);
-        }
-    };
-
     if (loading) {
         return <div role="status" className="flex min-h-40 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-500"><LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />Đang tải đơn thuốc…</div>;
     }
@@ -443,14 +410,6 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
     // UC-90 step 1: a saved, unchanged prescription that is pending, rejected or sent without an answer.
     const canSign = Boolean(data?.prescriptionId) && !accepted && !dirty && Boolean(data?.conclusionSaved)
         && linkCodeMessages.length === 0;
-    // UC-59 AF-03 (P03): only a prescription that was never sent.
-    const canDelete = Boolean(data?.prescriptionId) && data?.status === 'PENDING';
-    // UC-92 step 1: "Sửa đơn" brings the Doctor to the first field of the prescription, which stays editable.
-    const editPrescription = () => {
-        const section = prescriptionRef.current;
-        section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-        section?.querySelector('input:not([disabled]), textarea:not([disabled])')?.focus();
-    };
     const finishSigning = (prescription) => {
         setSigning(null);
         if (!prescription) {
@@ -508,16 +467,10 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
 
             {!data?.conclusionSaved && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{MSG.CONCLUSION_REQUIRED}</p>}
             {linkCodeMessages.map((message) => <p key={message} role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{message}</p>)}
-            <SubmissionResult
-                data={data}
-                canResend={canSign && Boolean(data?.signingCertificateRegistered)}
-                dirty={dirty}
-                onResend={() => setSigning({ resume: null })}
-                onEdit={editPrescription}
-            />
+            <SubmissionResult data={data} onResend={() => setSigning({ resume: null })} />
             {accepted && <p role="status" className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><Lock aria-hidden="true" className="h-4 w-4" />{MSG.SENT}</p>}
 
-            <section ref={prescriptionRef} aria-labelledby={`${titleId}`} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section aria-labelledby={`${titleId}`} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
                         <h2 id={titleId} className="flex items-center gap-2 text-base font-bold"><Pill aria-hidden="true" className="h-4 w-4 text-teal-600" />Đơn thuốc</h2>
@@ -536,7 +489,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className={BUTTON.primary}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
                                 {saving ? 'Đang lưu…' : 'Lưu đơn thuốc'}
@@ -547,58 +500,15 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                                 type="button"
                                 onClick={() => setSigning({ resume: null })}
                                 disabled={!data?.signingCertificateRegistered}
-                                className={BUTTON.outline}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 bg-white px-5 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <FileSignature aria-hidden="true" className="h-4 w-4" />Ký và gửi đơn
-                            </button>
-                        )}
-                        {data?.lastSubmission && (
-                            <button
-                                type="button"
-                                onClick={() => setShowHistory((open) => !open)}
-                                aria-expanded={showHistory}
-                                className={BUTTON.neutral}
-                            >
-                                <History aria-hidden="true" className="h-4 w-4" />Kết quả gửi
-                            </button>
-                        )}
-                        {data?.prescriptionId && (
-                            <PrintPrescriptionButton prescriptionId={data.prescriptionId} accepted={accepted} api={api} />
-                        )}
-                        {canDelete && (
-                            <button
-                                type="button"
-                                onClick={() => setConfirmDelete(true)}
-                                disabled={deleting || confirmDelete}
-                                className={BUTTON.danger}
-                            >
-                                <Trash2 aria-hidden="true" className="h-4 w-4" />Xóa đơn
                             </button>
                         )}
                     </div>
                 </div>
                 {canSign && !data?.signingCertificateRegistered && <p role="status" className="text-xs text-amber-800">{SIGNING_MSG.NOT_REGISTERED}</p>}
                 {data?.prescriptionId && !accepted && dirty && <p className="text-xs text-slate-500">Lưu đơn thuốc trước khi ký và gửi.</p>}
-
-                {confirmDelete && (
-                    <div role="alertdialog" aria-label="Xóa đơn thuốc" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm">
-                        <p className="text-rose-900">{MSG.DELETE_CONFIRM(data.prescriptionCode)}</p>
-                        <div className="mt-2 flex justify-end gap-2">
-                            <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-600 disabled:opacity-50">Hủy</button>
-                            <button type="button" onClick={() => { void remove(); }} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
-                                {deleting && <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
-                                {deleting ? 'Đang xóa…' : 'Xóa đơn'}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {showHistory && data?.prescriptionId && (
-                    <section aria-label="Kết quả gửi" className="space-y-2">
-                        <h3 className="text-sm font-bold">Kết quả gửi</h3>
-                        <PrescriptionSubmissionHistory key={data.version} prescriptionId={data.prescriptionId} api={api} />
-                    </section>
-                )}
 
                 {pageError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">{pageError}</p>}
 

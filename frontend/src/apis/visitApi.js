@@ -191,28 +191,6 @@ export const visitApi = {
         });
     },
 
-    // UC-59 AF-03: remove a prescription that was never sent.
-    deletePrescription(prescriptionId) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}`, { method: 'DELETE' });
-    },
-
-    // UC-91: every send of the prescription, newest first, each with its signature status.
-    getPrescriptionSubmissions(prescriptionId, signal) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/submissions`, { signal });
-    },
-
-    // UC-60 step 2: the printed form of an accepted prescription, for the preview (nothing is recorded).
-    getPrescriptionPrint(prescriptionId, signal) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/print`, { signal });
-    },
-
-    // UC-60 step 3: the server records the print (PRINT audit row, first printed_at) and returns the form.
-    preparePrescriptionPrint(prescriptionId) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/commands/prepare-print`, {
-            method: 'POST',
-        });
-    },
-
     // UC-90 step 3: re-check the prescription, pre-check the Doctor's certificate and ask the CA for a signature.
     requestPrescriptionSignature(prescriptionId, version) {
         return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/commands/request-signature`, {

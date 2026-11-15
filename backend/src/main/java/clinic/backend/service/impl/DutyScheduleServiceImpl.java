@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -23,20 +22,14 @@ import clinic.backend.dto.response.DutyScheduleItemResponse;
 import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.entity.DutySchedule;
-import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
-import clinic.backend.entity.Visit;
 import clinic.backend.enums.DutyShift;
-import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.Role;
 import clinic.backend.enums.RoomType;
-import clinic.backend.enums.VisitStatus;
 import clinic.backend.repository.DutyScheduleRepository;
-import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
-import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.DutyScheduleService;
 import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.utils.UuidV7Generator;
@@ -57,26 +50,13 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
     private final DutyShiftConfigService dutyShiftConfigService;
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
-    private final VisitRepository visitRepository;
-    private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
 
     public static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     public static final LocalTime MORNING_SHIFT_END = LocalTime.of(11, 30);
     public static final LocalTime AFTERNOON_SHIFT_END = LocalTime.of(17, 30);
 
     /**
-     * Kiểm tra xem ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian quá khứ hay chưa theo giờ Việt Nam.
-     * 
-     * Quy tắc:
-     * - Nếu ngày trực nhỏ hơn ngày hôm nay theo giờ VN: Đã qua (bị khóa).
-     * - Nếu ngày trực lớn hơn ngày hôm nay: Thuộc tương lai (hợp lệ).
-     * - Nếu ngày trực là hôm nay:
-     *   + Ca Sáng: Đã kết thúc nếu hiện tại sau giờ kết thúc ca sáng (hoặc sau 11:59).
-     *   + Ca Chiều: Đã kết thúc nếu hiện tại sau giờ kết thúc ca chiều (hoặc sau 23:59).
-     *
-     * @param workDate Ngày trực cần kiểm tra
-     * @param shift    Ca trực (MORNING hoặc AFTERNOON)
-     * @return true nếu ca trực đã trôi qua / đã kết thúc
+     * Kiểm tra xem ca trực (workDate, shift) đã kết thúc hoặc thuộc thời gian quá khứ hay chưa theo giờ Việt Nam
      */
     private boolean isPastShift(LocalDate workDate, DutyShift shift) {
         if (workDate == null) return false;
@@ -102,95 +82,9 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return false;
     }
 
-    /**
-     * BR-113: Kiểm tra phòng khám hoặc nhân viên có lượt khám / dịch vụ đang chờ hoặc dở dang hay không
-     * trước khi xóa hoặc thay đổi nhân sự ca trực trong ngày hiện tại.
-     */
-    private void checkWorkInProgress(DutySchedule schedule, String actionDescription) {
-        if (schedule == null || schedule.getWorkDate() == null) {
-            return;
-        }
-        ZonedDateTime nowVN = clock.instant().atZone(VIETNAM_ZONE);
-        LocalDate todayVN = nowVN.toLocalDate();
-        if (!schedule.getWorkDate().isEqual(todayVN)) {
-            return;
-        }
-
-        // 1. Kiểm tra nhân viên có lượt khám hoặc dịch vụ dở dang không
-        if (schedule.getStaffAccountId() != null) {
-            long visitsInProgress = visitRepository.countByDoctorAccountIdAndStatus(
-                    schedule.getStaffAccountId(), VisitStatus.IN_EXAMINATION);
-            long ordersInProgress = paraclinicalOrderDetailRepository.countByPerformerAccountIdAndStatus(
-                    schedule.getStaffAccountId(), ParaclinicalOrderDetailStatus.IN_PROGRESS);
-
-            if (visitsInProgress > 0 || ordersInProgress > 0) {
-                StaffAccount staff = staffAccountRepository.findById(schedule.getStaffAccountId()).orElse(null);
-                String staffName = staff != null ? staff.getFullName() : "Nhân viên";
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        staffName + " đang có lượt khám hoặc dịch vụ đang thực hiện dở dang. Vui lòng hoàn tất trước khi " + actionDescription + ".");
-            }
-        }
-
-        // 2. Kiểm tra phòng khám có bệnh nhân đang chờ hoặc đang khám trong ca trực này không
-        if (schedule.getRoomId() == null) {
-            return;
-        }
-        Room room = roomRepository.findById(schedule.getRoomId()).orElse(null);
-        if (room == null) {
-            return;
-        }
-        String roomName = room.getRoomName() != null ? room.getRoomName() : "phòng khám";
-
-        LocalTime currentTimeVN = nowVN.toLocalTime();
-        Optional<DutyShift> currentShiftOpt = dutyShiftConfigService.shiftAt(todayVN, currentTimeVN);
-        Optional<DutyShift> regShiftOpt = dutyShiftConfigService.registrationShift(todayVN, currentTimeVN);
-
-        boolean isCurrentOrRegShift = (currentShiftOpt.isPresent() && currentShiftOpt.get() == schedule.getShift())
-                || (regShiftOpt.isPresent() && regShiftOpt.get() == schedule.getShift());
-
-        if (isCurrentOrRegShift) {
-            if (room.getType() == RoomType.EXAMINATION) {
-                List<VisitStatus> activeStatuses = List.of(
-                        VisitStatus.WAITING,
-                        VisitStatus.IN_EXAMINATION,
-                        VisitStatus.WAITING_PARACLINICAL,
-                        VisitStatus.WAITING_CONCLUSION
-                );
-                List<Visit> activeVisits = visitRepository.findAllByRoomIdAndQueueDateAndStatusIn(
-                        schedule.getRoomId(), todayVN, activeStatuses
-                );
-                if (!activeVisits.isEmpty()) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Phòng " + roomName + " đang có " + activeVisits.size()
-                                    + " bệnh nhân đang chờ hoặc đang khám trong ca trực này. Không thể " + actionDescription + ".");
-                }
-            } else if (room.getType() == RoomType.PARACLINICAL) {
-                Instant startOfDay = todayVN.atStartOfDay(VIETNAM_ZONE).toInstant();
-                List<ParaclinicalOrderDetail> queueDetails = paraclinicalOrderDetailRepository.findQueueDetails(
-                        schedule.getRoomId(), startOfDay
-                );
-                long activeOrders = queueDetails.stream()
-                        .filter(d -> d.getStatus() == ParaclinicalOrderDetailStatus.WAITING
-                                || d.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS)
-                        .count();
-                if (activeOrders > 0) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Phòng " + roomName + " đang có " + activeOrders
-                                    + " dịch vụ cận lâm sàng đang chờ hoặc đang thực hiện trong ca trực này. Không thể " + actionDescription + ".");
-                }
-            }
-        }
-    }
-
-    /**
-     * Lấy toàn bộ ma trận phân công lịch trực của tất cả các phòng khám trong 1 tuần (từ Thứ 2 đến Chủ Nhật).
-     *
-     * @param startDate Ngày bắt đầu tuần (mặc định lấy Thứ 2 của tuần hiện tại nếu null)
-     * @param endDate   Ngày kết thúc tuần (mặc định bằng startDate + 6 ngày nếu null)
-     * @return Đối tượng WeeklyScheduleResponse gồm cấu hình giờ ca trực và danh sách các ca trực trong tuần
-     */
     @Override
     @Transactional(readOnly = true)
+    // lay lich truc trong 1 tuan
     public WeeklyScheduleResponse getWeeklySchedule(LocalDate startDate, LocalDate endDate) {
         if (startDate == null) {
             startDate = LocalDate.now(clock).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -203,17 +97,9 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return mapToWeeklyResponse(startDate, endDate, schedules);
     }
 
-    /**
-     * Lấy lịch trực theo tuần nhưng chỉ lọc riêng cho một phòng khám/phòng kỹ thuật cụ thể (UC-19).
-     * Dùng để xác định danh sách bác sĩ/KTV phụ trách phòng đó trong tuần.
-     *
-     * @param roomId    ID định danh của phòng
-     * @param startDate Ngày bắt đầu tuần
-     * @param endDate   Ngày kết thúc tuần
-     * @return Lịch trực tuần của riêng phòng được chỉ định
-     */
     @Override
     @Transactional(readOnly = true)
+    // Lấy lịch trực theo tuần nhưng chỉ lọc riêng cho một phòng cụ thể
     public WeeklyScheduleResponse getWeeklyScheduleByRoom(UUID roomId, LocalDate startDate, LocalDate endDate) {
         if (startDate == null) {
             startDate = LocalDate.now(clock).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -228,29 +114,8 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return mapToWeeklyResponse(startDate, endDate, schedules);
     }
 
-    /**
-     * Phân công mới (Tạo mới) hoặc Cập nhật 1 ca trực đơn lẻ cho nhân viên tại 1 phòng khám.
-     *
-     * Quy trình xử lý & kiểm tra ràng buộc (Business Rules):
-     * 1. Chặn thao tác trên ca trực đã kết thúc hoặc trong quá khứ theo giờ Việt Nam.
-     * 2. Kiểm tra tài khoản nhân viên và phòng khám tồn tại trong hệ thống.
-     * 3. Ràng buộc vai trò: Bác sĩ (DOCTOR) chỉ trực phòng lâm sàng (EXAMINATION);
-     *    Kỹ thuật viên (TECHNICIAN) chỉ trực phòng cận lâm sàng (PARACLINICAL).
-     * 4. Nếu là CẬP NHẬT (id != null):
-     *    - BR-113: Nếu thay đổi Bác sĩ/KTV hoặc đổi phòng trong ngày hôm nay, kiểm tra xem
-     *      nhân viên/phòng đó có lượt khám hoặc dịch vụ dở dang hay không. Nếu có -> từ chối đổi.
-     *    - Kiểm tra nhân viên không bị trùng ca trực khác trong cùng buổi (trừ ca hiện tại).
-     *    - Kiểm tra phòng khám không bị phân 2 người cùng 1 ca (trừ ca hiện tại).
-     * 5. Nếu là TẠO MỚI (id == null):
-     *    - Kiểm tra nhân viên chưa có lịch trực nào khác trong ca này.
-     *    - Kiểm tra phòng khám chưa có ai trực trong ca này.
-     *    - Khởi tạo Entity với UUIDv7 và lưu xuống Database.
-     *
-     * @param request       Dữ liệu yêu cầu phân công ca trực
-     * @param currentUserId ID của Admin đang thực hiện thao tác
-     * @return Bản ghi ca trực chi tiết sau khi đã lưu thành công
-     */
     @Override
+    // Tạo mới hoặc cập nhật 1 ca trực đơn lẻ.
     public DutyScheduleItemResponse saveDuty(DutyScheduleSaveRequest request, UUID currentUserId) {
         if (isPastShift(request.getWorkDate(), request.getShift())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể phân công hoặc chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
@@ -288,13 +153,6 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
 
             if (isPastShift(schedule.getWorkDate(), schedule.getShift())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa ca trực đã kết thúc hoặc trong quá khứ");
-            }
-
-            // BR-113: Nếu thay đổi nhân viên hoặc thay đổi phòng trong ngày hôm nay, kiểm tra xem có bệnh nhân hoặc công việc dở dang không
-            boolean isStaffChanged = !schedule.getStaffAccountId().equals(request.getStaffAccountId());
-            boolean isRoomChanged = !schedule.getRoomId().equals(request.getRoomId());
-            if (isStaffChanged || isRoomChanged) {
-                checkWorkInProgress(schedule, "thay đổi nhân sự hoặc phòng trực");
             }
 
             // Kiểm tra nhân viên không trùng ca trong ngày
@@ -351,24 +209,6 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return toResponse(saved, staffMap, roomMap);
     }
 
-    /**
-     * Lưu hàng loạt lịch trực cho một tuần (thường dùng cho tính năng "Sao chép tuần trước").
-     *
-     * Quy trình xử lý:
-     * 1. Kiểm tra tuần đích không được nằm trọn trong quá khứ.
-     * 2. Xác định mốc xóa an toàn `deleteFrom`: Chỉ xóa các ngày từ hôm nay trở đi,
-     *    tuyệt đối không xóa các ca trực thuộc ngày đã qua trong quá khứ.
-     * 3. BR-113: Kiểm tra các ca trực ngày hôm nay xem có phòng nào đang có bệnh nhân chờ/khám không.
-     *    Nếu có -> từ chối sao chép để tránh ghi đè làm mất phiên trực đang làm việc.
-     * 4. Xóa các ca trực cũ từ mốc `deleteFrom` đến `endDate`.
-     * 5. Lọc và chuẩn hóa danh sách ca mới: Bỏ qua ca quá khứ, kiểm tra vai trò nhân viên - loại phòng,
-     *    kiểm tra không trùng phòng và không trùng người trong cùng buổi.
-     * 6. Lưu danh sách ca trực mới hàng loạt (`saveAll`) và trả về ma trận tuần mới.
-     *
-     * @param request       Yêu cầu lưu hàng loạt kèm danh sách các ca trực
-     * @param currentUserId ID của Admin thực hiện
-     * @return Toàn bộ lịch trực tuần sau khi đã sao chép/cập nhật
-     */
     @Override
     public WeeklyScheduleResponse batchSaveWeeklySchedule(WeeklyBatchScheduleRequest request, UUID currentUserId) {
         LocalDate startDate = request.getStartDate();
@@ -386,14 +226,6 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
 
         LocalDate deleteFrom = startDate.isBefore(todayVN) ? todayVN : startDate;
         List<DutySchedule> existing = dutyScheduleRepository.findByWorkDateBetweenOrderByWorkDateAscShiftAsc(deleteFrom, endDate);
-
-        // BR-113: Kiểm tra xem các ca trực bị xóa đè trong ngày hôm nay có ca nào đang có bệnh nhân dở dang không
-        for (DutySchedule s : existing) {
-            if (s.getWorkDate().isEqual(todayVN)) {
-                checkWorkInProgress(s, "sao chép lịch trực đè lên ngày hôm nay");
-            }
-        }
-
         dutyScheduleRepository.deleteAll(existing);
         dutyScheduleRepository.flush();
 
@@ -460,15 +292,6 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         return getWeeklySchedule(startDate, endDate);
     }
 
-    /**
-     * Xóa / Hủy bỏ phân công một ca trực theo ID (Admin thực hiện).
-     *
-     * Quy tắc an toàn:
-     * 1. Không cho phép xóa ca trực đã kết thúc hoặc trong quá khứ.
-     * 2. BR-113: Từ chối xóa nếu phòng khám đang có bệnh nhân chờ khám hoặc nhân viên đang có lượt khám dở dang.
-     *
-     * @param id ID của bản ghi ca trực cần xóa
-     */
     @Override
     public void deleteDuty(UUID id) {
         DutySchedule schedule = dutyScheduleRepository.findById(id)
@@ -476,20 +299,9 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
         if (isPastShift(schedule.getWorkDate(), schedule.getShift())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xoá ca trực đã kết thúc hoặc trong quá khứ");
         }
-        // BR-113: Kiểm tra phòng khám hoặc nhân viên có bệnh nhân/công việc dở dang không
-        checkWorkInProgress(schedule, "xoá ca trực");
         dutyScheduleRepository.delete(schedule);
     }
 
-    /**
-     * Chuyển đổi danh sách thực thể DutySchedule sang đối tượng phản hồi tuần WeeklyScheduleResponse.
-     * Tải trước toàn bộ phòng và tài khoản vào Map để tối ưu hiệu năng (tránh N+1 query).
-     *
-     * @param startDate Ngày bắt đầu tuần
-     * @param endDate   Ngày kết thúc tuần
-     * @param schedules Danh sách entity các ca trực truy vấn từ DB
-     * @return Đối tượng response đóng gói đầy đủ dữ liệu cho giao diện ma trận tuần
-     */
     private WeeklyScheduleResponse mapToWeeklyResponse(LocalDate startDate, LocalDate endDate, List<DutySchedule> schedules) {
         Map<UUID, StaffAccount> staffMap = staffAccountRepository.findAll().stream()
                 .collect(Collectors.toMap(StaffAccount::getId, s -> s, (s1, s2) -> s1));
@@ -509,15 +321,6 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
                 .build();
     }
 
-    /**
-     * Ánh xạ một bản ghi thực thể DutySchedule sang DTO DutyScheduleItemResponse hiển thị trên giao diện.
-     * Ghép học hàm/học vị vào họ tên bác sĩ/KTV, đính kèm tên phòng, mã phòng và người phân công.
-     *
-     * @param schedule Bản ghi ca trực từ database
-     * @param staffMap Bản đồ tra cứu nhanh tài khoản nhân viên theo ID
-     * @param roomMap  Bản đồ tra cứu nhanh phòng theo ID
-     * @return DTO chứa đầy đủ thông tin ca trực
-     */
     private DutyScheduleItemResponse toResponse(
             DutySchedule schedule,
             Map<UUID, StaffAccount> staffMap,

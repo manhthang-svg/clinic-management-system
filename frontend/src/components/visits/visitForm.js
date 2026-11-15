@@ -2,11 +2,6 @@
 // Client checks mirror CreateVisitRequest for feedback only; the backend decides.
 
 export const CARD_NUMBER_LENGTH = 15;
-// BR-129: chẩn đoán của nơi giới thiệu, 2–1.000 ký tự.
-export const MIN_REFERRAL_DIAGNOSIS_LENGTH = 2;
-export const MAX_REFERRAL_DIAGNOSIS_LENGTH = 1000;
-// BR-94: nơi giới thiệu "Y tế" (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13).
-export const REFERRAL_HEALTH_FACILITY = 'CO_SO_Y_TE';
 
 export const EMPTY_VISIT_FORM = {
   isPriority: false,
@@ -15,7 +10,6 @@ export const EMPTY_VISIT_FORM = {
   cardNumber: '',
   reason: '',
   referralSource: 'TU_DEN',
-  referralDiagnosis: '',
   roomId: '',
   // Set when the receptionist attaches a follow-up appointment (AF-04).
   followUpAppointmentId: null,
@@ -69,17 +63,6 @@ export function validateVisitForm(form, insurance) {
   // No length limit: visits.lydovaovien is TEXT.
   if (!reason) errors.reason = msg02('Lý do khám');
 
-  // BR-129: required when referred by a health facility; the field is hidden for "Tự đến" and follow-ups.
-  if (referralSourceOf(form) === REFERRAL_HEALTH_FACILITY) {
-    const diagnosis = form.referralDiagnosis.trim();
-    if (!diagnosis) errors.referralDiagnosis = msg02('Chẩn đoán của nơi giới thiệu');
-    else if (diagnosis.length < MIN_REFERRAL_DIAGNOSIS_LENGTH) {
-      errors.referralDiagnosis = `Nhập tối thiểu ${MIN_REFERRAL_DIAGNOSIS_LENGTH} ký tự.`;
-    } else if (diagnosis.length > MAX_REFERRAL_DIAGNOSIS_LENGTH) {
-      errors.referralDiagnosis = `Vượt quá độ dài tối đa ${MAX_REFERRAL_DIAGNOSIS_LENGTH} ký tự.`;
-    }
-  }
-
   if (!form.roomId) errors.roomId = msg02('Phòng khám');
 
   return errors;
@@ -101,9 +84,6 @@ export function formToVisitRequest(form, patientId, insurance) {
     lydovaovien: form.reason.trim(),
     lydotiepnhan: form.followUpAppointmentId ? 'FOLLOW_UP' : 'EXAMINATION',
     noigioithieuLoai: referralSourceOf(form),
-    chandoancuanoigioithieu: referralSourceOf(form) === REFERRAL_HEALTH_FACILITY
-      ? form.referralDiagnosis.trim()
-      : null,
     isPriority: form.isPriority,
     priorityReason: form.isPriority ? form.priorityReason : null,
     followUpAppointmentId: form.followUpAppointmentId,

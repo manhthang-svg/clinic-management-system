@@ -52,7 +52,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void searchesByFullCitizenIdAndByPartOfPatientCodeAndPhone() throws Exception {
+    void searchesByExactCitizenIdPatientCodeAndPhone() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
         String citizenId = digits(12);
         String phone = "09" + digits(8);
@@ -64,7 +64,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         mockMvc.perform(search(receptionist, "PATIENT_CODE", code.toLowerCase()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(code)));
-        mockMvc.perform(search(receptionist, "PHONE", phone.substring(2)))
+        mockMvc.perform(search(receptionist, "PHONE", phone))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(code)));
     }
@@ -269,10 +269,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     void rejectsKeywordWithWrongFormatForItsType() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
 
-        mockMvc.perform(search(receptionist, "CITIZEN_ID", "07905"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details.keyword").value("INVALID_FORMAT"));
-        mockMvc.perform(search(receptionist, "CITIZEN_ID", "12345A"))
+        mockMvc.perform(search(receptionist, "CITIZEN_ID", "12345"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.details.keyword").value("INVALID_FORMAT"));

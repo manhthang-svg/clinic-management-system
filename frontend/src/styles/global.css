@@ -843,26 +843,8 @@ p[role='alert']:not(.banner) {
   .paraclinical-result-print,
   .paraclinical-result-print *,
   .paraclinical-order-print,
-  .paraclinical-order-print *,
-  .prescription-print,
-  .prescription-print * {
+  .paraclinical-order-print * {
     visibility: visible !important;
-  }
-
-  /* UC-60: the prescription of TT 26/2025 Phụ lục I across the printable width, like the paraclinical order. */
-  .prescription-print {
-    position: absolute;
-    inset: 0 0 auto 0;
-    color: #000 !important;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-  }
-
-  .prescription-print .prescription-sheet {
-    border: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
   }
 
   /* UC-50: one sheet with every service and its room (BR-50-04), across the printable width like the result slips. */

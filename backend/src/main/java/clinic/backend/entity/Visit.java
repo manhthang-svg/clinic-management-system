@@ -104,10 +104,6 @@ public class Visit extends VersionedEntity {
     @Column(name = "noigioithieu_loai", length = 200)
     private String noigioithieuLoai;
 
-    /** TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13; CV 365 II.7, III.17. BR-129: only when referred by a facility. */
-    @Column(name = "chandoancuanoigioithieu")
-    private String chandoancuanoigioithieu;
-
     /** CV 365 II.16. */
     @Column(name = "lydovaovien", nullable = false)
     private String lydovaovien;
@@ -225,19 +221,6 @@ public class Visit extends VersionedEntity {
 
     public void linkFollowUpAppointment(UUID appointmentId) {
         this.followupAppointmentId = appointmentId;
-    }
-
-    /** BR-94: the referral source "Y tế" (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13). */
-    public static final String REFERRAL_HEALTH_FACILITY = "CO_SO_Y_TE";
-
-    public boolean isReferredByHealthFacility() {
-        return REFERRAL_HEALTH_FACILITY.equals(noigioithieuLoai);
-    }
-
-    /** BR-129: kept only when the visit was referred by a health facility; cleared otherwise. */
-    public void updateReferralDiagnosis(String diagnosis, Instant now) {
-        this.chandoancuanoigioithieu = isReferredByHealthFacility() ? diagnosis : null;
-        touch(now);
     }
 
     public void updateReasonForVisit(String reasonForVisit, Instant now) {

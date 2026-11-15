@@ -33,20 +33,6 @@ describe('validateExamination', () => {
             .toBe(MSG.lengthBetween('Kết quả khám bộ phận', 2, 2000));
     });
 
-    it('requires the referral diagnosis only for a visit referred by a health facility (BR-129)', () => {
-        const referred = { ...blank, referralSource: 'CO_SO_Y_TE', referralDiagnosis: ' ' };
-        expect(validateExamination(referred, 'DRAFT').referralDiagnosis)
-            .toBe(MSG.required('Chẩn đoán của nơi giới thiệu'));
-        expect(validateExamination({ ...referred, referralDiagnosis: 'Viêm phổi' }, 'DRAFT')).toEqual({});
-        expect(validateExamination({ ...blank, referralSource: 'TU_DEN', referralDiagnosis: '' }, 'DRAFT'))
-            .toEqual({});
-    });
-
-    it('maps the backend referral-diagnosis error to its field', () => {
-        expect(fieldErrorsFromApi({ errorResponse: { code: 'REFERRAL_DIAGNOSIS_REQUIRED' } }))
-            .toEqual({ referralDiagnosis: MSG.REFERRAL_DIAGNOSIS_REQUIRED });
-    });
-
     it('requires a preliminary diagnosis before continuing (MSG98)', () => {
         expect(validateExamination(blank, 'CONTINUE')).toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED });
         expect(validateExamination({ ...blank, diagnoses: [{ code: 'J02', name: 'Viêm họng cấp' }] }, 'CONTINUE')).toEqual({});

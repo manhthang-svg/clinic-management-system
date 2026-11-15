@@ -51,7 +51,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         renderPage(patientApi);
 
         expect(await screen.findByText('Nguyễn Văn An')).toBeInTheDocument();
-        expect(patientApi.list).toHaveBeenCalledWith({ page: 0, size: 20 });
+        expect(patientApi.list).toHaveBeenCalledWith({ size: 50 });
     });
 
     it('searches by citizen ID by default after checking the format', async () => {
@@ -61,7 +61,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await screen.findByText(MSG.NO_RESULT);
 
         expect(screen.getByLabelText('Tìm theo')).toHaveValue('CITIZEN_ID');
-        await user.type(screen.getByLabelText('Từ khóa'), '12a45');
+        await user.type(screen.getByLabelText('Từ khóa'), '12345');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
         expect(screen.getByRole('alert')).toHaveTextContent(MSG.INVALID_FORMAT);
@@ -71,39 +71,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.type(screen.getByLabelText('Từ khóa'), '012345678901');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
-        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'CITIZEN_ID', keyword: '012345678901' });
-    });
-
-    it('clears the previous results when the new keyword is invalid', async () => {
-        const user = userEvent.setup();
-        const patientApi = { list: vi.fn().mockResolvedValue(page([patient()])) };
-        renderPage(patientApi);
-        await screen.findByText('Nguyễn Văn An');
-
-        await user.selectOptions(screen.getByLabelText('Tìm theo'), 'PHONE');
-        await user.type(screen.getByLabelText('Từ khóa'), '09');
-        await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
-
-        expect(screen.getByRole('alert')).toHaveTextContent(MSG.INVALID_FORMAT);
-        expect(screen.queryByText('Nguyễn Văn An')).not.toBeInTheDocument();
-        expect(screen.getByText('Sửa từ khóa ở trên để tìm kiếm.')).toBeInTheDocument();
-        expect(patientApi.list).toHaveBeenCalledTimes(1);
-    });
-
-    it('finds patients by part of the patient code', async () => {
-        const user = userEvent.setup();
-        const patientApi = {
-            list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient({ mabenhnhan: 'BN00000003' })])),
-        };
-        renderPage(patientApi);
-        await screen.findByText(MSG.NO_RESULT);
-
-        await user.selectOptions(screen.getByLabelText('Tìm theo'), 'PATIENT_CODE');
-        await user.type(screen.getByLabelText('Từ khóa'), 'BN0000');
-        await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
-
-        expect(await screen.findByText('BN00000003')).toBeInTheDocument();
-        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20, type: 'PATIENT_CODE', keyword: 'BN0000' });
+        expect(patientApi.list).toHaveBeenLastCalledWith({ size: 50, type: 'CITIZEN_ID', keyword: '012345678901' });
     });
 
     it('shows the last visit and the active visit of each result', async () => {
@@ -126,14 +94,9 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         expect(within(row).getByText(new Date('2026-11-01T02:00:00Z').toLocaleDateString('vi-VN'))).toBeInTheDocument();
     });
 
-    it('pages through search results and keeps the search on every page', async () => {
+    it('asks to refine the keyword when more than 50 patients match', async () => {
         const user = userEvent.setup();
-        const patientApi = {
-            list: vi.fn()
-                .mockResolvedValueOnce(page([]))
-                .mockResolvedValueOnce(page([patient()], 45))
-                .mockResolvedValueOnce(page([patient({ id: 'p-2', hoten: 'Nguyễn Thị Bình' })], 45)),
-        };
+        const patientApi = { list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient()], 72)) };
         renderPage(patientApi);
         await screen.findByText(MSG.NO_RESULT);
 
@@ -141,15 +104,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         await user.type(screen.getByLabelText('Từ khóa'), 'Nguyễn');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
 
-        expect(await screen.findByText('Trang 1/3')).toBeInTheDocument();
-        expect(screen.getByText('Có 45 bệnh nhân')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Trang trước' })).toBeDisabled();
-
-        await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-
-        expect(await screen.findByText('Nguyễn Thị Bình')).toBeInTheDocument();
-        expect(screen.getByText('Trang 2/3')).toBeInTheDocument();
-        expect(patientApi.list).toHaveBeenLastCalledWith({ page: 1, size: 20, type: 'NAME', keyword: 'Nguyễn' });
+        expect(await screen.findByText(MSG.TOO_MANY)).toBeInTheDocument();
     });
 
     it('offers to create a profile pre-filled with the keyword when nothing matches', async () => {
@@ -166,7 +121,7 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
         expect(screen.getByText('Trang tạo hồ sơ {"cccdSo":"012345678901"}')).toBeInTheDocument();
     });
 
-    it('keeps a single match in the list and opens the profile only when its row is clicked', async () => {
+    it('opens the profile when exactly one patient matches the citizen ID (AF-04)', async () => {
         const user = userEvent.setup();
         const patientApi = { list: vi.fn().mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([patient()])) };
         renderPage(patientApi);
@@ -174,11 +129,6 @@ describe('ReceptionistPatientsPage (UC-35)', () => {
 
         await user.type(screen.getByLabelText('Từ khóa'), '012345678901');
         await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
-
-        const row = (await screen.findByText('Nguyễn Văn An')).closest('tr');
-        expect(screen.queryByText('Hồ sơ p-1')).not.toBeInTheDocument();
-
-        await user.click(within(row).getByText('012345678901'));
 
         expect(await screen.findByText('Hồ sơ p-1')).toBeInTheDocument();
     });

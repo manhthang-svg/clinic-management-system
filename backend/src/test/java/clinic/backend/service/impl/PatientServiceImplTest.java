@@ -43,7 +43,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -394,28 +393,26 @@ class PatientServiceImplTest {
 
     @Test
     void searchesByTypeWithTheMatchingQuery() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 10);
         Page<Patient> found = new PageImpl<>(List.of(patient()));
         when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
+        when(patientRepository.findAllByMabenhnhanIgnoreCase("bn1234567", page)).thenReturn(found);
+        when(patientRepository.findAllBySodienthoai("0901234567", page)).thenReturn(found);
+        when(patientRepository.searchByName("nguyen", page)).thenReturn(found);
         when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
         when(patientRepository.searchByInsuranceCard("DN4010123456789", page)).thenReturn(found);
-        when(patientRepository.findAllByMabenhnhanContainingIgnoreCase("01", page)).thenReturn(found);
-        when(patientRepository.findAllBySodienthoaiContaining("4567", page)).thenReturn(found);
-        when(patientRepository.searchByName("an", page)).thenReturn(found);
 
-        // Document numbers in full, exact match.
         assertThat(service.listPatients(" 012345678901 ", PatientSearchType.CITIZEN_ID, page)).hasSize(1);
+        assertThat(service.listPatients("bn1234567", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
+        assertThat(service.listPatients("0901234567", PatientSearchType.PHONE, page)).hasSize(1);
+        assertThat(service.listPatients("nguyen", PatientSearchType.NAME, page)).hasSize(1);
         assertThat(service.listPatients("C1234567", PatientSearchType.PASSPORT, page)).hasSize(1);
         assertThat(service.listPatients("DN4010123456789", PatientSearchType.INSURANCE_CARD, page)).hasSize(1);
-        // What a patient remembers: any part.
-        assertThat(service.listPatients("01", PatientSearchType.PATIENT_CODE, page)).hasSize(1);
-        assertThat(service.listPatients("4567", PatientSearchType.PHONE, page)).hasSize(1);
-        assertThat(service.listPatients("an", PatientSearchType.NAME, page)).hasSize(1);
     }
 
     @Test
     void addsLastVisitAndActiveVisitToEachResult() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 10);
         when(patientRepository.searchByName("nguyen", page)).thenReturn(new PageImpl<>(List.of(patient())));
         Instant lastVisitAt = Instant.parse("2026-11-01T02:00:00Z");
         VisitRepository.PatientLastVisit lastVisit = mock(VisitRepository.PatientLastVisit.class);
@@ -439,16 +436,14 @@ class PatientServiceImplTest {
 
     @ParameterizedTest
     @CsvSource({
-            "CITIZEN_ID, 0790500",
-            "CITIZEN_ID, 0123456789012",
+            "CITIZEN_ID, 12345",
             "CITIZEN_ID, 01234567890A",
-            "PHONE, 090",
+            "PHONE, 090123456",
             "PHONE, 09012345678",
+            "NAME, A",
             "PASSPORT, C123456789012345",
             "PASSPORT, C-123",
-            "INSURANCE_CARD, DN40",
-            "PATIENT_CODE, BN#0001",
-            "NAME, A"
+            "INSURANCE_CARD, DN40101234"
     })
     void rejectsKeywordWithWrongFormatForItsType(PatientSearchType type, String keyword) {
         assertThatThrownBy(() -> service.listPatients(keyword, type, PageRequest.of(0, 10)))
@@ -476,19 +471,6 @@ class PatientServiceImplTest {
         verify(patientRepository).findAll(pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
-    }
-
-    @Test
-    void ordersPagesByPatientCodeUnlessTheClientSorts() {
-        when(patientRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
-
-        service.listPatients(null, null, PageRequest.of(1, 20));
-        service.listPatients(null, null, PageRequest.of(0, 20, Sort.by("hoten")));
-
-        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(patientRepository, org.mockito.Mockito.times(2)).findAll(pageable.capture());
-        assertThat(pageable.getAllValues().get(0)).isEqualTo(PageRequest.of(1, 20, Sort.by("mabenhnhan")));
-        assertThat(pageable.getAllValues().get(1).getSort()).isEqualTo(Sort.by("hoten"));
     }
 
     private void authenticateAs(UUID accountId) {

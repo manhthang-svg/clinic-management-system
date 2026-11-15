@@ -30,7 +30,6 @@ public record VisitResponse(
         String noidangkykcbbd,
         String lydotiepnhan,
         String noigioithieuLoai,
-        String chandoancuanoigioithieu,
         String lydovaovien,
         boolean isPriority,
         String priorityReason,

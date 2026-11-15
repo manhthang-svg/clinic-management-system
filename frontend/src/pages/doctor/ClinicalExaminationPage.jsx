@@ -13,16 +13,16 @@ import ConclusionPanel from '../../components/clinical/ConclusionPanel';
 import PrescriptionPanel from '../../components/clinical/PrescriptionPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
-import { REFERRAL_SOURCE_LABELS, VISIT_STATUS_LABELS } from '../../constants/visitData';
+import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import { EXAMINATION_SECTIONS, ROUTES, clinicalExaminationPath } from '../../routes/routes';
 import visitApi from '../../apis/visitApi';
 import {
-    MSG, ORGAN_FIELDS, REFERRAL_HEALTH_FACILITY, VITAL_RULES, examinationErrorMessage, fieldErrorsFromApi, notesKey,
+    MSG, ORGAN_FIELDS, VITAL_RULES, examinationErrorMessage, fieldErrorsFromApi, notesKey,
     validateExamination,
 } from './clinicalExaminationRules';
 
 const EMPTY_FORM = {
-    reason: '', referralSource: '', referralDiagnosis: '', generalExam: '', diagnoses: [],
+    reason: '', generalExam: '', diagnoses: [],
     pulse: '', temperature: '', systolic: '', diastolic: '', respiratoryRate: '',
     weight: '', height: '', spo2: '',
     ...Object.fromEntries(ORGAN_FIELDS.flatMap(([key]) => [[key, ''], [notesKey(key), '']])),
@@ -38,7 +38,6 @@ function formFromResponse(data) {
     return {
         ...EMPTY_FORM,
         reason: data?.reasonForVisit ?? '',
-        referralSource: data?.referralSource ?? '', referralDiagnosis: data?.referralDiagnosis ?? '',
         generalExam: data?.generalFinding ?? '', diagnoses: data?.preliminaryDiagnoses
             ?? (data?.preliminaryDiagnosisIcd10 ? [data.preliminaryDiagnosisIcd10] : []),
         pulse: data?.vitalSigns?.pulse ?? '', temperature: data?.vitalSigns?.temperature ?? '',
@@ -280,9 +279,7 @@ export default function ClinicalExaminationPage() {
     const visitTypeLabel = visit?.doituongbnLoai === 'BHYT' ? 'Khám BHYT' : 'Khám dịch vụ';
 
     const payload = (mode, nextStep = null) => ({
-        mode, nextStep, reasonForVisit: form.reason,
-        referralDiagnosis: form.referralSource === REFERRAL_HEALTH_FACILITY ? form.referralDiagnosis : null,
-        presentIllness: clinicalData?.presentIllness ?? null,
+        mode, nextStep, reasonForVisit: form.reason, presentIllness: clinicalData?.presentIllness ?? null,
         generalFinding: form.generalExam,
         vitalSigns: {
             pulse: optionalNumber(form.pulse), temperature: optionalNumber(form.temperature),
@@ -485,10 +482,6 @@ export default function ClinicalExaminationPage() {
                 <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <fieldset disabled={readOnly} className="min-w-0 space-y-3">
-                    {form.referralSource === REFERRAL_HEALTH_FACILITY && (
-                        // BR-129; TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13: entered at registration, editable here.
-                        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">Nơi giới thiệu: {REFERRAL_SOURCE_LABELS[form.referralSource]}</h2><Field label="Chẩn đoán của nơi giới thiệu *" value={form.referralDiagnosis} onChange={set('referralDiagnosis')} placeholder="Ghi theo giấy giới thiệu..." maxLength={1000} error={fieldErrors.referralDiagnosis} /></section>
-                    )}
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="mb-2 text-sm font-bold">Lý do vào viện</h2><Field label="Lý do khám / triệu chứng chính *" value={form.reason} onChange={set('reason')} placeholder="Nhập lý do khám, triệu chứng chính..." maxLength={1000} error={fieldErrors.reason} /></section>
 
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

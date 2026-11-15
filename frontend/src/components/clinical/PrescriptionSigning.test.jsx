@@ -159,43 +159,6 @@ describe('PrescriptionPanel (UC-90 Ký số và gửi đơn thuốc)', () => {
         expect(screen.getByRole('button', { name: 'Ký và gửi đơn' })).toBeEnabled();
     });
 
-    it('keeps the rejection errors visible while correcting and asks to save before resending (UC-92)', async () => {
-        const user = userEvent.setup();
-        render(<PrescriptionPanel visitId="v1" api={api({
-            getPrescription: vi.fn().mockResolvedValue({
-                ...saved, status: 'REJECTED',
-                lastSubmission: { ...accepted.lastSubmission, result: 'REJECTED', errors: ['Sai liều dùng.'] },
-            }),
-        })} />);
-
-        const result = await screen.findByRole('alert', { name: 'Kết quả gửi đơn thuốc' });
-        expect(result).toHaveTextContent(SIGNING_MSG.CORRECT_ELSEWHERE);
-        expect(within(result).getByRole('button', { name: 'Gửi lại' })).toBeEnabled();
-
-        await user.click(within(result).getByRole('button', { name: 'Sửa đơn' }));
-        expect(screen.getByLabelText('Thêm thuốc')).toHaveFocus();
-        await user.type(screen.getByLabelText(/^Cách dùng/), ', sau ăn');
-
-        expect(result).toHaveTextContent('Sai liều dùng.');
-        expect(within(result).getByRole('button', { name: 'Gửi lại' })).toBeDisabled();
-        expect(result).toHaveTextContent(SIGNING_MSG.SAVE_BEFORE_RESEND);
-    });
-
-    it('resends a rejected prescription without changing it (UC-92 AF-01)', async () => {
-        const user = userEvent.setup();
-        render(<PrescriptionPanel visitId="v1" api={api({
-            getPrescription: vi.fn().mockResolvedValue({
-                ...saved, status: 'REJECTED',
-                lastSubmission: { ...accepted.lastSubmission, result: 'REJECTED', errors: ['Sai mã bác sĩ.'] },
-            }),
-        })} />);
-
-        const result = await screen.findByRole('alert', { name: 'Kết quả gửi đơn thuốc' });
-        await user.click(within(result).getByRole('button', { name: 'Gửi lại' }));
-
-        expect(screen.getByRole('dialog', { name: 'Ký số và gửi đơn thuốc' })).toBeInTheDocument();
-    });
-
     it('offers to send again after no answer (AF-02, MSG86)', async () => {
         const user = userEvent.setup();
         render(<PrescriptionPanel visitId="v1" api={api({

@@ -92,8 +92,4 @@ export const CHANGE_FIELD_LABELS = {
   role: 'Vai trò',
   status: 'Trạng thái',
   lockReason: 'Lý do khóa',
-  practiceLicenseNo: 'Số giấy phép hành nghề',
-  maLienthongBacsi: 'Mã liên thông bác sĩ',
-  // The audit row keeps only "***" for this field, never the number.
-  citizenId: 'Số định danh cá nhân',
 };

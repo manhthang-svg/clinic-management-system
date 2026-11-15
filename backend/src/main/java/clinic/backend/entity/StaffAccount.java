@@ -76,10 +76,6 @@ public class StaffAccount {
     @Column(name = "ma_lienthong_bacsi", length = 50)
     private String maLienthongBacsi;
 
-    /** BR-59-16: personal identification number (12 digits) of a Doctor, matched against signing certificates. */
-    @Column(name = "citizen_id", length = 12)
-    private String citizenId;
-
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
 
@@ -390,12 +386,6 @@ public class StaffAccount {
     /** BR-49, BR-65: sets or clears the prescriber link code issued by the national prescription system. */
     public void updateMaLienthongBacsi(String newMaLienthongBacsi, Instant now) {
         maLienthongBacsi = normalizeOptional(newMaLienthongBacsi);
-        updatedAt = Objects.requireNonNull(now, "now");
-    }
-
-    /** BR-59-16: sets or clears the Doctor's personal identification number (12 digits). */
-    public void updateCitizenId(String newCitizenId, Instant now) {
-        citizenId = normalizeOptional(newCitizenId);
         updatedAt = Objects.requireNonNull(now, "now");
     }
 

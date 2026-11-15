@@ -10,8 +10,6 @@ public record SaveClinicalExaminationRequest(
         @NotNull ClinicalExaminationSaveMode mode,
         ClinicalExaminationNextStep nextStep,
         @Size(min = 2, max = 1000) String reasonForVisit,
-        /** BR-129: required when the visit was referred by a health facility; ignored otherwise. */
-        @Size(max = 1000) String referralDiagnosis,
         @Size(max = 4000) String presentIllness,
         @Size(max = 4000) String generalFinding,
         VitalSignRequest vitalSigns,

@@ -271,16 +271,12 @@ public class SimulatedSigningAuthority {
     // ---- Certificate administration, used by the dev console -------------------------------------------------
 
     /**
-     * Issues a subscriber certificate for a person identified by the 12-digit personal identification number:
-     * subject CN = full name, UID = "CCCD:" + the number (ASSUMPTION: the form Vietnamese CAs commonly use; to confirm
-     * against a real certificate). The number is also the subscriber's user id at the CA, as in VNPT SmartCA, whose
-     * {@code user_id} is the subscriber's identity number. The subscriber approves signatures with the PIN, which the
-     * simulated CA keeps as a hash.
+     * Issues a subscriber certificate for a staff member: subject CN = full name, UID = the account's user name
+     * (ASSUMPTION: a real certificate names the person's identity number). The subscriber approves signatures with
+     * the PIN, which the simulated CA keeps as a hash.
      */
-    synchronized Issued issue(String fullName, String citizenId, String pin) {
+    synchronized Issued issue(String fullName, String userId, String pin) {
         requireText(pin, "pin");
-        requireText(citizenId, "citizenId");
-        String userId = citizenId;
         Keys current = keys();
         try {
             KeyPair pair = newKeyPair();
@@ -288,7 +284,7 @@ public class SimulatedSigningAuthority {
             X500Name subject = new X500NameBuilder(BCStyle.INSTANCE)
                     .addRDN(BCStyle.C, "VN")
                     .addRDN(BCStyle.O, "Phòng khám (giả lập)")
-                    .addRDN(BCStyle.UID, DigitalSignatureVerifier.CITIZEN_ID_PREFIX + citizenId)
+                    .addRDN(BCStyle.UID, userId)
                     .addRDN(BCStyle.CN, fullName)
                     .build();
             X509Certificate certificate = certificate(

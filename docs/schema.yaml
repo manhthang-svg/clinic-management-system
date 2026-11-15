@@ -2571,25 +2571,8 @@ tables:
         appendix:
         - I.44
         standard: Có – I.44
-        description: 'TU_DEN = Tự đến; CO_SO_Y_TE = Y tế (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13; BR-94)'
+        description: Tự đến / được giới thiệu
         note: Phòng khám nhỏ hầu hết người bệnh tự đến; xuất mặc định 'Tự đến'
-      chandoancuanoigioithieu:
-        field: chandoancuanoigioithieu
-        sql_type: text
-        base_type: text
-        nullable: true
-        java_type: String
-        checks:
-        - ((noigioithieu_loai = 'CO_SO_Y_TE' AND char_length(btrim(chandoancuanoigioithieu)) BETWEEN 2 AND 1000)
-          OR (noigioithieu_loai IS DISTINCT FROM 'CO_SO_Y_TE' AND chandoancuanoigioithieu IS NULL)) NOT VALID
-        proposal: keep
-        appendix:
-        - II.7
-        - III.17
-        standard: Có điều kiện – II.7
-        description: Chẩn đoán của nơi giới thiệu (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13); bắt buộc khi Y tế (BR-129)
-        note: '[V59] Chuyển từ clinical_examinations sang visits để lưu một chỗ cùng noigioithieu_loai; lễ tân nhập
-          khi đăng ký, bác sĩ sửa được khi khám. Nguồn cho II.7 và III.17 chandoantuyenduoi.'
       lydovaovien:
         field: lydovaovien
         sql_type: text
@@ -3202,6 +3185,19 @@ tables:
         proposal: keep
         standard: Không – khóa ngoại nội bộ
         description: Bác sĩ khám; kết xuất bacsikhambenh, mabacsikhambenh, chuky_hoten
+      chandoancuanoigioithieu:
+        field: chandoancuanoigioithieu
+        sql_type: text
+        base_type: text
+        nullable: true
+        java_type: String
+        proposal: keep
+        appendix:
+        - II.7
+        - III.17
+        standard: Có điều kiện – II.7
+        description: Chẩn đoán nơi giới thiệu
+        note: '[Rà soát 10/2026] Đổi từ Có thể bỏ: là nguồn cho II.7 và III.17 chandoantuyenduoi.'
       quatrinhbenhly:
         field: quatrinhbenhly
         sql_type: text

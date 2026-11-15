@@ -113,7 +113,7 @@ class ClinicalExaminationServiceImplTest {
     void rejectsDraftWithoutAnyVitalSign() {
         stubEditableExamination();
         SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
-                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null, null,
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest(null, null, null, null, null, null, null, null, NOW),
                 null, null, null, null, null, null);
 
@@ -128,7 +128,7 @@ class ClinicalExaminationServiceImplTest {
         stubEditableExamination();
         SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
                 ClinicalExaminationSaveMode.CONTINUE, ClinicalExaminationNextStep.PARACLINICAL,
-                "Đau đầu", null, null, null,
+                "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
                 null, " ", null, null, null, null);
 
@@ -178,45 +178,13 @@ class ClinicalExaminationServiceImplTest {
                 .thenAnswer(call -> call.getArgument(0));
 
         var response = service.save(principal(), VISIT_ID, new SaveClinicalExaminationRequest(
-                ClinicalExaminationSaveMode.DRAFT, null, "Đau họng", null, null, null,
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau họng", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
                 null, "Bệnh J02; Bệnh J03", "J02", List.of("J02", "J03"), null, null));
 
         assertThat(response.preliminaryDiagnoses())
                 .extracting(option -> option.code())
                 .containsExactly("J02", "J03");
-    }
-
-    @Test
-    void requiresReferralDiagnosisWhenReferredByAHealthFacility() {
-        stubEditableExamination(Visit.REFERRAL_HEALTH_FACILITY);
-
-        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, draftWithReferralDiagnosis(" ")))
-                .isInstanceOfSatisfying(AppException.class,
-                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REFERRAL_DIAGNOSIS_REQUIRED));
-    }
-
-    @Test
-    void savesReferralDiagnosisOnTheVisitWhenReferredByAHealthFacility() {
-        stubEditableExamination(Visit.REFERRAL_HEALTH_FACILITY);
-        when(examinationRepository.saveAndFlush(any(ClinicalExamination.class)))
-                .thenAnswer(call -> call.getArgument(0));
-
-        var response = service.save(principal(), VISIT_ID, draftWithReferralDiagnosis(" Viêm phổi "));
-
-        assertThat(response.referralSource()).isEqualTo(Visit.REFERRAL_HEALTH_FACILITY);
-        assertThat(response.referralDiagnosis()).isEqualTo("Viêm phổi");
-    }
-
-    @Test
-    void dropsReferralDiagnosisForASelfReferredVisit() {
-        stubEditableExamination("TU_DEN");
-        when(examinationRepository.saveAndFlush(any(ClinicalExamination.class)))
-                .thenAnswer(call -> call.getArgument(0));
-
-        var response = service.save(principal(), VISIT_ID, draftWithReferralDiagnosis("Viêm phổi"));
-
-        assertThat(response.referralDiagnosis()).isNull();
     }
 
     @Test
@@ -239,16 +207,9 @@ class ClinicalExaminationServiceImplTest {
         verify(icd10Repository, never()).findSearchable();
     }
 
-    private static SaveClinicalExaminationRequest draftWithReferralDiagnosis(String referralDiagnosis) {
-        return new SaveClinicalExaminationRequest(
-                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", referralDiagnosis, null, null,
-                new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
-                null, null, null, null, null, null);
-    }
-
     private static SaveClinicalExaminationRequest draftWithIcd10(String code) {
         return new SaveClinicalExaminationRequest(
-                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null, null,
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau đầu", null, null,
                 new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
                 null, "Theo dõi", code, List.of(code), null, null);
     }
@@ -296,10 +257,6 @@ class ClinicalExaminationServiceImplTest {
     }
 
     private Patient stubEditableExamination() {
-        return stubEditableExamination(null);
-    }
-
-    private Patient stubEditableExamination(String referralSource) {
         StaffAccount doctor = StaffAccount.create(
                 DOCTOR_ID, "doctor01", "hash", "Bác sĩ An", null, null, null, null, null, null,
                 Role.DOCTOR, null, NOW);
@@ -311,7 +268,7 @@ class ClinicalExaminationServiceImplTest {
                 "Hà Nội", "001", null, null, null, null, null, null, null, null, null, UUID.randomUUID());
         Visit visit = new Visit(
                 VISIT_ID, NOW, "DK0001", patient.getId(), ROOM_ID, UUID.randomUUID(), NOW,
-                VisitDoituongbnLoai.DV, null, null, referralSource, "Đau đầu", false, null,
+                VisitDoituongbnLoai.DV, null, null, null, "Đau đầu", false, null,
                 LocalDate.ofInstant(NOW, ZoneId.of("Asia/Ho_Chi_Minh")), 1, VisitStatus.WAITING,
                 VisitInsuranceVerifyStatus.NOT_APPLICABLE);
         visit.startExamination(DOCTOR_ID, NOW);

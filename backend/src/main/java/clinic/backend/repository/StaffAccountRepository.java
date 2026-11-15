@@ -95,11 +95,6 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
 
     boolean existsByMaLienthongBacsiAndIdNot(String maLienthongBacsi, UUID id);
 
-    boolean existsByCitizenIdAndIdNot(String citizenId, UUID id);
-
-    /** BR-59-16: the account whose personal identification number a signing certificate names. */
-    Optional<StaffAccount> findByCitizenId(String citizenId);
-
     Optional<StaffAccount> findByCreationSubmissionId(UUID creationSubmissionId);
 
     /**

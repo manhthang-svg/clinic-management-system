@@ -141,7 +141,6 @@ class PrescriptionSigningServiceImplTest {
         StaffAccount doctor = StaffAccount.create(
                 DOCTOR_ID, "doctor01", "hash", "Bác sĩ An", null, null, null, null, null, null, Role.DOCTOR, null, NOW);
         doctor.updateMaLienthongBacsi("BS0001", NOW);
-        doctor.updateCitizenId("079090001234", NOW);
         context = new ConcludingVisitGuard.Context(visit, patient, record, doctor);
         lenient().when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
         lenient().when(medicalRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
@@ -159,7 +158,7 @@ class PrescriptionSigningServiceImplTest {
         lenient().when(signingRequestRepository.save(any(SigningRequest.class)))
                 .thenAnswer(call -> call.getArgument(0));
 
-        certificate = new StaffSigningCertificate(UUID.randomUUID(), NOW, DOCTOR_ID, "SIMULATED_CA", "079090001234",
+        certificate = new StaffSigningCertificate(UUID.randomUUID(), NOW, DOCTOR_ID, "SIMULATED_CA", "doctor01",
                 "abc123", "CN=CA ký số từ xa (giả lập)", "CN=Bác sĩ An", NOW.minusSeconds(86_400),
                 NOW.plusSeconds(86_400 * 365L), new byte[] {9});
         ClinicFacility facility = mock(ClinicFacility.class);
@@ -167,7 +166,6 @@ class PrescriptionSigningServiceImplTest {
         lenient().when(facility.getMaLienthongDonthuoc()).thenReturn("LT79001");
         lenient().when(prescriptions.requireLinkCodes(context)).thenReturn(facility);
         lenient().when(verifier.certificate(any())).thenReturn(mock(X509Certificate.class));
-        lenient().when(verifier.citizenId(any())).thenReturn(Optional.of("079090001234"));
     }
 
     @Test
@@ -179,21 +177,6 @@ class PrescriptionSigningServiceImplTest {
         assertThatThrownBy(() -> service.requestSignature(principal(), prescription.getId(), new RequestSignatureRequest(2L)))
                 .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getErrorCode())
                         .isEqualTo(ErrorCode.SIGNING_CERTIFICATE_NOT_REGISTERED));
-        verify(signingGateway, never()).requestSignature(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void refusesACertificateThatNamesAnotherPerson() {
-        stubSendChecks();
-        when(certificateRepository.findByStaffAccountIdAndStatus(DOCTOR_ID, SigningCertificateStatus.ACTIVE))
-                .thenReturn(Optional.of(certificate));
-        when(verifier.citizenId(any())).thenReturn(Optional.of("079090009999"));
-
-        assertThatThrownBy(() -> service.requestSignature(principal(), prescription.getId(), new RequestSignatureRequest(2L)))
-                .isInstanceOfSatisfying(AppException.class, error -> {
-                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.SIGNING_CERTIFICATE_INVALID);
-                    assertThat(error.getDetails()).containsEntry("reason", "CERTIFICATE_NOT_DOCTOR");
-                });
         verify(signingGateway, never()).requestSignature(any(), any(), any(), any(), any());
     }
 
@@ -225,7 +208,7 @@ class PrescriptionSigningServiceImplTest {
         stubSendChecks();
         when(certificateRepository.findByStaffAccountIdAndStatus(DOCTOR_ID, SigningCertificateStatus.ACTIVE))
                 .thenReturn(Optional.of(certificate));
-        when(signingGateway.requestSignature(eq("079090001234"), eq("abc123"), any(), any(), eq(NOW.plusSeconds(300))))
+        when(signingGateway.requestSignature(eq("doctor01"), eq("abc123"), any(), any(), eq(NOW.plusSeconds(300))))
                 .thenReturn("tx-1");
 
         SigningRequestResponse response =
@@ -249,7 +232,7 @@ class PrescriptionSigningServiceImplTest {
                 .doesNotContain("signature");
         assertThat(saved.getValue().getDocumentSha256())
                 .isEqualTo(DigitalSignatureVerifier.sha256Hex(saved.getValue().getPayload()));
-        verify(signingGateway).requestSignature(eq("079090001234"), eq("abc123"),
+        verify(signingGateway).requestSignature(eq("doctor01"), eq("abc123"),
                 eq(DigitalSignatureVerifier.sha256(saved.getValue().getPayload())), eq("Đơn thuốc 79001abc1234-c"),
                 eq(NOW.plusSeconds(300)));
     }

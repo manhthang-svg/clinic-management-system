@@ -17,13 +17,6 @@ export const SIGNING_MSG = {
     CHILD_DATA: (item) => `Trẻ dưới 72 tháng tuổi cần có ${item} trước khi gửi đơn thuốc.`, // MSG107
     CANCELLED: 'Yêu cầu ký đã được hủy. Đơn thuốc chưa được gửi.',
     SIGNATURE_VALID: 'Chữ ký số hợp lệ',
-    // BR-59-16: the stored signature verified again on display.
-    SIGNATURE_NOT_VALID: (reason) => `Chữ ký số không hợp lệ (${reason})`,
-    HISTORY_EMPTY: 'Đơn thuốc chưa được gửi lần nào.',
-    // UC-92 (ASSUMPTION wording): the rejection, AF-01, and a resend that needs the corrections saved first.
-    REJECTED_ATTEMPT: (attempt, time) => `Lần gửi ${attempt}, phản hồi lúc ${time}.`,
-    CORRECT_ELSEWHERE: 'Nếu lỗi thuộc chẩn đoán kết luận, hãy sửa ở phần Kết luận; nếu lỗi thuộc mã liên thông bác sĩ, hãy liên hệ quản trị viên. Sau đó bấm "Gửi lại", không cần sửa đơn. Mã đơn thuốc giữ nguyên khi gửi lại.',
-    SAVE_BEFORE_RESEND: 'Lưu đơn thuốc trước khi gửi lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.', // MSG80
 };
 
@@ -34,7 +27,6 @@ const CERTIFICATE_REASONS = {
     CA_NOT_TRUSTED: 'tổ chức cấp chứng thư không thuộc danh sách tin cậy',
     CA_CERTIFICATE_INVALID: 'chứng thư của tổ chức cấp không còn hiệu lực',
     UNKNOWN_TO_CA: 'tổ chức cấp không nhận ra chứng thư',
-    CERTIFICATE_NOT_DOCTOR: 'chứng thư không mang số định danh cá nhân của bạn',
 };
 
 const SIGNATURE_REASONS = {
@@ -47,17 +39,7 @@ const SIGNATURE_REASONS = {
     TIMESTAMP_INVALID: 'dấu thời gian không hợp lệ',
     CHAIN_NOT_TRUSTED: 'chứng thư không do tổ chức tin cậy cấp',
     CERTIFICATE_NOT_VALID_AT_SIGNING_TIME: 'chứng thư không còn hiệu lực tại thời điểm ký',
-    SIGNATURE_MISSING: 'không còn dữ liệu chữ ký',
-    EVIDENCE_MISSING: 'thiếu bằng chứng kiểm tra chứng thư lúc ký',
 };
-
-/** UC-91 step 2: the result labels of a send. */
-export const SUBMISSION_RESULTS = { ACCEPTED: 'Chấp nhận', REJECTED: 'Bị từ chối', NO_RESPONSE: 'Không phản hồi' };
-
-/** BR-59-16: why a stored signature is not valid, in Vietnamese. */
-export function signatureReason(reason) {
-    return SIGNATURE_REASONS[reason] ?? 'không xác định';
-}
 
 const CHILD_ITEMS = { WEIGHT: 'cân nặng', ACCOMPANYING_PERSON: 'thông tin người đưa trẻ đến khám' };
 
@@ -71,7 +53,7 @@ export function signingError(error) {
         case 'SIGNING_CERTIFICATE_INVALID':
             return SIGNING_MSG.CERTIFICATE_INVALID(CERTIFICATE_REASONS[details.reason] ?? 'không xác định');
         case 'SIGNATURE_INVALID':
-            return SIGNING_MSG.SIGNATURE_INVALID(signatureReason(details.reason));
+            return SIGNING_MSG.SIGNATURE_INVALID(SIGNATURE_REASONS[details.reason] ?? 'không xác định');
         case 'SIGNING_SERVICE_UNAVAILABLE':
             return SIGNING_MSG.SERVICE_UNAVAILABLE;
         case 'NATIONAL_PRESCRIPTION_SYSTEM_UNAVAILABLE':

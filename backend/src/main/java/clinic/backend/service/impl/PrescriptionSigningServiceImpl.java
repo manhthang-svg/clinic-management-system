@@ -10,7 +10,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import clinic.backend.dto.request.RequestSignatureRequest;
@@ -139,12 +138,7 @@ public class PrescriptionSigningServiceImpl implements PrescriptionSigningServic
         StaffSigningCertificate registered = certificateRepository
                 .findByStaffAccountIdAndStatus(principal.accountId(), SigningCertificateStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.SIGNING_CERTIFICATE_NOT_REGISTERED));
-        X509Certificate certificate = verifier.certificate(registered.getCertificateDer());
-        // BR-59-16 (NĐ 23 Điều 16 khoản 1 điểm a): the certificate still names this Doctor's identification number.
-        if (!verifier.citizenId(certificate).equals(Optional.ofNullable(context.doctor().getCitizenId()))) {
-            throw new AppException(ErrorCode.SIGNING_CERTIFICATE_INVALID, Map.of("reason", "CERTIFICATE_NOT_DOCTOR"));
-        }
-        verifier.preCheck(certificate);
+        verifier.preCheck(verifier.certificate(registered.getCertificateDer()));
 
         // BR-59-08: the diagnoses and follow-up date as they are sent.
         Instant now = clock.instant();

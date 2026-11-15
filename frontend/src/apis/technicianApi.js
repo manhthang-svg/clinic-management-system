@@ -17,7 +17,6 @@ let lastRoomsFetchTime = 0;
 const ROOMS_CACHE_TTL = 30_000; // 30s
 const ACTIVE_ROOM_KEY = 'technician_active_room_id';
 
-// de giup chuyen tab lien tuc ma van giu nguyen phong minh da chon 
 export const technicianApi = {
   getActiveRoomId() {
     try {
@@ -46,11 +45,10 @@ export const technicianApi = {
   async getRooms(signal, { force = false } = {}) {
     const now = Date.now();
     if (!force && cachedRooms && now - lastRoomsFetchTime < ROOMS_CACHE_TTL) {
-      // tra ve ngay data neu lần tải gần nhát nhỏ hơn 30s
       return cachedRooms;
     }
     if (cachedRoomsPromise && !force) {
-      return cachedRoomsPromise;// Tái sử dụng Promise đang chạy
+      return cachedRoomsPromise;
     }
 
     cachedRoomsPromise = apiClient

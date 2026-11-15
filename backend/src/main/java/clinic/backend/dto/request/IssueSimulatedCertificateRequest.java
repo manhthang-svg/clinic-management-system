@@ -1,12 +1,11 @@
 package clinic.backend.dto.request;
 
 /**
- * Dev profile only: issue a simulated signing certificate to a Doctor and register it on the Doctor's account
- * (BR-59-16, until the Admin use case exists). Like a real CA, the simulator knows the subscriber by the personal
- * identification number, not by the clinic user name.
+ * Dev profile only: issue a simulated signing certificate for a Doctor's account and register it (BR-59-16, until
+ * the Admin use case exists).
  *
- * @param citizenId the Doctor's 12-digit personal identification number, as recorded on the account
- * @param pin       the PIN the Doctor will use in the simulated CA app
+ * @param username the Doctor's user name
+ * @param pin      the PIN the Doctor will use in the simulated CA app
  */
-public record IssueSimulatedCertificateRequest(String citizenId, String pin) {
+public record IssueSimulatedCertificateRequest(String username, String pin) {
 }

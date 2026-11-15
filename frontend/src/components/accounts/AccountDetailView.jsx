@@ -38,11 +38,6 @@ const EVENT_STYLES = {
   LOGIN_THROTTLED: { icon: CircleAlert, tone: 'bg-amber-50 text-amber-600' },
 };
 
-/** Shows only the first 4 and last 3 digits of a personal identification number (docs/security.md). */
-function maskCitizenId(value) {
-  return value ? `${value.slice(0, 4)}•••••${value.slice(-3)}` : '—';
-}
-
 function parseValues(json) {
   if (!json) return {};
   try {
@@ -248,7 +243,6 @@ export function AccountDetailView({ account, loginEvents, changeHistory = [], hi
     ['Học hàm / học vị', account.title || '—'],
     ['Số giấy phép hành nghề', account.practiceLicenseNo || '—'],
     ...(account.role === 'DOCTOR' ? [['Mã liên thông bác sĩ', account.maLienthongBacsi || '—']] : []),
-    ...(account.role === 'DOCTOR' ? [['Số định danh cá nhân', maskCitizenId(account.citizenId)]] : []),
     ['Tên đăng nhập', account.username],
     ['Ngày sinh', account.dateOfBirth ? `${formatDate(account.dateOfBirth)} (${ageOf(account.dateOfBirth)} tuổi)` : '—'],
     ['Giới tính', GENDER_LABELS[account.gender] || '—'],

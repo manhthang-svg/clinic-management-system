@@ -35,7 +35,6 @@ import clinic.backend.service.CertificateStatusService;
 import clinic.backend.service.CertificateStatusService.CertificateStatus;
 import clinic.backend.service.TimestampAuthority;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1Primitive;
@@ -45,10 +44,6 @@ import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.ess.ESSCertIDv2;
 import org.bouncycastle.asn1.ess.SigningCertificateV2;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.asn1.x500.RDN;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x500.style.BCStyle;
-import org.bouncycastle.asn1.x500.style.IETFUtils;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSException;
@@ -78,8 +73,6 @@ public class DigitalSignatureVerifier {
 
     /** Detached CMS SignedData at CAdES baseline level T (BR-59-10 steps 4, 6; TT 15/2025/TT-BKHCN Phụ lục I). */
     static final String SIGNATURE_FORMAT = "CAdES-T";
-    /** Prefix of the personal identification number in a certificate's UID attribute (ASSUMPTION). */
-    static final String CITIZEN_ID_PREFIX = "CCCD:";
     /** BouncyCastle for RSASSA-PSS verification, passed to each builder; not registered as a JVM-wide provider. */
     private static final BouncyCastleProvider BC = new BouncyCastleProvider();
 
@@ -96,25 +89,6 @@ public class DigitalSignatureVerifier {
         this.statusService = statusService;
         this.timestampAuthority = timestampAuthority;
         this.clock = clock;
-    }
-
-    /**
-     * BR-59-16 (NĐ 23/2025 Điều 16 khoản 1 điểm a): the personal identification number a certificate names, from the
-     * subject's UID attribute written as "CCCD:" + 12 digits, or 12 digits alone (ASSUMPTION: the form Vietnamese CAs
-     * commonly use; to confirm against a real certificate). Empty when the subject has no such number.
-     */
-    public Optional<String> citizenId(X509Certificate certificate) {
-        X500Name subject = X500Name.getInstance(certificate.getSubjectX500Principal().getEncoded());
-        for (RDN rdn : subject.getRDNs(BCStyle.UID)) {
-            String value = IETFUtils.valueToString(rdn.getFirst().getValue()).strip();
-            if (value.regionMatches(true, 0, CITIZEN_ID_PREFIX, 0, CITIZEN_ID_PREFIX.length())) {
-                value = value.substring(CITIZEN_ID_PREFIX.length()).strip();
-            }
-            if (value.matches("[0-9]{12}")) {
-                return Optional.of(value);
-            }
-        }
-        return Optional.empty();
     }
 
     /** Reads a DER certificate as stored in {@code staff_signing_certificates}. */
@@ -195,16 +169,31 @@ public class DigitalSignatureVerifier {
 
         // BR-59-10 step 6: the time stamp over the signature value fixes the signing time.
         byte[] tokenBytes = timestampAuthority.timestamp(signer.getSignature());
-        Optional<Instant> stampedAt = timeStampTime(tokenBytes, signer.getSignature());
-        if (stampedAt.isEmpty()) {
+        Instant signedAt;
+        try {
+            TimeStampToken token = new TimeStampToken(new CMSSignedData(tokenBytes));
+            Optional<X509Certificate> tsaCertificate = timeStampCertificate(token);
+            if (tsaCertificate.isEmpty()
+                    || trustedIssuer(tsaCertificate.get()).isEmpty()
+                    || !MessageDigest.isEqual(token.getTimeStampInfo().getMessageImprintDigest(),
+                            sha256(signer.getSignature()))) {
+                return Verification.failed("TIMESTAMP_INVALID");
+            }
+            token.validate(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(tsaCertificate.get()));
+            signedAt = token.getTimeStampInfo().getGenTime().toInstant();
+        } catch (CMSException | TSPException | IOException | OperatorCreationException exception) {
             return Verification.failed("TIMESTAMP_INVALID");
         }
-        Instant signedAt = stampedAt.get();
 
         Optional<X509Certificate> issuer = trustedIssuer(signerCertificate);
-        String chainProblem = chainProblem(signerCertificate, issuer, signedAt);
-        if (chainProblem != null) {
-            return Verification.failed(chainProblem);
+        if (issuer.isEmpty() || !validPath(signerCertificate, issuer.get(), signedAt)) {
+            return Verification.failed("CHAIN_NOT_TRUSTED");
+        }
+        if (validityProblem(signerCertificate, signedAt) != null) {
+            return Verification.failed("CERTIFICATE_NOT_VALID_AT_SIGNING_TIME");
+        }
+        if (validityProblem(issuer.get(), signedAt) != null) {
+            return Verification.failed("CA_CERTIFICATE_INVALID");
         }
         CertificateStatus signerStatus = statusService.status(signerCertificate, signedAt);
         CertificateStatus issuerStatus = statusService.status(issuer.get(), signedAt);
@@ -218,128 +207,6 @@ public class DigitalSignatureVerifier {
                 signedAt, tokenBytes, pkiPath(List.of(signerCertificate, issuer.get())),
                 evidence(signedAt, Map.of("signer", signerStatus, "issuer", issuerStatus),
                         List.of(signerCertificate, issuer.get())));
-    }
-
-    /**
-     * BR-59-16: re-runs the checks of BR-59-10 step 5 on a stored CAdES-T signature without asking any service, so the
-     * status can be shown wherever the prescription is shown (UC-91, UC-60). The signature still matches the stored
-     * payload and the certificate named on the signature row, the embedded time stamp covers it, the certificate
-     * chains to a CA that is trusted now and both were valid at the time-stamp time, and the status evidence kept at
-     * signing time says both were good. Returns the failure reason, or null when the signature is valid.
-     */
-    public String reverify(
-            byte[] storedSignedData, byte[] payload, String certificateSerial, String certificateIssuer,
-            String evidence) {
-        if (storedSignedData == null || payload == null) {
-            return "SIGNATURE_MISSING";
-        }
-        SignerInformation signer;
-        X509Certificate signerCertificate;
-        try {
-            CMSSignedData cms = new CMSSignedData(new CMSProcessableByteArray(payload), storedSignedData);
-            Collection<SignerInformation> signers = cms.getSignerInfos().getSigners();
-            if (signers.size() != 1) {
-                return "MALFORMED_SIGNATURE";
-            }
-            signer = signers.iterator().next();
-            @SuppressWarnings("unchecked")
-            Collection<X509CertificateHolder> matches = cms.getCertificates()
-                    .getMatches((Selector<X509CertificateHolder>) (Selector<?>) signer.getSID());
-            if (matches.isEmpty()) {
-                return "SIGNER_CERTIFICATE_MISSING";
-            }
-            signerCertificate = new JcaX509CertificateConverter().getCertificate(matches.iterator().next());
-        } catch (CMSException | GeneralSecurityException | RuntimeException exception) {
-            return "MALFORMED_SIGNATURE";
-        }
-        if (!signerCertificate.getSerialNumber().toString(16).equalsIgnoreCase(certificateSerial)
-                || !signerCertificate.getIssuerX500Principal().getName().equals(certificateIssuer)) {
-            return "CERTIFICATE_NOT_REGISTERED_FOR_SIGNER";
-        }
-        if (!bindsSigningCertificate(signer, signerCertificate)) {
-            return "SIGNING_CERTIFICATE_ATTRIBUTE_INVALID";
-        }
-        try {
-            if (!signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(signerCertificate))) {
-                return "SIGNATURE_MISMATCH";
-            }
-        } catch (CMSException | OperatorCreationException exception) {
-            return "SIGNATURE_MISMATCH";
-        }
-        AttributeTable unsigned = signer.getUnsignedAttributes();
-        Attribute stamp = unsigned == null ? null : unsigned.get(PKCSObjectIdentifiers.id_aa_signatureTimeStampToken);
-        if (stamp == null || stamp.getAttrValues().size() != 1) {
-            return "TIMESTAMP_INVALID";
-        }
-        Optional<Instant> signedAt;
-        try {
-            signedAt = timeStampTime(
-                    stamp.getAttrValues().getObjectAt(0).toASN1Primitive().getEncoded(), signer.getSignature());
-        } catch (IOException exception) {
-            return "TIMESTAMP_INVALID";
-        }
-        if (signedAt.isEmpty()) {
-            return "TIMESTAMP_INVALID";
-        }
-        String chainProblem = chainProblem(signerCertificate, trustedIssuer(signerCertificate), signedAt.get());
-        if (chainProblem != null) {
-            return chainProblem;
-        }
-        return evidenceProblem(evidence);
-    }
-
-    /** The statuses recorded at signing time (BR-59-10 step 7): both certificates were good. */
-    private String evidenceProblem(String evidence) {
-        if (evidence == null) {
-            return "EVIDENCE_MISSING";
-        }
-        try {
-            JsonNode statuses = json.readTree(evidence).path("statuses");
-            if (!CertificateStatusService.State.GOOD.name().equals(statuses.path("signer").path("state").asText())) {
-                return "CERTIFICATE_REVOKED";
-            }
-            if (!CertificateStatusService.State.GOOD.name().equals(statuses.path("issuer").path("state").asText())) {
-                return "CA_CERTIFICATE_INVALID";
-            }
-            return null;
-        } catch (JsonProcessingException exception) {
-            return "EVIDENCE_MISSING";
-        }
-    }
-
-    /**
-     * BR-59-10 step 6: the time of a time-stamp token of a trusted time-stamp unit over this signature value, or empty
-     * when the token is not one.
-     */
-    private Optional<Instant> timeStampTime(byte[] tokenBytes, byte[] signatureValue) {
-        try {
-            TimeStampToken token = new TimeStampToken(new CMSSignedData(tokenBytes));
-            Optional<X509Certificate> tsaCertificate = timeStampCertificate(token);
-            if (tsaCertificate.isEmpty()
-                    || trustedIssuer(tsaCertificate.get()).isEmpty()
-                    || !MessageDigest.isEqual(token.getTimeStampInfo().getMessageImprintDigest(),
-                            sha256(signatureValue))) {
-                return Optional.empty();
-            }
-            token.validate(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(tsaCertificate.get()));
-            return Optional.of(token.getTimeStampInfo().getGenTime().toInstant());
-        } catch (CMSException | TSPException | IOException | OperatorCreationException | RuntimeException exception) {
-            return Optional.empty();
-        }
-    }
-
-    /** The certificate chains to a trusted CA at the signing time, and it and its CA were valid then. */
-    private static String chainProblem(X509Certificate certificate, Optional<X509Certificate> issuer, Instant at) {
-        if (issuer.isEmpty() || !validPath(certificate, issuer.get(), at)) {
-            return "CHAIN_NOT_TRUSTED";
-        }
-        if (validityProblem(certificate, at) != null) {
-            return "CERTIFICATE_NOT_VALID_AT_SIGNING_TIME";
-        }
-        if (validityProblem(issuer.get(), at) != null) {
-            return "CA_CERTIFICATE_INVALID";
-        }
-        return null;
     }
 
     /** The signing-certificate-v2 attribute names this certificate by its SHA-256 (ETSI EN 319 122-1). */

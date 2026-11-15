@@ -125,8 +125,6 @@ public class VisitServiceImpl implements VisitService {
                 .orElseThrow(() -> new AppException(ErrorCode.PATIENT_NOT_FOUND));
         Room room = requireAvailableExaminationRoom(request.roomId());
         PriorityReason priorityReason = parsePriorityReason(request.isPriority(), request.priorityReason());
-        String referralSource = normalize(request.noigioithieuLoai());
-        String referralDiagnosis = referralDiagnosisFor(referralSource, request.chandoancuanoigioithieu());
         InsuranceData insurance = resolveInsurance(patient, request);
         FollowUpAppointment appointment = lockAppointment(request, patient);
         MedicalService examinationService = requireExaminationService();
@@ -146,13 +144,12 @@ public class VisitServiceImpl implements VisitService {
                 request.doituongbnLoai(), insurance.submittedCode(), insurance.socialInsuranceNumber(),
                 insurance.validFrom(), insurance.validTo(), insurance.primaryCareFacilityCode(),
                 insurance.primaryCareFacility(), null, insurance.coverageRate(),
-                normalize(request.lydotiepnhan()), referralSource,
+                normalize(request.lydotiepnhan()), normalize(request.noigioithieuLoai()),
                 request.lydovaovien().strip(), Boolean.TRUE.equals(request.isPriority()), priorityReason,
                 queueDate, queueNumber,
                 initialStatus,
                 insurance.status());
 
-        visit.updateReferralDiagnosis(referralDiagnosis, now);
         if (appointment != null) {
             visit.linkFollowUpAppointment(appointment.getId());
         }
@@ -911,7 +908,6 @@ public class VisitServiceImpl implements VisitService {
                 visit.getRegisteredByAccountId(), visit.getThoigianvaovien(), visit.getDenkhambenhluc(),
                 visit.getDoituongbnLoai(), visit.getMabhyt(), visit.getTungaybhyt(), visit.getDenngaybhyt(),
                 visit.getNoidangkykcbbd(), visit.getLydotiepnhan(), visit.getNoigioithieuLoai(),
-                visit.getChandoancuanoigioithieu(),
                 visit.getLydovaovien(), visit.isPriority(),
                 visit.getPriorityReason() == null ? null : visit.getPriorityReason().name(), visit.getQueueDate(),
                 visit.getQueueNumber(), visit.getStatus(), visit.isSkipped(), visit.getSkippedAt(),
@@ -920,18 +916,6 @@ public class VisitServiceImpl implements VisitService {
 
     private static String normalize(String value) {
         return value == null || value.isBlank() ? null : value.strip();
-    }
-
-    /** BR-129: required with 2–1.000 characters when referred by a health facility; dropped otherwise. */
-    private static String referralDiagnosisFor(String referralSource, String diagnosis) {
-        if (!Visit.REFERRAL_HEALTH_FACILITY.equals(referralSource)) {
-            return null;
-        }
-        String value = normalize(diagnosis);
-        if (value == null || value.length() < 2 || value.length() > 1000) {
-            throw new AppException(ErrorCode.REFERRAL_DIAGNOSIS_REQUIRED);
-        }
-        return value;
     }
 
     private static boolean hasConstraint(Throwable exception, String constraintName) {
