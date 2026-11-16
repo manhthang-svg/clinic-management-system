@@ -72,6 +72,9 @@ class DepartmentServiceImplTest {
     private DutyScheduleRepository dutyScheduleRepository;
 
     @Mock
+    private clinic.backend.repository.VisitRepository visitRepository;
+
+    @Mock
     private UuidV7Generator uuidV7Generator;
 
     private Clock clock;
@@ -90,6 +93,7 @@ class DepartmentServiceImplTest {
                 medicalServiceRepository,
                 paraclinicalOrderDetailRepository,
                 dutyScheduleRepository,
+                visitRepository,
                 clock,
                 uuidV7Generator
         );
@@ -353,6 +357,7 @@ class DepartmentServiceImplTest {
         Room room = new Room(roomId, now, deptId, null, "R1", "Room 1", "L1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
 
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         DepartmentRoomItemResponse response = departmentService.toggleRoomStatus(roomId);
@@ -678,6 +683,7 @@ class DepartmentServiceImplTest {
 
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of());
 
@@ -905,5 +911,204 @@ class DepartmentServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getErrorCode())
                         .isEqualTo(ErrorCode.ROOM_HAS_DOCTOR_ON_DUTY));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_PENDING_WORK) khi tạm ngưng phòng khám lâm sàng đang có bệnh nhân chờ hoặc khám dở trong ngày")
+    void toggleRoomStatus_ThrowsException_WhenExaminationRoomHasActiveVisitsToday() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng khám 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(false);
+        when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_PENDING_WORK));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_FUTURE_SHIFTS) khi tạm ngưng phòng vẫn còn ca trực trong các ngày tới")
+    void toggleRoomStatus_ThrowsException_WhenRoomHasFutureDutySchedules() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng khám 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(true);
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_FUTURE_SHIFTS));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_PENDING_WORK) khi cập nhật phòng sang INACTIVE và phòng lâm sàng đang có bệnh nhân chờ/khám dở")
+    void updateRoom_ThrowsException_WhenExaminationRoomHasActiveVisitsTodayAndStatusInactive() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(false);
+        when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
+                .thenReturn(true);
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng 1")
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.INACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_PENDING_WORK));
+    }
+
+    @Test
+    @DisplayName("Ném AppException(ROOM_HAS_FUTURE_SHIFTS) khi cập nhật phòng sang INACTIVE và phòng còn ca trực các ngày tới")
+    void updateRoom_ThrowsException_WhenRoomHasFutureShiftsAndStatusInactive() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(true);
+
+        RoomRequest request = RoomRequest.builder()
+                .departmentId(deptId)
+                .roomName("Phòng 1")
+                .location("Tầng 1")
+                .type(RoomType.EXAMINATION)
+                .status(ActivationStatus.INACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ROOM_HAS_FUTURE_SHIFTS));
+    }
+
+    @Test
+    @DisplayName("RỦI RO 4: Ném ngoại lệ khi ngưng hoạt động chuyên khoa và có phòng trực thuộc đang có bệnh nhân chờ/khám dở")
+    void toggleDepartmentStatus_ThrowsException_WhenActiveRoomHasPendingWork() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findByDepartmentId(deptId)).thenReturn(List.of(room));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(false);
+        when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> departmentService.toggleDepartmentStatus(deptId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.ROOM_HAS_PENDING_WORK);
+                    assertThat(e.getMessage()).contains("Không thể tạm ngưng chuyên khoa \"Khoa Nội\"");
+                });
+    }
+
+    @Test
+    @DisplayName("RỦI RO 4: Ngưng hoạt động chuyên khoa thành công và cascade ngưng hoạt động toàn bộ phòng trực thuộc")
+    void toggleDepartmentStatus_Success_DeactivatesDepartmentAndAllActiveRooms() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findByDepartmentId(deptId)).thenReturn(List.of(room));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(false);
+        when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
+                .thenReturn(false);
+
+        when(departmentRepository.save(any(Department.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DepartmentRoomItemResponse response = departmentService.toggleDepartmentStatus(deptId);
+
+        assertThat(response.getStatus()).isEqualTo("INACTIVE");
+        assertThat(room.getStatus()).isEqualTo(ActivationStatus.INACTIVE);
+        verify(roomRepository).save(room);
+    }
+
+    @Test
+    @DisplayName("RỦI RO 3 (EF-06 / MSG94): Ném ngoại lệ khi tạm ngưng phòng khám lâm sàng duy nhất còn hoạt động")
+    void toggleRoomStatus_ThrowsException_WhenLastActiveExaminationRoom() {
+        UUID roomId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+
+        LocalDate today = LocalDate.ofInstant(now, java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(1L);
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(roomId, today, today))
+                .thenReturn(List.of());
+        when(dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(roomId, today)).thenReturn(false);
+        when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> departmentService.toggleRoomStatus(roomId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.LAST_ACTIVE_EXAMINATION_ROOM);
+                    assertThat(e.getMessage()).contains("đây là phòng khám duy nhất còn hoạt động nên không thể ngừng hoạt động");
+                });
+    }
+
+    @Test
+    @DisplayName("RỦI RO 3: Ném ngoại lệ khi ngưng hoạt động chuyên khoa làm tắt toàn bộ phòng khám lâm sàng còn lại trong cơ sở")
+    void toggleDepartmentStatus_ThrowsException_WhenDeactivatingAllRemainingActiveExaminationRooms() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        UUID roomId = UUID.randomUUID();
+        Room room = new Room(roomId, now, deptId, null, "PK-01", "Phòng 1", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findByDepartmentId(deptId)).thenReturn(List.of(room));
+        when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(1L);
+
+        assertThatThrownBy(() -> departmentService.toggleDepartmentStatus(deptId))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.LAST_ACTIVE_EXAMINATION_ROOM);
+                    assertThat(e.getMessage()).contains("thao tác này sẽ ngừng hoạt động toàn bộ phòng khám lâm sàng còn lại trong cơ sở");
+                });
     }
 }

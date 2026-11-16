@@ -13,7 +13,10 @@ const saved = {
     patientId: 'patient-1',
     editable: true,
     readOnlyReason: null,
-    history: [{ category: 'CHRONIC_DISEASE', content: 'Tăng huyết áp' }],
+    history: [
+        { category: 'CHRONIC_DISEASE', content: 'Tăng huyết áp' },
+        { category: 'FAMILY', content: 'Bố bị đái tháo đường' },
+    ],
     allergies: [{ drug: 'Penicillin', reaction: 'Phát ban', severity: 'SEVERE' }],
     noKnownDrugAllergy: false,
     updatedAt: '2026-11-05T02:00:00.123Z',
@@ -29,48 +32,56 @@ function apiWith(overrides = {}) {
 }
 
 describe('MedicalHistoryPanel', () => {
-    it('shows history, red allergy labels and who updated them last', async () => {
+    it('shows personal and family history, no allergies, and who updated them last', async () => {
         const onLoaded = vi.fn();
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={apiWith()} onLoaded={onLoaded} />);
 
-        expect(await screen.findByText('Dị ứng: Penicillin (Nặng)')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: '2. Tiền sử bệnh' })).toBeInTheDocument();
+        expect(screen.getByText('+ Bản thân:')).toBeInTheDocument();
         expect(screen.getByText('Tăng huyết áp')).toBeInTheDocument();
+        expect(screen.getByText('+ Gia đình:')).toBeInTheDocument();
+        expect(screen.getByText('Bố bị đái tháo đường')).toBeInTheDocument();
+        expect(screen.queryByText(/Penicillin/)).not.toBeInTheDocument();
         expect(screen.getByText(/BS Nguyễn Văn An/)).toBeInTheDocument();
         expect(onLoaded).toHaveBeenCalledWith(saved);
     });
 
-    it('saves the edited lists with the last updated time it loaded', async () => {
+    it('saves both groups and sends the stored allergies back unchanged', async () => {
         const user = userEvent.setup();
         const visitApi = apiWith();
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={visitApi} />);
         await user.click(await screen.findByRole('button', { name: 'Cập nhật' }));
 
-        await user.click(screen.getByRole('button', { name: 'Thêm dị ứng' }));
-        await user.type(screen.getByLabelText('Thuốc hoặc nhóm thuốc 2'), 'Aspirin');
+        await user.type(screen.getByLabelText('+ Bản thân'), '{Enter}Mổ ruột thừa');
+        await user.type(screen.getByLabelText('+ Gia đình'), '{Enter}Mẹ bị hen');
         await user.click(screen.getByRole('button', { name: 'Lưu' }));
 
         expect(visitApi.updateMedicalHistory).toHaveBeenCalledWith('visit-1', {
-            history: [{ category: 'CHRONIC_DISEASE', content: 'Tăng huyết áp' }],
-            allergies: [
-                { drug: 'Penicillin', reaction: 'Phát ban', severity: 'SEVERE' },
-                { drug: 'Aspirin', reaction: null, severity: null },
+            history: [
+                { category: 'CHRONIC_DISEASE', content: 'Tăng huyết áp' },
+                { category: 'OTHER', content: 'Mổ ruột thừa' },
+                { category: 'FAMILY', content: 'Bố bị đái tháo đường' },
+                { category: 'FAMILY', content: 'Mẹ bị hen' },
             ],
+            allergies: [{ drug: 'Penicillin', reaction: 'Phát ban', severity: 'SEVERE' }],
             noKnownDrugAllergy: false,
             lastUpdatedAt: '2026-11-05T02:00:00.123Z',
         });
         expect(await screen.findByRole('button', { name: 'Cập nhật' })).toBeInTheDocument();
     });
 
-    it('requires a drug for every allergy and does not call the API', async () => {
+    it('rejects a line longer than 255 characters and does not call the API', async () => {
         const user = userEvent.setup();
         const visitApi = apiWith();
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={visitApi} />);
         await user.click(await screen.findByRole('button', { name: 'Cập nhật' }));
 
-        await user.click(screen.getByRole('button', { name: 'Thêm dị ứng' }));
+        await user.clear(screen.getByLabelText('+ Gia đình'));
+        await user.click(screen.getByLabelText('+ Gia đình'));
+        await user.paste('x'.repeat(256));
         await user.click(screen.getByRole('button', { name: 'Lưu' }));
 
-        expect(screen.getByText('Thuốc hoặc nhóm thuốc là bắt buộc.')).toBeInTheDocument();
+        expect(screen.getByText(MESSAGES.lineTooLong(255))).toBeInTheDocument();
         expect(visitApi.updateMedicalHistory).not.toHaveBeenCalled();
     });
 
@@ -79,26 +90,13 @@ describe('MedicalHistoryPanel', () => {
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={apiWith()} />);
         await user.click(await screen.findByRole('button', { name: 'Cập nhật' }));
 
-        await user.click(screen.getByRole('button', { name: 'Xóa tiền sử 1' }));
+        await user.clear(screen.getByLabelText('+ Bản thân'));
         await user.click(screen.getByRole('button', { name: 'Hủy' }));
 
         const dialog = screen.getByRole('alertdialog', { name: 'Loại bỏ thay đổi' });
         expect(dialog).toHaveTextContent(MESSAGES.discard);
         await user.click(within(dialog).getByRole('button', { name: 'Loại bỏ' }));
         expect(screen.getByText('Tăng huyết áp')).toBeInTheDocument();
-    });
-
-    it('hides the allergy rows when "no known drug allergy" is ticked', async () => {
-        const user = userEvent.setup();
-        const visitApi = apiWith();
-        render(<MedicalHistoryPanel visitId="visit-1" visitApi={visitApi} />);
-        await user.click(await screen.findByRole('button', { name: 'Cập nhật' }));
-
-        await user.click(screen.getByLabelText('Không có tiền sử dị ứng thuốc'));
-        expect(screen.queryByLabelText('Thuốc hoặc nhóm thuốc 1')).not.toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Lưu' }));
-
-        expect(visitApi.updateMedicalHistory.mock.calls[0][1]).toMatchObject({ allergies: [], noKnownDrugAllergy: true });
     });
 
     it('is read-only when the visit is not examined in the doctor room', async () => {
@@ -115,10 +113,10 @@ describe('MedicalHistoryPanel', () => {
         const visitApi = apiWith({ getMedicalHistory: vi.fn(() => new Promise((done) => { resolve = done; })) });
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={visitApi} />);
 
-        expect(screen.getByText('Đang tải tiền sử và dị ứng…')).toBeInTheDocument();
+        expect(screen.getByText('Đang tải tiền sử bệnh…')).toBeInTheDocument();
         resolve(saved);
         expect(await screen.findByText('Tăng huyết áp')).toBeInTheDocument();
-        expect(screen.queryByText('Đang tải tiền sử và dị ứng…')).not.toBeInTheDocument();
+        expect(screen.queryByText('Đang tải tiền sử bệnh…')).not.toBeInTheDocument();
     });
 
     it('shows empty states when nothing has been recorded yet', async () => {
@@ -128,8 +126,7 @@ describe('MedicalHistoryPanel', () => {
             }),
         })} />);
 
-        expect(await screen.findByText('Chưa ghi nhận tiền sử')).toBeInTheDocument();
-        expect(screen.getByText('Chưa ghi nhận dị ứng thuốc')).toBeInTheDocument();
+        expect(await screen.findAllByText('Chưa ghi nhận')).toHaveLength(2);
         expect(screen.queryByText(/Cập nhật lần cuối/)).not.toBeInTheDocument();
     });
 
@@ -192,7 +189,7 @@ describe('MedicalHistoryPanel', () => {
 
     it('reloads the latest data after another doctor saved first', async () => {
         const user = userEvent.setup();
-        const latest = { ...saved, allergies: [{ drug: 'Aspirin', reaction: null, severity: null }], updatedAt: '2026-11-05T03:00:00.000Z' };
+        const latest = { ...saved, history: [{ category: 'FAMILY', content: 'Mẹ bị hen' }], updatedAt: '2026-11-05T03:00:00.000Z' };
         const getMedicalHistory = vi.fn().mockResolvedValueOnce(saved).mockResolvedValueOnce(latest);
         render(<MedicalHistoryPanel visitId="visit-1" visitApi={apiWith({
             getMedicalHistory,
@@ -204,7 +201,7 @@ describe('MedicalHistoryPanel', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent(MESSAGES.changedByOthers);
         await user.click(screen.getByRole('button', { name: 'Tải lại' }));
 
-        expect(await screen.findByText('Dị ứng: Aspirin')).toBeInTheDocument();
+        expect(await screen.findByText('Mẹ bị hen')).toBeInTheDocument();
         expect(getMedicalHistory).toHaveBeenCalledTimes(2);
     });
 
@@ -230,18 +227,18 @@ describe('MedicalHistoryPanel', () => {
 
 describe('medicalHistory helpers', () => {
     it('limits the whole history to 2000 characters', () => {
-        const history = Array.from({ length: 9 }, () => ({ category: 'OTHER', content: 'x'.repeat(250) }));
-        expect(validateDraft({ history, allergies: [], noKnownDrugAllergy: false }).history)
-            .toBe('Vượt quá độ dài tối đa 2000 ký tự.');
+        const self = Array.from({ length: 9 }, () => 'x'.repeat(250)).join('\n');
+        expect(validateDraft({ self, family: '' }).history).toBe('Vượt quá độ dài tối đa 2000 ký tự.');
     });
 
-    it('trims values and drops allergies when none are known', () => {
-        expect(toRequest({
-            history: [{ category: 'SURGERY', content: '  Mổ ruột thừa ' }],
-            allergies: [{ drug: 'Aspirin', reaction: '', severity: '' }],
-            noKnownDrugAllergy: true,
-        }, null)).toEqual({
-            history: [{ category: 'SURGERY', content: 'Mổ ruột thừa' }],
+    it('trims lines, drops blank ones and keeps the stored allergies', () => {
+        expect(toRequest({ self: '  Mổ ruột thừa \n\n', family: ' Bố bị gout ' }, {
+            history: [], allergies: [], noKnownDrugAllergy: true, updatedAt: null,
+        })).toEqual({
+            history: [
+                { category: 'OTHER', content: 'Mổ ruột thừa' },
+                { category: 'FAMILY', content: 'Bố bị gout' },
+            ],
             allergies: [],
             noKnownDrugAllergy: true,
             lastUpdatedAt: null,

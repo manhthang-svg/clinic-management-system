@@ -75,6 +75,24 @@ export function RoomTable({
     );
   };
 
+  const getDeactivationBlockedReason = (room) => {
+    if (room.hasDoctorOnDutyToday || room.doctorOnDutyToday) {
+      const role = room.type === 'EXAMINATION' ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên';
+      return `Không thể tạm ngưng: phòng đang có ${role} trực trong ngày${
+        room.doctorOnDutyToday ? ` (${room.doctorOnDutyToday})` : ''
+      }`;
+    }
+    if (room.hasActiveVisitsToday) {
+      return room.type === 'EXAMINATION'
+        ? 'Không thể tạm ngưng: phòng đang có bệnh nhân chờ hoặc đang khám dở trong ngày'
+        : 'Không thể tạm ngưng: phòng đang có dịch vụ cận lâm sàng đang chờ hoặc đang thực hiện';
+    }
+    if (room.hasFutureDutySchedules) {
+      return 'Không thể tạm ngưng: phòng còn nhân viên được xếp ca trực trong các ngày tới';
+    }
+    return null;
+  };
+
   return (
     <div>
       <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white">
@@ -100,6 +118,8 @@ export function RoomTable({
             ) : (
               items.map((room) => {
                 const isActive = room.status === 'ACTIVE';
+                const blockedReason = isActive ? getDeactivationBlockedReason(room) : null;
+                const isBlocked = Boolean(blockedReason);
 
                 return (
                   <tr
@@ -194,19 +214,15 @@ export function RoomTable({
                           title={
                             !isActive
                               ? 'Kích hoạt lại'
-                              : room.hasDoctorOnDutyToday || room.doctorOnDutyToday
-                              ? `Không thể tạm ngưng: phòng đang có ${
-                                  room.type === 'EXAMINATION' ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên'
-                                } trực trong ngày${
-                                  room.doctorOnDutyToday ? ` (${room.doctorOnDutyToday})` : ''
-                                }`
+                              : isBlocked
+                              ? blockedReason
                               : 'Vô hiệu hóa / Tạm ngưng'
                           }
                           aria-label={`Đổi trạng thái ${room.name}`}
                           onClick={() => onToggleStatus(room)}
                           className={`${ACTION_CLASS} ${
                             isActive
-                              ? room.hasDoctorOnDutyToday || room.doctorOnDutyToday
+                              ? isBlocked
                                 ? 'text-amber-500 hover:bg-amber-50 hover:text-amber-600'
                                 : 'text-slate-500 hover:bg-rose-50 hover:text-rose-600'
                               : 'text-emerald-600 hover:bg-emerald-50'

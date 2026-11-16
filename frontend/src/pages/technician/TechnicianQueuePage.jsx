@@ -1293,7 +1293,7 @@ export function TechnicianQueuePage() {
                                   ? 'opacity-50 cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200'
                                   : 'text-white bg-[#0d9488] hover:bg-[#0f766e] cursor-pointer active:scale-95'
                               }`}
-                              title={!canManage ? MSG48 : 'Tiếp nhận lại bệnh nhân quay lại hàng đợi phục vụ (UC-46)'}
+                              title={!canManage ? MSG48 : 'Tiếp nhận lại bệnh nhân quay lại hàng đợi phục vụ'}
                             >
                               <RotateCcw className="w-3 h-3 shrink-0" />
                               <span>Tiếp nhận lại</span>

@@ -359,6 +359,7 @@ class VisitServiceImplTest {
         Room emptyRoom = room(EMPTY_ROOM_ID, "PK02");
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(busyRoom, emptyRoom));
+        onDuty(busyRoom, emptyRoom);
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of(
                 count(BUSY_ROOM_ID, VisitStatus.WAITING, false, 3),
                 count(BUSY_ROOM_ID, VisitStatus.IN_EXAMINATION, false, 1),
@@ -381,6 +382,7 @@ class VisitServiceImplTest {
         Room room = room(BUSY_ROOM_ID, "PK01");
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room));
+        onDuty(room);
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of(
                 count(BUSY_ROOM_ID, VisitStatus.WAITING_FEE_PAYMENT, false, 2),
                 count(BUSY_ROOM_ID, VisitStatus.WAITING, false, 1)));
@@ -392,29 +394,24 @@ class VisitServiceImplTest {
     }
 
     @Test
-    void queueStatusShowsActiveAssignedDoctorsAndFlagsRoomsWithoutDoctor() {
+    void queueStatusListsOnlyRoomsWithADoctorOnDutyNamedByThatDoctor() {
         Room busyRoom = room(BUSY_ROOM_ID, "PK01");
-        Room emptyRoom = room(EMPTY_ROOM_ID, "PK02");
-        UUID lockedDoctorId = UUID.randomUUID();
-        UUID nurseId = UUID.randomUUID();
+        // PK02: only its id is read, since it is filtered out.
+        Room emptyRoom = mock(Room.class);
+        when(emptyRoom.getId()).thenReturn(EMPTY_ROOM_ID);
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(busyRoom, emptyRoom));
+        when(examinationRoomDuty.onDutyDoctorsByRoom(clock.instant())).thenReturn(Map.of(BUSY_ROOM_ID,
+                staff(DOCTOR_ID, "BS", "Nguyễn Văn An", clinic.backend.enums.Role.DOCTOR, AccountStatus.ACTIVE)));
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of());
-        when(staffRoomAssignmentRepository.findByRemovedAtIsNull()).thenReturn(List.of(
-                assignment(DOCTOR_ID, BUSY_ROOM_ID),
-                assignment(lockedDoctorId, EMPTY_ROOM_ID),
-                assignment(nurseId, EMPTY_ROOM_ID)));
-        when(staffAccountRepository.findAllById(any())).thenReturn(List.of(
-                staff(DOCTOR_ID, "BS", "Nguyễn Văn An", clinic.backend.enums.Role.DOCTOR, AccountStatus.ACTIVE),
-                staff(lockedDoctorId, null, "Trần Bình", clinic.backend.enums.Role.DOCTOR, AccountStatus.LOCKED),
-                staff(nurseId, null, "Lê Cúc", clinic.backend.enums.Role.RECEPTIONIST, AccountStatus.ACTIVE)));
 
         var status = service.getRoomQueueStatus(QUEUE_DATE);
 
-        assertThat(status.get(0).doctorNames()).containsExactly("BS Nguyễn Văn An");
-        assertThat(status.get(0).hasDoctor()).isTrue();
-        assertThat(status.get(1).doctorNames()).isEmpty();
-        assertThat(status.get(1).hasDoctor()).isFalse();
+        // PK02 has no doctor on duty in this shift, so it is not listed.
+        assertThat(status).extracting("roomCode").containsExactly("PK01");
+        assertThat(status.getFirst().doctorNames()).containsExactly("BS Nguyễn Văn An");
+        assertThat(status.getFirst().hasDoctor()).isTrue();
+        verifyNoInteractions(staffRoomAssignmentRepository);
     }
 
     @Test
@@ -428,6 +425,7 @@ class VisitServiceImplTest {
         when(cardiologyRoom.getDepartmentId()).thenReturn(cardiologyId);
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(noDepartmentRoom, internalRoom, cardiologyRoom));
+        onDuty(noDepartmentRoom, internalRoom, cardiologyRoom);
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of());
         List<Department> departments = List.of(
                 department(internalId, "Khoa Nội"), department(cardiologyId, "Khoa Tim mạch"));
@@ -444,6 +442,7 @@ class VisitServiceImplTest {
         Room emptyRoom = room(EMPTY_ROOM_ID, "PK02");
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(emptyRoom));
+        onDuty(emptyRoom);
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of());
 
         var empty = service.getRoomQueueStatus(QUEUE_DATE).getFirst();
@@ -460,6 +459,7 @@ class VisitServiceImplTest {
         Room room = room(BUSY_ROOM_ID, "PK01");
         when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.EXAMINATION, ActivationStatus.ACTIVE))
                 .thenReturn(List.of(room));
+        onDuty(room);
         when(visitRepository.countRoomQueues(QUEUE_DATE)).thenReturn(List.of(
                 count(BUSY_ROOM_ID, VisitStatus.WAITING, false, 2),
                 count(BUSY_ROOM_ID, VisitStatus.WAITING, true, 1),
@@ -526,6 +526,46 @@ class VisitServiceImplTest {
     }
 
     @Test
+    void roomQueueOfAnUnknownRoomIsNotFound() {
+        // UC-42 AF-03: MSG39.
+        UUID roomId = UUID.randomUUID();
+        when(roomRepository.findById(roomId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getRoomQueue(roomId, QUEUE_DATE))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ROOM_NOT_FOUND));
+        verify(visitRepository, never()).findRoomQueue(any(), any());
+    }
+
+    @Test
+    void roomQueueOfARoomWithoutADoctorOnDutyIsNotAvailable() {
+        // UC-42 AF-03: MSG53.
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getRoomQueue(BUSY_ROOM_ID, QUEUE_DATE))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ROOM_NOT_AVAILABLE));
+        verify(visitRepository, never()).findRoomQueue(any(), any());
+    }
+
+    @Test
+    void roomQueueOfARoomWithADoctorOnDutyIsListed() {
+        Room room = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
+        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
+                .thenReturn(Optional.of(mock(StaffAccount.class)));
+        when(visitRepository.findRoomQueue(BUSY_ROOM_ID, QUEUE_DATE)).thenReturn(List.of());
+
+        assertThat(service.getRoomQueue(BUSY_ROOM_ID, QUEUE_DATE)).isEmpty();
+    }
+
+    @Test
     void cashierCannotLoadOrPrintTheTicketBeforeTheExaminationFeeIsPaid() {
         // I1-D48: the Cashier prints the queue-number ticket, so only once the visit has its number.
         UUID visitId = UUID.randomUUID();
@@ -586,7 +626,7 @@ class VisitServiceImplTest {
                 new StaffPrincipal(receptionistId, UUID.randomUUID()),
                 new CreateVisitRequest(
                         patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
-                        "Đau đầu", "EXAMINATION", "TU_DEN", null, false, null,
+                        "Đau đầu", "EXAMINATION", "CO_SO_Y_TE", "Viêm phổi", false, null,
                         null, null));
 
         assertThat(response.sovaovien()).isEqualTo("DK0000000001");
@@ -598,6 +638,10 @@ class VisitServiceImplTest {
         verify(paymentRepository).save(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().getPatientTotalAmount()).isEqualByComparingTo("150000");
         assertThat(paymentCaptor.getValue().getItems()).hasSize(1);
+        // BR-129: the referring diagnosis is entered by the Doctor, so registration does not store it.
+        ArgumentCaptor<Visit> visitCaptor = ArgumentCaptor.forClass(Visit.class);
+        verify(visitRepository).saveAndFlush(visitCaptor.capture());
+        assertThat(visitCaptor.getValue().getChandoancuanoigioithieu()).isNull();
     }
 
     @Test
@@ -662,31 +706,6 @@ class VisitServiceImplTest {
     }
 
     @Test
-    void requiresReferralDiagnosisWhenReferredByAHealthFacility() {
-        UUID patientId = UUID.randomUUID();
-        Room room = new Room(
-                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
-                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
-        when(visitRepository.existsByPatientIdAndStatusNotIn(patientId, VisitRepository.FINISHED_STATUSES))
-                .thenReturn(false);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(mock(Patient.class)));
-        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(room));
-        when(examinationRoomDuty.onDutyDoctor(BUSY_ROOM_ID, clock.instant()))
-                .thenReturn(Optional.of(mock(StaffAccount.class)));
-
-        // BR-129: "Y tế" requires the referring facility's diagnosis (TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13).
-        assertThatThrownBy(() -> service.createVisit(
-                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()),
-                new CreateVisitRequest(
-                        patientId, BUSY_ROOM_ID, VisitDoituongbnLoai.DV, null,
-                        "Đau đầu", "EXAMINATION", "CO_SO_Y_TE", " x ", false, null,
-                        null, null)))
-                .isInstanceOfSatisfying(AppException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REFERRAL_DIAGNOSIS_REQUIRED));
-        verifyNoInteractions(paymentRepository);
-    }
-
-    @Test
     void rejectsRegistrationWhenPatientAlreadyHasActiveVisit() {
         UUID patientId = UUID.randomUUID();
         when(visitRepository.existsByPatientIdAndStatusNotIn(patientId, VisitRepository.FINISHED_STATUSES))
@@ -713,6 +732,17 @@ class VisitServiceImplTest {
         return StaffAccount.builder()
                 .id(id).academicTitle(title).fullName(name).role(role).status(status)
                 .build();
+    }
+
+    /** UC-42: the given rooms each have an active doctor on duty in the current shift. */
+    private void onDuty(Room... rooms) {
+        Map<UUID, StaffAccount> doctors = new java.util.HashMap<>();
+        for (Room room : rooms) {
+            doctors.put(room.getId(), staff(
+                    UUID.randomUUID(), "BS", "Trực " + room.getRoomCode(),
+                    clinic.backend.enums.Role.DOCTOR, AccountStatus.ACTIVE));
+        }
+        when(examinationRoomDuty.onDutyDoctorsByRoom(clock.instant())).thenReturn(doctors);
     }
 
     private static Department department(UUID id, String name) {

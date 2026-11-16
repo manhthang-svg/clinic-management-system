@@ -362,9 +362,14 @@ function DepartmentFormModalContent({
         isEdit &&
         initialData?.status === 'ACTIVE' &&
         formData.status === 'INACTIVE' &&
-        (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
+        (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday || initialData?.hasActiveVisitsToday || initialData?.hasFutureDutySchedules)
       ) {
-        newErrors.status = 'Không được phép tạm ngừng phòng nếu phòng đó đang có bác sĩ trực trong ngày';
+        newErrors.status =
+          (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday || initialData?.hasActiveVisitsToday || initialData?.hasFutureDutySchedules)
+            ? 'Không được phép tạm ngừng phòng nếu phòng đó đang có bác sĩ trực trong ngày'
+            : initialData?.hasActiveVisitsToday
+            ? 'Không được phép tạm ngừng phòng nếu phòng vẫn còn bệnh nhân chờ hoặc đang khám dở trong ngày'
+            : 'Không được phép tạm ngừng phòng nếu phòng vẫn còn nhân viên được xếp ca trực trong các ngày tới';
       }
     } else {
       // BR-70 (Mô tả khoa: tối đa 500 ký tự)
@@ -653,12 +658,20 @@ function DepartmentFormModalContent({
                       <option
                         value="INACTIVE"
                         disabled={Boolean(
-                          isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
+                          isEdit &&
+                            (initialData?.hasDoctorOnDutyToday ||
+                              initialData?.doctorOnDutyToday ||
+                              initialData?.hasActiveVisitsToday ||
+                              initialData?.hasFutureDutySchedules)
                         )}
                       >
                         Tạm ngưng
                         {isEdit && (initialData?.hasDoctorOnDutyToday || initialData?.doctorOnDutyToday)
                           ? ` (Có ${initialData?.type === 'EXAMINATION' ? 'BS' : 'nhân sự'} trực hôm nay)`
+                          : isEdit && initialData?.hasActiveVisitsToday
+                          ? ' (Đang có bệnh nhân)'
+                          : isEdit && initialData?.hasFutureDutySchedules
+                          ? ' (Còn ca trực tương lai)'
                           : ''}
                       </option>
                     </select>
@@ -667,6 +680,16 @@ function DepartmentFormModalContent({
                         Phòng đang có {initialData?.type === 'EXAMINATION' ? 'bác sĩ' : 'bác sĩ/kỹ thuật viên'} trực trong ngày
                         {initialData?.doctorOnDutyToday ? ` (${initialData.doctorOnDutyToday})` : ''}.
                         Không thể tạm ngưng.
+                      </p>
+                    )}
+                    {isEdit && !initialData?.hasDoctorOnDutyToday && !initialData?.doctorOnDutyToday && initialData?.hasActiveVisitsToday && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        Phòng đang có bệnh nhân chờ hoặc đang khám dở trong ngày. Không thể tạm ngưng.
+                      </p>
+                    )}
+                    {isEdit && !initialData?.hasDoctorOnDutyToday && !initialData?.doctorOnDutyToday && !initialData?.hasActiveVisitsToday && initialData?.hasFutureDutySchedules && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        Phòng còn nhân viên được xếp ca trực trong các ngày tới. Không thể tạm ngưng.
                       </p>
                     )}
                     {errors.status && <p className="text-[11px] text-rose-500 mt-1">{errors.status}</p>}

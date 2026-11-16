@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, DoorOpen, RefreshCw } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router';
+import { ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, RefreshCw } from 'lucide-react';
 
 import defaultVisitApi from '../../apis/visitApi';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
+import ROUTES, { roomQueuePath } from '../../routes/routes';
+import { MSG12, MSG13, MSG80, MSG92, msg39 } from '../../components/services/serviceMessages';
+import { MSG102, msg56 as msg53 } from '../../components/visits/visitErrors';
 
 const REFRESH_MS = 10_000;
 const NO_DEPARTMENT = 'Chưa thuộc khoa';
-const NO_ROOM_MESSAGE = 'Hiện không có phòng khám nào có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.';
 
 const COUNT_COLUMNS = [
     ['waitingPaymentCount', 'Chờ thanh toán', 'text-orange-700'],
@@ -17,14 +20,22 @@ const COUNT_COLUMNS = [
     ['skippedCount', 'Bỏ lượt', 'text-rose-700'],
 ];
 
+/**
+ * EF-02 / EF-03: MSG12 when the session has expired, MSG13 without permission (BR-02), MSG80 for any other failure,
+ * including a lost connection.
+ */
 function loadErrorMessage(error) {
-    if (error?.status === 401 || error?.status === 403) {
-        return 'Bạn không có quyền xem tình trạng hàng đợi phòng khám.';
-    }
-    if (error?.status >= 500) {
-        return 'Không thể tải tình trạng hàng đợi do lỗi hệ thống. Vui lòng thử lại sau.';
-    }
-    return 'Không thể tải tình trạng hàng đợi. Vui lòng thử lại.';
+    if (error?.status === 401) return MSG12;
+    if (error?.status === 403) return MSG13;
+    return MSG80;
+}
+
+/** AF-03: a room's waiting list can no longer be viewed: MSG39 for an unknown room, MSG53 otherwise. */
+function roomQueueErrorMessage(error) {
+    const code = error?.errorResponse?.code;
+    if (code === 'ROOM_NOT_FOUND') return msg39('phòng khám');
+    if (code === 'ROOM_NOT_AVAILABLE') return msg53();
+    return loadErrorMessage(error);
 }
 
 function formatTime(value) {
@@ -39,13 +50,14 @@ function formatRegistrationTime(value) {
         : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-function SummaryCard({ label, value, className }) {
-    return (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className={`mt-1 text-3xl font-extrabold ${className}`}>{value}</p>
-        </div>
-    );
+/**
+ * "Bác sĩ còn phải khám", as on 'Đăng ký khám' (UC-40 step 8): today's visits of the room that have a queue number
+ * and have not ended. Visits waiting for payment have no number yet and are not counted.
+ */
+function roomTotal(room) {
+    return COUNT_COLUMNS
+        .filter(([key]) => key !== 'waitingPaymentCount')
+        .reduce((sum, [key]) => sum + (room[key] ?? 0), 0);
 }
 
 /** Groups rooms by department in the order the backend returns them (UC-42 step 2). */
@@ -64,11 +76,81 @@ function groupByDepartment(rooms) {
     return groups;
 }
 
-/** UC-42 step 5: examination waiting list of one room. */
+const PAGE_SIZE = 10;
+
+/** Previous / page numbers / next under the waiting list (same look as the paraclinical service list). */
+function Pagination({ page, pageCount, total, onChange }) {
+    const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+    const to = Math.min(page * PAGE_SIZE, total);
+    const pageButton = 'flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-full px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40';
+    return (
+        <nav aria-label="Phân trang danh sách chờ" className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+            <span>Hiển thị {from} – {to} / {total}</span>
+            <div className="flex items-center gap-1">
+                <button type="button" aria-label="Trang trước" disabled={page === 1} onClick={() => onChange(page - 1)} className={`${pageButton} text-slate-600 hover:bg-slate-100`}>
+                    <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                </button>
+                {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+                    <button
+                        key={number}
+                        type="button"
+                        aria-label={`Trang ${number}`}
+                        aria-current={number === page ? 'page' : undefined}
+                        onClick={() => onChange(number)}
+                        className={`${pageButton} ${number === page ? 'border border-teal-600 text-teal-700' : 'text-slate-600 hover:bg-slate-100'}`}
+                    >
+                        {number}
+                    </button>
+                ))}
+                <button type="button" aria-label="Trang sau" disabled={page === pageCount} onClick={() => onChange(page + 1)} className={`${pageButton} text-slate-600 hover:bg-slate-100`}>
+                    <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                </button>
+            </div>
+        </nav>
+    );
+}
+
+/**
+ * UC-42 AF-03: the room in the link is not on the overview. The backend tells why: MSG39 when the room does not
+ * exist, MSG53 when it is inactive or has no doctor on duty.
+ */
+function UnavailableRoom({ roomId, visitApi, onBack }) {
+    const [message, setMessage] = useState('');
+
+    useEffect(() => {
+        const controller = new AbortController();
+        visitApi.getQueue({ roomId }, controller.signal)
+            // Listed again in the meantime: the overview refresh will open it; until then it is not receivable.
+            .then(() => setMessage(msg53()))
+            .catch((failure) => {
+                if (failure?.name !== 'AbortError') setMessage(roomQueueErrorMessage(failure));
+            });
+        return () => controller.abort();
+    }, [visitApi, roomId]);
+
+    return (
+        <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center shadow-sm">
+            <p role={message ? 'alert' : undefined} className="text-sm font-semibold text-slate-700">
+                {message || 'Đang tải hàng đợi của phòng…'}
+            </p>
+            <button type="button" onClick={onBack} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                <ArrowLeft className="h-4 w-4" />
+                Quay lại
+            </button>
+        </div>
+    );
+}
+
+/** UC-42 step 5: examination waiting list of one room, 10 visits per page. */
 function RoomDetail({ room, visitApi, refreshKey, onBack }) {
     const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [page, setPage] = useState(1);
+    const pageCount = Math.max(1, Math.ceil(visits.length / PAGE_SIZE));
+    // The list refreshes every 10 seconds; stay on the last page when it gets shorter.
+    const currentPage = Math.min(page, pageCount);
+    const pageVisits = visits.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -78,7 +160,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                 setError('');
             })
             .catch((failure) => {
-                if (failure?.name !== 'AbortError') setError(loadErrorMessage(failure));
+                if (failure?.name !== 'AbortError') setError(roomQueueErrorMessage(failure));
             })
             .finally(() => setLoading(false));
         return () => controller.abort();
@@ -93,7 +175,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         {[room.roomCode, room.location, room.departmentName].filter(Boolean).join(' · ')}
                     </p>
                     <p className="text-xs text-slate-500">
-                        Bác sĩ: {room.doctorNames?.length ? room.doctorNames.join(', ') : 'Chưa có bác sĩ'}
+                        Bác sĩ trực: {room.doctorNames?.length ? room.doctorNames.join(', ') : 'Chưa có bác sĩ'}
                     </p>
                 </div>
                 <button type="button" onClick={onBack} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
@@ -116,7 +198,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {visits.map((visit) => (
+                        {pageVisits.map((visit) => (
                             <tr key={visit.id} className="border-b border-slate-100">
                                 <td className="px-4 py-3 text-base font-bold tabular-nums">{visit.queueNumber}</td>
                                 <td className="px-4 py-3">
@@ -138,10 +220,13 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                 </table>
                 {visits.length === 0 && (
                     <p className="px-6 py-10 text-center text-sm text-slate-500">
-                        {loading ? 'Đang tải danh sách chờ…' : 'Phòng chưa có bệnh nhân trong hàng đợi.'}
+                        {loading ? 'Đang tải danh sách chờ…' : MSG92 /* AF-02 */}
                     </p>
                 )}
             </div>
+            {visits.length > 0 && (
+                <Pagination page={currentPage} pageCount={pageCount} total={visits.length} onChange={setPage} />
+            )}
         </section>
     );
 }
@@ -153,7 +238,10 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
-    const [selectedRoomId, setSelectedRoomId] = useState(null);
+    // UC-42 step 6: the selected room is part of the link, /receptionist/room-queue/{roomId}.
+    const { roomId: selectedRoomId } = useParams();
+    const navigate = useNavigate();
+    const backToOverview = () => navigate(ROUTES.RECEPTIONIST.ROOM_QUEUE);
     const [refreshKey, setRefreshKey] = useState(0);
 
     const fetchStatus = useCallback(async (signal) => {
@@ -191,11 +279,6 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
         };
     }, [fetchStatus]);
 
-    const totals = useMemo(() => rooms.reduce((sum, room) => ({
-        waiting: sum.waiting + room.waitingCount,
-        inExamination: sum.inExamination + room.inExaminationCount,
-        busiest: room.hasDoctor ? Math.max(sum.busiest, room.waitingCount) : sum.busiest,
-    }), { waiting: 0, inExamination: 0, busiest: 0 }), [rooms]);
     const groups = useMemo(() => groupByDepartment(rooms), [rooms]);
     const receivableRooms = rooms.filter((room) => room.hasDoctor).length;
     const noRoomCanReceive = !loading && lastUpdated !== null && receivableRooms === 0;
@@ -208,7 +291,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                     <DoorOpen className="mt-1 h-7 w-7 text-teal-600" />
                     <div>
                         <h1 className="text-2xl font-extrabold tracking-tight text-[#142534]">Tình trạng hàng đợi phòng khám</h1>
-                        <p className="mt-1 text-sm text-slate-500">Số bệnh nhân theo từng phòng trong ngày, nhóm theo khoa. Chọn một phòng để xem danh sách chờ.</p>
+                        <p className="mt-1 text-sm text-slate-500">Các phòng khám đang có bác sĩ trực và số bệnh nhân của từng phòng tại thời điểm hiện tại, nhóm theo khoa. Chọn một phòng để xem danh sách chờ.</p>
                     </div>
                 </div>
                 <button type="button" disabled={refreshing || loading} onClick={() => void refreshNow()} className="flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">
@@ -217,18 +300,21 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                 </button>
             </header>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-                <SummaryCard label="Phòng khám tiếp nhận được" value={receivableRooms} className="text-[#142534]" />
-                <SummaryCard label="Tổng bệnh nhân chờ khám" value={totals.waiting} className="text-amber-600" />
-                <SummaryCard label="Đang khám" value={totals.inExamination} className="text-blue-600" />
-            </div>
-
             {noRoomCanReceive && !loadError && (
-                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{NO_ROOM_MESSAGE}</p>
+                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{MSG102}</p>
             )}
 
             {selectedRoom ? (
-                <RoomDetail room={selectedRoom} visitApi={visitApi} refreshKey={refreshKey} onBack={() => setSelectedRoomId(null)} />
+                <RoomDetail room={selectedRoom} visitApi={visitApi} refreshKey={refreshKey} onBack={backToOverview} />
+            ) : selectedRoomId ? (
+                loading ? (
+                    <div className="flex min-h-48 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 shadow-sm">
+                        Đang tải hàng đợi của phòng…
+                    </div>
+                ) : (
+                    // AF-03: the room in the link is not (or no longer) listed.
+                    <UnavailableRoom roomId={selectedRoomId} visitApi={visitApi} onBack={backToOverview} />
+                )
             ) : (
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                     {loadError && (
@@ -245,42 +331,52 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                     {COUNT_COLUMNS.map(([key, label]) => (
                                         <th key={key} scope="col" className="px-4 py-3 text-right font-bold">{label}</th>
                                     ))}
+                                    <th scope="col" className="px-4 py-3 text-right font-bold text-slate-800">Bác sĩ còn phải khám</th>
                                 </tr>
                             </thead>
                             {groups.map((group) => (
                                 <tbody key={group.name}>
                                     <tr className="border-b border-slate-200 bg-slate-50">
-                                        <th scope="colgroup" colSpan={COUNT_COLUMNS.length + 1} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                                        <th scope="colgroup" colSpan={COUNT_COLUMNS.length + 2} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">
                                             {group.name}
                                         </th>
                                     </tr>
                                     {group.rooms.map((room) => {
-                                        const busiest = room.hasDoctor && totals.busiest > 0 && room.waitingCount === totals.busiest;
+                                        const total = roomTotal(room);
                                         return (
-                                            <tr key={room.roomId} className={`border-b border-slate-100 hover:bg-slate-50 ${room.hasDoctor ? '' : 'bg-slate-50 opacity-60'}`}>
+                                            <tr
+                                                key={room.roomId}
+                                                // The whole row opens the room; Enter does the same from the keyboard.
+                                                onClick={() => navigate(roomQueuePath(room.roomId))}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter') navigate(roomQueuePath(room.roomId));
+                                                }}
+                                                tabIndex={0}
+                                                aria-label={`Xem hàng đợi ${room.roomName || room.roomCode}`}
+                                                className={`cursor-pointer border-b border-slate-100 hover:bg-teal-50/60 focus-visible:bg-teal-50/60 focus-visible:outline-none ${room.hasDoctor ? '' : 'bg-slate-50 opacity-60'}`}
+                                            >
                                                 <td className="px-4 py-3">
-                                                    <button type="button" onClick={() => setSelectedRoomId(room.roomId)} className="cursor-pointer text-left font-semibold text-slate-800 hover:text-teal-700 hover:underline">
-                                                        {room.roomName || room.roomCode}
-                                                    </button>
-                                                    {busiest && <span className="ml-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">Đông nhất</span>}
+                                                    <span className="font-semibold text-slate-800">{room.roomName || room.roomCode}</span>
                                                     <p className="text-xs text-slate-500">{[room.roomCode, room.location].filter(Boolean).join(' · ')}</p>
                                                     <p className="text-xs text-slate-500">
-                                                        {room.hasDoctor ? `Bác sĩ: ${room.doctorNames.join(', ')}` : 'Chưa có bác sĩ'}
+                                                        {room.hasDoctor ? `Bác sĩ trực: ${room.doctorNames.join(', ')}` : 'Chưa có bác sĩ'}
                                                     </p>
                                                 </td>
                                                 {COUNT_COLUMNS.map(([key, , className]) => (
                                                     <td key={key} className={`px-4 py-3 text-right text-base font-bold tabular-nums ${room[key] > 0 ? className : 'text-slate-300'}`}>{room[key] ?? 0}</td>
                                                 ))}
+                                                <td className={`px-4 py-3 text-right text-base font-extrabold tabular-nums ${total > 0 ? 'text-slate-900' : 'text-slate-300'}`}>{total}</td>
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                             ))}
                         </table>
-                        {rooms.length === 0 && (
+                        {/* EF-01 shows only MSG102 above the table; the table itself stays empty. */}
+                        {rooms.length === 0 && (loading || (loadError && !lastUpdated)) && (
                             <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">
                                 <h3 className="text-sm font-bold">
-                                    {loading ? 'Đang tải tình trạng hàng đợi…' : loadError && !lastUpdated ? 'Chưa tải được dữ liệu' : 'Chưa có phòng khám đang hoạt động'}
+                                    {loading ? 'Đang tải tình trạng hàng đợi…' : 'Chưa tải được dữ liệu'}
                                 </h3>
                             </div>
                         )}

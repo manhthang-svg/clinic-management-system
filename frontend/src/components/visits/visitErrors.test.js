@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../apis/apiError';
-import { insuranceErrorKind, loadErrorMessage, msg21, MSG99, NETWORK_MESSAGE, ticketErrorMessage } from './visitErrors';
+import { insuranceErrorKind, loadErrorMessage, msg21, MSG80, NETWORK_MESSAGE, ticketErrorMessage } from './visitErrors';
 
 describe('insurance verification errors', () => {
   it('does not misclassify an API validation error as a portal timeout', () => {
@@ -10,7 +10,7 @@ describe('insurance verification errors', () => {
     });
 
     expect(insuranceErrorKind(error)).toBe('system');
-    expect(loadErrorMessage(error)).toBe(MSG99);
+    expect(loadErrorMessage(error)).toBe(MSG80);
   });
 
   it('keeps network failures distinct from portal timeouts', () => {
@@ -49,8 +49,8 @@ describe('ticket load errors (UC-41)', () => {
     const coded = new ApiError('Boom', { status: 500, errorResponse: { code: 'INTERNAL_ERROR', message: 'Boom' } });
     const bare = new ApiError('Bad gateway', { status: 502 });
 
-    expect(ticketErrorMessage(coded)).toBe(`${MSG99} (Mã lỗi: INTERNAL_ERROR)`);
-    expect(ticketErrorMessage(bare)).toBe(`${MSG99} (Mã lỗi: HTTP 502)`);
+    expect(ticketErrorMessage(coded)).toBe(`${MSG80} (Mã lỗi: INTERNAL_ERROR)`);
+    expect(ticketErrorMessage(bare)).toBe(`${MSG80} (Mã lỗi: HTTP 502)`);
   });
 });
 

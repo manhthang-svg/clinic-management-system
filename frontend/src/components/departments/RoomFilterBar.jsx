@@ -108,7 +108,7 @@ export function RoomFilterBar({
           className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] rounded-xl shadow-sm transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Thêm phòng mới</span>
+          <span>Thêm phòng mới</span>
         </button>
       </div>
     </div>

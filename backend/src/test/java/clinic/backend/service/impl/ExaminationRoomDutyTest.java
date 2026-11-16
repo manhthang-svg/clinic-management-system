@@ -68,6 +68,34 @@ class ExaminationRoomDutyTest {
         verifyNoInteractions(dutyScheduleRepository);
     }
 
+    @Test
+    void mapsEachRoomToItsActiveDoctorOnDutyInTheCurrentShift() {
+        UUID otherRoomId = UUID.randomUUID();
+        UUID lockedId = UUID.randomUUID();
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Lê Thị Bình").role(Role.DOCTOR).status(AccountStatus.ACTIVE).build();
+        StaffAccount locked = StaffAccount.builder()
+                .id(lockedId).fullName("Trần An").role(Role.DOCTOR).status(AccountStatus.LOCKED).build();
+        DutySchedule onDuty = mock(DutySchedule.class);
+        when(onDuty.getRoomId()).thenReturn(ROOM_ID);
+        when(onDuty.getStaffAccountId()).thenReturn(DOCTOR_ID);
+        DutySchedule lockedDuty = mock(DutySchedule.class);
+        when(lockedDuty.getRoomId()).thenReturn(otherRoomId);
+        when(lockedDuty.getStaffAccountId()).thenReturn(lockedId);
+        when(dutyScheduleRepository.findByWorkDateAndShift(TODAY, DutyShift.MORNING))
+                .thenReturn(java.util.List.of(onDuty, lockedDuty));
+        when(staffAccountRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of(doctor, locked));
+
+        assertThat(duty.onDutyDoctorsByRoom(MORNING)).containsOnlyKeys(ROOM_ID).containsEntry(ROOM_ID, doctor);
+    }
+
+    @Test
+    void mapsNoRoomAfterTheLastShiftOfTheDay() {
+        assertThat(duty.onDutyDoctorsByRoom(Instant.parse("2026-11-06T12:00:00Z"))).isEmpty();
+        verifyNoInteractions(dutyScheduleRepository);
+    }
+
     private void givenSchedule(DutyShift shift, StaffAccount staff) {
         DutySchedule schedule = mock(DutySchedule.class);
         when(schedule.getStaffAccountId()).thenReturn(DOCTOR_ID);
