@@ -313,7 +313,12 @@ export function ResultEditor({ order: initialOrder, api, children }) {
         </ResultSection>
       )}
 
-      <ResultApiContext.Provider value={{ supportsFiles: api?.supportsFiles !== false }}>
+      <ResultApiContext.Provider value={{
+        supportsFiles: api?.supportsFiles !== false,
+        // anh tai len / xoa ngay tren server cua phieu dang mo
+        uploadImage: api?.uploadImage ? (file, caption) => api.uploadImage(order.id, file, caption) : null,
+        deleteImage: api?.deleteImage ? (imageId) => api.deleteImage(order.id, imageId) : null,
+      }}>
         {children({ order, form, set, errors: shownErrors, readOnly, templateButton })}
       </ResultApiContext.Provider>
 

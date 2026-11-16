@@ -9,6 +9,7 @@ import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.security.PasswordHasher;
+import clinic.backend.service.ResultImageStorage;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,12 +19,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -41,6 +50,69 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
     @Autowired PasswordHasher passwordHasher;
     @Autowired UuidV7Generator ids;
     @Autowired JdbcTemplate jdbc;
+    // khong goi Cloudinary that trong test
+    @MockitoBean ResultImageStorage imageStorage;
+
+    private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13};
+    private static final String IMAGE_URL = "https://res.cloudinary.com/demo/image/upload/v17/test/anh-1.png";
+
+    @Test
+    void performerUploadsCaptionsAndDeletesAnImageOfAnImagingResult() throws Exception {
+        Fixture fixture = fixture("IMAGING", "Siêu âm ổ bụng tổng quát");
+        String token = accessToken(fixture.technician());
+        when(imageStorage.isConfigured()).thenReturn(true);
+        when(imageStorage.folder()).thenReturn("test");
+        when(imageStorage.upload(any(), any(), eq("image/png"))).thenReturn(IMAGE_URL);
+
+        String body = mockMvc.perform(withToken(multipart(path(fixture) + "/images")
+                                .file(new MockMultipartFile("file", "sieu-am.png", "image/png", PNG))
+                                .param("caption", "Gan"), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.result.files", hasSize(1)))
+                .andExpect(jsonPath("$.data.result.files[0].url").value(IMAGE_URL))
+                .andExpect(jsonPath("$.data.result.files[0].name").value("sieu-am.png"))
+                .andExpect(jsonPath("$.data.result.files[0].caption").value("Gan"))
+                .andReturn().getResponse().getContentAsString();
+        String imageId = objectMapper.readTree(body).path("data").path("result").path("files").path(0).path("id").asText();
+
+        // chu thich luu cung ban nhap
+        mockMvc.perform(withToken(put(path(fixture) + "/draft"), token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"conclusion\":\"\",\"imageCaptions\":{\"" + imageId + "\":\"Gan phải\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.files[0].caption").value("Gan phải"));
+
+        mockMvc.perform(withToken(delete(path(fixture) + "/images/" + imageId), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.files", hasSize(0)));
+        verify(imageStorage).delete("test/anh-1");
+    }
+
+    @Test
+    void imagesAreOnlyJpgOrPngOfImagingResultsAndNeedTheStorage() throws Exception {
+        Fixture imaging = fixture("IMAGING", "Chụp X-quang ngực thẳng");
+        String token = accessToken(imaging.technician());
+        when(imageStorage.isConfigured()).thenReturn(false);
+
+        mockMvc.perform(withToken(multipart(path(imaging) + "/images")
+                        .file(new MockMultipartFile("file", "a.png", "image/png", PNG)), token))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("FILE_STORAGE_NOT_CONFIGURED"));
+
+        when(imageStorage.isConfigured()).thenReturn(true);
+        // khai bao PNG nhung noi dung khong phai anh
+        mockMvc.perform(withToken(multipart(path(imaging) + "/images")
+                        .file(new MockMultipartFile("file", "a.png", "image/png", "khong phai anh".getBytes())), token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RESULT_IMAGE_INVALID"));
+
+        Fixture lab = fixture("LAB", "Tổng phân tích tế bào máu");
+        mockMvc.perform(withToken(multipart(path(lab) + "/images")
+                        .file(new MockMultipartFile("file", "a.png", "image/png", PNG)), accessToken(lab.technician())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RESULT_IMAGE_INVALID"));
+    }
 
     @Test
     void performerSavesADraftThenSubmitsALabResultAndTheVisitWaitsForConclusion() throws Exception {
