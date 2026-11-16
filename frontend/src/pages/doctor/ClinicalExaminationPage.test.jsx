@@ -62,10 +62,11 @@ describe('ClinicalExaminationPage', () => {
 
     afterEach(() => vi.restoreAllMocks());
 
-    it('shows the medical history panel and the allergy label of the patient (UC-39)', async () => {
+    it('shows the medical history panel without drug allergies (UC-39)', async () => {
         renderPage();
-        expect(await screen.findByRole('heading', { name: 'Tiền sử & dị ứng thuốc' })).toBeInTheDocument();
-        expect((await screen.findAllByText('Dị ứng: Penicillin (Nặng)')).length).toBe(2);
+        expect(await screen.findByRole('heading', { name: '2. Tiền sử bệnh' })).toBeInTheDocument();
+        expect(await screen.findByText('+ Bản thân:')).toBeInTheDocument();
+        expect(screen.queryByText(/Penicillin/)).not.toBeInTheDocument();
         expect(visitApi.getMedicalHistory).toHaveBeenCalledWith(visit.id, expect.any(AbortSignal));
     });
 

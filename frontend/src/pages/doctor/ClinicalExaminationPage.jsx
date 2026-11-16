@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import ParaclinicalOrderPanel from '../../components/paraclinical/ParaclinicalOrderPanel';
 import ParaclinicalOrderList from '../../components/paraclinical/ParaclinicalOrderList';
 import { cancelledMessage, createdMessage } from '../../components/paraclinical/paraclinicalOrder';
-import MedicalHistoryPanel, { AllergyLabels } from '../../components/clinical/MedicalHistoryPanel';
+import MedicalHistoryPanel from '../../components/clinical/MedicalHistoryPanel';
 import ConclusionPanel from '../../components/clinical/ConclusionPanel';
 import FollowUpPanel from '../../components/clinical/FollowUpPanel';
 import PrescriptionPanel from '../../components/clinical/PrescriptionPanel';
@@ -160,7 +160,6 @@ export default function ClinicalExaminationPage() {
     const [pendingLeave, setPendingLeave] = useState(null);
     const [icdOptions, setIcdOptions] = useState([]);
     const [icdQuery, setIcdQuery] = useState('');
-    const [medicalHistory, setMedicalHistory] = useState(null);
     // The paraclinical service list starts loading with the page, so the order tab usually opens with it ready.
     const [servicesRequest, setServicesRequest] = useState(() => (visitId ? startServicesRequest() : null));
 
@@ -457,7 +456,6 @@ export default function ClinicalExaminationPage() {
                     <div className="bg-white px-4 py-3"><Info label="Giờ bắt đầu khám">{formatTime(visit.denkhambenhluc)}</Info></div>
                     <div className="bg-white px-4 py-3"><Info label="Trạng thái lượt khám">{statusLabel}</Info></div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5 text-xs"><span className="font-semibold text-slate-500">Dị ứng thuốc:</span><AllergyLabels data={medicalHistory} /></div>
             </section>
 
             <nav className="flex gap-2 overflow-x-auto" aria-label="Các bước khám bệnh">
@@ -507,7 +505,7 @@ export default function ClinicalExaminationPage() {
                         </div>
                     </section>
 
-                    <MedicalHistoryPanel visitId={visit.id} onLoaded={setMedicalHistory} />
+                    <MedicalHistoryPanel visitId={visit.id} />
 
                     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <h2 className="mb-3 text-sm font-bold">Khám bệnh</h2>
