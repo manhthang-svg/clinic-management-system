@@ -11,7 +11,7 @@ export const MESSAGES = {
     saved: 'Tiền sử bệnh cập nhật thành công.', // MSG03
     readOnly: 'Bạn không có quyền thực hiện thao tác này.', // MSG13
     recordClosed: 'Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.', // MSG68
-    changedByOthers: 'Tiền sử bệnh vừa được người khác cập nhật. Vui lòng tải lại và thử lại.', // MSG75
+    changedByOthers: 'Tiền sử bệnh vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75
     sessionExpired: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
     systemError: 'Không thể lưu tiền sử bệnh do lỗi hệ thống. Vui lòng thử lại sau.', // MSG99
     loadError: 'Không thể tải tiền sử bệnh. Vui lòng thử lại.',

@@ -480,7 +480,7 @@ export default function ClinicalExaminationPage() {
                 />
             ) : shownSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
-                <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
+                <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order)); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <fieldset disabled={readOnly} className="min-w-0 space-y-3">
                     {form.referralSource === REFERRAL_HEALTH_FACILITY && (

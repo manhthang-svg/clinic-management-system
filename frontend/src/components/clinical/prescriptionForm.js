@@ -34,7 +34,7 @@ export const MSG = {
     OUTSIDE_ROOM_OR_SHIFT: 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.', // MSG48
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.', // MSG13
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
-    CONCURRENT_MODIFICATION: 'Đơn thuốc vừa được người khác cập nhật. Vui lòng tải lại và thử lại.', // MSG75
+    CONCURRENT_MODIFICATION: 'Đơn thuốc vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75
     SYSTEM_ERROR: 'Không thể kết nối hoặc hệ thống đang gặp sự cố. Vui lòng tải lại và thử lại.', // MSG80
     CHECK_FIELDS: 'Vui lòng kiểm tra các trường được đánh dấu.',
 };

@@ -20,6 +20,6 @@ export const msg55 = (item) =>
   `${item} vẫn còn bệnh nhân hoặc dịch vụ đang chờ hoặc đang thực hiện nên hiện không thể thay đổi.`;
 export const msg73 = (serviceName) =>
   `Nhóm dịch vụ của ${serviceName} chưa có phòng nào đang hoạt động. Vui lòng kích hoạt hoặc tạo phòng trước.`;
-export const msg75 = (item) => `${item} vừa được người khác cập nhật. Vui lòng tải lại và thử lại.`;
+export const msg75 = (item) => `${item} vừa được cập nhật. Vui lòng tải lại và thử lại.`;
 export const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 export const MSG92 = 'Chưa có dữ liệu để hiển thị.';
