@@ -21,7 +21,7 @@ describe('UC-40 visit form', () => {
     });
   });
 
-  it('requires the referral diagnosis when referred by a health facility (BR-129)', () => {
+  it('neither asks for nor sends the referral diagnosis: the Doctor enters it (BR-129)', () => {
     const form = {
       ...EMPTY_VISIT_FORM,
       visitType: 'DV',
@@ -30,30 +30,9 @@ describe('UC-40 visit form', () => {
       referralSource: 'CO_SO_Y_TE',
     };
 
-    expect(validateVisitForm(form, {})).toEqual({
-      referralDiagnosis: 'Chẩn đoán của nơi giới thiệu là bắt buộc.',
-    });
-    expect(validateVisitForm({ ...form, referralDiagnosis: 'V' }, {}).referralDiagnosis)
-      .toBe('Nhập tối thiểu 2 ký tự.');
-    expect(validateVisitForm({ ...form, referralDiagnosis: ' Viêm phổi ' }, {})).toEqual({});
-    expect(formToVisitRequest({ ...form, referralDiagnosis: ' Viêm phổi ' }, 'p', {}))
-      .toMatchObject({ noigioithieuLoai: 'CO_SO_Y_TE', chandoancuanoigioithieu: 'Viêm phổi' });
-  });
-
-  it('sends no referral diagnosis for a self-referred visit', () => {
-    const form = { ...EMPTY_VISIT_FORM, referralSource: 'TU_DEN', referralDiagnosis: 'Viêm phổi' };
-    expect(formToVisitRequest(form, 'p', {}).chandoancuanoigioithieu).toBeNull();
-  });
-
-  it('neither requires nor sends a referral diagnosis for a follow-up visit', () => {
-    const form = {
-      ...EMPTY_VISIT_FORM, visitType: 'DV', reason: 'Tái khám', roomId: 'room-1', referralSource: 'CO_SO_Y_TE',
-      followUpAppointmentId: 'a-1', followUpAppointmentVersion: 0,
-    };
-
     expect(validateVisitForm(form, {})).toEqual({});
-    expect(formToVisitRequest({ ...form, referralDiagnosis: 'Viêm phổi' }, 'p', {}).chandoancuanoigioithieu)
-      .toBeNull();
+    expect(formToVisitRequest(form, 'p', {}))
+      .toMatchObject({ noigioithieuLoai: 'CO_SO_Y_TE', chandoancuanoigioithieu: null });
   });
 
   it('has no length limit on the reason for visit (visits.lydovaovien is TEXT)', () => {

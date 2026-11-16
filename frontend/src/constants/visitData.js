@@ -33,7 +33,7 @@ export const INTAKE_TYPE_LABELS = {
 // BR-94; labels follow TT 32/2023/TT-BYT mẫu 15/BV1 mục I.13 ("1. Y tế  2. Tự đến").
 export const REFERRAL_SOURCE_LABELS = {
   TU_DEN: 'Tự đến',
-  CO_SO_Y_TE: 'Y tế',
+  CO_SO_Y_TE: 'Được giới thiệu',
 };
 
 // VisitStatus.
