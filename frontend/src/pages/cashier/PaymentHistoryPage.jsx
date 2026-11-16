@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 import defaultPaymentApi from '../../apis/paymentApi';
 import { confirmErrorMessage } from '../../components/payments/paymentConfirm';
-import { SEARCH_MSG, historyParams } from '../../components/payments/paymentSearch';
+import { PAYMENT_PAGE_SIZE, SEARCH_MSG, historyParams } from '../../components/payments/paymentSearch';
+
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
 const money = (value) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value || 0);
@@ -36,14 +40,17 @@ function Select({ id, label, value, onChange, options }) {
 export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
     const [draft, setDraft] = useState(() => ({
         from: today(), to: today(), status: 'ALL', type: 'ALL', method: 'ALL', mine: true, sort: SORTS[0].value,
+        search: '',
     }));
     const [filters, setFilters] = useState(draft);
+    // Phân trang: trang hiện tại (đếm từ 0); bấm "Xem" với bộ lọc mới thì về trang đầu
+    const [pageNumber, setPageNumber] = useState(0);
     const [history, setHistory] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const { params } = historyParams(filters);
+        const { params } = historyParams({ ...filters, page: pageNumber });
         let active = true;
         paymentApi.history(params)
             .then((response) => {
@@ -58,7 +65,7 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
         return () => {
             active = false;
         };
-    }, [filters, paymentApi]);
+    }, [filters, pageNumber, paymentApi]);
 
     const set = (key) => (value) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -72,10 +79,20 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
         }
         setError('');
         setLoading(true);
+        setPageNumber(0);
         setFilters(draft);
     };
 
+    const goToPage = (target) => {
+        setLoading(true);
+        setPageNumber(target);
+    };
+
     const receipts = history?.receipts?.content || [];
+    const totalElements = history?.receipts?.page?.totalElements ?? receipts.length;
+    const totalPages = Math.max(1, history?.receipts?.page?.totalPages ?? 1);
+    const firstRow = totalElements === 0 ? 0 : pageNumber * PAYMENT_PAGE_SIZE + 1;
+    const lastRow = pageNumber * PAYMENT_PAGE_SIZE + receipts.length;
 
     return (
         <main className="min-h-screen bg-[#f4f8f7] p-4 text-[#142534] sm:p-6 lg:p-8">
@@ -87,6 +104,17 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
                 </header>
 
                 <form onSubmit={handleView} noValidate className="grid gap-3 rounded-xl border border-[#e3ece9] bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+                    <label htmlFor="history-search" className="block sm:col-span-2 lg:col-span-4">
+                        <span className="mb-1 block text-xs font-semibold text-[#60737d]">Tìm kiếm</span>
+                        <input
+                            id="history-search"
+                            type="search"
+                            value={draft.search}
+                            onChange={(e) => set('search')(e.target.value)}
+                            placeholder="Số phiếu, số biên lai, mã lượt khám, mã BN hoặc tên bệnh nhân (ít nhất 2 ký tự)"
+                            className={fieldClass}
+                        />
+                    </label>
                     <label htmlFor="history-from" className="block">
                         <span className="mb-1 block text-xs font-semibold text-[#60737d]">Từ ngày</span>
                         <input id="history-from" type="date" value={draft.from} onChange={(e) => set('from')(e.target.value)} className={fieldClass} />
@@ -165,6 +193,32 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
                             )}
                         </tbody>
                     </table>
+                    {!loading && totalElements > 0 && (
+                        <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e3ece9] px-4 py-3 text-sm text-[#60737d] sm:flex-row">
+                            <span>Hiển thị {firstRow}–{lastRow} trên tổng số {totalElements} phiếu</span>
+                            <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    aria-label="Trang trước"
+                                    disabled={pageNumber === 0}
+                                    onClick={() => goToPage(pageNumber - 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <span className="px-2">Trang {pageNumber + 1}/{totalPages}</span>
+                                <button
+                                    type="button"
+                                    aria-label="Trang sau"
+                                    disabled={pageNumber + 1 >= totalPages}
+                                    onClick={() => goToPage(pageNumber + 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </nav>
+                        </div>
+                    )}
                 </section>
             </div>
         </main>

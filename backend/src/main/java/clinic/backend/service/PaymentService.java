@@ -29,6 +29,7 @@ public interface PaymentService {
             PaymentStatus status,
             PaymentType type,
             PaymentMethod method,
+            String search,
             LocalDate from,
             LocalDate to,
             Pageable pageable

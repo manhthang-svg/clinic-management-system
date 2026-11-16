@@ -77,4 +77,45 @@ class PaymentCompletionIT extends PostgresIntegrationTest {
         assertThat(audit.get("action")).isEqualTo("UPDATE");
         assertThat(audit.get("actor_account_id")).isNull();
     }
+
+    /** UC-73: the history finds a paid receipt by part of the patient code, page by page, and totals it. */
+    @Test
+    void historySearchesPaidReceiptsByKeyword() {
+        UUID visit = UUID.randomUUID();
+        UUID patient = jdbc.queryForObject("select id from patients where mabenhnhan = 'BN00000003'", UUID.class);
+        jdbc.update("""
+                insert into visits (id, sovaovien, patient_id, room_id, registered_by_account_id, thoigianvaovien,
+                    doituongbn_loai, insurance_verify_status, lydovaovien, is_priority, queue_date, queue_number,
+                    status, created_at, updated_at, version)
+                values (?, 'VV-HISTORY-1', ?, ?, ?, now(), 'DV', 'NOT_APPLICABLE', 'Khám bệnh', false, ?, null,
+                    'WAITING_FEE_PAYMENT', now(), now(), 0)
+                """, visit, patient, ROOM, RECEPTIONIST, LocalDate.now(clock));
+        UUID paymentId = UUID.randomUUID();
+        jdbc.update("""
+                insert into payments (id, payment_code, visit_id, type, status, total_amount, insurance_total_amount,
+                    patient_total_amount, created_at, updated_at, version)
+                values (?, 'HD-HISTORY-1', ?, 'EXAMINATION_FEE', 'PENDING', 150000, 0, 150000, now(), now(), 0)
+                """, paymentId, visit);
+        transactionTemplate.executeWithoutResult(status -> {
+            Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+            payment.markAsPaidByPayOS("PT-HISTORY-1");
+            paymentRepository.save(payment);
+        });
+        java.time.Instant from = java.time.Instant.now().minus(java.time.Duration.ofDays(1));
+        java.time.Instant to = java.time.Instant.now().plus(java.time.Duration.ofDays(1));
+        var statuses = java.util.EnumSet.of(clinic.backend.enums.PaymentStatus.PAID);
+        var firstPage = org.springframework.data.domain.PageRequest.of(0, 20,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "paidAt"));
+
+        var found = paymentRepository.history(statuses, null, null, null, from, to, "history-1", firstPage);
+        var byPatient = paymentRepository.history(statuses, null, null, null, from, to, "bn0000000", firstPage);
+        var none = paymentRepository.history(statuses, null, null, null, from, to, "khong-co-phieu", firstPage);
+        var totals = paymentRepository.historyTotals(null, null, null, from, to, "pt-history");
+
+        assertThat(found.getContent()).extracting(Payment::getId).containsExactly(paymentId);
+        assertThat(byPatient.getContent()).extracting(Payment::getId).contains(paymentId);
+        assertThat(none.getTotalElements()).isZero();
+        assertThat(totals).hasSize(1);
+        assertThat(totals.getFirst().getTotal()).isEqualByComparingTo("150000");
+    }
 }

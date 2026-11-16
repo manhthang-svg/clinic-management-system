@@ -70,6 +70,7 @@ public class PaymentController {
             @RequestParam(required = false) PaymentStatus status,
             @RequestParam(required = false) PaymentType type,
             @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "true") boolean mine,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -77,7 +78,7 @@ public class PaymentController {
     ) {
         UUID cashierId = mine ? StaffPrincipal.from(jwt).accountId() : null;
         return ApiResponse.success(
-                paymentService.getHistory(cashierId, status, type, method, from, to, pageable));
+                paymentService.getHistory(cashierId, status, type, method, search, from, to, pageable));
     }
 
     // 2. Danh sách phiếu thu đang chờ thanh toán

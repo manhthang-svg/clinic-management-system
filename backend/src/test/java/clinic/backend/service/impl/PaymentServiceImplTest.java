@@ -127,24 +127,24 @@ class PaymentServiceImplTest {
     @Test
     void historyDefaultsToTodayAndSumsPaidReceiptsPerMethod() {
         UUID cashierId = UUID.randomUUID();
-        when(paymentRepository.history(any(), any(), any(), any(), any(), any(), any()))
+        when(paymentRepository.history(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
         when(paymentRepository.historyTotals(null, null, cashierId,
-                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z")))
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), null))
                 .thenReturn(List.of(total(PaymentMethod.CASH, 300000, 2), total(PaymentMethod.BANK_TRANSFER, 200000, 1)));
 
-        var history = service.getHistory(cashierId, null, null, null, null, null, PageRequest.of(0, 50));
+        var history = service.getHistory(cashierId, null, null, null, null, null, null, PageRequest.of(0, 50));
 
         verify(paymentRepository).history(
                 EnumSet.of(PaymentStatus.PAID, PaymentStatus.CANCELLED), null, null, cashierId,
-                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), PageRequest.of(0, 50));
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), null, PageRequest.of(0, 50));
         assertThat(history.totalsByMethod()).hasSize(2);
         assertThat(history.totalPatientAmount()).isEqualByComparingTo("500000");
     }
 
     @Test
     void historyRejectsAReversedDateRange() {
-        assertThatThrownBy(() -> service.getHistory(null, null, null, null,
+        assertThatThrownBy(() -> service.getHistory(null, null, null, null, null,
                 LocalDate.of(2026, 10, 28), LocalDate.of(2026, 10, 27), PageRequest.of(0, 50)))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getDetails()).containsEntry("dateRange", "INVALID_FORMAT"));
@@ -152,9 +152,29 @@ class PaymentServiceImplTest {
 
     @Test
     void historyRejectsPendingReceipts() {
-        assertThatThrownBy(() -> service.getHistory(null, PaymentStatus.PENDING, null, null, null, null,
+        assertThatThrownBy(() -> service.getHistory(null, PaymentStatus.PENDING, null, null, null, null, null,
                 PageRequest.of(0, 50)))
                 .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void historySearchesByKeywordOfAtLeastTwoCharacters() {
+        UUID cashierId = UUID.randomUUID();
+        when(paymentRepository.history(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.getHistory(cashierId, null, null, null, "  binh ", null, null, PageRequest.of(1, 20));
+
+        verify(paymentRepository).history(
+                EnumSet.of(PaymentStatus.PAID, PaymentStatus.CANCELLED), null, null, cashierId,
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), "binh",
+                PageRequest.of(1, 20));
+        verify(paymentRepository).historyTotals(null, null, cashierId,
+                Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"), "binh");
+        assertThatThrownBy(() -> service.getHistory(cashierId, null, null, null, "b", null, null,
+                PageRequest.of(0, 20)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("search", "TOO_SHORT"));
     }
 
     private static PaymentRepository.MethodTotal total(PaymentMethod method, long amount, long count) {
