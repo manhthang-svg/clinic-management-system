@@ -37,6 +37,9 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
     // kiem tra xem phong co nhan dich vụ nao ko truoc khi xoa phong
     boolean existsByRoomIdAndStatusIn(UUID roomId, Collection<ParaclinicalOrderDetailStatus> statuses);
 
+    @Query("select distinct p.roomId from ParaclinicalOrderDetail p where p.roomId is not null and p.status in :statuses")
+    java.util.Set<UUID> findRoomIdsWithStatusIn(@Param("statuses") Collection<ParaclinicalOrderDetailStatus> statuses);
+
     long countByServiceIdAndStatusIn(
             UUID serviceId, Collection<ParaclinicalOrderDetailStatus> statuses);
 

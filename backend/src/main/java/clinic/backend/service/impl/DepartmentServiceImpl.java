@@ -130,6 +130,10 @@ public class DepartmentServiceImpl implements DepartmentService {
         roomDutyDoctorNames.forEach((roomId, names) ->
                 roomDutyDoctorMap.put(roomId, String.join(", ", names.stream().distinct().toList())));
 
+        Set<UUID> roomsWithFutureDuty = dutyScheduleRepository.findRoomIdsWithDutyScheduleAfter(today);
+        Set<UUID> roomsWithActiveVisits = visitRepository.findRoomIdsWithActiveVisitsToday(today, VisitRepository.FINISHED_STATUSES);
+        Set<UUID> roomsWithPendingOrders = paraclinicalOrderDetailRepository.findRoomIdsWithStatusIn(ROOM_PENDING_WORK);
+
         Map<UUID, Department> departmentMap = departments.stream()
                 .collect(Collectors.toMap(Department::getId, d -> d, (d1, d2) -> d1));
 
@@ -214,6 +218,11 @@ public class DepartmentServiceImpl implements DepartmentService {
                 roomServices = List.of();
             }
 
+            boolean hasFutureDuty = roomsWithFutureDuty != null && roomsWithFutureDuty.contains(room.getId());
+            boolean hasActiveVisits = room.getType() == RoomType.EXAMINATION
+                    ? (roomsWithActiveVisits != null && roomsWithActiveVisits.contains(room.getId()))
+                    : (roomsWithPendingOrders != null && roomsWithPendingOrders.contains(room.getId()));
+
             items.add(DepartmentRoomItemResponse.builder()
                     .id(room.getId())
                     .unitType("ROOM")
@@ -230,6 +239,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .assignedServices(roomServices)
                     .hasDoctorOnDutyToday(roomDutyDoctorMap.containsKey(room.getId()))
                     .doctorOnDutyToday(roomDutyDoctorMap.get(room.getId()))
+                    .hasFutureDutySchedules(hasFutureDuty)
+                    .hasActiveVisitsToday(hasActiveVisits)
                     .createdAt(room.getCreatedAt())
                     .updatedAt(room.getUpdatedAt())
                     .version(room.getVersion())
@@ -609,6 +620,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(false)
+                .hasActiveVisitsToday(false)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -723,10 +736,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         String staffName = resolveStaffNamesForRoom(saved.getId());
         String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
-
-
-
-
+        LocalDate todayDate = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        boolean hasFutureDuty = dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(saved.getId(), todayDate);
+        boolean hasActiveVisits = saved.getType() == RoomType.EXAMINATION
+                ? visitRepository.hasActiveVisitsToday(saved.getId(), todayDate, VisitRepository.FINISHED_STATUSES)
+                : paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(saved.getId(), ROOM_PENDING_WORK);
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -744,6 +758,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(hasFutureDuty)
+                .hasActiveVisitsToday(hasActiveVisits)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -780,10 +796,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         String staffName = resolveStaffNamesForRoom(saved.getId());
         String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
-
-
-
-
+        LocalDate todayDate = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        boolean hasFutureDuty = dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(saved.getId(), todayDate);
+        boolean hasActiveVisits = saved.getType() == RoomType.EXAMINATION
+                ? visitRepository.hasActiveVisitsToday(saved.getId(), todayDate, VisitRepository.FINISHED_STATUSES)
+                : paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(saved.getId(), ROOM_PENDING_WORK);
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -801,6 +818,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(hasFutureDuty)
+                .hasActiveVisitsToday(hasActiveVisits)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())

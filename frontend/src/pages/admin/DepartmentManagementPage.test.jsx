@@ -323,4 +323,104 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
       'Đã phân Nguyễn Văn B vào phòng "Phòng khám Ngoại 1"'
     );
   });
+
+  it('không cho phép tạm ngưng phòng khi phòng có ca trực trong tương lai', async () => {
+    const roomWithFutureShift = {
+      id: 'room-4',
+      unitType: 'ROOM',
+      code: 'PK-NOI-04',
+      name: 'Phòng khám Nội 4',
+      departmentId: 'dept-1',
+      departmentName: 'Khoa Nội',
+      type: 'EXAMINATION',
+      location: 'Tầng 1 - P.104',
+      status: 'ACTIVE',
+      hasDoctorOnDutyToday: false,
+      doctorOnDutyToday: null,
+      hasFutureDutySchedules: true,
+      hasActiveVisitsToday: false,
+    };
+
+    departmentApi.getItems.mockResolvedValue([dept1, roomWithFutureShift]);
+    dutyScheduleApi.getWeeklySchedule.mockResolvedValue({ items: [] });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Nội 4')).toBeInTheDocument();
+
+    const toggleBtn = await screen.findByTitle('Không thể tạm ngưng: phòng còn nhân viên được xếp ca trực trong các ngày tới');
+    expect(toggleBtn).toBeInTheDocument();
+
+    await user.click(toggleBtn);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('phòng vẫn còn nhân viên được xếp ca trực trong các ngày tới')
+    );
+    expect(departmentApi.toggleRoomStatus).not.toHaveBeenCalled();
+  });
+
+  it('không cho phép tạm ngưng phòng khi phòng có bệnh nhân đang chờ hoặc đang khám dở trong ngày', async () => {
+    const roomWithActiveVisits = {
+      id: 'room-5',
+      unitType: 'ROOM',
+      code: 'PK-NOI-05',
+      name: 'Phòng khám Nội 5',
+      departmentId: 'dept-1',
+      departmentName: 'Khoa Nội',
+      type: 'EXAMINATION',
+      location: 'Tầng 1 - P.105',
+      status: 'ACTIVE',
+      hasDoctorOnDutyToday: false,
+      doctorOnDutyToday: null,
+      hasFutureDutySchedules: false,
+      hasActiveVisitsToday: true,
+    };
+
+    departmentApi.getItems.mockResolvedValue([dept1, roomWithActiveVisits]);
+    dutyScheduleApi.getWeeklySchedule.mockResolvedValue({ items: [] });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Nội 5')).toBeInTheDocument();
+
+    const toggleBtn = await screen.findByTitle('Không thể tạm ngưng: phòng đang có bệnh nhân chờ hoặc đang khám dở trong ngày');
+    expect(toggleBtn).toBeInTheDocument();
+
+    await user.click(toggleBtn);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('phòng vẫn còn bệnh nhân đang chờ hoặc đang khám dở trong ngày hôm nay')
+    );
+    expect(departmentApi.toggleRoomStatus).not.toHaveBeenCalled();
+  });
 });
