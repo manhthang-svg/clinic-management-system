@@ -107,7 +107,11 @@ public record ParaclinicalResultResponse(
             String readingDoctor,
             UUID instrumentId,
             String instrumentName,
-            List<Object> files
+            List<ResultFile> files
     ) {
+    }
+
+    /** UC-67: an image attached to an imaging or functional result. */
+    public record ResultFile(UUID id, String name, String type, Long size, String url, String caption) {
     }
 }

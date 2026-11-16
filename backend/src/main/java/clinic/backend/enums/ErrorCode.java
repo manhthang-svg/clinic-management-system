@@ -237,6 +237,17 @@ public enum ErrorCode {
             "Bệnh nhân đã được xác nhận có mặt.", HttpStatus.CONFLICT),
     PARACLINICAL_ORDER_NOT_PAID("PARACLINICAL_ORDER_NOT_PAID",
             "Chỉ định cận lâm sàng chưa được thanh toán viện phí.", HttpStatus.CONFLICT),
+    RESULT_IMAGE_INVALID("RESULT_IMAGE_INVALID",
+            "Only JPG or PNG images up to 10 MB can be attached to an imaging or functional result.",
+            HttpStatus.BAD_REQUEST),
+    RESULT_IMAGE_LIMIT_REACHED("RESULT_IMAGE_LIMIT_REACHED",
+            "A result holds at most 10 images.", HttpStatus.CONFLICT),
+    RESULT_IMAGE_NOT_FOUND("RESULT_IMAGE_NOT_FOUND", "The image was not found on this result.",
+            HttpStatus.NOT_FOUND),
+    FILE_STORAGE_NOT_CONFIGURED("FILE_STORAGE_NOT_CONFIGURED",
+            "The image storage is not configured.", HttpStatus.SERVICE_UNAVAILABLE),
+    FILE_STORAGE_UNAVAILABLE("FILE_STORAGE_UNAVAILABLE",
+            "The image storage could not be reached.", HttpStatus.BAD_GATEWAY),
     INTERNAL_SERVER_ERROR("INTERNAL_SERVER_ERROR", "An unexpected error occurred.",
             HttpStatus.INTERNAL_SERVER_ERROR);
 

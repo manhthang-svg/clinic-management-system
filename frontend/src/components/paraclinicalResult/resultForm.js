@@ -2,10 +2,10 @@
 import { QUALITATIVE_OPTIONS, RESULT_TEMPLATES } from './resultMockData';
 import { composeDescription, emptySections, normalSections, sectionsFor } from './resultSections';
 
-// SRS UC-67 step 2: images or PDF, at most 10 files, each at most 20 MB.
+// UC-67 step 2: at most 10 images, JPG or PNG only, each at most 10 MB (decision 16/11/2026, Cloudinary limit).
 export const MAX_FILES = 10;
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
-export const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const ACCEPTED_TYPES = ['image/jpeg', 'image/png'];
 
 // SRS messages (MSG02, MSG05, MSG06, MSG13, MSG29, MSG61), in Vietnamese.
 export const MSG = {
@@ -163,9 +163,9 @@ export function checkFiles(picked, existingCount) {
   const errors = [];
   Array.from(picked).forEach((file) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      errors.push(`${file.name}: chỉ nhận ảnh JPG, PNG hoặc file PDF.`);
+      errors.push(`${file.name}: chỉ nhận ảnh JPG hoặc PNG.`);
     } else if (file.size > MAX_FILE_BYTES) {
-      errors.push(`${file.name}: dung lượng vượt quá 20 MB.`);
+      errors.push(`${file.name}: dung lượng vượt quá 10 MB.`);
     } else if (existingCount + accepted.length >= MAX_FILES) {
       errors.push(`${file.name}: chỉ được đính kèm tối đa ${MAX_FILES} file.`);
     } else {
@@ -209,6 +209,11 @@ const ERROR_MESSAGE = {
   INSTRUMENT_UNAVAILABLE: 'Máy thực hiện đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.', // MSG40
   NOT_PERFORMER: MSG.notPerformer,
   RESULT_ALREADY_SUBMITTED: MSG.submitted,
+  RESULT_IMAGE_INVALID: 'Ảnh không hợp lệ: chỉ nhận ảnh JPG hoặc PNG tối đa 10 MB.',
+  RESULT_IMAGE_LIMIT_REACHED: 'Mỗi kết quả chỉ được đính kèm tối đa 10 ảnh.',
+  RESULT_IMAGE_NOT_FOUND: 'Ảnh không còn tồn tại. Vui lòng tải lại trang.',
+  FILE_STORAGE_NOT_CONFIGURED: 'Chưa cấu hình nơi lưu ảnh (Cloudinary). Vui lòng báo quản trị viên.',
+  FILE_STORAGE_UNAVAILABLE: 'Không tải được ảnh lên kho lưu trữ. Vui lòng thử lại.',
 };
 const FALLBACK = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.'; // MSG99
 

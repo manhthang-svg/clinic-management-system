@@ -42,6 +42,10 @@ public record SaveParaclinicalResultRequest(
         @Size(max = 255, message = "Tên bác sĩ đọc kết quả không được vượt quá 255 ký tự")
         String readingDoctor,
 
-        UUID instrumentId
+        UUID instrumentId,
+
+        // chu thich anh: id anh -> chu thich (anh da tai len rieng qua /images)
+        @Size(max = 10, message = "Tối đa 10 ảnh")
+        Map<UUID, @Size(max = 255, message = "Chú thích ảnh không được vượt quá 255 ký tự") String> imageCaptions
 ) {
 }

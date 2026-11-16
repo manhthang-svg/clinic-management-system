@@ -176,9 +176,11 @@ public class PaymentServiceImpl implements PaymentService {
         return toResponse(payment);
     }
 
+    // in phieu thu (UC-72)
     @Override
     @Transactional
     public ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId) {
+        // tim phieu thu
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
@@ -188,23 +190,28 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // AF-01: từ lần in thứ hai là bản sao; mọi lần in đều ghi log
+        // da co log PRINT -> in lai -> ban sao
         boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId);
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
+        // ghi log in
         auditLogService.recordBusinessChange(
                 cashierAccountId, AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId,
                 visit != null ? visit.getSovaovien() : null,
                 Map.of("receiptNumber", String.valueOf(payment.getReceiptNumber()), "reprint", reprint),
                 clock.instant());
 
+        // ten thu ngan da thu
         String cashierName = payment.getCashierAccountId() == null
                 ? null
                 : staffAccountRepository.findById(payment.getCashierAccountId())
                         .map(StaffAccount::getFullName)
                         .orElse(null);
+        // ten phong kham in tren dau phieu
         String facilityName = clinicFacilityRepository.findCurrent()
                 .map(ClinicFacility::getTenCskcb)
                 .orElse(null);
 
+        // tra du lieu de FE dung phieu, STT chi co voi phi kham
         return new ReceiptPrintResponse(
                 reprint,
                 facilityName,
