@@ -53,8 +53,25 @@ describe('paraclinicalResultApi (UC-67, UC-68)', () => {
     await expect(createResultApi(client).get(ID)).rejects.toMatchObject({ code: expected });
   });
 
-  it('does not store images yet', () => {
-    expect(createResultApi(clientReturning({})).supportsFiles).toBe(false);
+  it('uploads and deletes result images, and saves their captions with the draft', async () => {
+    const client = clientReturning({ id: ID, result: { status: 'DRAFT', files: [] } });
+    const api = createResultApi(client);
+    expect(api.supportsFiles).toBe(true);
+
+    const image = new File(['png'], 'gan.png', { type: 'image/png' });
+    await api.uploadImage(ID, image, 'Gan');
+    const [uploadPath, uploadOptions] = client.request.mock.calls[0];
+    expect(uploadPath).toBe(`/paraclinical-results/${ID}/images`);
+    expect(uploadOptions.method).toBe('POST');
+    expect(uploadOptions.body).toBeInstanceOf(FormData);
+    expect(uploadOptions.body.get('file')).toBe(image);
+    expect(uploadOptions.body.get('caption')).toBe('Gan');
+
+    await api.deleteImage(ID, 'img-1');
+    expect(client.request.mock.calls[1]).toEqual([`/paraclinical-results/${ID}/images/img-1`, { method: 'DELETE' }]);
+
+    await api.saveDraft(ID, { conclusion: '', files: [{ id: 'img-1', caption: 'Gan phải' }] });
+    expect(client.request.mock.calls[2][1].body.imageCaptions).toEqual({ 'img-1': 'Gan phải' });
   });
 
   it('uses the API for real orders and the demo data for demo rows', () => {

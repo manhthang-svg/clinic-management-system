@@ -11,6 +11,11 @@ spring:
     # TBD: the shared database has V42 "reconcile room queue counters" applied (04/11/2026) but its file was
     # never pushed. Ignore that missing version until its author adds the file, then remove this line.
     ignore-migration-patterns: "*:missing"
+  # UC-67: one result image per request, at most 10 MB (Cloudinary free plan limit for images).
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   jpa:
     open-in-view: false
     hibernate:
@@ -88,6 +93,10 @@ clinic:
       cron: ${VISIT_END_OF_DAY_CRON:0 5 0 * * *}
       # Also run once at startup to catch up on a missed run (e.g. a laptop that was off at midnight).
       run-on-startup: ${VISIT_END_OF_DAY_RUN_ON_STARTUP:true}
+  # UC-67 result images. CLOUDINARY_URL is a secret (cloudinary://<api_key>:<api_secret>@<cloud_name>), only from env.
+  cloudinary:
+    url: ${CLOUDINARY_URL:}
+    folder: ${CLOUDINARY_FOLDER:clinic/paraclinical}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

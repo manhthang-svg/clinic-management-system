@@ -40,7 +40,11 @@ export class ApiClient {
         const headers = new Headers(options.headers);
         headers.set('Accept', 'application/json');
         let body;
-        if (options.body !== undefined) {
+        if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+            // multipart (upload anh): trinh duyet tu dat Content-Type kem boundary
+            body = options.body;
+        }
+        else if (options.body !== undefined) {
             headers.set('Content-Type', 'application/json');
             body = JSON.stringify(options.body);
         }

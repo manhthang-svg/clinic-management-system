@@ -23,6 +23,21 @@ describe('ApiClient', () => {
         const request = fetchImplementation.mock.calls[0]?.[1];
         expect(new Headers(request?.headers).get('Authorization')).toBe('Bearer access-token');
     });
+    it('sends FormData as is so the browser sets the multipart boundary', async () => {
+        const fetchImplementation = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, message: 'ok', data: null }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        }));
+        const client = new ApiClient({ baseUrl: '/api/v1', fetchImplementation });
+        const body = new FormData();
+        body.append('file', new File(['png'], 'a.png', { type: 'image/png' }));
+
+        await client.request('/upload', { method: 'POST', body });
+
+        const request = fetchImplementation.mock.calls[0]?.[1];
+        expect(request.body).toBe(body);
+        expect(new Headers(request.headers).has('Content-Type')).toBe(false);
+    });
     it('calls the global fetch with the global object as receiver by default', async () => {
         // Browsers throw "Illegal invocation" when fetch is called on another receiver.
         vi.stubGlobal('fetch', vi.fn(function () {

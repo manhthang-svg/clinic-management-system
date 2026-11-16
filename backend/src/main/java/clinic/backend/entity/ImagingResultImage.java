@@ -1,6 +1,7 @@
 package clinic.backend.entity;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -55,4 +56,29 @@ public class ImagingResultImage extends UuidEntity {
     /** Whether the image is printed on the slip (V32). */
     @Column(name = "print_on_slip", nullable = false)
     private boolean printOnSlip = true;
+
+    private ImagingResultImage(UUID id) {
+        super(id);
+    }
+
+    /** UC-67: an image uploaded by the technician; {@code hinhanh} is its HTTPS address in the file storage. */
+    public static ImagingResultImage uploaded(
+            UUID id, UUID imagingResultId, String url, String fileName, String mimeType, String sha256,
+            UUID uploadedByAccountId, Instant uploadedAt, int displayOrder, String caption) {
+        ImagingResultImage image = new ImagingResultImage(id);
+        image.imagingResultId = Objects.requireNonNull(imagingResultId, "imagingResultId");
+        image.hinhanh = Objects.requireNonNull(url, "url");
+        image.fileName = Objects.requireNonNull(fileName, "fileName");
+        image.mimeType = Objects.requireNonNull(mimeType, "mimeType");
+        image.fileSha256 = Objects.requireNonNull(sha256, "sha256");
+        image.uploadedByAccountId = Objects.requireNonNull(uploadedByAccountId, "uploadedByAccountId");
+        image.uploadedAt = Objects.requireNonNull(uploadedAt, "uploadedAt");
+        image.displayOrder = displayOrder;
+        image.caption = caption;
+        return image;
+    }
+
+    public void changeCaption(String caption) {
+        this.caption = caption;
+    }
 }

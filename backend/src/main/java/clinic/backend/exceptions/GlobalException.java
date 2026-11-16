@@ -26,6 +26,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -118,6 +120,24 @@ public class GlobalException {
                 Map.of(),
                 request
         );
+    }
+
+    // anh qua 10 MB (gioi han multipart) -> 400 RESULT_IMAGE_INVALID
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(
+            MaxUploadSizeExceededException exception,
+            HttpServletRequest request) {
+        log.warn("Upload too large [method={}, path={}, requestId={}]",
+                request.getMethod(), request.getRequestURI(), getRequestId(request));
+        return response(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "TOO_LARGE"), request);
+    }
+
+    // thieu phan file trong multipart -> 400
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(
+            MissingServletRequestPartException exception,
+            HttpServletRequest request) {
+        return response(ErrorCode.REQUEST_PARAMETER_INVALID, Map.of(), request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
