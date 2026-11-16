@@ -187,7 +187,7 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(screen.queryByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' })).not.toBeInTheDocument();
     });
 
-    it('drops a service deactivated meanwhile and reloads the list (EF-02, MSG42)', async () => {
+    it('drops a service deactivated meanwhile and reloads the list (EF-02, MSG40)', async () => {
         const user = userEvent.setup();
         const api = {
             getParaclinicalServices: vi.fn().mockResolvedValueOnce(services).mockResolvedValueOnce(services.slice(1)),
@@ -201,7 +201,7 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
         await user.click(screen.getByRole('button', { name: 'Xác nhận chỉ định' }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Dịch vụ Siêu âm ổ bụng không còn hoạt động.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Dịch vụ Siêu âm ổ bụng đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.');
         expect(api.getParaclinicalServices).toHaveBeenCalledTimes(2);
         expect(await screen.findByText('Chưa chọn dịch vụ nào.')).toBeInTheDocument();
     });
@@ -262,12 +262,15 @@ describe('paraclinicalOrder helpers', () => {
         expect(estimate(services, ['s1', 's2'], coverage)).toMatchObject({ appliedRate: 80, rateChanges: true });
     });
 
-    it('builds MSG67 and maps the visit state error', () => {
-        expect(createdMessage({ paymentCode: 'HD1', tongcong: 200000 }))
-            .toBe('Đã tạo chỉ định cận lâm sàng. Phiếu thu HD1 – bệnh nhân trả: 200.000 ₫.');
-        expect(createdMessage({ paymentCode: 'HD2', tongcong: 200000, patientAmount: 40000 }, true))
-            .toMatch(/bệnh nhân trả: 40.000 ₫\. Chỉ định đã được chuyển tới phòng cận lâm sàng/);
-        expect(orderErrorMessage(new ApiError('raw', { status: 409, errorResponse: { code: 'VISIT_NOT_IN_EXAMINATION' } })))
-            .toBe(MSG.NOT_IN_EXAMINATION);
+    it('builds MSG63 and maps EF-02 / EF-03 to MSG40, MSG75 and MSG68', () => {
+        expect(createdMessage({ sophieu: 'CD0000000001', paymentCode: 'HD0000000001' }))
+            .toBe('Đã tạo chỉ định cận lâm sàng CD0000000001.');
+        const failure = (code, details) => new ApiError('raw', { status: 409, errorResponse: { code, details } });
+        expect(orderErrorMessage(failure('SERVICE_INACTIVE', { serviceName: 'Công thức máu' })))
+            .toBe('Dịch vụ Công thức máu đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.');
+        expect(orderErrorMessage(failure('VISIT_NOT_IN_EXAMINATION')))
+            .toBe('Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.');
+        expect(orderErrorMessage(failure('MEDICAL_RECORD_CLOSED')))
+            .toBe('Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.');
     });
 });

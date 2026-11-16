@@ -43,9 +43,9 @@ const CODE_MESSAGE = {
   ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản.",
   NOT_FOUND: "Không tìm thấy dữ liệu.",
   ACCOUNT_STATE_CONFLICT:
-    "Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.", // MSG75
+    "Tài khoản vừa được cập nhật. Vui lòng tải lại và thử lại.", // MSG75
   CONCURRENT_MODIFICATION:
-    "Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.", // MSG75
+    "Tài khoản vừa được cập nhật. Vui lòng tải lại và thử lại.", // MSG75
   ROLE_CHANGE_NOT_ALLOWED: "Vai trò mới phải khác vai trò hiện tại.",
   WORK_IN_PROGRESS:
     "Nhân viên còn lượt khám hoặc chỉ định đang xử lý. Vui lòng hoàn tất trước.", // MSG49

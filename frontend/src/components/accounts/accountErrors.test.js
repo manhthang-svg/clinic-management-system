@@ -34,7 +34,7 @@ describe('accountErrors', () => {
     expect(accountErrorMessage(apiError('SELF_ADMINISTRATION_FORBIDDEN', undefined, 422)))
       .toBe('Bạn không thể thực hiện thao tác này trên tài khoản của chính mình.');
     expect(accountErrorMessage(apiError('CONCURRENT_MODIFICATION', undefined, 409)))
-      .toBe('Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
+      .toBe('Tài khoản vừa được cập nhật. Vui lòng tải lại và thử lại.');
     expect(accountErrorMessage(apiError('SOMETHING_NEW', undefined, 500)))
       .toBe('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
   });
@@ -45,7 +45,7 @@ describe('accountErrors', () => {
     expect(accountErrorMessage(apiError('WORK_IN_PROGRESS', { visits: '1', orders: '0' }), { fullName: 'Nguyễn An' }))
       .toBe('Nguyễn An đang có lượt khám hoặc dịch vụ đang thực hiện. Vui lòng hoàn tất các công việc này trước.');
     expect(accountErrorMessage(apiError('ACCOUNT_STATE_CONFLICT')))
-      .toBe('Tài khoản vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
+      .toBe('Tài khoản vừa được cập nhật. Vui lòng tải lại và thử lại.');
   });
 
   it('maps a too-short action reason to the BR-97 length message', () => {
