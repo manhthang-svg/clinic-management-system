@@ -39,4 +39,7 @@ public interface DutyScheduleRepository extends JpaRepository<DutySchedule, UUID
 
     // Kiểm tra phòng có ca trực nào trong tương lai (sau ngày chỉ định)
     boolean existsByRoomIdAndWorkDateAfter(UUID roomId, LocalDate workDate);
+
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT d.roomId FROM DutySchedule d WHERE d.roomId IS NOT NULL AND d.workDate > :workDate")
+    java.util.Set<UUID> findRoomIdsWithDutyScheduleAfter(@org.springframework.data.repository.query.Param("workDate") LocalDate workDate);
 }

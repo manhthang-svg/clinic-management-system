@@ -77,6 +77,17 @@ public interface VisitRepository extends JpaRepository<Visit, UUID> {
     );
 
     @Query("""
+            select distinct v.roomId from Visit v
+            where v.roomId is not null
+              and v.queueDate = :queueDate
+              and v.status not in :finishedStatuses
+            """)
+    java.util.Set<UUID> findRoomIdsWithActiveVisitsToday(
+            @Param("queueDate") LocalDate queueDate,
+            @Param("finishedStatuses") Collection<VisitStatus> finishedStatuses
+    );
+
+    @Query("""
             select coalesce(max(v.queueNumber), 0)
             from Visit v
             where v.queueDate = :queueDate

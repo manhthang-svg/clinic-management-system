@@ -36,4 +36,6 @@ public class DepartmentRoomItemResponse {
     private List<RoomServiceItemResponse> assignedServices;
     private Boolean hasDoctorOnDutyToday;
     private String doctorOnDutyToday;
+    private Boolean hasFutureDutySchedules;
+    private Boolean hasActiveVisitsToday;
 }

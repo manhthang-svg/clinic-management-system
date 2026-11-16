@@ -111,6 +111,8 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
             ...it,
             hasDoctorOnDutyToday: hasStaffScheduled,
             doctorOnDutyToday: staffName,
+            hasFutureDutySchedules: Boolean(it.hasFutureDutySchedules),
+            hasActiveVisitsToday: Boolean(it.hasActiveVisitsToday),
           };
         });
         setItems(mergedItems);
@@ -450,6 +452,22 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       return;
     }
 
+    if (isDeactivating && item.hasActiveVisitsToday) {
+      toast.error(
+        item.type === 'EXAMINATION'
+          ? `Không thể tạm ngưng phòng "${item.name}": phòng vẫn còn bệnh nhân đang chờ hoặc đang khám dở trong ngày hôm nay.`
+          : `Không thể tạm ngưng phòng "${item.name}": phòng vẫn còn dịch vụ cận lâm sàng đang chờ hoặc đang xử lý.`
+      );
+      return;
+    }
+
+    if (isDeactivating && item.hasFutureDutySchedules) {
+      toast.error(
+        `Không thể tạm ngưng phòng "${item.name}": phòng vẫn còn nhân viên được xếp ca trực trong các ngày tới. Vui lòng điều chỉnh lịch trực trước.`
+      );
+      return;
+    }
+
     // RỦI RO 3 (EF-06 / MSG94): Chặn nếu là phòng khám lâm sàng duy nhất còn hoạt động
     if (isDeactivating && item.type === 'EXAMINATION') {
       const activeExamRooms = allRoomsList.filter(
@@ -543,6 +561,22 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
               `Không được phép tạm ngừng phòng "${editingItem.name}" vì phòng đang có bác sĩ trực trong ngày${
                 editingItem.doctorOnDutyToday ? ` (${editingItem.doctorOnDutyToday})` : ''
               }!`
+            );
+            return;
+          }
+
+          if (editingItem?.status === 'ACTIVE' && formData.status === 'INACTIVE' && editingItem?.hasActiveVisitsToday) {
+            toast.error(
+              editingItem.type === 'EXAMINATION'
+                ? `Không thể tạm ngưng phòng "${editingItem.name}": phòng vẫn còn bệnh nhân đang chờ hoặc đang khám dở trong ngày hôm nay.`
+                : `Không thể tạm ngưng phòng "${editingItem.name}": phòng vẫn còn dịch vụ cận lâm sàng đang chờ hoặc đang xử lý.`
+            );
+            return;
+          }
+
+          if (editingItem?.status === 'ACTIVE' && formData.status === 'INACTIVE' && editingItem?.hasFutureDutySchedules) {
+            toast.error(
+              `Không thể tạm ngưng phòng "${editingItem.name}": phòng vẫn còn nhân viên được xếp ca trực trong các ngày tới. Vui lòng điều chỉnh lịch trực trước.`
             );
             return;
           }
