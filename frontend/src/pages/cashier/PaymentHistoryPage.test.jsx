@@ -78,7 +78,7 @@ describe('paymentSearch (UC-70)', () => {
     it('requires at least 2 characters (EF-01)', () => {
         expect(searchParams({ search: ' a ' }).error).toBe(SEARCH_MSG.TOO_SHORT);
         expect(searchParams({ search: ' an ', status: 'PAID', from: '2026-11-01' }).params)
-            .toEqual({ size: 50, status: 'PAID', search: 'an', from: '2026-11-01' });
+            .toEqual({ page: 0, size: 20, status: 'PAID', search: 'an', from: '2026-11-01' });
     });
 
     it('opens Confirm Payment for exactly one pending receipt of the registration code (AF-01)', () => {
@@ -90,6 +90,24 @@ describe('paymentSearch (UC-70)', () => {
 
     it('builds the history query', () => {
         expect(historyParams({ from: '2026-11-01', to: '2026-11-03', method: 'CASH', mine: false }).params)
-            .toEqual({ from: '2026-11-01', to: '2026-11-03', method: 'CASH', mine: 'false', size: 100 });
+            .toEqual({ from: '2026-11-01', to: '2026-11-03', method: 'CASH', mine: 'false', page: 0, size: 20 });
+        expect(historyParams({ search: ' binh ' }).params).toEqual(expect.objectContaining({ search: 'binh' }));
+        expect(historyParams({ search: 'b' }).error).toBe(SEARCH_MSG.TOO_SHORT);
+    });
+
+    it('searches and pages through the history, keeping the filters on every page', async () => {
+        const user = userEvent.setup();
+        const paged = { ...history, receipts: { ...history.receipts, page: { number: 0, size: 20, totalElements: 45, totalPages: 3 } } };
+        const api = { history: vi.fn().mockResolvedValue(paged) };
+        renderPage(api);
+        await screen.findByText('Trang 1/3');
+
+        await user.type(screen.getByLabelText('Tìm kiếm'), 'binh');
+        await user.click(screen.getByRole('button', { name: 'Xem' }));
+        expect(api.history).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'binh', page: 0, size: 20 }));
+
+        await user.click(await screen.findByRole('button', { name: 'Trang sau' }));
+        expect(await screen.findByText('Trang 2/3')).toBeInTheDocument();
+        expect(api.history).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'binh', page: 1, size: 20 }));
     });
 });

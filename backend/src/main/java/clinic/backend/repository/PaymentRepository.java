@@ -72,15 +72,29 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             Pageable pageable
     );
 
-    /** UC-73: paid or cancelled receipts whose paid / cancelled time is in [from, to). */
+    /**
+     * UC-73: paid or cancelled receipts whose paid / cancelled time is in [from, to). The keyword matches like
+     * UC-70: receipt number, patient code, registration code or patient name (accent-insensitive).
+     */
     @Query("""
             select p from Payment p
+            join Visit v on v.id = p.visitId
+            join Patient patient on patient.id = v.patientId
             where p.status in :statuses
               and (:type is null or p.type = :type)
               and (:method is null or p.paymentMethod = :method)
               and (:cashierId is null or p.cashierAccountId = :cashierId)
               and coalesce(p.paidAt, p.cancelledAt) >= :fromTime
               and coalesce(p.paidAt, p.cancelledAt) < :toTime
+              and (
+                    cast(:search as String) is null
+                    or lower(p.paymentCode) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(p.receiptNumber, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(v.sovaovien, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(patient.mabenhnhan) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(function('unaccent', patient.hoten))
+                        like lower(function('unaccent', concat('%', cast(:search as String), '%')))
+                  )
             """)
     Page<Payment> history(
             @Param("statuses") Collection<PaymentStatus> statuses,
@@ -89,6 +103,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("cashierId") UUID cashierId,
             @Param("fromTime") Instant fromTime,
             @Param("toTime") Instant toTime,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -96,11 +111,22 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("""
             select p.paymentMethod as method, sum(p.patientTotalAmount) as total, count(p) as count
             from Payment p
+            join Visit v on v.id = p.visitId
+            join Patient patient on patient.id = v.patientId
             where p.status = clinic.backend.enums.PaymentStatus.PAID
               and (:type is null or p.type = :type)
               and (:method is null or p.paymentMethod = :method)
               and (:cashierId is null or p.cashierAccountId = :cashierId)
               and p.paidAt >= :fromTime and p.paidAt < :toTime
+              and (
+                    cast(:search as String) is null
+                    or lower(p.paymentCode) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(p.receiptNumber, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(coalesce(v.sovaovien, '')) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(patient.mabenhnhan) like lower(concat('%', cast(:search as String), '%'))
+                    or lower(function('unaccent', patient.hoten))
+                        like lower(function('unaccent', concat('%', cast(:search as String), '%')))
+                  )
             group by p.paymentMethod
             """)
     List<MethodTotal> historyTotals(
@@ -108,7 +134,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("method") PaymentMethod method,
             @Param("cashierId") UUID cashierId,
             @Param("fromTime") Instant fromTime,
-            @Param("toTime") Instant toTime
+            @Param("toTime") Instant toTime,
+            @Param("search") String search
     );
 
     interface MethodTotal {
