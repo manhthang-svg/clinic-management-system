@@ -71,25 +71,36 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
     @Transactional
     public MedicalHistoryResponse updateForVisit(
             UUID doctorAccountId, UUID visitId, UpdateMedicalHistoryRequest request) {
+        // lay luot kham
         Visit visit = requireVisit(visitId);
+
+        // lay benh an
         Optional<MedicalRecord> record = medicalRecordRepository.findByVisitId(visitId);
         // EF-02: only while examining the patient in the Doctor's room, and the record is not closed.
+
+        // hoi ly do
         String reason = readOnlyReason(doctorAccountId, visit, record);
+        //ượt khám không ở trạng thái Đang khám / Chờ kết luận, hoặc không phải phòng của bác sĩ này
         if (NOT_IN_EXAMINATION.equals(reason)) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
+        //đang khám đúng phòng, nhưng bệnh án đã khóa
         if (MEDICAL_RECORD_CLOSED.equals(reason)) {
             throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
         }
+        // kiem tra du lieu co hop le ko
         validate(request);
 
+        // tiền sử và dị ứng HIỆN ĐANG LƯU
         List<MedicalHistory> current = medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(
                 visit.getPatientId());
         // Another Doctor saved in between: the Doctor reloads instead of overwriting (MSG75).
+        //Chống ghi đè
         if (!sameInstant(lastUpdatedAt(current), request.lastUpdatedAt())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
+        // dung danh sach moi
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         UUID recordId = record.map(MedicalRecord::getId).orElse(null);
         List<MedicalHistory> replacement = new ArrayList<>();
@@ -110,9 +121,9 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
 
         // Step 5: audit trail with old and new values (IV.2.3).
         Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("visitId", visit.getId());
-        audit.put("old", summary(current));
-        audit.put("new", summary(replacement));
+        audit.put("visitId", visit.getId());  // sửa trong lượt khám nao
+        audit.put("old", summary(current)); // danh sách TRƯỚC khi sửa
+        audit.put("new", summary(replacement)); // danh sách SAU khi sửa
         auditLogService.recordBusinessChange(
                 doctorAccountId, AuditLogAction.UPDATE, PATIENT_AUDIT_ENTITY, visit.getPatientId(),
                 visit.getSovaovien(), audit, now);

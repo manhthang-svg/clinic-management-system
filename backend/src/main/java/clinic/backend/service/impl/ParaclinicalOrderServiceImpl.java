@@ -171,13 +171,11 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
             throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION, Map.of("status", visit.getStatus().name()));
         }
 
-        // 2. Bước 7: không trùng dịch vụ (MSG07), dịch vụ CLS tồn tại và đang hoạt động (MSG42);
-        // I1-D47: phòng thực hiện bác sĩ chọn phải đang hoạt động và thuộc nhóm của dịch vụ (BR-50-01)
+        // chon dich vu
         List<MedicalService> services = requireOrderableServices(request.items().stream()
                 .map(CreateParaclinicalOrderRequest.Item::serviceId)
                 .toList());
-        // Phòng thực hiện được hệ thống tự xếp lúc tạo chỉ định: phòng có người trực ca hiện tại, ít người chờ
-        // nhất, rồi mã phòng nhỏ hơn. Danh sách phòng được tính một lần cho cả phiếu.
+        // lay danh sach phong co dch vu
         Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = null;
         List<UUID> roomIds = new ArrayList<>();
         for (int i = 0; i < services.size(); i++) {
@@ -202,6 +200,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         // 4. Bước 4, 8: một phiếu thu phí CLS với giá tại thời điểm chỉ định (BR-09). Lượt BHYT có thẻ hợp lệ:
         // dịch vụ có giá BHYT được tách phần BHYT chi trả theo mức hưởng áp dụng của cả lượt, tính trên tổng chi
         // phí trong phạm vi BHYT kể cả các dịch vụ mới; dịch vụ không thuộc BHYT bệnh nhân trả đủ (BR-27, AF-03).
+        // tong ten va bhyt ch tra
         Short coverageRate = appliedCoverageRate(visit, services);
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal insuranceTotal = BigDecimal.ZERO;
@@ -212,13 +211,17 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                         PaymentItem.insuranceAmount(PaymentItem.insuranceScope(service), coverageRate));
             }
         }
+        // snh ma pheu thu ten
         String paymentCode = "HD%010d".formatted(visitRepository.nextPaymentCode());
+        // tạo phiếu thu
         Payment payment = Payment.createParaclinicalFee(
                 uuidV7Generator.next(), now, paymentCode, visit.getId(), total, insuranceTotal,
                 total.subtract(insuranceTotal));
-
+        // lấy phòng khám của lượt khám
         Room room = roomRepository.findById(visit.getRoomId()).orElse(null);
+        // số phiếu chỉ định
         String sophieu = "CD" + paymentCode.substring(2);
+        // tạo phiếu chỉ định
         ParaclinicalOrder order = new ParaclinicalOrder(
                 uuidV7Generator.next(), now, sophieu, medicalRecord.getId(), doctorAccountId, payment.getId(),
                 request.chandoansobo(),
@@ -258,6 +261,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
 
         // 7. BR-26: lượt BHYT chuyển chỉ định tới phòng CLS ngay, phần bệnh nhân trả thu sau khi kết luận;
         // phiếu bệnh nhân trả 0đ cũng chuyển ngay (AF-01). Lượt dịch vụ chờ thu ngân xác nhận (UC-71, BR-28).
+        // chec d lam cls luon
         boolean releaseNow = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
                 || payment.getStatus() == PaymentStatus.FEE_EXEMPT;
         List<String> unroutedServices = releaseNow

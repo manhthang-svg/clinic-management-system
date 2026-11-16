@@ -100,6 +100,7 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentStatus status,
             PaymentType type,
             PaymentMethod method,
+            String search,
             LocalDate from,
             LocalDate to,
             Pageable pageable
@@ -110,6 +111,11 @@ public class PaymentServiceImpl implements PaymentService {
         LocalDate toDate = to != null ? to : today;
         if (fromDate.isAfter(toDate)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
+        }
+        // Tìm kiếm như UC-70: từ khóa ít nhất 2 ký tự (MSG05)
+        String keyword = search == null || search.isBlank() ? null : search.trim();
+        if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
         }
         // Lịch sử chỉ gồm phiếu Đã thu và Đã hủy
         if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
@@ -122,11 +128,11 @@ public class PaymentServiceImpl implements PaymentService {
         Instant toTime = endOf(toDate, ALL_TIME_END);
 
         Page<PaymentResponse> page = paymentRepository
-                .history(statuses, type, method, cashierAccountId, fromTime, toTime, pageable)
+                .history(statuses, type, method, cashierAccountId, fromTime, toTime, keyword, pageable)
                 .map(this::toResponse);
         List<PaymentHistoryResponse.MethodTotal> totals = status == PaymentStatus.CANCELLED
                 ? List.of()
-                : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime).stream()
+                : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime, keyword).stream()
                         .map(row -> new PaymentHistoryResponse.MethodTotal(
                                 row.getMethod(), row.getTotal(), row.getCount()))
                         .toList();

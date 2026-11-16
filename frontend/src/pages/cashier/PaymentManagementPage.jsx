@@ -13,6 +13,8 @@ import {
     FileText,
     Activity,
     X,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import {
@@ -20,7 +22,10 @@ import {
 } from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
-import { SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
+import { PAYMENT_PAGE_SIZE, SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
+
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
 const money = (n) =>
     new Intl.NumberFormat('vi-VN', {
@@ -77,6 +82,9 @@ function TypeBadge({ type }) {
 
 export default function PaymentManagementPage() {
     const [payments, setPayments] = useState([]);
+    // Phân trang: trang hiện tại (đếm từ 0) và tổng số phiếu khớp bộ lọc
+    const [pageNumber, setPageNumber] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
@@ -101,9 +109,10 @@ export default function PaymentManagementPage() {
     const [checkingQr, setCheckingQr] = useState(false);
 
     // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; đúng 1 phiếu Chờ của mã lượt khám thì mở UC-71
-    const fetchPayments = useCallback(async () => {
+    // pageToLoad: trang cần tải; không truyền (bộ lọc đổi) thì về trang đầu
+    const fetchPayments = useCallback(async (pageToLoad = 0) => {
         const { params, error } = searchParams({
-            search, status: statusFilter, type: typeTab, from: fromDate, to: toDate,
+            search, status: statusFilter, type: typeTab, from: fromDate, to: toDate, page: pageToLoad,
         });
         setSearchError(error || '');
         if (error) return;
@@ -111,8 +120,12 @@ export default function PaymentManagementPage() {
         try {
             const res = await paymentApi.list(params);
             const content = res?.data?.content || res?.content || (Array.isArray(res?.data) ? res.data : []);
+            const page = res?.data ?? res;
             setPayments(content);
-            const target = directConfirmTarget(content, search);
+            setTotalElements(page?.totalElements ?? content.length);
+            setPageNumber(pageToLoad);
+            // AF-01 chỉ xét ở trang đầu của một lần tìm
+            const target = pageToLoad === 0 ? directConfirmTarget(content, search) : null;
             if (target) navigate(target);
         } catch (err) {
             setNotice(confirmErrorMessage(err));
@@ -132,6 +145,12 @@ export default function PaymentManagementPage() {
         return payments;
     }, [payments]);
 
+    // Sau khi thu tiền / làm mới thì tải lại đúng trang đang xem
+    const reloadCurrentPage = () => fetchPayments(pageNumber);
+    const totalPages = Math.max(1, Math.ceil(totalElements / PAYMENT_PAGE_SIZE));
+    const firstRow = totalElements === 0 ? 0 : pageNumber * PAYMENT_PAGE_SIZE + 1;
+    const lastRow = pageNumber * PAYMENT_PAGE_SIZE + payments.length;
+
     // Xử lý xác nhận tiền mặt
     const handleConfirmCash = async () => {
         if (!cashModalPayment || submittingCash) return;
@@ -146,11 +165,11 @@ export default function PaymentManagementPage() {
             setQueueTicketVisitId(ticketVisitOf(confirmed));
             setCashModalPayment(null);
             setCashNote('');
-            fetchPayments();
+            fetchPayments(pageNumber);
         } catch (err) {
             alert(confirmErrorMessage(err));
             setCashModalPayment(null);
-            fetchPayments();
+            fetchPayments(pageNumber);
         } finally {
             setSubmittingCash(false);
         }
@@ -187,7 +206,7 @@ export default function PaymentManagementPage() {
                 setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                 setQrModalPayment(null);
                 setQrData(null);
-                fetchPayments();
+                fetchPayments(pageNumber);
             } else {
                 setNotice('Chưa nhận được giao dịch chuyển khoản. Vui lòng thử lại sau khi chuyển tiền.');
             }
@@ -210,14 +229,14 @@ export default function PaymentManagementPage() {
                     setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                     setQrModalPayment(null);
                     setQrData(null);
-                    fetchPayments();
+                    fetchPayments(pageNumber);
                 }
             } catch {
                 // Ignore background polling error
             }
         }, 3000);
         return () => clearInterval(timer);
-    }, [qrModalPayment, fetchPayments]);
+    }, [qrModalPayment, fetchPayments, pageNumber]);
 
     return (
         <main className="min-h-screen bg-[#f4f8f7] p-4 text-[#142534] sm:p-6 lg:p-8">
@@ -232,7 +251,7 @@ export default function PaymentManagementPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <button
-                            onClick={fetchPayments}
+                            onClick={reloadCurrentPage}
                             disabled={loading}
                             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#d5e0dc] bg-white px-4 py-2 text-sm font-semibold text-[#142534] hover:bg-[#edf5f3]"
                         >
@@ -255,7 +274,7 @@ export default function PaymentManagementPage() {
                 <section className="grid gap-4 sm:grid-cols-3">
                     <div className="rounded-2xl border border-[#e3ece9] bg-white p-5 shadow-sm">
                         <p className="text-sm text-[#60737d]">Tổng số phiếu thu</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-800">{payments.length}</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-800">{totalElements}</p>
                     </div>
                     <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
                         <p className="text-sm font-medium text-amber-700">Chờ thanh toán (Cần thu)</p>
@@ -456,6 +475,33 @@ export default function PaymentManagementPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {totalElements > 0 && (
+                        <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e3ece9] px-5 py-4 text-sm text-[#60737d] sm:flex-row">
+                            <span>Hiển thị {firstRow}–{lastRow} trên tổng số {totalElements} phiếu thu</span>
+                            <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    aria-label="Trang trước"
+                                    disabled={loading || pageNumber === 0}
+                                    onClick={() => void fetchPayments(pageNumber - 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <span className="px-2">Trang {pageNumber + 1}/{totalPages}</span>
+                                <button
+                                    type="button"
+                                    aria-label="Trang sau"
+                                    disabled={loading || pageNumber + 1 >= totalPages}
+                                    onClick={() => void fetchPayments(pageNumber + 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </nav>
+                        </div>
+                    )}
                 </section>
             </div>
 
