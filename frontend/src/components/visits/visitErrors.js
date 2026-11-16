@@ -7,10 +7,6 @@ export const MSG20 = 'Không thể kết nối với cổng BHYT. Vui lòng th�
 export const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 // MSG102: no examination room can receive patients now (UC-40 step 8, UC-42 EF-01).
 export const MSG102 = 'Không có phòng khám nào đang hoạt động có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.';
-// ASSUMPTION: MSG91 is not in the SRS message list available in docs/.
-export const MSG91 = 'Lịch hẹn tái khám vừa được gắn với lượt khám khác. Thông tin lịch hẹn đã được tải lại.';
-
-export const NETWORK_MESSAGE = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
 
 /**
  * MSG21: registration confirmed. A Dịch vụ visit that still has to pay has no queue number yet (I1-D48), so the
@@ -43,24 +39,19 @@ function isNetworkError(error) {
 // ASSUMPTION: error codes; the backend currently answers these cases without a stable code.
 const ACTIVE_VISIT_CODES = ['ACTIVE_VISIT_EXISTS'];
 const ROOM_CODES = ['ROOM_NOT_AVAILABLE', 'ROOM_NOT_ACTIVE', 'ROOM_HAS_NO_DOCTOR'];
-const APPOINTMENT_CODES = ['FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED'];
 const INSURANCE_CODES = ['INSURANCE_CARD_INVALID'];
-// BR-129.
-export const REFERRAL_DIAGNOSIS_MESSAGE = 'Vui lòng nhập chẩn đoán của nơi giới thiệu (2–1.000 ký tự).';
 
 /**
  * Classifies a failed POST /visits:
- * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'appointment' (EF-04), 'session' or 'system' (EF-05).
+ * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'insurance' (UC-74 EF-02 at step 9), 'session' or 'system' (EF-04).
+ * Any other failure, a lost connection included, is MSG80 on the confirmation (EF-04).
  */
 export function visitCreateError(error) {
   const code = codeOf(error);
   if (ACTIVE_VISIT_CODES.includes(code)) return { kind: 'activeVisit' };
   if (ROOM_CODES.includes(code)) return { kind: 'room' };
-  if (APPOINTMENT_CODES.includes(code)) return { kind: 'appointment', message: MSG91 };
   if (INSURANCE_CODES.includes(code)) return { kind: 'insurance', message: MSG17 };
-  if (code === 'REFERRAL_DIAGNOSIS_REQUIRED') return { kind: 'system', message: REFERRAL_DIAGNOSIS_MESSAGE };
   if (code === 'UNAUTHORIZED' || error?.status === 401) return { kind: 'session', message: MSG12 };
-  if (isNetworkError(error)) return { kind: 'system', message: NETWORK_MESSAGE };
   return { kind: 'system', message: MSG80 };
 }
 
@@ -73,9 +64,9 @@ export function insuranceErrorKind(error) {
   return INVALID_CARD_CODES.includes(codeOf(error)) ? 'invalid' : 'system';
 }
 
+/** EF-04: MSG12 when the session has expired (the app then shows the Login screen); MSG80 otherwise. */
 export function loadErrorMessage(error) {
   if (error?.status === 401) return MSG12;
-  if (isNetworkError(error)) return NETWORK_MESSAGE;
   return MSG80;
 }
 
@@ -94,7 +85,7 @@ export function ticketErrorMessage(error) {
   const code = codeOf(error);
   if (TICKET_CODE_MESSAGES[code]) return TICKET_CODE_MESSAGES[code];
   if (error?.status === 401) return MSG12;
-  if (isNetworkError(error)) return NETWORK_MESSAGE;
+  if (isNetworkError(error)) return MSG80;
   const reference = code ?? (error?.status ? `HTTP ${error.status}` : error?.name);
   return reference ? `${MSG80} (Mã lỗi: ${reference})` : MSG80;
 }

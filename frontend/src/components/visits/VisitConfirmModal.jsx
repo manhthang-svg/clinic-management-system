@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { ClipboardCheck, X } from 'lucide-react';
-import { INTAKE_TYPE_LABELS, PRIORITY_REASON_LABELS, REFERRAL_SOURCE_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
+import { INTAKE_TYPE_LABELS, PRIORITY_REASON_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
 import { FormAlert } from '../shared/FormFields';
-import { coverageRateOf, referralSourceOf } from './visitForm';
+import { coverageRateOf } from './visitForm';
 import { formatDate, formatMoney, genderLabel, roomLabel } from './visitFormat';
 
 function Row({ label, children }) {
@@ -125,7 +125,6 @@ export function VisitConfirmModal({
               )}
             </Row>
             <Row label="Loại tiếp nhận">{INTAKE_TYPE_LABELS[intakeType]}</Row>
-            <Row label="Nơi giới thiệu">{REFERRAL_SOURCE_LABELS[referralSourceOf(form)] || '—'}</Row>
             <Row label="Phòng khám">
               {roomLabel(room)}
               {room?.location && <div className="text-xs text-slate-500 font-normal">{room.location}</div>}
