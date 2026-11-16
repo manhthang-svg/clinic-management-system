@@ -51,9 +51,13 @@ class Icd10ImportIT extends PostgresIntegrationTest {
 
     @Test
     void loadsTheWholePublishedListAndAgainChangesNothing() throws Exception {
+        // The container is shared: test codes outside the list (e.g. U96.1 of ExaminedPatientApiIT) may still be
+        // active when this test runs after them, and the import rightly retires them.
+        int leftoverTestCodes = (int) count("select count(*) from icd10 where is_active and van_ban is null");
+
         Result first = importReal();
 
-        assertThat(first).isEqualTo(new Result(15_844, 15_844, 0, 0, 0));
+        assertThat(first).isEqualTo(new Result(15_844, 15_844, 0, 0, leftoverTestCodes));
         assertThat(count("select count(*) from icd10 where co_ma_chi_tiet_hon")).isEqualTo(2_119);
         assertThat(count("select count(*) from icd10 where gioi_tinh_ap_dung = 2")).isEqualTo(933);
         assertThat(count("select count(*) from icd10 where gioi_tinh_ap_dung = 1")).isEqualTo(144);

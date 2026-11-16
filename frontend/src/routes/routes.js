@@ -86,4 +86,9 @@ export function clinicalExaminationPath(visitId, section = 'clinical') {
   return section === 'clinical' ? base : `${base}/${section}`;
 }
 
+/** Link of one room's waiting list (UC-42 step 6), e.g. /receptionist/room-queue/{roomId}. */
+export function roomQueuePath(roomId) {
+  return `${ROUTES.RECEPTIONIST.ROOM_QUEUE}/${encodeURIComponent(roomId)}`;
+}
+
 export default ROUTES;

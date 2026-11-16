@@ -47,9 +47,11 @@ public class PatientController {
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @Operation(summary = "UC-37 Tạo hồ sơ bệnh nhân")
     public ApiResponse<PatientResponse> createPatient(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreatePatientRequest request
     ) {
-        return ApiResponse.success(patientService.createPatient(request));
+        // The creator comes from the token, never from the request body (same as UC-36 and UC-38).
+        return ApiResponse.success(patientService.createPatient(StaffPrincipal.from(jwt).accountId(), request));
     }
 
     @GetMapping("/possible-duplicates")

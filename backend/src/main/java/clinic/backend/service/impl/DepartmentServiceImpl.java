@@ -42,6 +42,7 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
+import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.DepartmentService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final MedicalServiceRepository medicalServiceRepository;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     private final DutyScheduleRepository dutyScheduleRepository;
+    private final VisitRepository visitRepository;
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private final Clock clock;
     private final UuidV7Generator uuidV7Generator;
@@ -127,6 +129,10 @@ public class DepartmentServiceImpl implements DepartmentService {
         Map<UUID, String> roomDutyDoctorMap = new HashMap<>();
         roomDutyDoctorNames.forEach((roomId, names) ->
                 roomDutyDoctorMap.put(roomId, String.join(", ", names.stream().distinct().toList())));
+
+        Set<UUID> roomsWithFutureDuty = dutyScheduleRepository.findRoomIdsWithDutyScheduleAfter(today);
+        Set<UUID> roomsWithActiveVisits = visitRepository.findRoomIdsWithActiveVisitsToday(today, VisitRepository.FINISHED_STATUSES);
+        Set<UUID> roomsWithPendingOrders = paraclinicalOrderDetailRepository.findRoomIdsWithStatusIn(ROOM_PENDING_WORK);
 
         Map<UUID, Department> departmentMap = departments.stream()
                 .collect(Collectors.toMap(Department::getId, d -> d, (d1, d2) -> d1));
@@ -212,6 +218,11 @@ public class DepartmentServiceImpl implements DepartmentService {
                 roomServices = List.of();
             }
 
+            boolean hasFutureDuty = roomsWithFutureDuty != null && roomsWithFutureDuty.contains(room.getId());
+            boolean hasActiveVisits = room.getType() == RoomType.EXAMINATION
+                    ? (roomsWithActiveVisits != null && roomsWithActiveVisits.contains(room.getId()))
+                    : (roomsWithPendingOrders != null && roomsWithPendingOrders.contains(room.getId()));
+
             items.add(DepartmentRoomItemResponse.builder()
                     .id(room.getId())
                     .unitType("ROOM")
@@ -228,6 +239,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .assignedServices(roomServices)
                     .hasDoctorOnDutyToday(roomDutyDoctorMap.containsKey(room.getId()))
                     .doctorOnDutyToday(roomDutyDoctorMap.get(room.getId()))
+                    .hasFutureDutySchedules(hasFutureDuty)
+                    .hasActiveVisitsToday(hasActiveVisits)
                     .createdAt(room.getCreatedAt())
                     .updatedAt(room.getUpdatedAt())
                     .version(room.getVersion())
@@ -404,6 +417,12 @@ public class DepartmentServiceImpl implements DepartmentService {
         Instant now = clock.instant();
         boolean active = request.getActive() == null ? department.isActive() : request.getActive();
 
+        // RỦI RO 4: Kiểm tra và ngưng hoạt động toàn bộ phòng con khi khóa chuyên khoa
+        if (department.isActive() && !active) {
+            validateDepartmentDeactivation(department);
+            deactivateRoomsOfDepartment(department.getId(), now);
+        }
+
         department.update(
                 name,
                 department.getType(),
@@ -444,7 +463,15 @@ public class DepartmentServiceImpl implements DepartmentService {
                         Map.of("departmentId", "Không tìm thấy khoa với mã ID: " + id)));
 
         Instant now = clock.instant();
-        department.setActive(!department.isActive(), now);
+        boolean nextActive = !department.isActive();
+
+        // RỦI RO 4: Kiểm tra và ngưng hoạt động toàn bộ phòng con khi khóa chuyên khoa
+        if (department.isActive() && !nextActive) {
+            validateDepartmentDeactivation(department);
+            deactivateRoomsOfDepartment(department.getId(), now);
+        }
+
+        department.setActive(nextActive, now);
         Department saved = departmentRepository.save(department);
         int roomCount = roomRepository.findByDepartmentId(id).size();
 
@@ -593,6 +620,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(false)
+                .hasActiveVisitsToday(false)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -682,7 +711,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Instant now = clock.instant();
         ActivationStatus status = request.getStatus() != null ? request.getStatus() : room.getStatus();
         if (room.getStatus() == ActivationStatus.ACTIVE && status == ActivationStatus.INACTIVE) {
-            checkNoDoctorOnDutyToday(room.getId());
+            validateRoomDeactivation(room);
         }
 
         room.update(
@@ -707,10 +736,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         String staffName = resolveStaffNamesForRoom(saved.getId());
         String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
-
-
-
-
+        LocalDate todayDate = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        boolean hasFutureDuty = dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(saved.getId(), todayDate);
+        boolean hasActiveVisits = saved.getType() == RoomType.EXAMINATION
+                ? visitRepository.hasActiveVisitsToday(saved.getId(), todayDate, VisitRepository.FINISHED_STATUSES)
+                : paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(saved.getId(), ROOM_PENDING_WORK);
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -728,6 +758,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(hasFutureDuty)
+                .hasActiveVisitsToday(hasActiveVisits)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -744,21 +776,12 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Instant now = clock.instant();
         if (room.getStatus() == ActivationStatus.ACTIVE) {
-            checkNoDoctorOnDutyToday(room.getId());
+            validateRoomDeactivation(room);
         }
 
         ActivationStatus nextStatus = room.getStatus() == ActivationStatus.ACTIVE
                 ? ActivationStatus.INACTIVE
                 : ActivationStatus.ACTIVE;
-
-        // BR-50-03 (I1-D47, extends I1-D32): a paraclinical room chosen by services that are still pending payment,
-        // waiting or in progress stays active, so those services keep the room printed on their order slip.
-        if (nextStatus == ActivationStatus.INACTIVE
-                && room.getType() == RoomType.PARACLINICAL
-                && paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(room.getId(), ROOM_PENDING_WORK)) {
-            throw new AppException(ErrorCode.ROOM_HAS_PENDING_WORK, Map.of(
-                    "roomId", room.getId().toString(), "roomName", room.getRoomName()));
-        }
 
         room.setStatus(nextStatus, now);
         Room saved = roomRepository.save(room);
@@ -773,10 +796,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         String staffName = resolveStaffNamesForRoom(saved.getId());
         String dutyDoctor = resolveDutyDoctorForRoomToday(saved.getId());
-
-
-
-
+        LocalDate todayDate = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+        boolean hasFutureDuty = dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(saved.getId(), todayDate);
+        boolean hasActiveVisits = saved.getType() == RoomType.EXAMINATION
+                ? visitRepository.hasActiveVisitsToday(saved.getId(), todayDate, VisitRepository.FINISHED_STATUSES)
+                : paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(saved.getId(), ROOM_PENDING_WORK);
 
         return DepartmentRoomItemResponse.builder()
                 .id(saved.getId())
@@ -794,6 +818,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .assignedServices(resolveSingleRoomServices(saved, serviceGroupName))
                 .hasDoctorOnDutyToday(dutyDoctor != null)
                 .doctorOnDutyToday(dutyDoctor)
+                .hasFutureDutySchedules(hasFutureDuty)
+                .hasActiveVisitsToday(hasActiveVisits)
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .version(saved.getVersion())
@@ -859,6 +885,106 @@ public class DepartmentServiceImpl implements DepartmentService {
         return List.of();
     }
 
+    /**
+     * Kiểm tra tính hợp lệ trước khi tạm ngưng phòng khám (BR-07, BR-50-03, EF-03 / MSG55, EF-04 / MSG79).
+     * 1. Phòng đang có nhân sự (Bác sĩ / KTV) trực trong ngày hôm nay.
+     * 2. Rủi ro 2: Phòng vẫn còn ca trực được xếp lịch trong tương lai (sau ngày hôm nay).
+     * 3. Rủi ro 1: Phòng lâm sàng đang có bệnh nhân chờ khám hoặc đang khám dở;
+     *    hoặc phòng cận lâm sàng có chỉ định đang chờ thanh toán / chờ thực hiện / đang xử lý.
+     */
+    private void validateRoomDeactivation(Room room) {
+        LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);
+
+        // 1. Kiểm tra nhân sự trực hôm nay (Doctor/Technician on duty today)
+        checkNoDoctorOnDutyToday(room.getId());
+
+        // 2. RỦI RO 2 (EF-04 / MSG79): Kiểm tra ca trực tương lai (các ngày tới)
+        if (dutyScheduleRepository.existsByRoomIdAndWorkDateAfter(room.getId(), today)) {
+            throw new AppException(ErrorCode.ROOM_HAS_FUTURE_SHIFTS,
+                    "Không thể tạm ngưng phòng \"" + room.getRoomName()
+                            + "\": phòng vẫn còn nhân viên được xếp ca trực trong các ngày tới. Vui lòng điều chỉnh lịch trực trước.",
+                    Map.of("roomId", room.getId().toString(), "roomName", room.getRoomName()));
+        }
+
+        // 3. RỦI RO 1 (EF-03 / MSG55, BR-07, BR-50-03): Kiểm tra bệnh nhân hoặc công việc dở dang
+        if (room.getType() == RoomType.EXAMINATION) {
+            if (visitRepository.hasActiveVisitsToday(room.getId(), today, VisitRepository.FINISHED_STATUSES)) {
+                throw new AppException(ErrorCode.ROOM_HAS_PENDING_WORK,
+                        "Không thể tạm ngưng phòng \"" + room.getRoomName()
+                                + "\": phòng vẫn còn bệnh nhân đang chờ hoặc đang khám dở trong ngày hôm nay.",
+                        Map.of("roomId", room.getId().toString(), "roomName", room.getRoomName()));
+            }
+        } else if (room.getType() == RoomType.PARACLINICAL) {
+            if (paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(room.getId(), ROOM_PENDING_WORK)) {
+                throw new AppException(ErrorCode.ROOM_HAS_PENDING_WORK,
+                        "Không thể tạm ngưng phòng \"" + room.getRoomName()
+                                + "\": phòng vẫn còn dịch vụ cận lâm sàng đang chờ thanh toán, chờ thực hiện hoặc đang xử lý.",
+                        Map.of("roomId", room.getId().toString(), "roomName", room.getRoomName()));
+            }
+        }
+
+        // 4. RỦI RO 3 (EF-06 / MSG94): Chặn tạm ngưng phòng khám lâm sàng duy nhất còn lại
+        if (room.getType() == RoomType.EXAMINATION) {
+            long activeExamRooms = roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+            if (activeExamRooms <= 1) {
+                throw new AppException(ErrorCode.LAST_ACTIVE_EXAMINATION_ROOM,
+                        "Không thể tạm ngưng phòng \"" + room.getRoomName()
+                                + "\": đây là phòng khám duy nhất còn hoạt động nên không thể ngừng hoạt động.",
+                        Map.of("roomId", room.getId().toString(), "roomName", room.getRoomName()));
+            }
+        }
+    }
+
+    /**
+     * RỦI RO 4: Kiểm tra điều kiện ngưng hoạt động chuyên khoa.
+     * Chuyên khoa chỉ được phép tạm ngưng khi TẤT CẢ các phòng trực thuộc đang hoạt động
+     * đều thỏa mãn điều kiện tạm ngưng phòng (không có BS/KTV trực hôm nay, không còn ca trực tương lai,
+     * không có bệnh nhân chờ/khám dở hoặc chỉ định CLS chưa xong).
+     */
+    private void validateDepartmentDeactivation(Department department) {
+        List<Room> rooms = roomRepository.findByDepartmentId(department.getId());
+        List<Room> activeRooms = rooms.stream()
+                .filter(r -> r.getStatus() == ActivationStatus.ACTIVE)
+                .toList();
+
+        // RỦI RO 3: Chặn nếu việc tạm ngưng chuyên khoa sẽ tắt toàn bộ phòng khám lâm sàng còn lại trong cơ sở
+        long totalActiveExamRooms = roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        long activeExamRoomsInDept = activeRooms.stream()
+                .filter(r -> r.getType() == RoomType.EXAMINATION)
+                .count();
+        if (activeExamRoomsInDept > 0 && totalActiveExamRooms <= activeExamRoomsInDept) {
+            throw new AppException(ErrorCode.LAST_ACTIVE_EXAMINATION_ROOM,
+                    "Không thể tạm ngưng chuyên khoa \"" + department.getDepartmentName()
+                            + "\": thao tác này sẽ ngừng hoạt động toàn bộ phòng khám lâm sàng còn lại trong cơ sở.",
+                    Map.of("departmentId", department.getId().toString(), "departmentName", department.getDepartmentName()));
+        }
+
+        for (Room room : activeRooms) {
+            try {
+                validateRoomDeactivation(room);
+            } catch (AppException ex) {
+                throw new AppException(
+                        ex.getErrorCode(),
+                        "Không thể tạm ngưng chuyên khoa \"" + department.getDepartmentName() + "\": " + ex.getMessage(),
+                        ex.getDetails()
+                );
+            }
+        }
+    }
+
+    /**
+     * RỦI RO 4: Cascade chuyển tất cả các phòng đang hoạt động thuộc chuyên khoa sang INACTIVE.
+     */
+    private void deactivateRoomsOfDepartment(UUID departmentId, Instant now) {
+        List<Room> rooms = roomRepository.findByDepartmentId(departmentId);
+        for (Room room : rooms) {
+            if (room.getStatus() == ActivationStatus.ACTIVE) {
+                room.setStatus(ActivationStatus.INACTIVE, now);
+                roomRepository.save(room);
+            }
+        }
+    }
+
     private void checkNoDoctorOnDutyToday(UUID roomId) {
         String dutyStaff = resolveDutyDoctorForRoomToday(roomId);
         if (dutyStaff != null) {
@@ -867,6 +993,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     Map.of("roomId", "Không thể tạm ngưng phòng đang có nhân sự (bác sĩ/kỹ thuật viên) trực trong ngày"));
         }
     }
+
+
 
     private String resolveDutyDoctorForRoomToday(UUID roomId) {
         LocalDate today = LocalDate.ofInstant(clock.instant(), CLINIC_ZONE);

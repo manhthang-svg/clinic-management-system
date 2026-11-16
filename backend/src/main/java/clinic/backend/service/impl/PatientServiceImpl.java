@@ -26,13 +26,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -51,6 +47,7 @@ public class PatientServiceImpl implements PatientService {
 
     /** UC-35 step 6: at most 50 results. */
     static final int MAX_SEARCH_RESULTS = 50;
+    static final Sort DEFAULT_SEARCH_SORT = Sort.by("mabenhnhan");
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
@@ -85,20 +82,7 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional
-    public PatientResponse createPatient(CreatePatientRequest request) {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null
-                || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Không xác định được tài khoản đang đăng nhập"
-            );
-        }
-
-        UUID createdByAccountId = UUID.fromString(jwt.getSubject());
-
+    public PatientResponse createPatient(UUID createdByAccountId, CreatePatientRequest request) {
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
         checkAgeRules(request);
@@ -213,6 +197,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponse updatePatient(UUID actorAccountId, UUID id, UpdatePatientRequest request) {
         Patient patient = requiredPatient(id);
+        // check chong race condition
         if (!patient.getVersion().equals(request.version())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
@@ -350,15 +335,25 @@ public class PatientServiceImpl implements PatientService {
         return changes;
     }
 
+    /**
+     * UC-35 Tìm kiếm bệnh nhân (sequence diagram bước 15–24).
+     * Chỉ đọc dữ liệu nên dùng readOnly = true (không ghi audit như UC-36).
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
-        Pageable limited = pageable.getPageSize() > MAX_SEARCH_RESULTS
-                ? PageRequest.of(pageable.getPageNumber(), MAX_SEARCH_RESULTS, pageable.getSort())
-                : pageable;
+        // - Sắp theo mã BN nếu FE không gửi sort
+        // - Mỗi trang tối đa 50 dòng (MAX_SEARCH_RESULTS), FE có gửi size lớn hơn cũng bị ép về 50.
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : DEFAULT_SEARCH_SORT;
+        Pageable limited = PageRequest.of(
+                pageable.getPageNumber(), Math.min(pageable.getPageSize(), MAX_SEARCH_RESULTS), sort);
+
+        // Bỏ khoảng trắng 2 đầu; từ khóa trống hoặc toàn dấu cách thì thành null.
         String normalizedKeyword = normalize(keyword);
         Page<Patient> patients;
+
         if (type == null) {
+            // Không có từ khóa → lấy tất cả; có từ khóa → tìm tự do trên mã BN, họ tên, CCCD, SĐT.
             patients = normalizedKeyword == null
                     ? patientRepository.findAll(limited)
                     : patientRepository.search(normalizedKeyword, limited);
@@ -369,32 +364,42 @@ public class PatientServiceImpl implements PatientService {
             if (!isValidKeyword(normalizedKeyword, type)) {
                 throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "INVALID_FORMAT"));
             }
+            // - Giấy tờ cầm trên tay (CCCD, hộ chiếu, BHYT) → khớp đúng.
+            // - Thứ bệnh nhân nhớ miệng (mã BN, SĐT, họ tên) → chứa từ khóa (like '%...%').
             patients = switch (type) {
                 case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
                 case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
-                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanIgnoreCase(normalizedKeyword, limited);
-                case PHONE -> patientRepository.findAllBySodienthoai(normalizedKeyword, limited);
+                case PATIENT_CODE -> patientRepository.findAllByMabenhnhanContainingIgnoreCase(normalizedKeyword, limited);
+                case PHONE -> patientRepository.findAllBySodienthoaiContaining(normalizedKeyword, limited);
                 case NAME -> patientRepository.searchByName(normalizedKeyword, limited);
                 case INSURANCE_CARD -> patientRepository.searchByInsuranceCard(normalizedKeyword, limited);
             };
         }
+
+        // rồi trả Page<PatientResponse> về controller.
         return withVisitSummary(patients);
     }
 
-    /** UC-35 step 4: keyword format by search type. */
+    /**
+     * UC-35 step 4: keyword format by search type.
+     * DECISION (team, 2026-11-15): numbers read from a document (citizen ID, passport, insurance card) must be
+     * typed in full and match exactly, so a partial number cannot list other patients' identities. What a
+     * patient says from memory may be partial. The minimum length follows how sensitive the field is: the
+     * internal patient code from 1 character, the phone (personal data) from 4 digits, the name from 2.
+     */
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
             case CITIZEN_ID -> keyword.matches("\\d{12}");
             case PASSPORT -> keyword.matches("[A-Za-z0-9]{1,15}");
-            case PHONE -> keyword.matches("\\d{10}");
-            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
             case INSURANCE_CARD -> keyword.matches("[A-Za-z0-9]{15}");
-            case PATIENT_CODE -> true;
+            case PHONE -> keyword.matches("\\d{4,10}");
+            case PATIENT_CODE -> keyword.matches("[A-Za-z0-9-]{1,20}");
+            case NAME -> keyword.length() >= 2 && keyword.length() <= 100;
         };
     }
 
     /** UC-35 step 6: last visit date and active visit of each result, loaded with two queries per page. */
-    private Page<PatientResponse> withVisitSummary(Page<Patient> patients) {
+    private Page<PatientResponse>  withVisitSummary(Page<Patient> patients) {
         List<UUID> ids = patients.map(Patient::getId).getContent();
         if (ids.isEmpty()) {
             return patients.map(this::toResponse);
@@ -423,19 +428,24 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional
     public PatientOverviewResponse getPatientOverview(UUID actorAccountId, UUID id) {
+        // tim benh nhan
         Patient patient = requiredPatient(id);
+        // lich su kham
         List<VisitRepository.PatientVisitHistory> history = visitRepository.findPatientHistory(id);
-
+        // kham hien tai
         List<PatientOverviewResponse.VisitHistoryItem> visits = history.stream()
                 .map(visit -> new PatientOverviewResponse.VisitHistoryItem(
                         visit.getVisitId(), visit.getRegistrationCode(), visit.getRegisteredAt(),
                         visit.getRoomName(), doctorName(visit.getDoctorTitle(), visit.getDoctorName()),
                         visit.getVisitType(), visit.getStatus()))
                 .toList();
+        // lay bao hiem y te gan nhat
         String lastInsuranceCard = history.stream()
                 .map(VisitRepository.PatientVisitHistory::getInsuranceCard)
                 .filter(card -> card != null && !card.isBlank())
                 .findFirst().orElse(null);
+
+        // luot kham + phi kham
         PatientOverviewResponse.CurrentVisit activeVisit = history.stream()
                 .filter(visit -> !VisitRepository.FINISHED_STATUSES.contains(visit.getStatus()))
                 .findFirst()
@@ -444,6 +454,8 @@ public class PatientServiceImpl implements PatientService {
                         paymentRepository.findByVisitIdAndType(visit.getVisitId(), PaymentType.EXAMINATION_FEE)
                                 .map(Payment::getStatus).orElse(null)))
                 .orElse(null);
+
+        // thuoc di ung
         List<String> drugAllergies = medicalHistoryRepository
                 .findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(id, MedicalHistoryType.DRUG_ALLERGY).stream()
                 // UC-39 AF-01: the "no known drug allergy" statement is not an allergy.

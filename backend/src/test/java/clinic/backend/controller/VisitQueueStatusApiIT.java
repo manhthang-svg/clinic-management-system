@@ -4,6 +4,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.dto.request.LoginRequest;
@@ -12,6 +13,7 @@ import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.security.PasswordHasher;
+import clinic.backend.service.impl.ExaminationRoomDuty;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,9 +22,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.contains;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.empty;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -41,15 +46,20 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
     @Autowired PasswordHasher passwordHasher;
     @Autowired UuidV7Generator ids;
     @Autowired JdbcTemplate jdbc;
+    // Who is on duty depends on the time the test runs; the shift rule itself is tested in ExaminationRoomDuty.
+    @MockitoBean ExaminationRoomDuty examinationRoomDuty;
 
     @Test
     void receptionistSeesCountsPerActiveExaminationRoom() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
+        StaffAccount doctor = account(Role.DOCTOR);
         String suffix = suffix();
         UUID departmentId = insertDepartment(suffix);
         UUID roomId = insertRoom(departmentId, "PK-" + suffix, "ACTIVE");
         UUID emptyRoomId = insertRoom(departmentId, "PE-" + suffix, "ACTIVE");
         UUID inactiveRoomId = insertRoom(departmentId, "PI-" + suffix, "INACTIVE");
+        when(examinationRoomDuty.onDutyDoctorsByRoom(any()))
+                .thenReturn(Map.of(roomId, doctor, emptyRoomId, doctor, inactiveRoomId, doctor));
 
         insertVisit(receptionist, roomId, QUEUE_DATE, "WAITING", false);
         insertVisit(receptionist, roomId, QUEUE_DATE, "WAITING", false);
@@ -72,7 +82,7 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath(room + ".roomCode", contains("PK-" + suffix)))
                 .andExpect(jsonPath(room + ".roomName", contains("Phòng PK-" + suffix)))
                 .andExpect(jsonPath(room + ".departmentName", contains("Khoa " + suffix)))
-                .andExpect(jsonPath(room + ".hasDoctor", contains(false)))
+                .andExpect(jsonPath(room + ".hasDoctor", contains(true)))
                 .andExpect(jsonPath(room + ".waitingPaymentCount", contains(1)))
                 .andExpect(jsonPath(room + ".waitingCount", contains(2)))
                 .andExpect(jsonPath(room + ".inExaminationCount", contains(1)))
@@ -86,12 +96,18 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void listsActiveAssignedDoctorsOfEachRoom() throws Exception {
+    void listsOnlyRoomsWithADoctorOnDutyNamedByThatDoctor() throws Exception {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
-        StaffAccount doctor = account(Role.DOCTOR);
+        StaffAccount onDuty = account(Role.DOCTOR);
+        StaffAccount assignedOnly = account(Role.DOCTOR);
         String suffix = suffix();
-        UUID roomId = insertRoom(insertDepartment(suffix), "PD-" + suffix, "ACTIVE");
-        assignToRoom(doctor, roomId);
+        UUID departmentId = insertDepartment(suffix);
+        UUID roomId = insertRoom(departmentId, "PD-" + suffix, "ACTIVE");
+        UUID offDutyRoomId = insertRoom(departmentId, "PO-" + suffix, "ACTIVE");
+        // Assigned to both rooms, but on duty in neither: assignment alone does not list a room or name a doctor.
+        assignToRoom(assignedOnly, roomId);
+        assignToRoom(assignedOnly, offDutyRoomId);
+        when(examinationRoomDuty.onDutyDoctorsByRoom(any())).thenReturn(Map.of(roomId, onDuty));
 
         String room = "$.data[?(@.roomId == '" + roomId + "')]";
         mockMvc.perform(get("/api/v1/visits/queue-status")
@@ -99,7 +115,8 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(room + ".hasDoctor", contains(true)))
-                .andExpect(jsonPath(room + ".doctorNames[0]", contains(doctor.getFullName())));
+                .andExpect(jsonPath(room + ".doctorNames[*]", contains(onDuty.getFullName())))
+                .andExpect(jsonPath("$.data[?(@.roomId == '" + offDutyRoomId + "')]", empty()));
     }
 
     @Test
