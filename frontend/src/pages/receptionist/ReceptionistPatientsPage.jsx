@@ -33,7 +33,7 @@ const PAGE_SIZE = 20;
 const PAGE_BUTTON_CLASS =
     'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
-/** UC-35 Search Patient (plus UC-38 update and the entry to UC-40). */
+// UC-35: trang tim kiem benh nhan (tu day mo ho so, sua ho so, dang ky kham)
 export default function ReceptionistPatientsPage({ patientApi = defaultPatientApi }) {
     const navigate = useNavigate();
     const location = useLocation();
@@ -49,12 +49,13 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     const [lastSearch, setLastSearch] = useState(null);
     const [notice, setNotice] = useState('');
 
-    // UC-40: đăng ký khám mở trang riêng thay vì popup.
+    // UC-40: mo trang dang ky kham rieng
     const openRegisterVisit = useCallback(
         (patient) => navigate(generatePath(ROUTES.RECEPTIONIST.VISIT_REGISTER, { id: patient.id })),
         [navigate]
     );
 
+    // xoa ket qua dang hien
     const clearResults = useCallback(() => {
         setPatients([]);
         setTotalElements(0);
@@ -62,7 +63,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         setLastSearch(null);
     }, []);
 
-    // Without a search the page lists all patients; a search sends its type (UC-35). Both are paged.
+    // tai 1 trang benh nhan: khong tim thi lay het, co tim thi gui kem loai tim
     const fetchPatients = useCallback(async (search, pageToLoad = 0) => {
         setLoading(true);
         setLoadError('');
@@ -70,7 +71,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
             const res = await patientApi.list({ page: pageToLoad, size: PAGE_SIZE, ...(search ?? {}) });
             const page = res?.data ?? res;
             const list = page?.content || (Array.isArray(page) ? page : []);
-            // Even a single match stays in the list: the Receptionist opens the profile from there (UC-36).
+            // chi 1 ket qua van hien trong danh sach, khong tu mo ho so
             setPatients(list);
             setTotalElements(page?.totalElements ?? list.length);
             setPageNumber(pageToLoad);
@@ -95,18 +96,20 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
         return () => window.clearTimeout(timer);
     }, [fetchPatients]);
 
+    // bam Tim: kiem tra tu khoa roi tai trang dau
     const handleSearch = (event) => {
         event.preventDefault();
         const error = validateKeyword(searchType, keyword);
         setKeywordError(error);
         if (error) {
-            // The rows of the previous search would read as results of the wrong keyword.
+            // tu khoa sai thi xoa ket qua cu
             clearResults();
             return;
         }
         void fetchPatients({ type: searchType, keyword: keyword.trim() });
     };
 
+    // xoa tu khoa, hien lai tat ca benh nhan
     const clearSearch = () => {
         setKeyword('');
         setKeywordError('');
@@ -116,6 +119,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     const openPatientDetail = (patient) =>
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patient.id }));
 
+    // tim khong ra: mo form tao ho so, dien san tu khoa
     const createFromSearch = () => navigate(ROUTES.RECEPTIONIST.PATIENT_CREATE, {
         state: { prefill: lastSearch ? createPrefill(lastSearch.type, lastSearch.keyword) : {} },
     });
@@ -140,7 +144,7 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     const lastRow = pageNumber * PAGE_SIZE + filteredPatients.length;
     const goToPage = (target) => void fetchPatients(lastSearch, target);
 
-    // UC-38 has its own page with the full form of UC-37.
+    // UC-38: mo trang sua ho so
     const openEditPatient = (patient) =>
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_EDIT, { id: patient.id }));
 

@@ -1,7 +1,7 @@
 import { apiClient } from '../services/session';
 
 export const patientApi = {
-    // Lấy danh sách bệnh nhân, hỗ trợ tìm kiếm và phân trang
+    // UC-35: lay danh sach benh nhan (tim kiem + phan trang)
     list(params = {}, signal) {
         const query = new URLSearchParams();
 
@@ -16,25 +16,25 @@ export const patientApi = {
         return apiClient.request(`/patients${suffix}`, { signal });
     },
 
-    // Lấy chi tiết bệnh nhân theo ID
+    // lay ho so hanh chinh 1 benh nhan
     detail(id, signal) {
         return apiClient.request(`/patients/${encodeURIComponent(id)}`, {
             signal,
         });
     },
 
-    // UC-36: thông tin hành chính, dị ứng, lịch sử khám (backend ghi audit lượt xem)
+    // UC-36: ho so + di ung + lich su kham (backend ghi audit)
     overview(id, signal) {
         return apiClient.request(`/patients/${encodeURIComponent(id)}/overview`, { signal });
     },
 
-    // UC-37 AF-02: hồ sơ có cùng họ tên và ngày sinh
+    // UC-37: ho so co the trung (cung ho ten + ngay sinh)
     possibleDuplicates(hoten, ngaysinh, signal) {
         const query = new URLSearchParams({ hoten, ngaysinh });
         return apiClient.request(`/patients/possible-duplicates?${query}`, { signal });
     },
 
-    // Tạo hồ sơ bệnh nhân
+    // UC-37: tao ho so benh nhan
     create(data) {
         return apiClient.request('/patients', {
             method: 'POST',
@@ -42,7 +42,7 @@ export const patientApi = {
         });
     },
 
-    // Cập nhật thông tin bệnh nhân
+    // UC-38: cap nhat thong tin benh nhan
     update(id, data) {
         return apiClient.request(`/patients/${encodeURIComponent(id)}`, {
             method: 'PUT',

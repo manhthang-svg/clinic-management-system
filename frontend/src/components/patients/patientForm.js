@@ -1,5 +1,4 @@
-// UC-37 Create New Patient Profile: form values, field rules and messages. Pure functions, no React.
-// Client checks mirror the backend for feedback only; the backend repeats every check.
+// UC-37, UC-38: gia tri form, kiem tra truong va thong bao (backend kiem tra lai)
 
 import { ageOn } from './patientOverview';
 
@@ -34,7 +33,7 @@ export const INITIAL_PATIENT_FORM = {
     sodienthoainguoithan: '',
 };
 
-// Report 3 System Messages (Vietnamese).
+// thong bao theo bang System Messages
 export const FIELD_MSG = {
     REQUIRED: 'Trường này là bắt buộc.',
     INVALID_FORMAT: 'Định dạng không hợp lệ.',
@@ -43,7 +42,7 @@ export const FIELD_MSG = {
 export const MSG = {
     CREATED: 'Tạo hồ sơ bệnh nhân thành công.',
     UPDATED: 'Cập nhật hồ sơ bệnh nhân thành công.',
-    // TBD: Report 3 has no message for a profile changed by someone else meanwhile.
+    // TBD: chua co MSG cho ho so bi nguoi khac sua
     STALE: 'Hồ sơ vừa được người khác cập nhật. Vui lòng tải lại trang để xem dữ liệu mới.',
     NOT_FOUND: 'Không tìm thấy hồ sơ bệnh nhân được yêu cầu.',
     FIX_FIELDS: 'Vui lòng kiểm tra lại các trường được đánh dấu.',
@@ -53,20 +52,20 @@ export const MSG = {
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
 };
 
-/** MSG57: possible duplicates (same full name and date of birth). */
+// MSG57: canh bao ho so co the trung
 export const msg57 = (count) =>
     `Đã tồn tại ${count} bệnh nhân có cùng họ tên và ngày sinh. Vui lòng chọn một hồ sơ hoặc tạo hồ sơ mới.`;
 
-/** MSG19: the citizen ID or passport belongs to another profile. */
+// MSG19: CCCD / ho chieu da thuoc ho so khac
 export const msg19 = (field, code, name) =>
     `Bệnh nhân có số ${field === 'hochieuSo' ? 'hộ chiếu' : 'CCCD'} này đã tồn tại (${code} – ${name}).`;
 
-/** Whole-year age of the form's date of birth, or null without a valid date. */
+// tinh tuoi tu ngay sinh tren form, sai ngay thi tra null
 export function formAge(form, today) {
     return /^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) ? ageOn(form.ngaysinh, today) : null;
 }
 
-/** UC-37 steps 4–5: returns { field: message } for every wrong field (empty when valid). */
+// kiem tra form, tra ve { truong: loi } (rong la hop le)
 export function validatePatientForm(form, today) {
     const errors = {};
     const text = (field) => (form[field] ?? '').trim();
@@ -97,7 +96,7 @@ export function validatePatientForm(form, today) {
     return errors;
 }
 
-/** Request body of POST /patients: trimmed values, empty optional fields as null. */
+// tao body gui len: bo khoang trang, truong rong thanh null
 export function buildPatientPayload(form) {
     const payload = {};
     Object.keys(INITIAL_PATIENT_FORM).forEach((field) => {
@@ -108,7 +107,7 @@ export function buildPatientPayload(form) {
     return payload;
 }
 
-/** UC-38 step 2: form values from a stored profile (null becomes ''). */
+// UC-38: doi ho so da luu thanh gia tri form
 export function toFormValues(patient) {
     return Object.fromEntries(Object.keys(INITIAL_PATIENT_FORM).map((field) => {
         const value = patient?.[field];
@@ -116,18 +115,19 @@ export function toFormValues(patient) {
     }));
 }
 
-/** Maps backend validation codes (details) to field messages. */
+// doi ma loi backend thanh loi tung truong
 export function serverFieldErrors(details) {
     return Object.fromEntries(Object.entries(details ?? {})
         .filter(([field]) => field in INITIAL_PATIENT_FORM)
         .map(([field, code]) => [field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
 }
 
+// form da bi sua so voi ban dau chua
 export function isDirty(form, initial) {
     return Object.keys(INITIAL_PATIENT_FORM).some((field) => (form[field] ?? '') !== (initial[field] ?? ''));
 }
 
-/** General message of a failure that is not tied to a field. */
+// thong bao loi chung (khong thuoc truong nao)
 export function createErrorMessage(error) {
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
     if (error?.status === 403) return MSG.FORBIDDEN;

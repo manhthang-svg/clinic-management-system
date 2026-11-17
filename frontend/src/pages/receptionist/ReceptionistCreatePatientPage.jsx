@@ -4,9 +4,9 @@ import { ADULT_AGE, MSG, formAge, msg57 } from '../../components/patients/patien
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
 import { clinicToday } from '../../components/visits/visitForm';
 
-/** UC-37 Create New Patient Profile. */
+// UC-37: trang tao ho so benh nhan
 export default function ReceptionistCreatePatientPage({ patientApi }) {
-    // Hook quản lý form, validation, trạng thái lưu và gọi API.
+    // hook quan ly form, kiem tra, luu
     const {
         form,
         fieldErrors,
@@ -25,7 +25,7 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         discard,
     } = useCreatePatient(patientApi);
 
-    // Step 4: required fields depend on the age (phone from 18; guardian under 18).
+    // truong bat buoc theo tuoi: tu 18 tuoi can SDT, duoi 18 can nguoi than
     const age = formAge(form, clinicToday());
     const adult = age !== null && age >= ADULT_AGE;
     const minor = age !== null && age < ADULT_AGE;

@@ -58,6 +58,7 @@ function calculateAge(dateStr) {
     }
 }
 
+// trang Tong quan le tan: tim benh nhan, tao luot kham gui sang thu ngan
 export default function ReceptionistOverviewPage() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -73,10 +74,10 @@ export default function ReceptionistOverviewPage() {
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
 
-    // Modal xem chi tiết hồ sơ bệnh nhân
+    // modal xem ho so benh nhan
     const [selectedPatient, setSelectedPatient] = useState(null);
 
-    // Modal Đăng ký khám (Tạo Visit)
+    // modal dang ky kham
     const [visitPatient, setVisitPatient] = useState(null);
     const [rooms, setRooms] = useState([]);
     const [selectedRoomId, setSelectedRoomId] = useState('');
@@ -112,7 +113,7 @@ export default function ReceptionistOverviewPage() {
         }
     }, []);
 
-    // Tải số phòng khám đang hoạt động
+    // tai cac phong kham dang hoat dong
     const fetchRooms = useCallback(async () => {
         try {
             const res = await visitApi.getActiveExaminationRooms();
@@ -143,7 +144,7 @@ export default function ReceptionistOverviewPage() {
         return () => window.clearTimeout(timer);
     }, [fetchRooms]);
 
-    // Nhận state từ trang Tạo bệnh nhân mới (nếu có)
+    // nhan thong bao / benh nhan vua tao tu trang tao ho so
     useEffect(() => {
         const timer = window.setTimeout(() => {
             if (location.state?.notice) {
@@ -156,7 +157,7 @@ export default function ReceptionistOverviewPage() {
         return () => window.clearTimeout(timer);
     }, [location.state]);
 
-    // Mở modal đăng ký khám cho bệnh nhân
+    // mo modal dang ky kham
     async function handleOpenVisitModal(patient) {
         setVisitPatient(patient);
         setLydovaovien('Khám nội tổng quát / theo yêu cầu');
@@ -176,7 +177,7 @@ export default function ReceptionistOverviewPage() {
         }
     }
 
-    // Xác nhận gửi lượt khám cho Thu ngân
+    // tao luot kham va gui sang thu ngan
     const handleConfirmVisit = async (e) => {
         e.preventDefault();
         if (!selectedRoomId) {
@@ -219,6 +220,7 @@ export default function ReceptionistOverviewPage() {
         }
     };
 
+    // bam Tim: doi tu khoa, danh sach tu tai lai trang dau
     const handleSearchSubmit = (e) => {
         e.preventDefault();
         setKeyword(searchInput.trim());
@@ -262,7 +264,7 @@ export default function ReceptionistOverviewPage() {
                 </div>
             </header>
 
-            {/* Thông báo banner */}
+            {/* Thong bao banner */}
             {notice && (
                 <div className="flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/80 p-4 text-sm text-teal-900 shadow-sm">
                     <div className="flex items-center gap-3">
@@ -295,7 +297,7 @@ export default function ReceptionistOverviewPage() {
                 </div>
             )}
 
-            {/* Thống kê nhanh */}
+            {/* Thong ke nhanh */}
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
@@ -327,7 +329,7 @@ export default function ReceptionistOverviewPage() {
                 </div>
             </section>
 
-            {/* Tìm kiếm bệnh nhân */}
+            {/* Tim kiem benh nhan */}
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <form onSubmit={handleSearchSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
@@ -363,7 +365,7 @@ export default function ReceptionistOverviewPage() {
                 </form>
             </section>
 
-            {/* Bảng danh sách bệnh nhân */}
+            {/* Bang danh sach benh nhan */}
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-col justify-between gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center">
                     <div>
@@ -513,7 +515,7 @@ export default function ReceptionistOverviewPage() {
                 )}
             </section>
 
-            {/* MODAL: TẠO ĐƠN ĐI KHÁM (VISIT) VÀ CHUYỂN SANG THU NGÂN */}
+            {/* MODAL: TAO DON DI KHAM (VISIT) VA CHUYEN SANG THU NGAN */}
             {visitPatient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
                     <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -542,7 +544,7 @@ export default function ReceptionistOverviewPage() {
                             </div>
                         </div>
 
-                        {/* Nội dung modal */}
+                        {/* Noi dung modal */}
                         <div className="p-6">
                             {visitSuccessData ? (
                                 <div className="space-y-5 text-center">
@@ -596,7 +598,7 @@ export default function ReceptionistOverviewPage() {
                                 </div>
                             ) : (
                                 <form onSubmit={handleConfirmVisit} className="space-y-4">
-                                    {/* Thông tin bệnh nhân */}
+                                    {/* Thong tin benh nhan */}
                                     <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 text-xs text-slate-700 space-y-1.5">
                                         <div className="flex justify-between">
                                             <span className="text-slate-500">Bệnh nhân:</span>
@@ -616,7 +618,7 @@ export default function ReceptionistOverviewPage() {
                                         </div>
                                     </div>
 
-                                    {/* Chọn phòng khám bác sĩ */}
+                                    {/* Chon phong kham bac si */}
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-700">
                                             Phòng khám chỉ định <span className="text-rose-500">*</span>
@@ -639,7 +641,7 @@ export default function ReceptionistOverviewPage() {
                                         </select>
                                     </div>
 
-                                    {/* Lý do vào viện / khám */}
+                                    {/* Ly do vao vien / kham */}
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-700">
                                             Lý do vào viện / Triệu chứng khám <span className="text-rose-500">*</span>
@@ -654,7 +656,7 @@ export default function ReceptionistOverviewPage() {
                                         />
                                     </div>
 
-                                    {/* Ưu tiên */}
+                                    {/* Uu tien */}
                                     <div className="space-y-2 pt-1">
                                         <div className="flex items-center gap-2">
                                             <input
@@ -687,12 +689,12 @@ export default function ReceptionistOverviewPage() {
                                         )}
                                     </div>
 
-                                    {/* Banner thông báo luồng tiếp theo */}
+                                    {/* Banner thong bao luong tiep theo */}
                                     <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800 border border-teal-200">
                                         💡 Hệ thống sẽ tự động tạo phiếu thu tiền khám (Lần 1) và chuyển ngay sang quầy Thu ngân.
                                     </div>
 
-                                    {/* Nút gửi */}
+                                    {/* Nut gui */}
                                     <div className="flex items-center justify-end gap-3 pt-2">
                                         <button
                                             type="button"
@@ -721,7 +723,7 @@ export default function ReceptionistOverviewPage() {
                 </div>
             )}
 
-            {/* MODAL: CHI TIẾT BỆNH NHÂN */}
+            {/* MODAL: CHI TIET BENH NHAN */}
             {selectedPatient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
                     <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
