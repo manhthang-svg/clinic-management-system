@@ -19,9 +19,9 @@ import defaultDutyScheduleApi from '../../apis/dutyScheduleApi';
 import { technicianApi as defaultTechnicianApi } from '../../apis/technicianApi';
 import { MetricCard } from '../../components/shared/MetricCard';
 
-/** Dashboard data is reloaded this often while the tab is visible (UI-04). */
+// tu tai lai moi 10 giay khi tab dang mo
 const REFRESH_MS = 10_000;
-/** Days shown in "Lịch trực cá nhân sắp tới", today included. */
+// so ngay hien o lich truc sap toi (tinh ca hom nay)
 const SCHEDULE_DAYS = 4;
 const SHIFT_NAMES = { MORNING: 'Ca sáng', AFTERNOON: 'Ca chiều' };
 const SHIFT_ORDER = ['MORNING', 'AFTERNOON'];
@@ -35,6 +35,7 @@ const MSG = {
   noRoom: 'Chưa có phòng cận lâm sàng nào đang hoạt động.',
 };
 
+// doi loi tai thanh thong bao
 function errorMessage(error) {
   if (error instanceof ApiError && error.status === 401) return MSG.session;
   if (error instanceof ApiError && error.status === 403) return MSG.forbidden;
@@ -54,7 +55,7 @@ function addDays(date, days) {
   return next;
 }
 
-/** "HH:mm" or "HH:mm:ss" → minutes since midnight. */
+// gio "HH:mm" -> so phut tu 0h
 function minutesOf(time) {
   if (!time) return null;
   const [h, m] = time.split(':').map(Number);
@@ -65,6 +66,7 @@ function hhmm(time) {
   return time ? time.slice(0, 5) : '';
 }
 
+// khung gio cua ca, vd "13:00 - 17:30"
 function shiftTime(shift, config) {
   if (!config) return '';
   const start = shift === 'MORNING' ? config.morningStartTime : config.afternoonStartTime;
@@ -72,7 +74,7 @@ function shiftTime(shift, config) {
   return start && end ? `${hhmm(start)} – ${hhmm(end)}` : '';
 }
 
-/** The shift running at `now` according to the configured times, or null. */
+// ca dang dien ra luc nay, khong co thi null
 function shiftAt(now, config) {
   if (!config) return null;
   const minutes = now.getHours() * 60 + now.getMinutes();
@@ -83,6 +85,7 @@ function shiftAt(now, config) {
   }) ?? null;
 }
 
+// nhan ngay: Hom nay, Ngay mai, Thu ...
 function dayLabel(date, index) {
   const dm = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
   if (index === 0) return `Hôm nay, ${dm}`;
@@ -90,7 +93,7 @@ function dayLabel(date, index) {
   return `${WEEKDAYS[date.getDay()]}, ${dm}`;
 }
 
-/** Builds one card per day from the schedule items of the current technician. */
+// tao the lich truc tung ngay cua KTV dang dang nhap
 function buildScheduleDays(schedule, accountId, now) {
   const items = (schedule?.items ?? []).filter((item) => item.staffAccountId === accountId);
   const current = shiftAt(now, schedule?.shiftConfig);
@@ -163,7 +166,7 @@ function DoctorLine({ item }) {
   );
 }
 
-/** Technician home: the room's figures of today, the next patients, the results to enter and the coming shifts. */
+// dashboard KTV: so lieu hom nay, benh nhan sap toi luot, ket qua cho nhap, lich truc
 export function TechnicianDashboardPage({
   currentUser,
   api = defaultTechnicianApi,
@@ -185,7 +188,7 @@ export function TechnicianDashboardPage({
       try {
         result = await api.getDashboard({ roomId: storedRoomId }, signal);
       } catch (failure) {
-        // The stored room was removed or deactivated: forget it and show the default room.
+        // phong da luu khong con thi bo, lay phong mac dinh
         if (!storedRoomId || failure?.errorResponse?.code !== 'ROOM_NOT_FOUND') throw failure;
         api.setActiveRoomId?.('');
         result = await api.getDashboard({}, signal);
@@ -203,7 +206,7 @@ export function TechnicianDashboardPage({
 
   useEffect(() => {
     const controller = new AbortController();
-    // First load on the next tick, like the other list pages, so the effect never sets state synchronously.
+    // tai lan dau o tick sau, roi tu tai lai moi 10 giay
     const first = setTimeout(() => {
       void load(controller.signal);
     }, 0);
@@ -242,7 +245,7 @@ export function TechnicianDashboardPage({
 
   const scheduleDays = useMemo(
     () => buildScheduleDays(schedule, currentUser?.id, today),
-    // `today` changes identity on every render; its calendar day and time are what matter here.
+    // chi tinh lai khi doi ngay
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [schedule, currentUser?.id, todayIso],
   );
@@ -274,7 +277,7 @@ export function TechnicianDashboardPage({
 
       {room && (
         <>
-          {/* 1. Phòng làm việc và trạng thái ca trực (BR-05, BR-19, BR-55) */}
+          {/* 1. Phong lam viec va trang thai ca truc (BR-05, BR-19, BR-55) */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -348,7 +351,7 @@ export function TechnicianDashboardPage({
             </div>
           )}
 
-          {/* 2. Bốn thẻ chỉ số trong ngày; bấm vào thẻ để mở màn hình tương ứng */}
+          {/* 2. Bon the chi so trong ngay; bam vao the de mo man hinh tuong ung */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button type="button" onClick={() => navigate('/technician/queue')} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
@@ -408,7 +411,7 @@ export function TechnicianDashboardPage({
             </button>
           </div>
 
-          {/* 3. Bệnh nhân sắp tới lượt và kết quả đang chờ nhập */}
+          {/* 3. Benh nhan sap toi luot va ket qua dang cho nhap */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <section aria-labelledby="next-queue-title" className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
@@ -552,7 +555,7 @@ export function TechnicianDashboardPage({
         </>
       )}
 
-      {/* 4. Lịch trực cá nhân sắp tới (BR-55) */}
+      {/* 4. Lich truc ca nhan sap toi (BR-55) */}
       <section aria-labelledby="my-shifts-title" className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
