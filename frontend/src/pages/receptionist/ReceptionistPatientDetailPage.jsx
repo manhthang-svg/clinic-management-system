@@ -80,7 +80,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
 
     const printTicket = async () => {
         if (!reprint?.ticket) return;
-        // A payment guide is not a ticket print, so the Cashier's first ticket is not marked "IN LẠI".
+        // The payment guide is printed as shown; it needs no fresh ticket from the server.
         if (needsPaymentGuide(reprint.ticket)) {
             window.print();
             return;
