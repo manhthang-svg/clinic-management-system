@@ -224,7 +224,7 @@ class VisitServiceImplTest {
                 .containsExactly("Ưu tiên", "Chuyển phòng", "Thường");
         assertThat(queue.visits().content().get(1).sourceRoomName()).isEqualTo(sourceRoom.getRoomName());
         assertThat(queue.visits().content().get(0).note()).isEqualTo("Ưu tiên: Người cao tuổi");
-        assertThat(queue.visits().content().get(1).note()).isEqualTo("Chuyển từ: " + sourceRoom.getRoomName());
+        assertThat(queue.visits().content().get(1).note()).isEqualTo("Chuyển từ phòng " + sourceRoom.getRoomName());
 
         var filtered = service.getDoctorQueue(
                 new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()),

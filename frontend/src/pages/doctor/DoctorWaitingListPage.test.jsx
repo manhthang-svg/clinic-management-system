@@ -108,7 +108,7 @@ describe('DoctorWaitingListPage backend integration', () => {
         expect(screen.queryByRole('columnheader', { name: 'Lý do khám' })).not.toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Nguồn / Phòng chuyển đến' })).not.toBeInTheDocument();
         expect(screen.getByText('Ưu tiên: Người cao tuổi')).toBeInTheDocument();
-        expect(screen.getByText('Chuyển từ: Phòng khám Nội 2')).toBeInTheDocument();
+        expect(screen.getByText('Chuyển từ phòng Phòng khám Nội 2')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu' }));
         await waitFor(() => expect(visitApi.startExamination).toHaveBeenCalledWith('visit-1'));

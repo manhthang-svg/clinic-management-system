@@ -548,7 +548,7 @@ public class VisitServiceImpl implements VisitService {
         if (transfer != null) {
             String sourceRoomName = sourceRoomNames.get(transfer.getFromRoomId());
             if (sourceRoomName != null && !sourceRoomName.isBlank()) {
-                notes.add("Chuyển từ: " + sourceRoomName);
+                notes.add("Chuyển từ phòng " + sourceRoomName);
             }
         }
         return notes.isEmpty() ? null : String.join("\n", notes);

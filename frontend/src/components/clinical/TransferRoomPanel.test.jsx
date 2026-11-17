@@ -33,7 +33,7 @@ function renderPanel(api = apiWith(), props = {}) {
 }
 
 async function fillForm(user, reason = 'Cần khám chuyên khoa Ngoại') {
-    await user.selectOptions(await screen.findByLabelText(/Phòng khám chuyển đến/), 'room-ngoai');
+    await user.selectOptions(await screen.findByLabelText(/Phòng chuyển đến/), 'room-ngoai');
     await user.type(screen.getByLabelText(/Lý do chuyển/), reason);
 }
 
@@ -65,20 +65,20 @@ describe('TransferRoomPanel', () => {
 
         await fillForm(user, '  Cần khám chuyên khoa Ngoại  ');
         expect(screen.getByText('BS Lê Thị Bình')).toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' }));
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
 
         expect(api.transferVisit).toHaveBeenCalledWith('visit-1', {
             toRoomId: 'room-ngoai', reason: 'Cần khám chuyên khoa Ngoại', notes: null,
         });
         expect(await screen.findByRole('status')).toHaveTextContent('Đã chuyển bệnh nhân đến Phòng khám Ngoại. Số thứ tự mới: 7.');
-        expect(screen.getByRole('button', { name: 'In lại phiếu khám' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'In phiếu khám' })).toBeInTheDocument();
     });
 
     it('keeps the confirm button disabled when no room can receive the patient (AF-03)', async () => {
         renderPanel(apiWith({ getTransferRooms: vi.fn().mockResolvedValue([]) }));
 
         expect(await screen.findByText(TRANSFER_MESSAGES.noEligibleRoom)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Xác nhận chuyển' })).toBeDisabled();
     });
 
     it('rejects a short reason before calling the backend', async () => {
@@ -86,7 +86,7 @@ describe('TransferRoomPanel', () => {
         const api = renderPanel();
 
         await fillForm(user, 'abc');
-        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' }));
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
 
         expect(screen.getByText(TRANSFER_MESSAGES.reasonLength)).toBeInTheDocument();
         expect(api.transferVisit).not.toHaveBeenCalled();
@@ -101,10 +101,10 @@ describe('TransferRoomPanel', () => {
         }));
 
         await fillForm(user);
-        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' }));
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(TRANSFER_MESSAGES.recordOpened);
-        expect(screen.getByRole('button', { name: 'Xác nhận chuyển phòng' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Xác nhận chuyển' })).toBeDisabled();
     });
 
     it('asks before discarding an unfinished form (MSG38)', async () => {
