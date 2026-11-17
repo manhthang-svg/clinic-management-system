@@ -917,9 +917,12 @@ p[role='alert']:not(.banner) {
     -webkit-print-color-adjust: exact;
   }
 
+  /* UC-72: fixed, not absolute: the receipt sits at the bottom of the scrolling content column, so absolute offsets
+     follow the scroll and the sheet is cut off (blank page); fixed offsets start at the page edge. */
   .payment-receipt-print {
-    position: absolute;
+    position: fixed;
     inset: 0 auto auto 0;
+    margin: 0 !important;
     width: 148mm;
     border: 0 !important;
     box-shadow: none !important;

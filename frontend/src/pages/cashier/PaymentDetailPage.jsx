@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useParams } from 'react-router';
 import {
     ArrowLeft,
@@ -99,8 +100,10 @@ export default function PaymentDetailPage() {
     // UC-72: lay noi dung phieu (ghi log in / ban sao), hien ban xem truoc roi mo hop thoai in
     const handlePrint = async () => {
         try {
-            setReceipt(await paymentApi.prepareReceiptPrint(payment.id));
-            window.setTimeout(() => window.print(), 0);
+            const data = await paymentApi.prepareReceiptPrint(payment.id);
+            // ve xong to phieu len trang roi moi mo hop thoai in (tranh in trang trang)
+            flushSync(() => setReceipt(data));
+            window.print();
         } catch (err) {
             setNotice(printErrorMessage(err));
         }
