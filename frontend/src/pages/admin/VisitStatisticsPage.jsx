@@ -38,18 +38,19 @@ const GROUP_OPTIONS = [
   { value: 'MONTH', label: 'Theo tháng' },
 ];
 
-/** MM/yyyy from the first day of a month (YYYY-MM-01). */
+// hien thang dang MM/yyyy
 function formatMonth(iso) {
   const [y, m] = iso.split('-');
   return `${m}/${y}`;
 }
 
+// ti le phan tram (1 so le)
 function percent(part, total) {
   if (!total) return '0%';
   return `${Math.round((part / total) * 1000) / 10}%`.replace('.', ',');
 }
 
-/** UC-27 View Patient Visit Statistics. */
+// UC-27: trang thong ke luot kham
 export function VisitStatisticsPage({
   currentAdmin,
   onLogout,

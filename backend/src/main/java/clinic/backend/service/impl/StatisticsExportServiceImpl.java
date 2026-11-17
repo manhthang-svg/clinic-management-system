@@ -30,10 +30,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * UC-33 Export Report. The figures come from {@link StatisticsService}, so the file always matches the statistics
- * pages (UC-27 → UC-32) for the same period. The workbook has a cover sheet and one sheet per report.
- */
+// UC-33: xuat bao cao Excel, so lieu lay tu StatisticsService nen khop voi cac trang thong ke
+// file gom 1 sheet thong tin + 1 sheet cho moi bao cao
 @Service
 @RequiredArgsConstructor
 public class StatisticsExportServiceImpl implements StatisticsExportService {
@@ -58,7 +56,7 @@ public class StatisticsExportServiceImpl implements StatisticsExportService {
     private final UuidV7Generator ids;
     private final Clock clock;
 
-    /** Not read-only: the export is written to the audit log (a read-only transaction would silently drop it). */
+    // tao file Excel cac bao cao da chon, ghi audit (nen khong de readOnly)
     @Override
     @Transactional
     public ExportedFile exportExcel(StaffPrincipal principal, LocalDate from, LocalDate to,
@@ -66,7 +64,7 @@ public class StatisticsExportServiceImpl implements StatisticsExportService {
         Set<StatisticsReport> selected = reports == null || reports.isEmpty()
                 ? EnumSet.allOf(StatisticsReport.class)
                 : EnumSet.copyOf(reports);
-        // The visit statistics resolve and validate the period exactly as the pages do.
+        // kiem tra khoang ngay giong cac trang thong ke
         VisitStatisticsResponse visits = statisticsService.getVisitStatistics(from, to, groupBy);
         LocalDate start = visits.from();
         LocalDate end = visits.to();
@@ -105,6 +103,7 @@ public class StatisticsExportServiceImpl implements StatisticsExportService {
         return new ExportedFile(fileName, CONTENT_TYPE, content);
     }
 
+    // sheet "Thong tin": tieu de, tu ngay, den ngay, thoi diem xuat, danh sach bao cao
     private static void cover(StatisticsWorkbook workbook, LocalDate start, LocalDate end,
             Set<StatisticsReport> selected, Instant now) {
         SheetWriter sheet = workbook.sheet("Thông tin");
@@ -133,6 +132,7 @@ public class StatisticsExportServiceImpl implements StatisticsExportService {
                 : period;
     }
 
+    // cac sheet tung bao cao, cung cot voi bang tren trang
     private static void visitsSheet(SheetWriter sheet, VisitStatisticsResponse data) {
         VisitStatisticsResponse.VisitCounts total = data.summary();
         sheet.title("Thống kê lượt khám")

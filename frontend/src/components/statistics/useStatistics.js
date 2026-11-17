@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PRESETS, dashboardError, validatePeriod } from './dashboardPeriod';
 
-/** Period selection shared by the statistics pages; starts at "Tháng này". */
+// chon khoang thoi gian (mac dinh Thang nay)
 export function usePeriod(today) {
   const [period, setPeriod] = useState(() => PRESETS.find((p) => p.id === 'month').range(today));
   const [presetId, setPresetId] = useState('month');
@@ -19,12 +19,7 @@ export function usePeriod(today) {
   return { period, presetId, periodError: validatePeriod(period), choosePreset, changeDate };
 }
 
-/**
- * Loads `fetcher(params, signal)` whenever `params` change and `enabled` is true. `params` must be
- * memoised by the caller. Loading is derived from the last settled request, so the effect never sets
- * state synchronously. The previous data stays visible while a new request runs. `toMessage` turns a
- * failure into the Vietnamese message shown (default: the statistics pages' messages).
- */
+// tai lai so lieu moi khi tham so doi (giu du lieu cu trong luc tai); loi thi doi thanh thong bao
 export function useStatisticsQuery(fetcher, params, enabled, toMessage = dashboardError) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');

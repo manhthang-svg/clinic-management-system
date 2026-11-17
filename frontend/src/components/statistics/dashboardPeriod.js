@@ -1,11 +1,11 @@
 import { ApiError } from '../../apis/apiError';
 
-/** Longest period the backend accepts for one dashboard request (UC-26). */
+// khoang thoi gian toi da (giong backend)
 export const MAX_PERIOD_DAYS = 366;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Local calendar date as YYYY-MM-DD. */
+// ngay theo gio may dang YYYY-MM-DD
 export function toIsoDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -18,7 +18,7 @@ function parseIsoDate(value) {
   return Date.UTC(y, m - 1, d);
 }
 
-/** Quick period choices; each returns { from, to } relative to `today`. */
+// cac lua chon nhanh: hom nay, 7 ngay qua, thang nay, nam nay
 export const PRESETS = [
   { id: 'today', label: 'Hôm nay', range: (today) => ({ from: toIsoDate(today), to: toIsoDate(today) }) },
   {
@@ -45,7 +45,7 @@ export const PRESETS = [
   },
 ];
 
-/** Returns a Vietnamese message when the period is not acceptable, otherwise ''. Mirrors the backend rules. */
+// kiem tra khoang ngay (giong backend), hop le thi tra ''
 export function validatePeriod({ from, to }) {
   if (!from || !to) return 'Vui lòng chọn đủ ngày bắt đầu và ngày kết thúc.';
   const days = Math.round((parseIsoDate(to) - parseIsoDate(from)) / DAY_MS) + 1;
@@ -54,6 +54,7 @@ export function validatePeriod({ from, to }) {
   return '';
 }
 
+// doi loi tai thong ke thanh thong bao
 export function dashboardError(error) {
   if (!(error instanceof ApiError)) return 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
   if (error.errorResponse?.code === 'REQUEST_VALIDATION_FAILED') {
@@ -77,7 +78,7 @@ export function formatMoney(value) {
   return `${numberFormat.format(Number(value ?? 0))} ₫`;
 }
 
-/** Compact money for chart axes: 1,2 tỷ / 3,5 tr / 350 N. */
+// tien rut gon cho truc bieu do: 1,2 ty / 3,5 tr / 350 N
 export function formatMoneyShort(value) {
   const n = Number(value ?? 0);
   const short = (amount) => amount.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
@@ -87,19 +88,19 @@ export function formatMoneyShort(value) {
   return numberFormat.format(n);
 }
 
-/** MM/yyyy from the first day of a month (YYYY-MM-01). */
+// hien thang dang MM/yyyy
 export function formatMonth(iso) {
   const [y, m] = iso.split('-');
   return `${m}/${y}`;
 }
 
-/** dd/MM from YYYY-MM-DD, for chart axes. */
+// hien ngay dang dd/MM (truc bieu do)
 export function formatDayShort(iso) {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
 }
 
-/** dd/MM/yyyy from YYYY-MM-DD. */
+// hien ngay dang dd/MM/yyyy
 export function formatDayLong(iso) {
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
