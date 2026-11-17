@@ -14,6 +14,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
+import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
+import clinic.backend.entity.ExportLog;
+import clinic.backend.entity.RecordArchive;
+import clinic.backend.enums.ExportFormat;
+import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.enums.RecordArchiveRetentionCategory;
+import clinic.backend.repository.ExportLogRepository;
+import clinic.backend.repository.RecordArchiveRepository;
+import clinic.backend.utils.UuidV7Generator;
 import clinic.backend.dto.response.MedicalRecordDetailResponse;
 import clinic.backend.dto.response.MedicalRecordItemResponse;
 import clinic.backend.dto.response.MedicalRecordPatientItemResponse;
@@ -96,6 +109,10 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
     private final PrescriptionRepository prescriptionRepository;
     private final AuditLogService auditLogService;
     private final Clock clock;
+    private final ArchivePackageBuilder archivePackageBuilder;
+    private final ExportLogRepository exportLogRepository;
+    private final RecordArchiveRepository recordArchiveRepository;
+    private final UuidV7Generator ids;
 
     @Override
     @Transactional
@@ -409,6 +426,109 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
                 soba,
                 Map.of("action", "EXPORT_MEDICAL_RECORD_PDF", "scope", scope != null ? scope : "CURRENT_VISIT"),
                 Instant.now()
+        );
+    }
+
+    @Override
+    @Transactional
+    public ExportMedicalRecordDataResponse exportMedicalRecordData(
+            UUID medicalRecordId,
+            ExportMedicalRecordDataRequest request,
+            UUID actorAccountId) {
+        if (medicalRecordId == null) {
+            throw new AppException(ErrorCode.NOT_FOUND, Map.of("id", "Mã hồ sơ bệnh án không được để trống"));
+        }
+        if (request == null || request.format() == null) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID, Map.of("format", "Định dạng xuất không được để trống"));
+        }
+
+        MedicalRecord record = medicalRecordRepository.findById(medicalRecordId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, Map.of("id", "Hồ sơ bệnh án không tồn tại")));
+
+        Visit visit = visitRepository.findById(record.getVisitId()).orElse(null);
+        Patient patient = visit != null ? patientRepository.findById(visit.getPatientId()).orElse(null) : null;
+        Conclusion conclusion = conclusionRepository.findByMedicalRecordId(record.getId()).orElse(null);
+        StaffAccount doctor = staffAccountRepository.findById(
+                record.getClosedByAccountId() != null ? record.getClosedByAccountId() : (actorAccountId != null ? actorAccountId : UUID.randomUUID())
+        ).orElse(null);
+
+        String sovaovien = visit != null ? visit.getSovaovien() : record.getSoba();
+        String soluutru = record.getSoluutru() != null && !record.getSoluutru().isBlank()
+                ? record.getSoluutru()
+                : ("LT-" + sovaovien);
+        Instant closedAt = record.getClosedAt() != null ? record.getClosedAt() : clock.instant();
+
+        RecordArchive archive = recordArchiveRepository.findByMedicalRecordId(record.getId()).orElse(null);
+        RecordArchiveRetentionCategory retentionCategory = archive != null ? archive.getRetentionCategory() : RecordArchiveRetentionCategory.STANDARD;
+        LocalDate expiresOn = archive != null ? archive.getExpiresOn() : LocalDate.of(closedAt.atZone(CLINIC_ZONE).getYear() + 10, 12, 31);
+
+        ArchivePackageBuilder.Closing closing = new ArchivePackageBuilder.Closing(
+                visit, patient, record, conclusion, doctor, soluutru, closedAt, retentionCategory, expiresOn
+        );
+
+        byte[] content;
+        String contentType;
+        String extension;
+
+        if (request.format() == ExportFormat.XML) {
+            content = archivePackageBuilder.buildXml(closing);
+            contentType = "application/xml; charset=UTF-8";
+            extension = "xml";
+        } else {
+            content = archivePackageBuilder.build(closing);
+            contentType = "application/json; charset=UTF-8";
+            extension = "json";
+        }
+
+        String sha256;
+        try {
+            sha256 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Cannot compute SHA-256", e);
+        }
+
+        UUID exportLogId = ids.next();
+        ExportLog log = ExportLog.dataExport(
+                exportLogId,
+                record.getId(),
+                sovaovien,
+                request.format(),
+                request.purpose(),
+                request.recipient(),
+                null,
+                sha256,
+                "CV365/2025",
+                actorAccountId,
+                clock.instant()
+        );
+        exportLogRepository.save(log);
+
+        if (actorAccountId != null) {
+            auditLogService.recordBusinessChange(
+                    actorAccountId,
+                    AuditLogAction.EXPORT,
+                    "MEDICAL_RECORD",
+                    record.getId(),
+                    record.getSoba(),
+                    Map.of(
+                            "action", "EXPORT_MEDICAL_RECORD_DATA",
+                            "format", request.format().name(),
+                            "purpose", request.purpose() != null ? request.purpose().name() : "LIEN_THONG",
+                            "sha256", sha256,
+                            "exportLogId", exportLogId.toString()
+                    ),
+                    clock.instant()
+            );
+        }
+
+        String fileName = "HoSoBenhAn_" + record.getSoba() + "_" + sovaovien + "." + extension;
+        return new ExportMedicalRecordDataResponse(
+                fileName,
+                contentType,
+                content,
+                sha256,
+                request.format(),
+                request.purpose()
         );
     }
 

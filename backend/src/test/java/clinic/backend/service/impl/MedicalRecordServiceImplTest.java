@@ -9,7 +9,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
+import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import clinic.backend.dto.response.MedicalRecordDetailResponse;
+import clinic.backend.enums.ExportFormat;
+import clinic.backend.enums.ExportLogPurpose;
 import clinic.backend.dto.response.MedicalRecordItemResponse;
 import clinic.backend.dto.response.MedicalRecordPatientItemResponse;
 import clinic.backend.dto.response.PageResponse;
@@ -54,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,6 +83,10 @@ class MedicalRecordServiceImplTest {
     @Mock private clinic.backend.repository.ImagingResultImageRepository imagingResultImageRepository;
     @Mock private clinic.backend.repository.PrescriptionRepository prescriptionRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private ArchivePackageBuilder archivePackageBuilder;
+    @Mock private clinic.backend.repository.ExportLogRepository exportLogRepository;
+    @Mock private clinic.backend.repository.RecordArchiveRepository recordArchiveRepository;
+    @Mock private clinic.backend.utils.UuidV7Generator ids;
 
     private Clock clock;
     private MedicalRecordServiceImpl service;
@@ -104,7 +113,11 @@ class MedicalRecordServiceImplTest {
                 imagingResultImageRepository,
                 prescriptionRepository,
                 auditLogService,
-                clock
+                clock,
+                archivePackageBuilder,
+                exportLogRepository,
+                recordArchiveRepository,
+                ids
         );
     }
 
@@ -230,5 +243,121 @@ class MedicalRecordServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID);
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: xuất dạng JSON thành công và ghi nhận export_logs")
+    void exportMedicalRecordData_json_success() {
+        UUID recordId = UUID.randomUUID();
+        UUID visitId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID doctorAccountId = UUID.randomUUID();
+        UUID exportLogId = UUID.randomUUID();
+
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getSoba()).thenReturn("BA0001");
+        when(record.getVisitId()).thenReturn(visitId);
+        when(record.getSoluutru()).thenReturn("LT-DK000001");
+        when(record.getClosedAt()).thenReturn(Instant.now());
+
+        Visit visit = mock(Visit.class);
+        when(visit.getSovaovien()).thenReturn("DK000001");
+        when(visit.getPatientId()).thenReturn(patientId);
+
+        Patient patient = mock(Patient.class);
+
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(ids.next()).thenReturn(exportLogId);
+
+        byte[] fakeJson = "{\"HoSoBenhAn\":{\"ThongTinBenhNhan\":{}}}".getBytes();
+        when(archivePackageBuilder.build(any())).thenReturn(fakeJson);
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.LIEN_THONG)
+                .recipient("Bệnh viện Đa khoa Tỉnh")
+                .build();
+
+        ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
+
+        assertThat(res.fileName()).isEqualTo("HoSoBenhAn_BA0001_DK000001.json");
+        assertThat(res.contentType()).isEqualTo("application/json; charset=UTF-8");
+        assertThat(res.content()).isEqualTo(fakeJson);
+        assertThat(res.fileSha256()).isNotEmpty();
+
+        verify(exportLogRepository).save(any());
+        verify(auditLogService).recordBusinessChange(
+                eq(doctorAccountId),
+                eq(AuditLogAction.EXPORT),
+                eq("MEDICAL_RECORD"),
+                eq(recordId),
+                eq("BA0001"),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: xuất dạng XML thành công và gọi archivePackageBuilder.buildXml")
+    void exportMedicalRecordData_xml_success() {
+        UUID recordId = UUID.randomUUID();
+        UUID visitId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID doctorAccountId = UUID.randomUUID();
+        UUID exportLogId = UUID.randomUUID();
+
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getSoba()).thenReturn("BA0002");
+        when(record.getVisitId()).thenReturn(visitId);
+        when(record.getSoluutru()).thenReturn("LT-DK000002");
+        when(record.getClosedAt()).thenReturn(Instant.now());
+
+        Visit visit = mock(Visit.class);
+        when(visit.getSovaovien()).thenReturn("DK000002");
+        when(visit.getPatientId()).thenReturn(patientId);
+
+        Patient patient = mock(Patient.class);
+
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(ids.next()).thenReturn(exportLogId);
+
+        byte[] fakeXml = "<HoSoBenhAn><ThongTinBenhNhan/></HoSoBenhAn>".getBytes();
+        when(archivePackageBuilder.buildXml(any())).thenReturn(fakeXml);
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.XML)
+                .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .build();
+
+        ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
+
+        assertThat(res.fileName()).isEqualTo("HoSoBenhAn_BA0002_DK000002.xml");
+        assertThat(res.contentType()).isEqualTo("application/xml; charset=UTF-8");
+        assertThat(res.content()).isEqualTo(fakeXml);
+
+        verify(exportLogRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi khi không tìm thấy hồ sơ")
+    void exportMedicalRecordData_notFound_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.empty());
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.LUU_TRU)
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.NOT_FOUND);
     }
 }
