@@ -18,6 +18,7 @@ import {
   EMPTY_VISIT_FORM,
   NO_INSURANCE_CHECK,
   clinicToday,
+  daysBetween,
   formToVisitRequest,
   isCardNumberFormatValid,
   referralSourceOf,
@@ -148,7 +149,8 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   const [rooms, setRooms] = useState({ loading: true, list: [], error: null });
   const [roomsKey, setRoomsKey] = useState(0);
   const [appointment, setAppointment] = useState(null);
-  const [appointmentKey, setAppointmentKey] = useState(0);
+  // AF-05 / AF-06: the suggested room is marked only once the appointment is due.
+  const appointmentDue = Boolean(appointment) && daysBetween(appointment.appointmentDate, today) >= 0;
 
   const [form, setForm] = useState(EMPTY_VISIT_FORM);
   const [insurance, setInsurance] = useState(NO_INSURANCE_CHECK);
@@ -217,7 +219,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         if (error.name !== 'AbortError') setAppointment(null);
       });
     return () => controller.abort();
-  }, [visitApi, patientId, appointmentKey]);
+  }, [visitApi, patientId]);
 
   const patient = patientState.id === patientId ? patientState.patient : null;
   const patientError = patientState.id === patientId ? patientState.error : null;
@@ -349,18 +351,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         setRoomNotice(msg56(selectedRoom?.name));
         update({ roomId: '' });
         setRoomsKey((key) => key + 1);
-      } else if (result.kind === 'appointment') {
-        // EF-04: back to the appointment card, reloaded.
-        setConfirm(null);
-        setRoomNotice(null);
-        update({ followUpAppointmentId: null, followUpAppointmentVersion: null });
-        setAppointmentKey((key) => key + 1);
-        toast.error(result.message);
       } else if (result.kind === 'insurance') {
         setConfirm(null);
         switchToSelfPaid(result.message);
       } else {
-        // EF-05: stay on the confirmation.
+        // EF-04: MSG80 on the confirmation, which stays open with the entered data.
         setConfirm((prev) => ({ ...prev, submitting: false, error: result.message }));
       }
     }
@@ -609,7 +604,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
                   loading={rooms.loading}
                   loadError={rooms.error}
                   onReload={() => setRoomsKey((key) => key + 1)}
-                  suggestedRoomId={appointment?.suggestedRoomId}
+                  suggestedRoomId={appointmentDue ? appointment.suggestedRoomId : undefined}
                 />
               </div>
             </FormSection>

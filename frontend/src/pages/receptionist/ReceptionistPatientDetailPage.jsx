@@ -7,7 +7,7 @@ import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { VisitTicket } from '../../components/visits';
 import { needsPaymentGuide } from '../../components/visits/visitFormat';
 import { clinicToday } from '../../components/visits/visitForm';
-import { loadErrorMessage } from '../../components/visits/visitErrors';
+import { loadErrorMessage, msg22 } from '../../components/visits/visitErrors';
 import { VISIT_STATUS_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
 import {
     GENDER_LABELS,
@@ -173,7 +173,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
                     <button
                         type="button"
                         disabled={!registerAllowed}
-                        title={registerAllowed ? undefined : 'Bệnh nhân đang có lượt khám chưa kết thúc'}
+                        title={registerAllowed || !activeVisit ? undefined : msg22({ sovaovien: activeVisit.registrationCode })}
                         onClick={() => navigate(generatePath(ROUTES.RECEPTIONIST.VISIT_REGISTER, { id: patient.id }))}
                         className="inline-flex items-center gap-2 rounded-xl bg-[#0F9D9A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >

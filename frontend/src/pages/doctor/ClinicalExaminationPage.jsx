@@ -120,7 +120,7 @@ function Vital({ label, value, unit, onChange, error, type = 'number' }) {
 }
 
 function Info({ label, children }) {
-    return <div className="min-w-0"><p className="text-[10px] text-slate-400">{label}</p><p className="mt-1 truncate text-xs font-semibold text-slate-700">{children || '—'}</p></div>;
+    return <div className="min-w-0"><p className="text-[10px] leading-4 text-slate-400">{label}</p><p className="truncate text-xs font-semibold leading-5 text-slate-700">{children || '—'}</p></div>;
 }
 
 const SERVICES_MAX_AGE_MS = 60_000;
@@ -426,35 +426,35 @@ export default function ClinicalExaminationPage() {
 
     return (
         <main className="mx-auto max-w-[1600px] space-y-3 pb-8 text-slate-800">
-            <header>
+            <header className="-mt-4">
                 <div className="flex items-center gap-3"><Stethoscope className="h-7 w-7 text-teal-600" /><div><h1 className="text-2xl font-extrabold">Khám lâm sàng</h1><p className="flex items-center text-xs text-slate-400"><button type="button" onClick={returnToWaitingList} className="cursor-pointer font-semibold text-teal-700 hover:text-teal-900 hover:underline">Khám bệnh</button><span className="px-1">›</span><span>Khám lâm sàng</span></p></div></div>
             </header>
 
-            {waitingParaclinical && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
-            {waitingConclusion && <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">Bệnh nhân đã có đủ kết quả cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem; thực hiện kết luận ở tab Kết luận.</p>}
+            {waitingParaclinical && <p role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-800">Bệnh nhân đang chờ thực hiện cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem.</p>}
+            {waitingConclusion && <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">Bệnh nhân đã có đủ kết quả cận lâm sàng. Hồ sơ khám lâm sàng chỉ để xem; thực hiện kết luận ở tab Kết luận.</p>}
 
             {pageError && <div role="alert" tabIndex={-1} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">{pageError}</div>}
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="grid gap-px bg-slate-100 md:grid-cols-3 xl:grid-cols-6">
-                    <div className="flex items-center gap-3 bg-white p-4 xl:col-span-2"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-50 text-teal-700"><UserRound className="h-6 w-6" /></div><div><p className="font-bold">{visit.patientName}</p><p className="text-xs text-slate-500">Mã BN: <strong>{visit.patientCode}</strong></p></div></div>
-                    <div className="bg-white p-4"><Info label="Ngày sinh / Tuổi">{formatDate(visit.patientDob)} ({ageOf(visit.patientDob)} tuổi)</Info></div>
-                    <div className="bg-white p-4"><Info label="Giới tính">{visit.patientGender}</Info></div>
-                    <div className="bg-white p-4"><Info label="Loại khám">{visitTypeLabel}</Info></div>
-                    <div className="bg-white p-4"><Info label="Số thẻ BHYT">{visit.mabhyt}</Info></div>
+                    <div className="flex items-center gap-2.5 bg-white px-3 py-1.5 xl:col-span-2"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700"><UserRound className="h-4 w-4" /></div><div className="min-w-0"><p className="truncate text-sm font-bold leading-5">{visit.patientName}</p><p className="text-[11px] leading-4 text-slate-500">Mã BN: <strong>{visit.patientCode}</strong></p></div></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Ngày sinh / Tuổi">{formatDate(visit.patientDob)} ({ageOf(visit.patientDob)} tuổi)</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Giới tính">{visit.patientGender}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Loại khám">{visitTypeLabel}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Số thẻ BHYT">{visit.mabhyt}</Info></div>
                 </div>
                 <div className="grid gap-px border-t border-slate-100 bg-slate-100 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="bg-white px-4 py-3"><Info label="Nghề nghiệp">{visit.occupation}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Dân tộc">{visit.ethnicity}</Info></div>
-                    <div className="bg-white px-4 py-3 lg:col-span-2"><Info label="Địa chỉ">{visit.address}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Nghề nghiệp">{visit.occupation}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Dân tộc">{visit.ethnicity}</Info></div>
+                    <div className="bg-white px-3 py-1.5 lg:col-span-2"><Info label="Địa chỉ">{visit.address}</Info></div>
                 </div>
                 <div className="grid gap-px border-t border-slate-100 bg-slate-100 sm:grid-cols-3 lg:grid-cols-6">
-                    <div className="bg-white px-4 py-3"><Info label="Mã lượt khám">{visit.sovaovien}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Số thứ tự">{visit.queueNumber}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Phòng khám">{queueInfo?.roomName}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Bác sĩ khám">{queueInfo?.doctorName}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Giờ bắt đầu khám">{formatTime(visit.denkhambenhluc)}</Info></div>
-                    <div className="bg-white px-4 py-3"><Info label="Trạng thái lượt khám">{statusLabel}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Mã lượt khám">{visit.sovaovien}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Số thứ tự">{visit.queueNumber}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Phòng khám">{queueInfo?.roomName}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Bác sĩ khám">{queueInfo?.doctorName}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Giờ bắt đầu khám">{formatTime(visit.denkhambenhluc)}</Info></div>
+                    <div className="bg-white px-3 py-1.5"><Info label="Trạng thái lượt khám">{statusLabel}</Info></div>
                 </div>
             </section>
 
@@ -483,7 +483,7 @@ export default function ClinicalExaminationPage() {
                 />
             ) : shownSection === 'paraclinical' ? (
                 // UC-49: after the order the visit is Waiting for Paraclinical, so the examination closes (MSG67).
-                <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order, visit?.doituongbnLoai === 'BHYT')); goToWaitingList(); }} />
+                <ParaclinicalOrderPanel visit={visit} initialServices={servicesRequest?.promise} blocked={saving} preliminaryDiagnosis={form.diagnoses.map((item) => item.name).join('; ')} onCancel={() => setActiveSection('clinical')} onCreated={(order) => { toast.success(createdMessage(order)); goToWaitingList(); }} />
             ) : <><div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <fieldset disabled={readOnly} className="min-w-0 space-y-3">
                     {form.referralSource === REFERRAL_HEALTH_FACILITY && (

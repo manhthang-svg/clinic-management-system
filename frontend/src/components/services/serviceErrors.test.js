@@ -43,7 +43,7 @@ describe('shared messages', () => {
 
   it('uses MSG75 when the service was changed by someone else (BR-119)', () => {
     expect(serviceUpdateErrors(apiError(409, 'CONCURRENT_MODIFICATION')).message)
-      .toBe('Dịch vụ vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
+      .toBe('Dịch vụ vừa được cập nhật. Vui lòng tải lại và thử lại.');
   });
 });
 

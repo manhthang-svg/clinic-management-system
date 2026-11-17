@@ -32,6 +32,9 @@ public record ParaclinicalOrderResponse(
             BigDecimal bhytChitra,
             BigDecimal benhnhanphaitra,
             UUID roomId,
+            /** The performing room shown in the order list; null when no room is assigned yet. */
+            String roomName,
+            String roomLocation,
             String status,
             /** BR-25: the Doctor of the visit can cancel this service now. */
             boolean cancellable,

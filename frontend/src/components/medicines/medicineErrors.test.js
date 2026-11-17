@@ -23,7 +23,7 @@ describe('medicine errors', () => {
 
   it('never shows the raw backend message', () => {
     expect(medicineSaveErrors(apiError(409, 'CONCURRENT_MODIFICATION')).message)
-      .toBe('Thuốc vừa được người khác cập nhật. Vui lòng tải lại và thử lại.');
+      .toBe('Thuốc vừa được cập nhật. Vui lòng tải lại và thử lại.');
     expect(medicineSaveErrors(new Error('network')).message)
       .toBe('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
     expect(medicineLoadErrorMessage(apiError(403, 'FORBIDDEN'))).toBe('Bạn không có quyền thực hiện thao tác này.');

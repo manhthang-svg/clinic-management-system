@@ -1,5 +1,5 @@
 // UC-67 / UC-68 adapter for /api/v1/paraclinical-results. Same method names as resultMockApi, so the result
-// pages work with either. Image upload is not available yet (TBD: file storage), so `supportsFiles` is false.
+// pages work with either. Images go to the backend, which stores them on Cloudinary.
 import { apiClient as defaultClient } from '../services/session';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -45,6 +45,10 @@ function toRequest(form) {
     imageLink: form.imageLink?.trim() || null,
     readingDoctor: null,
     instrumentId: form.instrumentId || null,
+    // chu thich anh luu cung ban nhap / gui
+    imageCaptions: form.files?.length
+      ? Object.fromEntries(form.files.map((file) => [file.id, file.caption ?? '']))
+      : null,
   };
 }
 
@@ -59,8 +63,18 @@ export function createResultApi(client = defaultClient) {
   const base = (id) => `/paraclinical-results/${encodeURIComponent(id)}`;
 
   return {
-    supportsFiles: false,
+    supportsFiles: true,
     get: (id) => call(base(id)),
+    // The Doctor reads the submitted result of a service of the visit (read-only).
+    viewForDoctor: (id) => call(`${base(id)}/view`),
+    // tai 1 anh len, tra ve phieu moi (co danh sach anh)
+    uploadImage: (id, file, caption) => {
+      const body = new FormData();
+      body.append('file', file);
+      if (caption) body.append('caption', caption);
+      return call(`${base(id)}/images`, { method: 'POST', body });
+    },
+    deleteImage: (id, imageId) => call(`${base(id)}/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' }),
     saveDraft: (id, form) => call(`${base(id)}/draft`, { method: 'PUT', body: toRequest(form) }),
     submit: (id, form) => call(`${base(id)}/commands/submit`, { method: 'POST', body: toRequest(form) }),
     recordPrint: (id) => call(`${base(id)}/commands/record-print`, { method: 'POST' }),

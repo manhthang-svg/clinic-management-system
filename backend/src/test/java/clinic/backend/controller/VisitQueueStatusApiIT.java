@@ -100,15 +100,15 @@ class VisitQueueStatusApiIT extends PostgresIntegrationTest {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
         StaffAccount onDuty = account(Role.DOCTOR);
         StaffAccount assignedOnly = account(Role.DOCTOR);
-        StaffAccount assignedOffDuty = account(Role.DOCTOR);
+        StaffAccount assignedOnlyOther = account(Role.DOCTOR);
         String suffix = suffix();
         UUID departmentId = insertDepartment(suffix);
         UUID roomId = insertRoom(departmentId, "PD-" + suffix, "ACTIVE");
         UUID offDutyRoomId = insertRoom(departmentId, "PO-" + suffix, "ACTIVE");
-        // One doctor assigned to each room, neither on duty: assignment alone does not list a room or name a
-        // doctor. A staff member has one active room assignment at a time (BR-05, V23), hence two doctors.
+        // Doctors assigned to the rooms but on duty in neither: assignment alone does not list a room or name a
+        // doctor. One doctor per room, since an account has at most one active room assignment.
         assignToRoom(assignedOnly, roomId);
-        assignToRoom(assignedOffDuty, offDutyRoomId);
+        assignToRoom(assignedOnlyOther, offDutyRoomId);
         when(examinationRoomDuty.onDutyDoctorsByRoom(any())).thenReturn(Map.of(roomId, onDuty));
 
         String room = "$.data[?(@.roomId == '" + roomId + "')]";

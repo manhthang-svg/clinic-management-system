@@ -42,6 +42,7 @@ Backend environment variables:
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Yes | PostgreSQL connection (default URL `jdbc:postgresql://localhost:5432/clinic`) |
 | `JWT_SIGNING_KEY` | Yes | Base64-encoded key of at least 256 bits; startup fails without it. Generate one per environment, e.g. `openssl rand -base64 32` |
 | `APP_FRONTEND_ORIGIN` | Deployed environments | Origin allowed to call refresh/logout (default `http://localhost:5173`) |
+| `CLOUDINARY_URL` | For UC-67 result images | `cloudinary://<api_key>:<api_secret>@<cloud_name>` of the Cloudinary account (secret, never commit). Without it uploads answer `FILE_STORAGE_NOT_CONFIGURED`; `CLOUDINARY_FOLDER` sets the folder (default `clinic/paraclinical`) |
 | `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
 | `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
 | `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2340000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |

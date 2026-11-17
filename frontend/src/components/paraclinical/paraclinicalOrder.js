@@ -8,8 +8,9 @@ export const TYPE_LABEL = {
 
 export const MSG = {
     NONE_SELECTED: 'Vui lòng chọn ít nhất một dịch vụ cận lâm sàng.',
-    NOT_IN_EXAMINATION: 'Lượt khám không còn ở trạng thái đang khám. Vui lòng tải lại danh sách.',
-    RECORD_CLOSED: 'Bệnh án đã đóng, không thể chỉ định thêm.',
+    // EF-03: MSG75 ("Lượt khám") when the visit changed meanwhile, MSG68 when its medical record is closed.
+    NOT_IN_EXAMINATION: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.',
+    RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.',
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
@@ -99,13 +100,9 @@ export function estimate(services, selectedIds, coverage = null) {
     };
 }
 
-/** MSG67 after the order is confirmed; an insured visit's orders already went to the paraclinical rooms (BR-26). */
-export function createdMessage(order, insured = false) {
-    const patientAmount = formatMoney(order?.patientAmount ?? order?.tongcong);
-    const message = `Đã tạo chỉ định cận lâm sàng. Phiếu thu ${order?.paymentCode} – bệnh nhân trả: ${patientAmount}.`;
-    return insured
-        ? `${message} Chỉ định đã được chuyển tới phòng cận lâm sàng; bệnh nhân thanh toán sau khi có kết luận.`
-        : message;
+/** MSG63 (toast) after the order is confirmed: "Đã tạo chỉ định cận lâm sàng {order_number}." (UC-49 step 10). */
+export function createdMessage(order) {
+    return `Đã tạo chỉ định cận lâm sàng ${order?.sophieu}.`;
 }
 
 export const PRINT_MSG = {
@@ -184,7 +181,8 @@ export function orderErrorMessage(error) {
     }
     if (code === 'SERVICE_INACTIVE') {
         const name = error.errorResponse.details?.serviceName || 'dịch vụ đã chọn';
-        return `Dịch vụ ${name} không còn hoạt động. Vui lòng chọn dịch vụ khác.`;
+        // EF-02: MSG40; the panel also removes the service from the selection.
+        return `Dịch vụ ${name} đã chọn hiện không còn khả dụng. Vui lòng chọn mục khác.`;
     }
     if (code === 'SERVICE_NOT_FOUND') return 'Dịch vụ đã chọn không còn hợp lệ. Vui lòng chọn dịch vụ khác.';
     if (code === 'VISIT_NOT_IN_EXAMINATION') return MSG.NOT_IN_EXAMINATION;

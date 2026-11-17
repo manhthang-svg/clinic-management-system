@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../apis/apiError';
-import { insuranceErrorKind, loadErrorMessage, msg21, MSG80, NETWORK_MESSAGE, ticketErrorMessage } from './visitErrors';
+import { insuranceErrorKind, loadErrorMessage, msg21, MSG80, ticketErrorMessage } from './visitErrors';
 
 describe('insurance verification errors', () => {
   it('does not misclassify an API validation error as a portal timeout', () => {
@@ -13,11 +13,11 @@ describe('insurance verification errors', () => {
     expect(loadErrorMessage(error)).toBe(MSG80);
   });
 
-  it('keeps network failures distinct from portal timeouts', () => {
+  it('shows MSG80 for a lost connection (UC-40 EF-04)', () => {
     const error = new ApiError('Unable to reach the API.');
 
     expect(insuranceErrorKind(error)).toBe('system');
-    expect(loadErrorMessage(error)).toBe(NETWORK_MESSAGE);
+    expect(loadErrorMessage(error)).toBe(MSG80);
   });
 
   it('recognizes stable invalid-card and mismatch codes', () => {

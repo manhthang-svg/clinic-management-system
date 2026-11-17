@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import clinic.backend.dto.request.SaveParaclinicalResultRequest;
 import clinic.backend.dto.response.ParaclinicalResultResponse;
 import clinic.backend.entity.ImagingResult;
+import clinic.backend.entity.ImagingResultImage;
 import clinic.backend.entity.LabParameter;
 import clinic.backend.entity.LabReferenceRange;
 import clinic.backend.entity.LabResult;
@@ -50,6 +51,7 @@ import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.ImagingResultImageRepository;
 import clinic.backend.repository.ImagingResultRepository;
 import clinic.backend.repository.LabParameterRepository;
 import clinic.backend.repository.LabReferenceRangeRepository;
@@ -67,19 +69,24 @@ import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ParaclinicalProgressService;
 import clinic.backend.service.ParaclinicalResultService;
+import clinic.backend.service.ResultImageStorage;
 import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * UC-67 Record Paraclinical Result and the print counter of UC-68. Results are typed by hand (SW-04); the
  * instrument only records which machine ran them (V54). Only the technician who performed the service edits its
  * result, and a submitted result is locked (BR-29). Images are not handled yet (TBD: file storage).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ParaclinicalResultServiceImpl implements ParaclinicalResultService {
@@ -87,10 +94,15 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private static final String AUDIT_ENTITY = "paraclinical_order_details";
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String EMERGENCY = "cấp cứu";
+    // anh ket qua: toi da 10 anh, moi anh 10 MB, chi JPG / PNG (quyet dinh 16/11/2026)
+    static final int MAX_IMAGES = 10;
+    static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
 
     private final ParaclinicalOrderDetailRepository orderDetailRepository;
     private final LabResultRepository labResultRepository;
     private final ImagingResultRepository imagingResultRepository;
+    private final ImagingResultImageRepository imageRepository;
+    private final ResultImageStorage resultImageStorage;
     private final MedicalServiceRepository medicalServiceRepository;
     private final ServiceGroupRepository serviceGroupRepository;
     private final ServiceLabParameterRepository serviceLabParameterRepository;
@@ -115,6 +127,22 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     @Transactional(readOnly = true)
     public ParaclinicalResultResponse get(UUID technicianAccountId, UUID orderDetailId) {
         return toResponse(load(orderDetailId), technicianAccountId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParaclinicalResultResponse viewForDoctor(UUID doctorAccountId, UUID orderDetailId) {
+        Context context = load(orderDetailId);
+        boolean ownOrder = doctorAccountId.equals(context.order().getDoctorAccountId());
+        boolean ownVisit = context.visit().map(visit -> doctorAccountId.equals(visit.getDoctorAccountId())).orElse(false);
+        if (!ownOrder && !ownVisit) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        if (context.detail().getStatus() != ParaclinicalOrderDetailStatus.COMPLETED) {
+            throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
+        }
+        // The Doctor is never the performer, so the response is read-only.
+        return toResponse(context, doctorAccountId, false);
     }
 
     // [UC-67 buoc 24-25] LUU NHAP: luu do dang, khong bat nhap du, sua lai duoc (PUT .../draft)
@@ -187,6 +215,152 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         auditLogService.recordBusinessChange(technicianAccountId, AuditLogAction.PRINT, AUDIT_ENTITY,
                 orderDetailId, context.detail().getMachidinh(), Map.of("action", "PRINT_RESULT"), now);
         return toResponse(load(orderDetailId), technicianAccountId);
+    }
+
+    // tai anh len (UC-67): kiem tra -> day len Cloudinary -> luu link vao DB
+    @Override
+    @Transactional
+    public ParaclinicalResultResponse uploadImage(
+            UUID technicianAccountId, UUID orderDetailId, String fileName, String contentType, byte[] content,
+            String caption) {
+        Context context = load(orderDetailId);
+        requireEditableBy(context, technicianAccountId);
+        // xet nghiem khong co anh
+        if (context.isLab()) {
+            throw new AppException(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "LAB_RESULT"));
+        }
+        if (!resultImageStorage.isConfigured()) {
+            throw new AppException(ErrorCode.FILE_STORAGE_NOT_CONFIGURED);
+        }
+        String type = imageType(contentType, content);
+        if (content.length > MAX_IMAGE_BYTES) {
+            throw new AppException(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "TOO_LARGE"));
+        }
+
+        Instant now = clock.instant();
+        ParaclinicalOrderDetail detail = context.detail();
+        // chua co ket qua nhap thi tao ban nhap de gan anh vao
+        ImagingResult result = imagingResultRepository.findByOrderDetailId(detail.getId())
+                .orElseGet(() -> imagingResultRepository.save(ImagingResult.start(ids.next(), now, detail.getId(),
+                        technicianAccountId, detail.getMachidinh(), context.order().getChandoansobo())));
+        List<ImagingResultImage> images = imageRepository.findByImagingResultIdOrderByDisplayOrderAsc(result.getId());
+        if (images.size() >= MAX_IMAGES) {
+            throw new AppException(ErrorCode.RESULT_IMAGE_LIMIT_REACHED);
+        }
+        int nextOrder = images.stream().map(ImagingResultImage::getDisplayOrder).filter(Objects::nonNull)
+                .max(Integer::compare).orElse(0) + 1;
+
+        UUID imageId = ids.next();
+        String publicId = resultImageStorage.folder() + "/" + imageId;
+        String url = resultImageStorage.upload(publicId, content, type);
+        // loi DB sau khi da up thi xoa anh tren Cloudinary cho khoi rac
+        afterRollback(() -> resultImageStorage.delete(publicId));
+
+        imageRepository.save(ImagingResultImage.uploaded(imageId, result.getId(), url, safeFileName(fileName), type,
+                sha256(content), technicianAccountId, now, nextOrder, trimTo(caption, 255)));
+        audit(technicianAccountId, detail, "UPLOAD_RESULT_IMAGE", now);
+        return toResponse(load(orderDetailId), technicianAccountId);
+    }
+
+    // xoa anh (UC-67): chi khi ket qua chua gui
+    @Override
+    @Transactional
+    public ParaclinicalResultResponse deleteImage(UUID technicianAccountId, UUID orderDetailId, UUID imageId) {
+        Context context = load(orderDetailId);
+        requireEditableBy(context, technicianAccountId);
+        ImagingResult result = imagingResultRepository.findByOrderDetailId(orderDetailId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESULT_IMAGE_NOT_FOUND));
+        ImagingResultImage image = imageRepository.findByIdAndImagingResultId(imageId, result.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESULT_IMAGE_NOT_FOUND));
+        imageRepository.delete(image);
+        audit(technicianAccountId, context.detail(), "DELETE_RESULT_IMAGE", clock.instant());
+        // DB xoa xong moi xoa tren Cloudinary; xoa loi thi chi ghi log
+        String publicId = publicIdOf(image.getHinhanh());
+        afterCommit(() -> {
+            try {
+                resultImageStorage.delete(publicId);
+            } catch (RuntimeException exception) {
+                log.warn("Result image left in the file storage [imageId={}]", imageId);
+            }
+        });
+        return toResponse(load(orderDetailId), technicianAccountId);
+    }
+
+    // chi nhan JPG / PNG: kiem ca content type lan noi dung file (magic bytes)
+    private static String imageType(String contentType, byte[] content) {
+        if (content == null || content.length == 0) {
+            throw new AppException(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "EMPTY"));
+        }
+        boolean png = content.length > 8 && (content[0] & 0xFF) == 0x89 && content[1] == 'P' && content[2] == 'N'
+                && content[3] == 'G';
+        boolean jpeg = content.length > 3 && (content[0] & 0xFF) == 0xFF && (content[1] & 0xFF) == 0xD8
+                && (content[2] & 0xFF) == 0xFF;
+        if ("image/png".equals(contentType) && png) {
+            return "image/png";
+        }
+        if (("image/jpeg".equals(contentType) || "image/jpg".equals(contentType)) && jpeg) {
+            return "image/jpeg";
+        }
+        throw new AppException(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "TYPE"));
+    }
+
+    private static String safeFileName(String fileName) {
+        String name = fileName == null ? "" : fileName.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1).strip();
+        return name.isEmpty() ? "anh" : trimTo(name, 255);
+    }
+
+    private static String trimTo(String text, int max) {
+        String value = trim(text);
+        return value == null || value.length() <= max ? value : value.substring(0, max);
+    }
+
+    private static String sha256(byte[] content) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    // link Cloudinary .../image/upload/v123/<public_id>.png -> <public_id>
+    static String publicIdOf(String url) {
+        String path = url.substring(url.indexOf("/upload/") + "/upload/".length());
+        path = path.replaceFirst("^v\\d+/", "");
+        int dot = path.lastIndexOf('.');
+        return dot > 0 ? path.substring(0, dot) : path;
+    }
+
+    private static void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
+    }
+
+    private void afterRollback(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    try {
+                        action.run();
+                    } catch (RuntimeException exception) {
+                        log.warn("Uploaded result image could not be removed after a rollback");
+                    }
+                }
+            }
+        });
     }
 
     // ---- loading -----------------------------------------------------------------------------------------------
@@ -360,7 +534,13 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
             if (submit) {
                 result.submit(now);
             }
-            imagingResultRepository.save(result);
+            ImagingResult saved = imagingResultRepository.save(result);
+            // luu chu thich anh gui kem
+            if (request.imageCaptions() != null && !request.imageCaptions().isEmpty()) {
+                imageRepository.findByImagingResultIdOrderByDisplayOrderAsc(saved.getId()).stream()
+                        .filter(image -> request.imageCaptions().containsKey(image.getId()))
+                        .forEach(image -> image.changeCaption(trimTo(request.imageCaptions().get(image.getId()), 255)));
+            }
         }
     }
 
@@ -529,6 +709,14 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     // DUNG KET QUA TRA VE FE: thong tin phieu, benh nhan, chi so, ket qua da luu, may, cac tab cung dot, isPerformer
     private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId) {
+        return toResponse(context, technicianAccountId, true);
+    }
+
+    /**
+     * {@code forEditing} false is the Doctor's read-only print view: it skips the room's instruments and the other
+     * services of the order, which only the technician's result screen uses (two fewer queries per view).
+     */
+    private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId, boolean forEditing) {
         ParaclinicalOrderDetail detail = context.detail();
         ParaclinicalOrder order = context.order();
         boolean isPerformer = technicianAccountId.equals(detail.getPerformerAccountId());
@@ -549,7 +737,9 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
             }
         }
         boolean currentIsDraft = result != null && !"SUBMITTED".equals(result.status());
-        List<ParaclinicalResultResponse.SiblingService> siblingServices = siblingServices(detail, order, currentIsDraft);
+        List<ParaclinicalResultResponse.SiblingService> siblingServices = forEditing
+                ? siblingServices(detail, order, currentIsDraft)
+                : List.of();
         Map<UUID, String> staffNames = staffNames(order.getDoctorAccountId(), detail.getPerformerAccountId());
         return new ParaclinicalResultResponse(
                 detail.getId(), order.getSophieu(), context.form(), context.service().getType().name(),
@@ -566,7 +756,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                         detail.getPerformerAccountId(), staffNames.get(detail.getPerformerAccountId())),
                 isPerformer,
                 rows.stream().map(ParaclinicalResultServiceImpl::parameter).toList(),
-                result, printCount, instruments(context),
+                result, printCount, forEditing ? instruments(context) : List.of(),
                 context.visit().map(Visit::getSovaovien).orElse(null),
                 clinicFacilityRepository.findCurrent()
                         .map(facility -> new ParaclinicalResultResponse.Clinic(
@@ -600,7 +790,10 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 imaging.getKqclsKetluan(), imaging.getKqclsKythuat(), imaging.getKqclsMota(),
                 sectionsOf(imaging.getKqclsMotaChitiet()), imaging.getKqclsDenghi(), imaging.getKqclsLinkhinhanh(),
                 imaging.getReadingDoctorName(), imaging.getInstrumentId(), imaging.getInstrumentNameSnapshot(),
-                List.of());
+                imageRepository.findByImagingResultIdOrderByDisplayOrderAsc(imaging.getId()).stream()
+                        .map(image -> new ParaclinicalResultResponse.ResultFile(image.getId(), image.getFileName(),
+                                image.getMimeType(), null, image.getHinhanh(), image.getCaption()))
+                        .toList());
     }
 
     // doi 1 chi so + khoang tham chieu thanh dang tra ve FE (de FE tu to mau cao/thap khi nhap)
