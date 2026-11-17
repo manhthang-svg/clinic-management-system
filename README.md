@@ -49,6 +49,7 @@ Backend environment variables:
 | `VISIT_END_OF_DAY_ENABLED`, `VISIT_END_OF_DAY_CRON`, `VISIT_END_OF_DAY_RUN_ON_STARTUP` | No | End-of-day job (BR-22) that closes unfinished visits of earlier days; defaults `true`, `0 5 0 * * *` (00:05, Asia/Ho_Chi_Minh) and `true` (also run once at startup to catch up). Safe when several backends share one database: a visit is closed once and later runs skip it |
 
 | `SIGNING_SIMULATOR_KEYSTORE_PASSWORD` | To sign e-prescriptions | Password of the simulated signing CA's key file (UC-90); the `dev` profile sets a development value. Without it, signing answers "service unavailable" |
+| `CLINIC_HEALTH_DEPARTMENT` | No | "Sở Y tế" printed in the header of the medical-record PDF, form 15/BV1 (UC-53); default empty |
 | `CLINIC_ARCHIVE_ROOT` | No | Directory of the write-once archive packages of closed medical records (UC-58, BR-126); default `.clinic-archive` (git-ignored). Back it up, with one off-site copy (CV 365 mục III.2) |
 | `SIGNING_SIMULATOR_KEYSTORE`, `SIGNING_TRUSTED_CA_FILES` | No | Simulated CA key file (default `.signing-simulator/simulator.p12`, created on first use, git-ignored) and comma-separated PEM files of trusted CAs (the `dev` profile trusts `.signing-simulator/trusted-ca.pem`) |
 | `SIGNING_SIMULATOR_FAILURE_MODE`, `SIGNING_SIMULATOR_RESPONSE_DELAY` | No | `NONE`, `UNAVAILABLE` or `BAD_SIGNATURE`, and a delay, to demonstrate UC-90 EF-15 and EF-16 |

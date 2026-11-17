@@ -4,14 +4,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import clinic.backend.dto.request.ExportMedicalRecordRequest;
 import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
 import clinic.backend.dto.response.MedicalRecordDetailResponse;
 import clinic.backend.dto.response.MedicalRecordItemResponse;
 import clinic.backend.dto.response.MedicalRecordPatientItemResponse;
@@ -19,32 +16,40 @@ import clinic.backend.dto.response.PageResponse;
 import clinic.backend.dto.response.PatientVisitItemResponse;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.MedicalRecordExportService;
 import clinic.backend.service.MedicalRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller for Medical Records (Screen #39 / UC-51: Medical Record History, UC-52: Medical Record Detail).
+ * Controller for Medical Records (Screen #39 / UC-51: Medical Record History, UC-52: Medical Record Detail, UC-53: Export).
  */
 @RestController
 @RequestMapping("/api/v1/medical-records")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+// BR-120: Admin exports XML/JSON but does not see clinical content on screen, so only the Doctor reads records.
+@PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
 @Tag(name = "Medical Records", description = "Hồ sơ bệnh án / Lịch sử hồ sơ bệnh án (Screen #39, UC-51, UC-52)")
 public class MedicalRecordController {
 
     private final MedicalRecordService medicalRecordService;
+    private final MedicalRecordExportService medicalRecordExportService;
 
     @Operation(summary = "Screen #39 Cấp 1: Tìm kiếm danh sách bệnh nhân khớp điều kiện lọc")
     @GetMapping("/patients")
@@ -107,16 +112,20 @@ public class MedicalRecordController {
         return ApiResponse.success(medicalRecordService.getMedicalRecordByVisitId(visitId, actorAccountId));
     }
 
-    @Operation(summary = "UC-53: Ghi nhận nhật ký xuất hồ sơ bệnh án ra PDF")
-    @PostMapping("/{id}/export-log")
-    public ApiResponse<Void> recordExportLog(
+    @Operation(summary = "UC-53: Xuất hồ sơ bệnh án đã đóng ra PDF theo mẫu 15/BV1 (TT 32/2023)")
+    @PostMapping("/{id}/commands/export-pdf")
+    public ResponseEntity<byte[]> exportPdf(
             @PathVariable UUID id,
-            @RequestParam(required = false, defaultValue = "CURRENT_VISIT") String scope,
+            @RequestBody ExportMedicalRecordRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        medicalRecordService.recordExportLog(id, scope, actorAccountId);
-        return ApiResponse.success(null);
+        MedicalRecordExportService.ExportedFile file =
+                medicalRecordExportService.exportPdf(StaffPrincipal.from(jwt), id, request);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(file.fileName()).build().toString())
+                .body(file.content());
     }
 
     @Operation(summary = "BR-42, I.3.3: Ghi nhận nhật ký truy cập/tải tệp kết quả cận lâm sàng")

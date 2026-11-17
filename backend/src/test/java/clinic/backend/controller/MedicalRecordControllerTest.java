@@ -8,6 +8,7 @@ import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.service.MedicalRecordExportService;
 import clinic.backend.service.MedicalRecordService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,11 +34,14 @@ class MedicalRecordControllerTest {
     @Mock
     private MedicalRecordService medicalRecordService;
 
+    @Mock
+    private MedicalRecordExportService medicalRecordExportService;
+
     private MedicalRecordController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new MedicalRecordController(medicalRecordService);
+        controller = new MedicalRecordController(medicalRecordService, medicalRecordExportService);
     }
 
     @Test

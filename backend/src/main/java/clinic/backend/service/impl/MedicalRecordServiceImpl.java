@@ -414,23 +414,6 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
 
     @Override
     @Transactional
-    public void recordExportLog(UUID medicalRecordId, String scope, UUID actorAccountId) {
-        if (medicalRecordId == null || actorAccountId == null) return;
-        MedicalRecord record = medicalRecordRepository.findById(medicalRecordId).orElse(null);
-        String soba = record != null ? record.getSoba() : medicalRecordId.toString();
-        auditLogService.recordBusinessChange(
-                actorAccountId,
-                AuditLogAction.EXPORT,
-                "MEDICAL_RECORD",
-                medicalRecordId,
-                soba,
-                Map.of("action", "EXPORT_MEDICAL_RECORD_PDF", "scope", scope != null ? scope : "CURRENT_VISIT"),
-                Instant.now()
-        );
-    }
-
-    @Override
-    @Transactional
     public ExportMedicalRecordDataResponse exportMedicalRecordData(
             UUID medicalRecordId,
             ExportMedicalRecordDataRequest request,
