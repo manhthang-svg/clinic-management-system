@@ -143,7 +143,7 @@ public class ArchivePackageBuilder {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("DuLieuChu", metadata(closing));
         root.put("HoSoBenhAn", hoSo);
-        root.put("extensions", extensions(closing, prescription, followUp));
+        root.put("extensions", extensions(closing, examination, prescription, followUp));
         return root;
     }
 
@@ -496,8 +496,12 @@ public class ArchivePackageBuilder {
     }
 
     /** Data the clinic keeps that has no CV 365 field. */
-    private Map<String, Object> extensions(Closing closing, Prescription prescription, FollowUpAppointment followUp) {
+    private Map<String, Object> extensions(
+            Closing closing, ClinicalExamination examination, Prescription prescription, FollowUpAppointment followUp) {
         Map<String, Object> values = new LinkedHashMap<>();
+        // UC-53 BR-53-10: form 15/BV1 IV.2 (free text) and IV.5 "Đã xử lý (thuốc, chăm sóc)".
+        values.put("khambenh_bophan", examination == null ? null : examination.getKhambenhBophan());
+        values.put("daxuly", examination == null ? null : examination.getTreatmentCarePerformed());
         Map<String, Object> rx = null;
         if (prescription != null) {
             rx = new LinkedHashMap<>();

@@ -74,7 +74,7 @@ Status values:
 | Doctor | Visit | Reprint examination ticket after a transfer | UC-48 AF-02, UC-41 | Visit the Doctor has just transferred; the ticket shows the destination room and new queue number. | Source |
 | Doctor | Paraclinical order | Create and print | UC-49, UC-50 | Active services only (BR-10). | Source |
 | Doctor | Paraclinical service | Cancel a service the patient refused | BR-25, BR-41 | Doctor of the visit; visit Waiting for Paraclinical and record open; no Technician has accepted the service and its receipt is unpaid; reason required. The receipt is recalculated (BR-27). | Decided (I1-D44) |
-| Doctor | Medical record | List, view detail, export | UC-51 → UC-53 | All patients (BR-35). | Source |
+| Doctor | Medical record | List, view detail, export PDF (form 15/BV1) | UC-51 → UC-53 | All patients (BR-35). Export only a closed record, with a purpose; recipient required for the patient and authorities (BR-43, BR-131; [`uc-53-export-medical-record.md`](uc-53-export-medical-record.md)). The Admin has no access to these screens or their API (BR-120). | Source |
 | Doctor | Paraclinical result | View | UC-55 | Current visit. | Source |
 | Doctor | Visit | Conclude, print conclusion | UC-56, UC-57 | All orders have results (BR-30). | Source |
 | Doctor | Prescription | Create, update, print | UC-59, UC-60 | Current visit: the Doctor of the visit, on duty in its room, record open (BR-59-15). Print only an accepted prescription (BR-59-13). | Source |
