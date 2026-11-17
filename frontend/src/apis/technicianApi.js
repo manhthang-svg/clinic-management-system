@@ -67,6 +67,12 @@ export const technicianApi = {
     return cachedRoomsPromise;
   },
 
+  /** Dashboard of one room: today's figures, the next 5 waiting patients and 5 services waiting for a result. */
+  async getDashboard({ roomId } = {}, signal) {
+    const queryString = buildQueueQuery({ roomId });
+    return apiClient.request(`/technician/dashboard${queryString}`, { signal });
+  },
+
   async getQueue({ roomId, search, status, doctorRoom } = {}, signal) {
     const queryString = buildQueueQuery({ roomId, search, status, doctorRoom });
     return apiClient.request(`/technician/queue${queryString}`, { signal });

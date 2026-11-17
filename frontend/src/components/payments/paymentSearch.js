@@ -29,14 +29,6 @@ export function searchParams({ search = '', status = 'ALL', type = 'ALL', from =
     };
 }
 
-/** UC-70 AF-01: exactly one Pending receipt of the typed registration code opens Confirm Payment directly. */
-export function directConfirmTarget(results, keyword) {
-    const code = keyword.trim().toLowerCase();
-    if (!code) return null;
-    const pending = results.filter((p) => p.status === 'PENDING' && p.sovaovien?.toLowerCase() === code);
-    return pending.length === 1 && results.length === pending.length ? pending[0].id : null;
-}
-
 /** UC-73: history query; status ALL means Paid and Cancelled. The keyword works like UC-70 (at least 2 characters). */
 export function historyParams({
     from, to, status = 'ALL', type = 'ALL', method = 'ALL', mine = true, sort, search = '', page = 0,
