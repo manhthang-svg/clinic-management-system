@@ -1,9 +1,6 @@
-/**
- * The technician queue shows one row per patient order in a room, while the backend returns one item per service.
- * These helpers derive the row from its services.
- */
+// hang doi KTV hien 1 dong / phieu cua benh nhan, backend tra 1 item / dich vu -> gom lai thanh dong
 
-/** A service is in the room queue once the patient checked in, has a number, or the service went further. */
+// dich vu da vao hang doi phong: da check-in, co so thu tu hoac da lam tiep
 export function isServiceCheckedIn(service) {
   return Boolean(
     service?.isCheckedIn
@@ -14,15 +11,13 @@ export function isServiceCheckedIn(service) {
   );
 }
 
+// dich vu bi bo qua (goi khong co mat)
 function isSkippedService(service) {
   return Boolean(service.isSkipped) || service.status === 'SKIPPED';
 }
 
-/**
- * Status of a patient row, from the most to the least urgent work left:
- * IN_PROGRESS → WAITING → SKIPPED → PENDING_RESULT (performed, result not entered) → COMPLETED → CANCELLED.
- * A row whose services were all performed must never fall back to WAITING, or "Tiếp nhận" shows again.
- */
+// trang thai cua dong, uu tien viec gap nhat: dang lam > cho > bo qua > cho ket qua > xong > huy
+// dong da lam het thi khong duoc quay ve cho (neu khong nut Tiep nhan hien lai)
 export function groupStatusOf(services) {
   if (services.some((s) => s.status === 'IN_PROGRESS')) return 'IN_PROGRESS';
   if (services.some((s) => s.status === 'WAITING' && !isSkippedService(s))) return 'WAITING';
@@ -32,7 +27,7 @@ export function groupStatusOf(services) {
   return 'CANCELLED';
 }
 
-/** The service a row action applies to: the first one in the row's status, otherwise the first service. */
+// dich vu ma nut thao tac cua dong ap dung
 export function serviceForAction(group) {
   const services = group.roomServices ?? [group];
   const matches = group.status === 'SKIPPED'
