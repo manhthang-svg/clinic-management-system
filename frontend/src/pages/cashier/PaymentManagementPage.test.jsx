@@ -12,6 +12,7 @@ vi.mock('../../apis/paymentApi', () => ({
     confirm: vi.fn(),
     createPayosQr: vi.fn(),
     syncPayos: vi.fn(),
+    history: vi.fn(),
   },
 }));
 
@@ -30,6 +31,33 @@ function page(content, totalElements) {
 describe('PaymentManagementPage (UC-70)', () => {
   beforeEach(() => {
     paymentApi.list.mockReset();
+    paymentApi.history.mockReset();
+    paymentApi.history.mockResolvedValue({ data: { receipts: { content: [], page: { totalElements: 0 } } } });
+  });
+
+  // the dem tren toan bo phieu (server dem), danh sach van 20 phieu / trang
+  it('counts the cards over all receipts, not only the 20 rows of the page', async () => {
+    const user = userEvent.setup();
+    const rows = Array.from({ length: 20 }, (_, i) => payment(i + 1));
+    paymentApi.list.mockImplementation((params) => {
+      if (params.size === 1) return Promise.resolve(page([], params.status === 'PENDING' ? 9 : 213));
+      return Promise.resolve(page(params.page === 1 ? [payment(21)] : rows, 213));
+    });
+    paymentApi.history.mockResolvedValue({ data: { receipts: { content: [], page: { totalElements: 2 } } } });
+    render(<MemoryRouter><PaymentManagementPage /></MemoryRouter>);
+
+    expect(await screen.findByText('Tìm thấy 213 phiếu phù hợp.')).toBeInTheDocument();
+    expect(await screen.findByText('9')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(paymentApi.history).toHaveBeenCalledWith(expect.objectContaining({ status: 'PAID', mine: 'false', size: 1 }));
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    // sang trang 2 so khong doi
+    expect(await screen.findByText('Bệnh nhân 21')).toBeInTheDocument();
+    expect(screen.getByText('Tìm thấy 213 phiếu phù hợp.')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('pages through the receipts and keeps the filters on every page', async () => {
