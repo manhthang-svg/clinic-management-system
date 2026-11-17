@@ -265,28 +265,13 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         // chec d lam cls luon
         boolean releaseNow = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT
                 || payment.getStatus() == PaymentStatus.FEE_EXEMPT;
-        List<String> unroutedServices = releaseNow
-                ? paymentCompletionService.releaseOrder(savedOrder)
-                : List.of();
+        if (releaseNow) {
+            paymentCompletionService.releaseOrder(savedOrder);
+        }
 
-        // 8. Bước 9: lượt khám chờ CLS (cả khi chỉ định thêm từ chờ kết luận) và ghi audit
+        // 8. Bước 10: lượt khám chờ CLS (cả khi chỉ định thêm từ chờ kết luận). The order is not audited (UC-49).
         visit.markAsWaitingParaclinical();
         visitRepository.save(visit);
-
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("sophieu", sophieu);
-        audit.put("paymentCode", paymentCode);
-        audit.put("services", services.stream().map(MedicalService::getTenchidinh).toList());
-        audit.put("total", total);
-        audit.put("insuranceAmount", insuranceTotal);
-        audit.put("patientAmount", payment.getPatientTotalAmount());
-        audit.put("released", releaseNow);
-        if (!unroutedServices.isEmpty()) {
-            audit.put("unroutedServices", unroutedServices);
-        }
-        auditLogService.recordBusinessChange(
-                doctorAccountId, AuditLogAction.CREATE, "paraclinical_orders", savedOrder.getId(),
-                visit.getSovaovien(), audit, now);
 
         return toResponse(savedOrder, payment, visit.getStatus() == VisitStatus.WAITING_PARACLINICAL);
     }
