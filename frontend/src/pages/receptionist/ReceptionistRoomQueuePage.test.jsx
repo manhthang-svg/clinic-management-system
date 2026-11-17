@@ -186,9 +186,9 @@ describe('ReceptionistRoomQueuePage', () => {
         expect(await screen.findByText('Chưa có dữ liệu để hiển thị.')).toBeInTheDocument();
     });
 
-    it('pages the waiting list of a room, 10 visits per page', async () => {
+    it('pages the waiting list of a room, 20 visits per page', async () => {
         const user = userEvent.setup();
-        const visits = Array.from({ length: 12 }, (_, index) => ({
+        const visits = Array.from({ length: 22 }, (_, index) => ({
             id: `visit-${index + 1}`, queueNumber: index + 1, patientName: `Bệnh nhân ${index + 1}`,
             patientCode: `BN${index + 1}`, isPriority: false, thoigianvaovien: '2026-11-05T01:30:00Z',
             status: 'WAITING', isSkipped: false,
@@ -199,15 +199,15 @@ describe('ReceptionistRoomQueuePage', () => {
         }, '/receptionist/room-queue/room-1');
 
         const detail = await screen.findByRole('region', { name: 'Hàng đợi Phòng khám Nội 1' });
-        expect(await within(detail).findByText('Bệnh nhân 10')).toBeInTheDocument();
-        expect(within(detail).queryByText('Bệnh nhân 11')).not.toBeInTheDocument();
-        expect(within(detail).getByText('Hiển thị 1 – 10 / 12')).toBeInTheDocument();
+        expect(await within(detail).findByText('Bệnh nhân 20')).toBeInTheDocument();
+        expect(within(detail).queryByText('Bệnh nhân 21')).not.toBeInTheDocument();
+        expect(within(detail).getByText('Hiển thị 1 – 20 / 22')).toBeInTheDocument();
 
         await user.click(within(detail).getByRole('button', { name: 'Trang 2' }));
 
-        expect(within(detail).getByText('Bệnh nhân 12')).toBeInTheDocument();
+        expect(within(detail).getByText('Bệnh nhân 22')).toBeInTheDocument();
         expect(within(detail).queryByText('Bệnh nhân 1')).not.toBeInTheDocument();
-        expect(within(detail).getByText('Hiển thị 11 – 12 / 12')).toBeInTheDocument();
+        expect(within(detail).getByText('Hiển thị 21 – 22 / 22')).toBeInTheDocument();
         expect(within(detail).getByRole('button', { name: 'Trang sau' })).toBeDisabled();
     });
 

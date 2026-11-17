@@ -76,7 +76,7 @@ function groupByDepartment(rooms) {
     return groups;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 /** Previous / page numbers / next under the waiting list (same look as the paraclinical service list). */
 function Pagination({ page, pageCount, total, onChange }) {
@@ -141,7 +141,7 @@ function UnavailableRoom({ roomId, visitApi, onBack }) {
     );
 }
 
-/** UC-42 step 5: examination waiting list of one room, 10 visits per page. */
+/** UC-42 step 5: examination waiting list of one room, 20 visits per page. */
 function RoomDetail({ room, visitApi, refreshKey, onBack }) {
     const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
