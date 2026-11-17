@@ -48,6 +48,15 @@ public class ParaclinicalResultController {
         return ApiResponse.success(paraclinicalResultService.get(StaffPrincipal.from(jwt).accountId(), orderDetailId));
     }
 
+    @GetMapping("/{orderDetailId}/view")
+    @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @Operation(summary = "Bác sĩ xem phiếu kết quả cận lâm sàng đã gửi của lượt khám mình (chỉ đọc)")
+    public ApiResponse<ParaclinicalResultResponse> viewForDoctor(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderDetailId) {
+        return ApiResponse.success(
+                paraclinicalResultService.viewForDoctor(StaffPrincipal.from(jwt).accountId(), orderDetailId));
+    }
+
     @PutMapping("/{orderDetailId}/draft")
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Operation(summary = "UC-67 AF-01 Lưu nháp kết quả")

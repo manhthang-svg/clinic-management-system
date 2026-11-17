@@ -23,6 +23,13 @@ function ageOf(patient, orderedAt) {
     return patient.birthYear ?? '—';
 }
 
+/** Time the slip is printed, e.g. "11:42 17/11/2026" (clinic time). */
+function printTime(iso) {
+    return new Intl.DateTimeFormat('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric',
+    }).format(iso ? new Date(iso) : new Date()).replace(',', '');
+}
+
 function longDate(iso) {
     if (!iso) return 'Ngày …… tháng …… năm ……';
     const parts = new Intl.DateTimeFormat('en-GB', {
@@ -65,6 +72,8 @@ export function ParaclinicalOrderSlip({ slip }) {
                 aria-label="Phiếu chỉ định cận lâm sàng"
                 className="paraclinical-order-sheet flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-6 font-['Times_New_Roman',serif] text-[14px] leading-[1.5] text-black"
             >
+                {/* Print time, small, in the top margin of the page. */}
+                <div className="-mt-[8mm] mb-1 text-[10px] leading-none text-slate-600">In lúc: {printTime(slip.printedAt)}</div>
                 <header className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                         <div className="flex h-14 w-14 shrink-0 items-center justify-center border-2 border-black text-[11px] font-bold">METPH</div>
@@ -161,7 +170,7 @@ export function ParaclinicalOrderSlip({ slip }) {
  * The slip is rendered straight into `document.body`: inside the page it would sit in the scrolling `main` of the
  * layout, which the print view clips. It is hidden on screen and shown only when printing.
  */
-export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
+export function PrintOrderButton({ orderId, api = visitApi, className = '', disabled = false }) {
     const [job, setJob] = useState(null);
     const [printing, setPrinting] = useState(false);
     const [error, setError] = useState('');
@@ -193,8 +202,9 @@ export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
             <button
                 type="button"
                 onClick={handlePrint}
-                disabled={printing}
-                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 px-4 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-60"
+                disabled={printing || disabled}
+                title={disabled ? 'Không còn dịch vụ nào để in' : undefined}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 px-4 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             >
                 {printing
                     ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />

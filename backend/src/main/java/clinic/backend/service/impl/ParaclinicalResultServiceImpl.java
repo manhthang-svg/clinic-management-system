@@ -129,6 +129,22 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return toResponse(load(orderDetailId), technicianAccountId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ParaclinicalResultResponse viewForDoctor(UUID doctorAccountId, UUID orderDetailId) {
+        Context context = load(orderDetailId);
+        boolean ownOrder = doctorAccountId.equals(context.order().getDoctorAccountId());
+        boolean ownVisit = context.visit().map(visit -> doctorAccountId.equals(visit.getDoctorAccountId())).orElse(false);
+        if (!ownOrder && !ownVisit) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        if (context.detail().getStatus() != ParaclinicalOrderDetailStatus.COMPLETED) {
+            throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
+        }
+        // The Doctor is never the performer, so the response is read-only.
+        return toResponse(context, doctorAccountId, false);
+    }
+
     // [UC-67 buoc 24-25] LUU NHAP: luu do dang, khong bat nhap du, sua lai duoc (PUT .../draft)
     @Override
     @Transactional
@@ -693,6 +709,14 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     // DUNG KET QUA TRA VE FE: thong tin phieu, benh nhan, chi so, ket qua da luu, may, cac tab cung dot, isPerformer
     private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId) {
+        return toResponse(context, technicianAccountId, true);
+    }
+
+    /**
+     * {@code forEditing} false is the Doctor's read-only print view: it skips the room's instruments and the other
+     * services of the order, which only the technician's result screen uses (two fewer queries per view).
+     */
+    private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId, boolean forEditing) {
         ParaclinicalOrderDetail detail = context.detail();
         ParaclinicalOrder order = context.order();
         boolean isPerformer = technicianAccountId.equals(detail.getPerformerAccountId());
@@ -713,7 +737,9 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
             }
         }
         boolean currentIsDraft = result != null && !"SUBMITTED".equals(result.status());
-        List<ParaclinicalResultResponse.SiblingService> siblingServices = siblingServices(detail, order, currentIsDraft);
+        List<ParaclinicalResultResponse.SiblingService> siblingServices = forEditing
+                ? siblingServices(detail, order, currentIsDraft)
+                : List.of();
         Map<UUID, String> staffNames = staffNames(order.getDoctorAccountId(), detail.getPerformerAccountId());
         return new ParaclinicalResultResponse(
                 detail.getId(), order.getSophieu(), context.form(), context.service().getType().name(),
@@ -730,7 +756,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                         detail.getPerformerAccountId(), staffNames.get(detail.getPerformerAccountId())),
                 isPerformer,
                 rows.stream().map(ParaclinicalResultServiceImpl::parameter).toList(),
-                result, printCount, instruments(context),
+                result, printCount, forEditing ? instruments(context) : List.of(),
                 context.visit().map(Visit::getSovaovien).orElse(null),
                 clinicFacilityRepository.findCurrent()
                         .map(facility -> new ParaclinicalResultResponse.Clinic(

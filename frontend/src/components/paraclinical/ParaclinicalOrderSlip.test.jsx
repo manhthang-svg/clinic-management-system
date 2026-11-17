@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ParaclinicalOrderSlip } from './ParaclinicalOrderSlip';
 
 const slip = (patient) => ({
-    orderId: 'o1', sophieu: 'CD1', reprint: true, orderedAt: '2026-11-17T03:00:00Z',
+    orderId: 'o1', sophieu: 'CD1', reprint: true, orderedAt: '2026-11-17T03:00:00Z', printedAt: '2026-11-17T04:42:00Z',
     facility: { tenCskcb: 'Phòng khám Đa khoa A', diachi: '1 Lê Lợi', sodienthoai: '0281234567' },
     patient: {
         fullName: 'Nguyễn Văn Bình', birthYear: 1950, age: 76, gender: 'Nam', address: 'Hà Nội',
@@ -25,6 +25,8 @@ describe('ParaclinicalOrderSlip (UC-50)', () => {
         expect(screen.getByText('Giới tính:').parentElement).toHaveTextContent('Giới tính: Nam');
         expect(screen.getByText('Tuổi:').parentElement).toHaveTextContent('Tuổi: 76 tuổi 8 tháng');
         expect(screen.queryByText('BẢN IN LẠI')).not.toBeInTheDocument();
+        // The print time in the top margin, in clinic time.
+        expect(screen.getByText('In lúc: 11:42 17/11/2026')).toBeInTheDocument();
     });
 
     it('prints the months only for a baby under one year', () => {

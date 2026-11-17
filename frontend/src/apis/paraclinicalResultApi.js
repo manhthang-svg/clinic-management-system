@@ -65,6 +65,8 @@ export function createResultApi(client = defaultClient) {
   return {
     supportsFiles: true,
     get: (id) => call(base(id)),
+    // The Doctor reads the submitted result of a service of the visit (read-only).
+    viewForDoctor: (id) => call(`${base(id)}/view`),
     // tai 1 anh len, tra ve phieu moi (co danh sach anh)
     uploadImage: (id, file, caption) => {
       const body = new FormData();

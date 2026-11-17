@@ -1,7 +1,10 @@
-import { useEffect, useId, useState } from 'react';
-import { ClipboardList, LoaderCircle } from 'lucide-react';
+import { Fragment, useEffect, useId, useState } from 'react';
+import { ChevronDown, ClipboardList, LoaderCircle } from 'lucide-react';
 
 import visitApi from '../../apis/visitApi';
+import { resultApi as defaultResultApi } from '../../apis/paraclinicalResultApi';
+import { ResultPrintView } from '../paraclinicalResult/ResultPrintView';
+import { formForSave, resultToForm } from '../paraclinicalResult/resultForm';
 import { cancelErrorMessage, cancelledMessage, isPrintable } from './paraclinicalOrder';
 import { PrintOrderButton } from './ParaclinicalOrderSlip';
 
@@ -16,6 +19,7 @@ const SERVICE_STATUS_LABELS = {
 };
 
 const LOAD_FAILED = 'Không tải được danh sách chỉ định cận lâm sàng.';
+const RESULT_LOAD_FAILED = 'Không tải được phiếu kết quả. Vui lòng thử lại.';
 const REASON_LENGTH = 'Lý do hủy từ 5 đến 500 ký tự.';
 
 const thClass = 'whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500';
@@ -96,14 +100,84 @@ function CancelServiceDialog({ detail, api, onClose, onCancelled }) {
     );
 }
 
-function OrderCard({ order, api, onCancel }) {
+/**
+ * Submitted results by service: each is requested once (a failed request may be tried again), and `ready` gives a
+ * result that has already arrived.
+ */
+function createResultCache(resultApi) {
+    const entries = new Map();
+    return {
+        ready: (detailId) => entries.get(detailId)?.order ?? null,
+        load(detailId) {
+            if (!entries.has(detailId)) {
+                const entry = {};
+                entry.promise = resultApi.viewForDoctor(detailId).then(
+                    (order) => { entry.order = order; return order; },
+                    (error) => { entries.delete(detailId); throw error; },
+                );
+                entries.set(detailId, entry);
+            }
+            return entries.get(detailId).promise;
+        },
+    };
+}
+
+/**
+ * The submitted result of one service, shown exactly as the technician prints it (UC-68 ResultPrintView, read-only).
+ * Hidden when printing, so it never mixes into the order slip.
+ */
+function ResultPreview({ detailId, results }) {
+    // A result loaded before (prefetched or opened earlier) shows at once, without a loading step.
+    const [state, setState] = useState(() => {
+        const ready = results.ready(detailId);
+        return ready ? { loading: false, order: ready, error: '' } : { loading: true, order: null, error: '' };
+    });
+
+    useEffect(() => {
+        if (!state.loading) return undefined;
+        let active = true;
+        results.load(detailId)
+            .then((order) => active && setState({ loading: false, order, error: '' }))
+            .catch(() => active && setState({ loading: false, order: null, error: RESULT_LOAD_FAILED }));
+        return () => { active = false; };
+    }, [detailId, results, state.loading]);
+
+    if (state.loading) {
+        return (
+            <p role="status" className="flex items-center gap-2 text-xs text-slate-600">
+                <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />Đang tải phiếu kết quả…
+            </p>
+        );
+    }
+    if (state.error) return <p role="alert" className="text-xs text-rose-700">{state.error}</p>;
+    return (
+        <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-4">
+            <div className="mx-auto w-fit shadow-md">
+                <ResultPrintView order={state.order} form={formForSave(state.order, resultToForm(state.order))} />
+            </div>
+        </div>
+    );
+}
+
+function OrderCard({ order, api, results, onCancel }) {
+    // The service whose result is open below its row.
+    const [openId, setOpenId] = useState(null);
+    const toggle = (detail) => setOpenId((current) => (current === detail.id ? null : detail.id));
+
     return (
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <header className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-bold">Phiếu chỉ định {order.sophieu}</h3>
-                <p className="text-xs text-slate-500">Chỉ định lúc {formatDateTime(order.createdAt)}</p>
+            <header className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h3 className="text-sm font-bold">Phiếu chỉ định {order.sophieu}</h3>
+                    <p className="mt-1 text-xs text-slate-600">Chẩn đoán sơ bộ: <strong>{order.chandoansobo || '—'}</strong></p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                    <p className="text-xs text-slate-500">Chỉ định lúc {formatDateTime(order.createdAt)}</p>
+                    {/* UC-50: in phiếu chỉ định khi phiếu chưa hủy và còn dịch vụ cần làm (BR-50-05) */}
+                    {/* All services cancelled: nothing left to print, so the button is disabled. */}
+                    <PrintOrderButton orderId={order.id} api={api} className="text-right" disabled={!isPrintable(order)} />
+                </div>
             </header>
-            <p className="mt-1 text-xs text-slate-600">Chẩn đoán sơ bộ: <strong>{order.chandoansobo || '—'}</strong></p>
 
             <div className="mt-3 overflow-x-auto">
                 <table className="w-full text-xs">
@@ -117,8 +191,20 @@ function OrderCard({ order, api, onCancel }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {order.details.map((detail) => (
-                            <tr key={detail.id} className="border-b border-slate-100">
+                        {order.details.map((detail) => {
+                            // A service with a submitted result opens it below its row.
+                            const hasResult = detail.status === 'COMPLETED';
+                            const open = openId === detail.id;
+                            return (
+                            <Fragment key={detail.id}>
+                            <tr
+                                className={`border-b border-slate-100 ${hasResult ? 'cursor-pointer hover:bg-teal-50/60' : ''} ${open ? 'bg-teal-50/60' : ''}`}
+                                onClick={hasResult ? () => toggle(detail) : undefined}
+                                onKeyDown={hasResult ? (event) => { if (event.key === 'Enter') toggle(detail); } : undefined}
+                                tabIndex={hasResult ? 0 : undefined}
+                                aria-expanded={hasResult ? open : undefined}
+                                aria-label={hasResult ? `Xem kết quả ${detail.tenchidinh}` : undefined}
+                            >
                                 <td className={tdClass}>{detail.machidinh}</td>
                                 <td className={tdClass}>{detail.tenchidinh}</td>
                                 <td className={tdClass}>
@@ -144,15 +230,28 @@ function OrderCard({ order, api, onCancel }) {
                                             Hủy
                                         </button>
                                     )}
+                                    {hasResult && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700">
+                                            {open ? 'Ẩn kết quả' : 'Xem kết quả'}
+                                            <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                        </span>
+                                    )}
                                 </td>
                             </tr>
-                        ))}
+                            {open && (
+                                <tr className="border-b border-slate-100 print:hidden">
+                                    <td colSpan={5} className="bg-slate-50 p-3">
+                                        <ResultPreview detailId={detail.id} results={results} />
+                                    </td>
+                                </tr>
+                            )}
+                            </Fragment>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
 
-            {/* UC-50: in phiếu chỉ định khi phiếu chưa hủy và còn dịch vụ cần làm (BR-50-05) */}
-            {isPrintable(order) && <PrintOrderButton orderId={order.id} api={api} className="mt-3" />}
         </article>
     );
 }
@@ -161,18 +260,26 @@ function OrderCard({ order, api, onCancel }) {
  * UC-49: the paraclinical orders already made for a visit. BR-25, BR-41: the Doctor cancels a service the patient
  * refused while no Technician has accepted it and its receipt is unpaid.
  */
-export function ParaclinicalOrderList({ visitId, api = visitApi, onCancelled }) {
+export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = defaultResultApi, onCancelled }) {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [cancelling, setCancelling] = useState(null);
     const [notice, setNotice] = useState('');
     const [reloadKey, setReloadKey] = useState(0);
+    // Submitted results, loaded once per service: reopening a result shows it at once.
+    const [results] = useState(() => createResultCache(resultApi));
 
     useEffect(() => {
         const controller = new AbortController();
         api.getParaclinicalOrders(visitId, controller.signal)
-            .then((response) => setOrders(response ?? []))
+            .then((response) => {
+                setOrders(response ?? []);
+                // Load every submitted result in the background, so opening one needs no wait.
+                (response ?? []).forEach((item) => item.details
+                    ?.filter((detail) => detail.status === 'COMPLETED')
+                    .forEach((detail) => results.load(detail.id).catch(() => {})));
+            })
             .catch((err) => {
                 if (err?.name !== 'AbortError') setError(LOAD_FAILED);
             })
@@ -180,7 +287,7 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, onCancelled }) 
                 if (!controller.signal.aborted) setLoading(false);
             });
         return () => controller.abort();
-    }, [api, visitId, reloadKey]);
+    }, [api, visitId, reloadKey, results]);
 
     const handleCancelled = (result) => {
         setCancelling(null);
@@ -211,7 +318,7 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, onCancelled }) 
             )}
             {orders.length === 0
                 ? <p className="text-sm text-slate-500">Chưa có chỉ định cận lâm sàng.</p>
-                : orders.map((order) => <OrderCard key={order.id} order={order} api={api} onCancel={setCancelling} />)}
+                : orders.map((order) => <OrderCard key={order.id} order={order} api={api} results={results} onCancel={setCancelling} />)}
             {cancelling && (
                 <CancelServiceDialog
                     detail={cancelling}

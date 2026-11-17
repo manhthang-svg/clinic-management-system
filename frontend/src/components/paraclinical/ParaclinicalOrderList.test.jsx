@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
+import { MOCK_RESULT_ORDERS } from '../paraclinicalResult/resultMockData';
 import { ParaclinicalOrderList } from './ParaclinicalOrderList';
 
 function order(details) {
@@ -172,11 +173,44 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         print.mockRestore();
     });
 
-    it('offers no print for an order whose services were all cancelled (BR-50-05)', async () => {
+    it('disables the print button of an order whose services were all cancelled (BR-50-05)', async () => {
         const cancelled = { ...ultrasound, status: 'CANCELLED', cancellable: false, cancelReason: 'Bệnh nhân từ chối' };
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([cancelled])) }} />);
 
         expect(await screen.findByText('Phiếu chỉ định CD1')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'In phiếu chỉ định' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'In phiếu chỉ định' })).toBeDisabled();
+    });
+});
+
+describe('ParaclinicalOrderList – submitted results', () => {
+    it('opens the result of a completed service below its row, as the technician prints it', async () => {
+        const user = userEvent.setup();
+        const completed = { ...blood, status: 'COMPLETED' };
+        const labOrder = {
+            ...MOCK_RESULT_ORDERS.find((item) => item.id === 'cls-002'),
+            result: { status: 'SUBMITTED', submittedAt: '2026-11-01T08:09:00Z', values: { GLU: '11.4' } },
+        };
+        const resultApi = { viewForDoctor: vi.fn().mockResolvedValue(labOrder) };
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, completed])) }} resultApi={resultApi} />);
+
+        // The submitted result is loaded in the background as soon as the list shows, only for completed services.
+        await screen.findByText('Siêu âm ổ bụng');
+        expect(resultApi.viewForDoctor).toHaveBeenCalledTimes(1);
+        expect(resultApi.viewForDoctor).toHaveBeenCalledWith('d2');
+
+        // A service without a result does not open anything.
+        await user.click(screen.getByText('Siêu âm ổ bụng'));
+        expect(screen.queryByRole('article', { name: 'Phiếu kết quả in' })).not.toBeInTheDocument();
+
+        const row = screen.getByRole('row', { name: 'Xem kết quả Tổng phân tích máu' });
+        await user.click(row);
+        expect(await screen.findByRole('article', { name: 'Phiếu kết quả in' })).toBeInTheDocument();
+        await user.click(row);
+        expect(screen.queryByRole('article', { name: 'Phiếu kết quả in' })).not.toBeInTheDocument();
+
+        // Reopening shows it at once, without asking the server again.
+        await user.click(row);
+        expect(screen.getByRole('article', { name: 'Phiếu kết quả in' })).toBeInTheDocument();
+        expect(resultApi.viewForDoctor).toHaveBeenCalledTimes(1);
     });
 });
