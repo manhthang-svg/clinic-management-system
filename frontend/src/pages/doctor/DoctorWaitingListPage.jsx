@@ -145,7 +145,7 @@ function VisitNotes({ visit }) {
     if (visit.isPriority) {
         notes.push(`Ưu tiên: ${PRIORITY_REASON_LABELS[visit.priorityReason] ?? visit.priorityReason ?? 'Có'}`);
     }
-    if (visit.sourceRoomName) notes.push(`Chuyển từ: ${visit.sourceRoomName}`);
+    if (visit.sourceRoomName) notes.push(`Chuyển từ phòng ${visit.sourceRoomName}`);
 
     return notes.length > 0
         ? <div className="space-y-1 text-slate-700">{notes.map((note) => <p key={note}>{note}</p>)}</div>

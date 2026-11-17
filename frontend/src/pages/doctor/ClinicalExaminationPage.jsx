@@ -152,6 +152,8 @@ export default function ClinicalExaminationPage() {
     const [savedForm, setSavedForm] = useState(initialForm);
     const [clinicalData, setClinicalData] = useState(null);
     const [loading, setLoading] = useState(Boolean(visitId));
+    // UC-48 EF-04: bumped to reload the visit details after the visit changed meanwhile.
+    const [reloadKey, setReloadKey] = useState(0);
     const [loadError, setLoadError] = useState('');
     const [saving, setSaving] = useState(false);
     const [pageError, setPageError] = useState('');
@@ -239,7 +241,7 @@ export default function ClinicalExaminationPage() {
                 if (!controller.signal.aborted) setLoading(false);
             });
         return () => controller.abort();
-    }, [visitId]);
+    }, [visitId, reloadKey]);
 
     useEffect(() => {
         const keyword = icdQuery.trim();
@@ -490,7 +492,7 @@ export default function ClinicalExaminationPage() {
             ) : shownSection === 'conclusion' ? (
                 <ConclusionPanel visitId={visit.id} onClosed={goToWaitingList} onOpenPrescription={() => setActiveSection('prescription')} />
             ) : shownSection === 'transfer' ? (
-                <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
+                <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} onVisitChanged={() => setReloadKey((key) => key + 1)} />
             ) : shownSection === 'orders' ? (
                 <ParaclinicalOrderList
                     visitId={visit.id}
