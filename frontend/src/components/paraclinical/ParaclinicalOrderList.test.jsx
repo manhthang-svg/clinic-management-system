@@ -13,7 +13,7 @@ function order(details) {
 }
 
 const ultrasound = {
-    id: 'd1', machidinh: 'CD1-01', tenchidinh: 'Siêu âm ổ bụng', thanhtien: 200000, status: 'PENDING_PAYMENT',
+    id: 'd1', machidinh: 'CD1-01', tenchidinh: 'Siêu âm ổ bụng', thanhtien: 200000, status: 'PENDING_PAYMENT', roomName: 'Phòng siêu âm 1', roomLocation: 'Tầng 2',
     cancellable: true, cancelReason: null,
 };
 const blood = {
@@ -43,6 +43,18 @@ const slip = {
 };
 
 describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
+    it('shows the performing room instead of the amount of each service', async () => {
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])) }} />);
+
+        const row = (await screen.findByText('Siêu âm ổ bụng')).closest('tr');
+        expect(row).toHaveTextContent('Phòng siêu âm 1');
+        expect(within(row).getByText('Tầng 2')).toBeInTheDocument();
+        expect(within(screen.getByText('Tổng phân tích máu').closest('tr')).getByText('Chưa xếp phòng')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Nơi thực hiện' })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Thành tiền (₫)' })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Tổng cộng/)).not.toBeInTheDocument();
+    });
+
     it('offers to cancel only the services that can still be cancelled', async () => {
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])) }} />);
 
@@ -133,7 +145,7 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         print.mockRestore();
     });
 
-    it('marks a reprint and explains an order that can no longer be printed', async () => {
+    it('prints again without a reprint mark and explains an order that can no longer be printed', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const api = {
@@ -147,7 +159,9 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         render(<ParaclinicalOrderList visitId="v1" api={api} />);
 
         await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
-        expect((await screen.findAllByText('BẢN IN LẠI')).length).toBeGreaterThan(0);
+        // A reprinted slip carries no "BẢN IN LẠI" mark.
+        expect(await screen.findByRole('button', { name: 'In lại phiếu chỉ định' })).toBeInTheDocument();
+        expect(screen.queryByText('BẢN IN LẠI')).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'In lại phiếu chỉ định' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.');

@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { ClipboardList, LoaderCircle } from 'lucide-react';
 
 import visitApi from '../../apis/visitApi';
-import { cancelErrorMessage, cancelledMessage, formatAmount, isPrintable } from './paraclinicalOrder';
+import { cancelErrorMessage, cancelledMessage, isPrintable } from './paraclinicalOrder';
 import { PrintOrderButton } from './ParaclinicalOrderSlip';
 
 // Labels from docs/state-transitions.md section 3.1. PENDING_RESULT has no documented label yet (TBD).
@@ -111,7 +111,7 @@ function OrderCard({ order, api, onCancel }) {
                         <tr>
                             <th scope="col" className={thClass}>Mã dịch vụ</th>
                             <th scope="col" className={thClass}>Tên dịch vụ</th>
-                            <th scope="col" className={`${thClass} text-right`}>Thành tiền (₫)</th>
+                            <th scope="col" className={thClass}>Nơi thực hiện</th>
                             <th scope="col" className={thClass}>Trạng thái</th>
                             <th scope="col" className={thClass}><span className="sr-only">Thao tác</span></th>
                         </tr>
@@ -121,7 +121,12 @@ function OrderCard({ order, api, onCancel }) {
                             <tr key={detail.id} className="border-b border-slate-100">
                                 <td className={tdClass}>{detail.machidinh}</td>
                                 <td className={tdClass}>{detail.tenchidinh}</td>
-                                <td className={`${tdClass} text-right tabular-nums`}>{formatAmount(detail.thanhtien)}</td>
+                                <td className={tdClass}>
+                                    {detail.roomName ?? 'Chưa xếp phòng'}
+                                    {detail.roomLocation && (
+                                        <span className="block text-[11px] text-slate-500">{detail.roomLocation}</span>
+                                    )}
+                                </td>
                                 <td className={tdClass}>
                                     {SERVICE_STATUS_LABELS[detail.status] ?? '—'}
                                     {detail.cancelReason && (
@@ -145,10 +150,6 @@ function OrderCard({ order, api, onCancel }) {
                     </tbody>
                 </table>
             </div>
-
-            <p className="mt-3 text-right text-xs text-slate-600">
-                Tổng cộng: <strong className="tabular-nums">{formatAmount(order.tongcong)} ₫</strong>
-            </p>
 
             {/* UC-50: in phiếu chỉ định khi phiếu chưa hủy và còn dịch vụ cần làm (BR-50-05) */}
             {isPrintable(order) && <PrintOrderButton orderId={order.id} api={api} className="mt-3" />}

@@ -53,6 +53,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -476,7 +477,15 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
         List<ParaclinicalOrderResponse.ParaclinicalOrderDetailResponse> detailResponses = new ArrayList<>();
 
         if (order.getDetails() != null) {
+            // Performing rooms of all lines in one query.
+            Map<UUID, Room> rooms = roomRepository.findAllById(order.getDetails().stream()
+                            .map(ParaclinicalOrderDetail::getRoomId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet()))
+                    .stream()
+                    .collect(Collectors.toMap(Room::getId, Function.identity()));
             for (ParaclinicalOrderDetail detail : order.getDetails()) {
+                Room room = detail.getRoomId() == null ? null : rooms.get(detail.getRoomId());
                 detailResponses.add(new ParaclinicalOrderResponse.ParaclinicalOrderDetailResponse(
                         detail.getId(),
                         detail.getServiceId(),
@@ -488,6 +497,8 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                         detail.getBhytChitra(),
                         detail.getBenhnhanphaitra(),
                         detail.getRoomId(),
+                        room == null ? null : room.getRoomName(),
+                        room == null ? null : room.getLocation(),
                         detail.getStatus().name(),
                         visitOpen && isCancellable(detail, payment),
                         detail.getStatus() == ParaclinicalOrderDetailStatus.CANCELLED ? detail.getCancelReason() : null

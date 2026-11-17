@@ -185,7 +185,8 @@ public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrint
                 patient.getMabenhnhan(),
                 visit.getSovaovien(),
                 visit.getDoituongbnLoai(),
-                insured ? visit.getMabhyt() : null);
+                insured ? visit.getMabhyt() : null,
+                birthDate);
     }
 
     private static String gender(short code) {

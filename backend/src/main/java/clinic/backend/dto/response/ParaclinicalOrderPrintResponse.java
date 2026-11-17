@@ -2,6 +2,7 @@ package clinic.backend.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +42,9 @@ public record ParaclinicalOrderPrintResponse(
             String patientCode,
             String visitCode,
             VisitDoituongbnLoai visitType,
-            String insuranceCardNumber
+            String insuranceCardNumber,
+            // Full date of birth, so the slip can print the age in years and months.
+            LocalDate dateOfBirth
     ) {
     }
 
