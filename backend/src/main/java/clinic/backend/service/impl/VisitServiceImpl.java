@@ -777,16 +777,14 @@ public class VisitServiceImpl implements VisitService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public VisitTicketResponse prepareTicketPrint(StaffPrincipal principal, UUID visitId) {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
         rejectCashierBeforePayment(visit);
-        boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId);
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.PRINT, VISIT_AUDIT_ENTITY, visitId,
-                visit.getSovaovien(), Map.of("reprint", reprint), clock.instant());
-        return toTicketResponse(visit, reprint);
+        // UC-41: printing is not logged and every print is the same ticket (no "IN LẠI"); the slip shows the print
+        // time instead.
+        return toTicketResponse(visit, false);
     }
 
     private VisitTicketResponse toTicketResponse(Visit visit, boolean reprint) {

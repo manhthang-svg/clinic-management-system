@@ -926,17 +926,27 @@ p[role='alert']:not(.banner) {
     color: #000 !important;
   }
 
-  /* UC-41: the A5 examination ticket fills the printable area of the A5 page set by the ticket screen. */
+  /* UC-41: the examination ticket and the payment guide on an A4 page (margin 0, set by the ticket screen, so the
+     browser prints no header or footer). The sheet keeps the exact width and padding of the screen preview
+     (148 mm, 9 mm) so it lays out the same, then is scaled up by 1.2 (≈ 178 mm wide) and centred on the 210 mm
+     page; zoom also scales the margin, so 13.5 mm becomes the ≈ 16 mm side gap. The height follows the content and
+     stays clear of the bottom edge.
+     fixed, not absolute: the ticket sits inside the app's content column (right of the sidebar), so absolute
+     offsets would start there and push the sheet off the paper; fixed offsets start at the page edge. */
   .visit-ticket-a5-print {
     position: fixed;
-    inset: 0 0 auto 0;
+    top: 0;
+    left: 0;
+    right: auto;
+    bottom: auto;
     box-sizing: border-box;
-    width: auto !important;
+    width: 148mm !important;
     max-width: none !important;
-    height: 194mm;
+    height: auto !important;
     aspect-ratio: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    margin: 0 0 0 13.5mm !important;
+    padding: 9mm !important;
+    zoom: 1.2;
     box-shadow: none !important;
     --tw-ring-shadow: 0 0 #0000 !important;
     color: #000 !important;

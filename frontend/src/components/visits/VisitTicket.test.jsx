@@ -97,7 +97,7 @@ describe('VisitTicket', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
   });
 
-  it('marks a reprint and sends a fully covered patient to the waiting area', () => {
+  it('shows no reprint mark, carries the print time and sends a fully covered patient to the waiting area', () => {
     render(
       <VisitTicket
         visit={{ ...visit, status: 'WAITING' }}
@@ -107,7 +107,8 @@ describe('VisitTicket', () => {
       />,
     );
 
-    expect(screen.getByText('IN LẠI')).toBeInTheDocument();
+    expect(screen.queryByText('IN LẠI')).not.toBeInTheDocument();
+    expect(screen.getByText(/^In lúc: \d{2}:\d{2} \d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
     expect(screen.getAllByText(/khu chờ/)).not.toHaveLength(0);
   });
 });
