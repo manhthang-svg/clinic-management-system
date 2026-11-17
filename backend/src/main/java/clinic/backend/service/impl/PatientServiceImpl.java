@@ -353,7 +353,7 @@ public class PatientServiceImpl implements PatientService {
         Page<Patient> patients;
 
         if (type == null) {
-            // Không có từ khóa → lấy tất cả; có từ khóa → tìm tự do trên mã BN, họ tên, CCCD, SĐT.
+            // Không có từ khóa → lấy tất cả; có từ khóa → tìm tự do: mã BN, họ tên, SĐT chứa từ khóa; CCCD khớp đúng.
             patients = normalizedKeyword == null
                     ? patientRepository.findAll(limited)
                     : patientRepository.search(normalizedKeyword, limited);

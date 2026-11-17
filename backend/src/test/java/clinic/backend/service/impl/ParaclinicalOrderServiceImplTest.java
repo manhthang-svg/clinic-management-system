@@ -131,9 +131,9 @@ class ParaclinicalOrderServiceImplTest {
         assertThat(payment.getValue().getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(payment.getValue().getItems()).hasSize(2);
         verify(paymentCompletionService, never()).releaseOrder(any());
-        verify(auditLogService).recordBusinessChange(
-                eq(DOCTOR_ID), eq(AuditLogAction.CREATE), eq("paraclinical_orders"), any(),
-                eq(visit.getSovaovien()), any(), eq(NOW));
+        // UC-49: creating an order is not written to the audit log.
+        verify(auditLogService, never()).recordBusinessChange(
+                any(), eq(AuditLogAction.CREATE), eq("paraclinical_orders"), any(), any(), any(), any());
     }
 
     @Test

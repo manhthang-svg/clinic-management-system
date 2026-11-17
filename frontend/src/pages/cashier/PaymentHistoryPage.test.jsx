@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SEARCH_MSG, directConfirmTarget, historyParams, searchParams } from '../../components/payments/paymentSearch';
+import { SEARCH_MSG, historyParams, searchParams } from '../../components/payments/paymentSearch';
 import PaymentHistoryPage from './PaymentHistoryPage';
 
 const history = {
@@ -79,13 +79,6 @@ describe('paymentSearch (UC-70)', () => {
         expect(searchParams({ search: ' a ' }).error).toBe(SEARCH_MSG.TOO_SHORT);
         expect(searchParams({ search: ' an ', status: 'PAID', from: '2026-11-01' }).params)
             .toEqual({ page: 0, size: 20, status: 'PAID', search: 'an', from: '2026-11-01' });
-    });
-
-    it('opens Confirm Payment for exactly one pending receipt of the registration code (AF-01)', () => {
-        const pending = { id: 'p1', status: 'PENDING', sovaovien: 'DK0000000001' };
-        expect(directConfirmTarget([pending], 'dk0000000001')).toBe('p1');
-        expect(directConfirmTarget([pending, { ...pending, id: 'p2' }], 'DK0000000001')).toBeNull();
-        expect(directConfirmTarget([pending], 'Nguyễn')).toBeNull();
     });
 
     it('builds the history query', () => {

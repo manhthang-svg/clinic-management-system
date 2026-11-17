@@ -435,8 +435,8 @@ export function AppRoutes({
             />
           }
         >
-          <Route index element={<TechnicianDashboardPage />} />
-          <Route path="dashboard" element={<TechnicianDashboardPage />} />
+          <Route index element={<TechnicianDashboardPage currentUser={session.account} />} />
+          <Route path="dashboard" element={<TechnicianDashboardPage currentUser={session.account} />} />
           <Route path="queue" element={<TechnicianQueuePage />} />
           <Route path="results" element={<ParaclinicalResultListPage />} />
           <Route path="results/:orderId" element={<ParaclinicalResultPage />} />

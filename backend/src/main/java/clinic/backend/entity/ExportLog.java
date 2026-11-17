@@ -103,6 +103,26 @@ public class ExportLog extends UuidEntity {
         return log;
     }
 
+    /** UC-80 / BR-43: Electronic medical record export as XML or JSON. */
+    public static ExportLog dataExport(
+            UUID id, UUID medicalRecordId, String sovaovien, ExportFormat format, ExportLogPurpose purpose,
+            String recipient, String fileUri, String fileSha256, String specVersion,
+            UUID exportedByAccountId, Instant exportedAt) {
+        ExportLog log = new ExportLog(id);
+        log.medicalRecordId = medicalRecordId;
+        log.sovaovien = sovaovien;
+        log.exportFormat = format;
+        log.purpose = purpose != null ? purpose : ExportLogPurpose.LIEN_THONG;
+        log.recipient = recipient;
+        log.fileUri = fileUri;
+        log.fileSha256 = fileSha256;
+        log.specVersion = specVersion != null ? specVersion : "CV365/2025";
+        log.status = ExportLogStatus.SUCCESS;
+        log.exportedByAccountId = exportedByAccountId;
+        log.exportedAt = exportedAt;
+        return log;
+    }
+
     /** UC-53 EF-03: an export that failed; {@code errorMessage} is a reason code, never medical data. */
     public static ExportLog failed(
             UUID id, UUID medicalRecordId, String sovaovien, ExportFormat format, ExportLogPurpose purpose,

@@ -54,7 +54,9 @@ describe('QueueTicketDialog (I1-D48)', () => {
     await user.click(await screen.findByRole('button', { name: 'In phiếu khám' }));
 
     expect(visitApi.prepareTicketPrint).toHaveBeenCalledWith('v1');
-    expect(await screen.findByText('IN LẠI')).toBeInTheDocument();
+    // UC-41 AF-02: no reprint mark; the printed ticket carries the print time instead.
+    expect(screen.queryByText('IN LẠI')).not.toBeInTheDocument();
+    expect(screen.getByText(/^In lúc: /)).toBeInTheDocument();
     await vi.waitFor(() => expect(print).toHaveBeenCalled());
   });
 

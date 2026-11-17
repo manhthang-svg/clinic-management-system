@@ -33,7 +33,7 @@ export function QueueTicketDialog({ visitId, onClose, visitApi = defaultVisitApi
     setPrinting(true);
     setError(null);
     try {
-      // Records the print (and marks a reprint) before the browser print dialog opens.
+      // Loads the current ticket before the browser print dialog opens (UC-41 AF-02; the print is not logged).
       setTicket(await visitApi.prepareTicketPrint(visitId));
       window.setTimeout(() => window.print(), 0);
     } catch (printError) {
@@ -48,7 +48,7 @@ export function QueueTicketDialog({ visitId, onClose, visitApi = defaultVisitApi
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       {/* While the dialog is open, the browser prints the ticket on one A5 page. */}
-      <style>{'@media print { @page { size: A5 portrait; margin: 8mm; } }'}</style>
+      <style>{'@media print { @page { size: A4 portrait; margin: 0; } }'}</style>
       <div
         role="dialog"
         aria-modal="true"

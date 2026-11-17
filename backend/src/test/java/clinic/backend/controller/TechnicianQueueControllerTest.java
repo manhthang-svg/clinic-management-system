@@ -6,10 +6,12 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.TechnicianDashboardResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianQueueStatsResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
+import clinic.backend.service.TechnicianDashboardService;
 import clinic.backend.service.TechnicianQueueService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,11 +33,14 @@ class TechnicianQueueControllerTest {
     @Mock
     private TechnicianQueueService technicianQueueService;
 
+    @Mock
+    private TechnicianDashboardService technicianDashboardService;
+
     private TechnicianQueueController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new TechnicianQueueController(technicianQueueService);
+        controller = new TechnicianQueueController(technicianQueueService, technicianDashboardService);
     }
 
     @Test
@@ -49,6 +54,23 @@ class TechnicianQueueControllerTest {
 
         assertThat(response.getData()).containsExactly(room);
         verify(technicianQueueService).getTechnicianRooms(null);
+    }
+
+    @Test
+    void getDashboard_delegatesToServiceWithRoomAndPrincipalId() {
+        UUID roomId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getSubject()).thenReturn(technicianId.toString());
+        when(jwt.getClaimAsString("sid")).thenReturn(UUID.randomUUID().toString());
+        TechnicianDashboardResponse dashboard = new TechnicianDashboardResponse(
+                null, false, TechnicianDashboardResponse.Stats.empty(), List.of(), List.of());
+        when(technicianDashboardService.getDashboard(roomId, technicianId)).thenReturn(dashboard);
+
+        ApiResponse<TechnicianDashboardResponse> response = controller.getDashboard(jwt, roomId);
+
+        assertThat(response.getData()).isEqualTo(dashboard);
+        verify(technicianDashboardService).getDashboard(roomId, technicianId);
     }
 
     @Test

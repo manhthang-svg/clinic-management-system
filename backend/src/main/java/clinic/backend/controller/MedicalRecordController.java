@@ -5,7 +5,10 @@ import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ExportMedicalRecordRequest;
+import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
+import jakarta.validation.Valid;
 import clinic.backend.dto.response.MedicalRecordDetailResponse;
 import clinic.backend.dto.response.MedicalRecordItemResponse;
 import clinic.backend.dto.response.MedicalRecordPatientItemResponse;
@@ -134,5 +137,23 @@ public class MedicalRecordController {
         UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
         medicalRecordService.recordFileAccess(imageId, actorAccountId);
         return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án điện tử (XML / JSON) theo CV 365")
+    @PostMapping("/{id}/export-data")
+    public ResponseEntity<byte[]> exportMedicalRecordData(
+            @PathVariable UUID id,
+            @RequestBody @Valid ExportMedicalRecordDataRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
+        ExportMedicalRecordDataResponse response = medicalRecordService.exportMedicalRecordData(id, request, actorAccountId);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + response.fileName() + "\"")
+                .header("X-File-SHA256", response.fileSha256())
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Disposition, X-File-SHA256")
+                .contentType(MediaType.parseMediaType(response.contentType()))
+                .body(response.content());
     }
 }

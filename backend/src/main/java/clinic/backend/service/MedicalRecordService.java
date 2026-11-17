@@ -59,4 +59,12 @@ public interface MedicalRecordService {
      */
     void recordFileAccess(UUID imageId, UUID actorAccountId);
 
+    /**
+     * UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án dạng XML hoặc JSON theo chuẩn CV 365.
+     */
+    clinic.backend.dto.response.ExportMedicalRecordDataResponse exportMedicalRecordData(
+            UUID medicalRecordId,
+            clinic.backend.dto.request.ExportMedicalRecordDataRequest request,
+            UUID actorAccountId
+    );
 }

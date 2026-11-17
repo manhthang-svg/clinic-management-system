@@ -1,5 +1,7 @@
 import { CheckCircle2, Printer, Users } from 'lucide-react';
 import { PRIORITY_REASON_LABELS, VISIT_STATUS_LABELS, VISIT_TYPE_LABELS } from '../../constants/visitData';
+import { Barcode } from '../paraclinicalResult/Barcode';
+import { PrintTime } from './PrintTime';
 import { ageText, formatDate, formatDateTime, formatMoney, needsPaymentGuide } from './visitFormat';
 
 function Row({ label, children }) {
@@ -41,7 +43,7 @@ export function VisitTicket({
   return (
     <div className="space-y-5">
       {/* While this screen is open, the browser prints on one A5 page. */}
-      <style>{'@media print { @page { size: A5 portrait; margin: 8mm; } }'}</style>
+      <style>{'@media print { @page { size: A4 portrait; margin: 0; } }'}</style>
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -145,6 +147,7 @@ export function PaymentGuideA5({ ticket }) {
       aria-label="Phiếu hướng dẫn thanh toán"
       className="visit-ticket-a5-print relative flex w-full max-w-[148mm] flex-col bg-white text-[13px] leading-5 text-slate-800 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 p-[9mm] sm:aspect-[148/210]"
     >
+      <PrintTime className="absolute left-[9mm] top-[3.5mm]" />
       <header className="flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-3">
         <div className="min-w-0">
           <p className="font-bold uppercase leading-tight text-slate-900">{ticket.facilityName}</p>
@@ -152,16 +155,16 @@ export function PaymentGuideA5({ ticket }) {
         </div>
         <div className="shrink-0 text-right text-[11px] text-slate-600">
           <p>Mã lượt khám</p>
-          <p className="font-mono text-[13px] font-bold text-slate-900">{ticket.registrationCode}</p>
+          {/* Barcode of the registration code (Code 128), with the code printed under it. */}
+          {ticket.registrationCode
+            ? <Barcode value={ticket.registrationCode} height={28} module={1} />
+            : <p className="font-mono text-[13px] font-bold text-slate-900">—</p>}
         </div>
       </header>
 
       <div className="mt-4 text-center">
         <h3 className="text-xl! font-extrabold! uppercase tracking-wide text-slate-900">Phiếu hướng dẫn thanh toán</h3>
         <p className="text-xs text-slate-500">Phí khám bệnh – lượt khám dịch vụ</p>
-        {ticket.reprint && (
-          <p className="mt-1 inline-block rounded border-2 border-rose-600 px-2 text-xs font-extrabold text-rose-700">IN LẠI</p>
-        )}
       </div>
 
       <div className="mt-5 rounded-xl border-2 border-[#127e7a] px-4 py-3 text-center">
@@ -214,6 +217,7 @@ export function VisitTicketA5({ ticket }) {
       aria-label="Phiếu khám bệnh"
       className="visit-ticket-a5-print relative flex w-full max-w-[148mm] flex-col bg-white text-[13px] leading-5 text-slate-800 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 p-[9mm] sm:aspect-[148/210]"
     >
+      <PrintTime className="absolute left-[9mm] top-[3.5mm]" />
       <header className="flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-3">
         <div className="min-w-0">
           <p className="font-bold uppercase leading-tight text-slate-900">{ticket.facilityName}</p>
@@ -221,15 +225,15 @@ export function VisitTicketA5({ ticket }) {
         </div>
         <div className="shrink-0 text-right text-[11px] text-slate-600">
           <p>Mã lượt khám</p>
-          <p className="font-mono text-[13px] font-bold text-slate-900">{ticket.registrationCode}</p>
+          {/* Barcode of the registration code (Code 128), with the code printed under it. */}
+          {ticket.registrationCode
+            ? <Barcode value={ticket.registrationCode} height={28} module={1} />
+            : <p className="font-mono text-[13px] font-bold text-slate-900">—</p>}
         </div>
       </header>
 
       <div className="mt-4 text-center">
         <h3 className="text-xl! font-extrabold! uppercase tracking-wide text-slate-900">Phiếu khám bệnh</h3>
-        {ticket.reprint && (
-          <p className="mt-1 inline-block rounded border-2 border-rose-600 px-2 text-xs font-extrabold text-rose-700">IN LẠI</p>
-        )}
       </div>
 
       {/* I1-D48: a visit that must pay first gets its number with the receipt, so its ticket shows none. */}
@@ -311,7 +315,6 @@ export function VisitTicketSheet({ ticket }) {
       <header className="text-center border-b border-dashed border-slate-200 pb-4">
         <p className="text-sm font-bold uppercase text-slate-800">{ticket.facilityName}</p>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phiếu khám bệnh</p>
-        {ticket.reprint && <p className="mt-1 text-xs font-extrabold text-rose-700">IN LẠI</p>}
         <p className="text-xs text-slate-400 font-mono mt-1">{ticket.registrationCode}</p>
         {/* I1-D48: a visit that must pay first gets its number with the receipt, so its ticket shows none. */}
         {ticket.queueNumber != null && (
