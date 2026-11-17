@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import {
     Search,
     RefreshCw,
@@ -22,7 +22,7 @@ import {
 } from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
-import { PAYMENT_PAGE_SIZE, SEARCH_MSG, directConfirmTarget, searchParams } from '../../components/payments/paymentSearch';
+import { PAYMENT_PAGE_SIZE, SEARCH_MSG, searchParams } from '../../components/payments/paymentSearch';
 
 const PAGE_BUTTON_CLASS =
     'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
@@ -95,7 +95,6 @@ export default function PaymentManagementPage() {
     const [notice, setNotice] = useState('');
     // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
     const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
-    const navigate = useNavigate();
 
     // Modal state
     const [cashModalPayment, setCashModalPayment] = useState(null);
@@ -108,7 +107,7 @@ export default function PaymentManagementPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
 
-    // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; đúng 1 phiếu Chờ của mã lượt khám thì mở UC-71
+    // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; luôn trả về danh sách, bấm vào phiếu mới mở chi tiết
     // pageToLoad: trang cần tải; không truyền (bộ lọc đổi) thì về trang đầu
     const fetchPayments = useCallback(async (pageToLoad = 0) => {
         const { params, error } = searchParams({
@@ -124,15 +123,12 @@ export default function PaymentManagementPage() {
             setPayments(content);
             setTotalElements(page?.totalElements ?? content.length);
             setPageNumber(pageToLoad);
-            // AF-01 chỉ xét ở trang đầu của một lần tìm
-            const target = pageToLoad === 0 ? directConfirmTarget(content, search) : null;
-            if (target) navigate(target);
         } catch (err) {
             setNotice(confirmErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, typeTab, fromDate, toDate, navigate]);
+    }, [search, statusFilter, typeTab, fromDate, toDate]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
