@@ -24,13 +24,15 @@ import {
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 
-// so dong moi trang cua danh sach cho thu
+// so dong moi trang cua 2 bang (cho thu / da thu)
 const PENDING_PAGE_SIZE = 20;
-// phieu da thu: tai tung trang 100 phieu (moi thu truoc) cho den khi het phieu cua hom nay
+// the thong ke: tai tung trang 100 phieu da thu (moi thu truoc) cho den khi het phieu cua hom nay
 const PAID_LOAD_SIZE = 100;
-const RECENT_PAID_COUNT = 6;
 // chan tren de khong lap vo han neu du lieu bat thuong
 const MAX_PAID_PAGES = 50;
+// 2 nua cua trang tong quan
+const VIEW_PENDING = 'PENDING';
+const VIEW_PAID = 'PAID';
 
 // lay mang phieu tu ket qua Page cua API
 function contentOf(res) {
@@ -45,21 +47,19 @@ function totalOf(res) {
     return page?.totalElements ?? page?.page?.totalElements ?? contentOf(res).length;
 }
 
-// 6 phieu thu gan nhat + tat ca phieu thu trong hom nay (khong gioi han so luong)
-async function loadPaid() {
-    const recent = [];
+// tat ca phieu thu trong hom nay (cho the "Da thu hom nay" va doanh thu)
+async function loadPaidToday() {
     const today = [];
     for (let page = 0; page < MAX_PAID_PAGES; page += 1) {
         const rows = contentOf(await paymentApi.list({
             status: 'PAID', page, size: PAID_LOAD_SIZE, sort: 'paidAt,desc',
         }));
-        if (page === 0) recent.push(...rows.slice(0, RECENT_PAID_COUNT));
         const paidToday = rows.filter((p) => isToday(p.paidAt));
         today.push(...paidToday);
         // het trang, hoac da gap phieu thu tu hom truoc -> dung
         if (rows.length < PAID_LOAD_SIZE || paidToday.length < rows.length) break;
     }
-    return { recent, today };
+    return today;
 }
 
 // cung ngay (theo gio may) voi hom nay
@@ -102,8 +102,13 @@ export default function CashierOverviewPage() {
     const [pendingRows, setPendingRows] = useState([]);
     const [pendingTotal, setPendingTotal] = useState(0);
     const [pendingCounts, setPendingCounts] = useState({ exam: 0, para: 0 });
-    // phieu da thu: 6 phieu gan nhat + tat ca phieu thu hom nay
-    const [paid, setPaid] = useState({ recent: [], today: [] });
+    // phieu thu trong hom nay (cho 2 the thong ke)
+    const [paidToday, setPaidToday] = useState([]);
+    // nua "Da thu tien": trang dang xem + tong so phieu da thu (server dem)
+    const [paidRows, setPaidRows] = useState([]);
+    const [paidTotal, setPaidTotal] = useState(0);
+    const [paidPage, setPaidPage] = useState(0);
+    const [view, setView] = useState(VIEW_PENDING);
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
     const [pendingPage, setPendingPage] = useState(0);
@@ -122,17 +127,18 @@ export default function CashierOverviewPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [syncingQr, setSyncingQr] = useState(false);
 
-    // Tai du lieu (goi song song): 1 trang phieu cho thu (moi nhat truoc), so phieu cho thu theo loai,
-    // phieu da thu hom nay. Phan trang o server nen khong bo sot phieu nao.
+    // Tai du lieu (goi song song): 1 trang phieu cho thu, 1 trang phieu da thu (moi thu truoc),
+    // so phieu cho thu theo loai, phieu thu hom nay. Phan trang o server nen khong bo sot phieu nao.
     const fetchPayments = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const [pageRes, examRes, paraRes, paidResult] = await Promise.all([
+            const [pageRes, paidRes, examRes, paraRes, todayRows] = await Promise.all([
                 paymentApi.list({ status: 'PENDING', type: filterType, page: pendingPage, size: PENDING_PAGE_SIZE }),
+                paymentApi.list({ status: 'PAID', page: paidPage, size: PENDING_PAGE_SIZE, sort: 'paidAt,desc' }),
                 paymentApi.list({ status: 'PENDING', type: 'EXAMINATION_FEE', size: 1 }),
                 paymentApi.list({ status: 'PENDING', type: 'PARACLINICAL_FEE', size: 1 }),
-                loadPaid(),
+                loadPaidToday(),
             ]);
             const total = totalOf(pageRes);
             const lastPage = Math.max(0, Math.ceil(total / PENDING_PAGE_SIZE) - 1);
@@ -143,14 +149,16 @@ export default function CashierOverviewPage() {
             }
             setPendingRows(contentOf(pageRes));
             setPendingTotal(total);
+            setPaidRows(contentOf(paidRes));
+            setPaidTotal(totalOf(paidRes));
             setPendingCounts({ exam: totalOf(examRes), para: totalOf(paraRes) });
-            setPaid(paidResult);
+            setPaidToday(todayRows);
         } catch (err) {
             setError(err?.message || 'Không thể tải danh sách phiếu thu');
         } finally {
             setLoading(false);
         }
-    }, [filterType, pendingPage]);
+    }, [filterType, pendingPage, paidPage]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -164,24 +172,22 @@ export default function CashierOverviewPage() {
         pendingExam: pendingCounts.exam,
         pendingPara: pendingCounts.para,
         pendingTotal: pendingCounts.exam + pendingCounts.para,
-        paidCount: paid.today.length,
-        totalRevenue: paid.today.reduce(
+        paidCount: paidToday.length,
+        totalRevenue: paidToday.reduce(
             (sum, p) => sum + Number(p.patientTotalAmount ?? p.totalAmount ?? p.amount ?? 0), 0),
-    }), [pendingCounts, paid]);
+    }), [pendingCounts, paidToday]);
 
-    // phan trang danh sach cho thu (o server): 20 dong / trang
+    // phan trang (o server): 20 dong / trang, moi nua 1 bo dem trang rieng
     const pendingPageCount = Math.max(1, Math.ceil(pendingTotal / PENDING_PAGE_SIZE));
     const pendingCurrentPage = pendingPage;
     const pendingPageRows = pendingRows;
+    const paidPageCount = Math.max(1, Math.ceil(paidTotal / PENDING_PAGE_SIZE));
 
     // doi loai phieu thi ve trang dau
     const chooseFilter = (type) => {
         setFilterType(type);
         setPendingPage(0);
     };
-
-    // Danh sach da thanh toan gan day (PAID)
-    const recentPaidList = paid.recent;
 
     // Xu ly mo Modal tien mat
     const handleOpenCashModal = (payment) => {
@@ -412,8 +418,41 @@ export default function CashierOverviewPage() {
                     </article>
                 </section>
 
-                {/* BANG CHINH: LUOT KHAM MOI NHAN - CHO THU TIEN */}
+                {/* TRANG CHIA 2 NUA: CHO THU TIEN / DA THU TIEN */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
+                    <div role="tablist" aria-label="Phiếu thu" className="flex border-b border-[#edf2f0] bg-[#f8fbfa]">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={view === VIEW_PENDING}
+                            onClick={() => setView(VIEW_PENDING)}
+                            className={`flex flex-1 items-center justify-center gap-2 border-b-2 px-4 py-3.5 text-sm font-bold transition ${
+                                view === VIEW_PENDING
+                                    ? 'border-amber-500 bg-white text-amber-800'
+                                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            <Clock className="h-4 w-4" />
+                            Chờ thu tiền ({pendingTotal})
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={view === VIEW_PAID}
+                            onClick={() => setView(VIEW_PAID)}
+                            className={`flex flex-1 items-center justify-center gap-2 border-b-2 px-4 py-3.5 text-sm font-bold transition ${
+                                view === VIEW_PAID
+                                    ? 'border-emerald-500 bg-white text-emerald-800'
+                                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Đã thu tiền ({paidTotal})
+                        </button>
+                    </div>
+
+                    {view === VIEW_PENDING && (
+                    <>
                     <div className="flex flex-col justify-between gap-3 border-b border-[#edf2f0] p-5 sm:flex-row sm:items-center">
                         <div>
                             <h2 className="text-lg font-bold text-[#142534]">
@@ -635,14 +674,16 @@ export default function CashierOverviewPage() {
                             </nav>
                         </div>
                     )}
-                </section>
+                    </>
+                    )}
 
-                {/* BANG PHU: GIAO DICH DA THANH TOAN GAN DAY */}
-                <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
+                    {/* NUA 2: PHIEU DA THU TIEN (moi thu truoc) */}
+                    {view === VIEW_PAID && (
+                    <>
                     <div className="flex items-center justify-between border-b border-[#edf2f0] p-5">
                         <div>
-                            <h2 className="text-base font-bold text-[#142534]">Giao dịch hoàn tất gần đây</h2>
-                            <p className="mt-0.5 text-xs text-[#60737d]">Các phiếu thu đã được xác nhận thanh toán thành công</p>
+                            <h2 className="text-lg font-bold text-[#142534]">Phiếu đã thu tiền</h2>
+                            <p className="mt-0.5 text-xs text-[#60737d]">Các phiếu thu đã xác nhận thanh toán, mới thu xếp trước</p>
                         </div>
                         <Link to="payment-history" className="text-xs font-semibold text-teal-700 hover:text-teal-900">
                             Xem tất cả lịch sử →
@@ -662,14 +703,21 @@ export default function CashierOverviewPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#edf2f0]">
-                                {recentPaidList.length === 0 ? (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-12 text-center text-slate-500">
+                                            <RefreshCw className="mx-auto h-6 w-6 animate-spin text-teal-600" />
+                                            <p className="mt-2 text-sm font-medium">Đang tải dữ liệu phiếu thu...</p>
+                                        </td>
+                                    </tr>
+                                ) : paidRows.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
-                                            Chưa có giao dịch hoàn tất trong phiên làm việc này.
+                                            Chưa có phiếu nào đã thu tiền.
                                         </td>
                                     </tr>
                                 ) : (
-                                    recentPaidList.map((p) => (
+                                    paidRows.map((p) => (
                                         <tr key={p.id} className="hover:bg-slate-50/50">
                                             <td className="px-5 py-3 font-mono text-xs font-semibold text-slate-800">
                                                 {p.paymentCode}
@@ -684,12 +732,21 @@ export default function CashierOverviewPage() {
                                                 {formatMoney(p.patientTotalAmount ?? p.totalAmount ?? p.amount ?? 0)}
                                             </td>
                                             <td className="px-5 py-3 text-xs text-slate-500">
-                                                {formatDate(p.createdAt)}
+                                                {formatDate(p.paidAt ?? p.createdAt)}
                                             </td>
                                             <td className="px-5 py-3 text-right">
-                                                <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                                                    Đã thanh toán
-                                                </span>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                                                        Đã thanh toán
+                                                    </span>
+                                                    <Link
+                                                        to={`payments/${p.id}`}
+                                                        className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                                                        title="Xem chi tiết phiếu thu"
+                                                    >
+                                                        <FileText className="h-4 w-4" />
+                                                    </Link>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -697,6 +754,37 @@ export default function CashierOverviewPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {paidTotal > PENDING_PAGE_SIZE && (
+                        <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e3ece9] px-5 py-4 text-sm text-[#60737d] sm:flex-row">
+                            <span>
+                                Hiển thị {paidPage * PENDING_PAGE_SIZE + 1}–{paidPage * PENDING_PAGE_SIZE + paidRows.length} trên tổng số {paidTotal} phiếu đã thu
+                            </span>
+                            <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    aria-label="Trang trước"
+                                    disabled={paidPage === 0}
+                                    onClick={() => setPaidPage(paidPage - 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <span className="px-2">Trang {paidPage + 1}/{paidPageCount}</span>
+                                <button
+                                    type="button"
+                                    aria-label="Trang sau"
+                                    disabled={paidPage + 1 >= paidPageCount}
+                                    onClick={() => setPaidPage(paidPage + 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </nav>
+                        </div>
+                    )}
+                    </>
+                    )}
                 </section>
             </div>
 
