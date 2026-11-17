@@ -16,6 +16,7 @@ import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
 import {
+  dashboardError,
   formatDayLong,
   formatDayShort,
   formatMoney,
@@ -37,6 +38,8 @@ import {
 import { COLORS } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
@@ -78,7 +81,13 @@ export function RevenueStatisticsPage({
     () => ({ from: period.from, to: period.to, groupBy }),
     [period.from, period.to, groupBy],
   );
-  const { data, error, loading, reload } = useStatisticsQuery(api.getRevenue, params, !periodError);
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getRevenue, params, !periodError);
+  // bang chi tiet: loc + phan trang o server, chi nhan 20 dong dang xem
+  const table = useServerPage(api.getRevenueRows, params, { enabled: !periodError, toMessage: dashboardError });
+  const reload = () => {
+    reloadSummary();
+    table.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -100,7 +109,13 @@ export function RevenueStatisticsPage({
     insurance: Number(item.amounts.insuranceAmount),
     patient: Number(item.amounts.patientAmount),
   }));
-  const activeRows = series.filter((row) => row.payments > 0);
+  const tableRows = table.rows.map((item) => ({
+    period: item.period,
+    payments: item.amounts.payments,
+    total: Number(item.amounts.totalAmount),
+    insurance: Number(item.amounts.insuranceAmount),
+    patient: Number(item.amounts.patientAmount),
+  }));
 
   const typeItems = (data?.byType ?? []).map((item) => ({
     name: PAYMENT_TYPES[item.type]?.label ?? item.type,
@@ -207,7 +222,7 @@ export function RevenueStatisticsPage({
             </div>
 
             <ChartCard title="Chi tiết" description={byMonth ? 'Các tháng có khoản thu.' : 'Các ngày có khoản thu.'}>
-              {activeRows.length > 0 ? (
+              {table.total > 0 ? (
                 <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white">
@@ -220,7 +235,7 @@ export function RevenueStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {activeRows.map((row) => (
+                      {tableRows.map((row) => (
                         <tr key={row.period} className="border-b border-slate-50 last:border-0">
                           <th scope="row" className="py-2.5 pr-4 text-left font-medium text-slate-700">{formatPeriod(row.period)}</th>
                           <td className="py-2.5 px-2 text-right text-slate-600">{formatNumber(row.payments)}</td>
@@ -240,6 +255,7 @@ export function RevenueStatisticsPage({
                       </tr>
                     </tfoot>
                   </table>
+                  <ListPagination paged={table} />
                 </div>
               ) : <EmptyChart />}
             </ChartCard>

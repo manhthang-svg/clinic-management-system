@@ -6,10 +6,26 @@ import ApiError from '../../apis/apiError';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 import ReceptionistRoomQueuePage from './ReceptionistRoomQueuePage';
+import { pageOf } from '../../test/fakeStatisticsServer';
+
+// lam viec cua backend moi tren du lieu day du cua test: loc roomId + cat trang
+function asServer(visitApi) {
+    return {
+        ...visitApi,
+        getQueueStatusPage: vi.fn(async (params = {}, signal) => {
+            const list = await visitApi.getQueueStatus(signal);
+            const rooms = params.roomId ? list.filter((item) => item.roomId === params.roomId) : list;
+            return { rooms: pageOf(rooms, params), receivableRooms: list.filter((item) => item.hasDoctor).length };
+        }),
+        getQueuePage: vi.fn(async (params = {}, signal) => (
+            pageOf(await visitApi.getQueue({ roomId: params.roomId }, signal), params))),
+    };
+}
 
 function renderPage(visitApi, path = '/receptionist/room-queue') {
-    const page = <ReceptionistRoomQueuePage visitApi={visitApi} />;
-    return render(
+    const server = asServer(visitApi);
+    const page = <ReceptionistRoomQueuePage visitApi={server} />;
+    const result = render(
         <MemoryRouter initialEntries={[path]}>
             <Routes>
                 <Route path="/receptionist/room-queue" element={page} />
@@ -17,6 +33,7 @@ function renderPage(visitApi, path = '/receptionist/room-queue') {
             </Routes>
         </MemoryRouter>,
     );
+    return { ...result, server };
 }
 
 const NO_ROOM_MESSAGE = 'Không có phòng khám nào đang hoạt động có thể tiếp nhận bệnh nhân. Vui lòng báo quản trị viên.';
@@ -193,19 +210,24 @@ describe('ReceptionistRoomQueuePage', () => {
             patientCode: `BN${index + 1}`, isPriority: false, thoigianvaovien: '2026-11-05T01:30:00Z',
             status: 'WAITING', isSkipped: false,
         }));
-        renderPage({
+        const { server } = renderPage({
             getQueueStatus: vi.fn().mockResolvedValue([room()]),
             getQueue: vi.fn().mockResolvedValue(visits),
         }, '/receptionist/room-queue/room-1');
 
         const detail = await screen.findByRole('region', { name: 'Hàng đợi Phòng khám Nội 1' });
+        // mo phong tu link: server loc dung phong; danh sach cho lay tung trang 20 benh nhan
+        expect(server.getQueueStatusPage).toHaveBeenCalledWith(
+            { roomId: 'room-1', page: 0, size: 20 }, expect.any(AbortSignal));
         expect(await within(detail).findByText('Bệnh nhân 20')).toBeInTheDocument();
         expect(within(detail).queryByText('Bệnh nhân 21')).not.toBeInTheDocument();
         expect(within(detail).getByText('Hiển thị 1 – 20 / 22')).toBeInTheDocument();
 
         await user.click(within(detail).getByRole('button', { name: 'Trang 2' }));
 
-        expect(within(detail).getByText('Bệnh nhân 22')).toBeInTheDocument();
+        expect(await within(detail).findByText('Bệnh nhân 22')).toBeInTheDocument();
+        expect(server.getQueuePage).toHaveBeenLastCalledWith(
+            { roomId: 'room-1', page: 1, size: 20 }, expect.any(AbortSignal));
         expect(within(detail).queryByText('Bệnh nhân 1')).not.toBeInTheDocument();
         expect(within(detail).getByText('Hiển thị 21 – 22 / 22')).toBeInTheDocument();
         expect(within(detail).getByRole('button', { name: 'Trang sau' })).toBeDisabled();
@@ -306,5 +328,27 @@ describe('ReceptionistRoomQueuePage', () => {
         expect(alert).toHaveTextContent('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
         expect(alert).toHaveTextContent('Số liệu bên dưới là lần cập nhật lúc');
         expect(totalOf('Phòng khám Nội 1')).toBe('3');
+    });
+
+    it('shows every room, 20 per page', async () => {
+        const user = userEvent.setup();
+        const rooms = Array.from({ length: 25 }, (_, i) => room({
+            roomId: `room-${i + 1}`, roomCode: `PK${i + 1}`, roomName: `Phòng số ${i + 1}`,
+        }));
+        const { server } = renderPage({ getQueueStatus: vi.fn().mockResolvedValue(rooms) });
+
+        expect(await screen.findByText('Phòng số 20')).toBeInTheDocument();
+        // trinh duyet chi xin 1 trang 20 phong
+        expect(server.getQueueStatusPage).toHaveBeenCalledWith({ page: 0, size: 20 }, expect.any(AbortSignal));
+        expect(screen.queryByText('Phòng số 21')).not.toBeInTheDocument();
+        expect(screen.getByText('Hiển thị 1 – 20 / 25')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+        expect(await screen.findByText('Phòng số 25')).toBeInTheDocument();
+        expect(server.getQueueStatusPage).toHaveBeenLastCalledWith({ page: 1, size: 20 }, expect.any(AbortSignal));
+        expect(screen.queryByText('Phòng số 1')).not.toBeInTheDocument();
+        // tieu de khoa van hien tren trang 2
+        expect(screen.getByRole('columnheader', { name: 'Khoa Nội' })).toBeInTheDocument();
     });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, RefreshCw } from 'lucide-react';
 
@@ -7,6 +7,7 @@ import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import ROUTES, { roomQueuePath } from '../../routes/routes';
 import { MSG12, MSG13, MSG80, MSG92, msg39 } from '../../components/services/serviceMessages';
 import { MSG102, msg56 as msg53 } from '../../components/visits/visitErrors';
+import { ListPagination } from '../../components/shared/ListPagination';
 
 const REFRESH_MS = 10_000;
 const NO_DEPARTMENT = 'Chưa thuộc khoa';
@@ -110,7 +111,7 @@ function UnavailableRoom({ roomId, visitApi, onBack }) {
 
     useEffect(() => {
         const controller = new AbortController();
-        visitApi.getQueue({ roomId }, controller.signal)
+        visitApi.getQueuePage({ roomId, size: 1 }, controller.signal)
             // phong vua mo lai: lan lam moi sau se hien, tam thoi bao MSG53
             .then(() => setMessage(msg53()))
             .catch((failure) => {
@@ -132,22 +133,23 @@ function UnavailableRoom({ roomId, visitApi, onBack }) {
     );
 }
 
-// danh sach cho kham cua 1 phong, 20 dong / trang
+// danh sach cho kham cua 1 phong: phan trang o server, moi lan chi nhan 20 benh nhan dang xem
 function RoomDetail({ room, visitApi, refreshKey, onBack }) {
     const [visits, setVisits] = useState([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [page, setPage] = useState(1);
-    const pageCount = Math.max(1, Math.ceil(visits.length / PAGE_SIZE));
-    // tu lam moi 10 giay; danh sach ngan lai thi dung o trang cuoi
-    const currentPage = Math.min(page, pageCount);
-    const pageVisits = visits.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    // tu lam moi 10 giay; danh sach ngan lai ma dang o trang qua cuoi thi lui ve trang cuoi
+    if (!loading && page > pageCount) setPage(pageCount);
 
     useEffect(() => {
         const controller = new AbortController();
-        visitApi.getQueue({ roomId: room.roomId }, controller.signal)
-            .then((list) => {
-                setVisits(Array.isArray(list) ? list : []);
+        visitApi.getQueuePage({ roomId: room.roomId, page: page - 1, size: PAGE_SIZE }, controller.signal)
+            .then((result) => {
+                setVisits(Array.isArray(result?.content) ? result.content : []);
+                setTotal(result?.page?.totalElements ?? 0);
                 setError('');
             })
             .catch((failure) => {
@@ -155,7 +157,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
             })
             .finally(() => setLoading(false));
         return () => controller.abort();
-    }, [visitApi, room.roomId, refreshKey]);
+    }, [visitApi, room.roomId, refreshKey, page]);
 
     return (
         <section aria-label={`Hàng đợi ${room.roomName || room.roomCode}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -189,7 +191,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {pageVisits.map((visit) => (
+                        {visits.map((visit) => (
                             <tr key={visit.id} className="border-b border-slate-100">
                                 <td className="px-4 py-3 text-base font-bold tabular-nums">{visit.queueNumber}</td>
                                 <td className="px-4 py-3">
@@ -209,14 +211,14 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         ))}
                     </tbody>
                 </table>
-                {visits.length === 0 && (
+                {total === 0 && (
                     <p className="px-6 py-10 text-center text-sm text-slate-500">
                         {loading ? 'Đang tải danh sách chờ…' : MSG92 /* AF-02 */}
                     </p>
                 )}
             </div>
-            {visits.length > 0 && (
-                <Pagination page={currentPage} pageCount={pageCount} total={visits.length} onChange={setPage} />
+            {total > 0 && (
+                <Pagination page={page} pageCount={pageCount} total={total} onChange={setPage} />
             )}
         </section>
     );
@@ -224,7 +226,11 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
 
 // UC-42: trang tinh trang hang doi cac phong kham, nhom theo khoa
 export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }) {
+    // 1 trang phong tu server (20 phong), tong so phong va so phong tiep nhan duoc
     const [rooms, setRooms] = useState([]);
+    const [roomCount, setRoomCount] = useState(0);
+    const [receivableRooms, setReceivableRooms] = useState(0);
+    const [roomPage, setRoomPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -235,11 +241,17 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
     const backToOverview = () => navigate(ROUTES.RECEPTIONIST.ROOM_QUEUE);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // tai so lieu hang doi cac phong
+    // tai so lieu hang doi: 1 trang phong; mo phong tu link thi server chi tra phong do
     const fetchStatus = useCallback(async (signal) => {
         try {
-            const list = await visitApi.getQueueStatus(signal);
-            setRooms(Array.isArray(list) ? list : []);
+            const result = await visitApi.getQueueStatusPage({
+                roomId: selectedRoomId,
+                page: selectedRoomId ? 0 : roomPage - 1,
+                size: PAGE_SIZE,
+            }, signal);
+            setRooms(Array.isArray(result?.rooms?.content) ? result.rooms.content : []);
+            setRoomCount(result?.rooms?.page?.totalElements ?? 0);
+            setReceivableRooms(result?.receivableRooms ?? 0);
             setLoadError('');
             setLastUpdated(new Date());
         } catch (error) {
@@ -247,7 +259,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
         } finally {
             setLoading(false);
         }
-    }, [visitApi]);
+    }, [visitApi, selectedRoomId, roomPage]);
 
     // bam Lam moi
     const refreshNow = async () => {
@@ -272,8 +284,13 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
         };
     }, [fetchStatus]);
 
-    const groups = useMemo(() => groupByDepartment(rooms), [rooms]);
-    const receivableRooms = rooms.filter((room) => room.hasDoctor).length;
+    // trang phong dang xem, nhom theo khoa (tieu de khoa giu lai cho cac phong tren trang)
+    const pageGroups = groupByDepartment(rooms);
+    const roomPageCount = Math.max(1, Math.ceil(roomCount / PAGE_SIZE));
+    if (!loading && !selectedRoomId && roomPage > roomPageCount) setRoomPage(roomPageCount);
+    const pagedRooms = {
+        page: roomPage, setPage: setRoomPage, pageCount: roomPageCount, pageSize: PAGE_SIZE, total: roomCount,
+    };
     const noRoomCanReceive = !loading && lastUpdated !== null && receivableRooms === 0;
     const selectedRoom = rooms.find((room) => room.roomId === selectedRoomId) ?? null;
 
@@ -327,7 +344,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                     <th scope="col" className="px-4 py-3 text-right font-bold text-slate-800">Bác sĩ còn phải khám</th>
                                 </tr>
                             </thead>
-                            {groups.map((group) => (
+                            {pageGroups.map((group) => (
                                 <tbody key={group.name}>
                                     <tr className="border-b border-slate-200 bg-slate-50">
                                         <th scope="colgroup" colSpan={COUNT_COLUMNS.length + 2} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -365,6 +382,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                 </tbody>
                             ))}
                         </table>
+                        <ListPagination paged={pagedRooms} label="Phân trang danh sách phòng" />
                         {/* EF-01 shows only MSG102 above the table; the table itself stays empty. */}
                         {rooms.length === 0 && (loading || (loadError && !lastUpdated)) && (
                             <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">

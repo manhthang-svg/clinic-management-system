@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Bar,
@@ -15,7 +15,7 @@ import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
-import { formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
+import { dashboardError, formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
 import {
   ChartCard,
   DonutWithLegend,
@@ -29,6 +29,8 @@ import {
 import { COLORS } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
@@ -46,10 +48,8 @@ function percent(part, total) {
   return `${(Math.round((part / total) * 1000) / 10).toLocaleString('vi-VN')}%`;
 }
 
-// bo dau de tim kiem
-function fold(text) {
-  return (text ?? '').normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-}
+// cho go xong moi gui tu khoa len server
+const SEARCH_DELAY_MS = 300;
 
 // UC-30: trang thong ke dich vu CLS
 export function ParaclinicalStatisticsPage({
@@ -62,8 +62,21 @@ export function ParaclinicalStatisticsPage({
   const navigate = useNavigate();
   const { period, presetId, periodError, choosePreset, changeDate } = usePeriod(today);
   const params = useMemo(() => ({ from: period.from, to: period.to }), [period.from, period.to]);
-  const { data, error, loading, reload } = useStatisticsQuery(api.getParaclinical, params, !periodError);
+  // the, loai, nhom, bieu do: chi so lieu tong va 10 phong lam nhieu nhat
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getParaclinicalOverview, params, !periodError);
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(query.trim()), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  // bang dich vu: tim + phan trang o server, chi nhan 20 dong dang xem
+  const tableFilters = useMemo(() => ({ ...params, search }), [params, search]);
+  const table = useServerPage(api.getParaclinicalServices, tableFilters, { enabled: !periodError, toMessage: dashboardError });
+  const reload = () => {
+    reloadSummary();
+    table.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -78,16 +91,11 @@ export function ParaclinicalStatisticsPage({
     value: item.performed,
     color: SERVICE_TYPES[item.type]?.color ?? COLORS.selfPay,
   }));
-  const roomRows = (data?.byRoom ?? []).slice(0, ROOM_CHART_LIMIT).map((room) => ({
+  const roomRows = (data?.topRooms ?? []).map((room) => ({
     name: room.roomName ?? room.roomCode,
     withResult: room.withResult,
     awaiting: room.performed - room.withResult,
   }));
-  const services = data?.byService ?? [];
-  const term = fold(query.trim());
-  const shownServices = term
-    ? services.filter((service) => fold(service.serviceName).includes(term) || fold(service.serviceCode).includes(term))
-    : services;
 
   return (
     <AdminLayout {...layoutProps}>
@@ -142,7 +150,7 @@ export function ParaclinicalStatisticsPage({
                 value={formatNumber(data.performed - data.withResult)}
                 hint="Đã làm nhưng chưa gửi kết quả"
               />
-              <KpiCard icon={ListChecks} label="Loại dịch vụ đã làm" value={formatNumber(services.length)} hint="Số dịch vụ khác nhau" />
+              <KpiCard icon={ListChecks} label="Loại dịch vụ đã làm" value={formatNumber(data.serviceCount)} hint="Số dịch vụ khác nhau" />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -152,7 +160,7 @@ export function ParaclinicalStatisticsPage({
 
               <ChartCard
                 title="Theo phòng thực hiện"
-                description={(data.byRoom?.length ?? 0) > ROOM_CHART_LIMIT
+                description={data.roomCount > ROOM_CHART_LIMIT
                   ? `${ROOM_CHART_LIMIT} phòng làm nhiều nhất.`
                   : 'Đã có kết quả và chờ nhập kết quả.'}
               >
@@ -208,7 +216,7 @@ export function ParaclinicalStatisticsPage({
                 </div>
               )}
             >
-              {shownServices.length > 0 ? (
+              {table.total > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -222,7 +230,7 @@ export function ParaclinicalStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {shownServices.map((service) => (
+                      {table.rows.map((service) => (
                         <tr key={service.serviceId} className="border-b border-slate-50 last:border-0">
                           <th scope="row" className="py-2.5 pr-4 text-left font-medium text-slate-700">{service.serviceName ?? '—'}</th>
                           <td className="py-2.5 px-2 font-mono text-xs text-slate-500">{service.serviceCode ?? '—'}</td>
@@ -234,8 +242,9 @@ export function ParaclinicalStatisticsPage({
                       ))}
                     </tbody>
                   </table>
+                  <ListPagination paged={table} label="Phân trang danh sách dịch vụ" />
                 </div>
-              ) : services.length === 0 ? <EmptyChart /> : (
+              ) : !search ? <EmptyChart /> : (
                 <p className="py-8 text-center text-sm text-slate-400">Không tìm thấy dịch vụ phù hợp.</p>
               )}
             </ChartCard>

@@ -41,6 +41,41 @@ export function createStatisticsApi(client = apiClient) {
     getDiagnoses: ({ from, to, limit } = {}, signal) =>
       client.request(withQuery('/statistics/diagnoses', { from, to, limit }), { signal }),
 
+    // ---- bang thong ke: loc + phan trang o server (page tu 0, size mac dinh 20) ----
+    // UC-27: bang chi tiet luot kham
+    getVisitRows: ({ from, to, groupBy, page, size } = {}, signal) =>
+      client.request(withQuery('/statistics/visits/rows', { from, to, groupBy, page, size }), { signal }),
+
+    // UC-28: so lieu tong + bieu do; bang bac si (tim theo ten)
+    getDoctorOverview: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/doctors/overview', { from, to }), { signal }),
+    getDoctorRows: ({ from, to, search, page, size } = {}, signal) =>
+      client.request(withQuery('/statistics/doctors/rows', { from, to, search, page, size }), { signal }),
+
+    // UC-29: so lieu tong + bieu do; bang khoa (loc loai khoa)
+    getDepartmentOverview: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/departments/overview', { from, to }), { signal }),
+    getDepartmentRows: ({ from, to, type, page, size } = {}, signal) =>
+      client.request(withQuery('/statistics/departments/rows', {
+        from, to, type: type === 'ALL' ? undefined : type, page, size,
+      }), { signal }),
+
+    // UC-30: so lieu tong + bieu do; bang dich vu (tim theo ten / ma)
+    getParaclinicalOverview: ({ from, to } = {}, signal) =>
+      client.request(withQuery('/statistics/paraclinical/overview', { from, to }), { signal }),
+    getParaclinicalServices: ({ from, to, search, page, size } = {}, signal) =>
+      client.request(withQuery('/statistics/paraclinical/services', { from, to, search, page, size }), { signal }),
+
+    // UC-31: bang chi tiet doanh thu
+    getRevenueRows: ({ from, to, groupBy, page, size } = {}, signal) =>
+      client.request(withQuery('/statistics/revenue/rows', { from, to, groupBy, page, size }), { signal }),
+
+    // UC-32: so lieu tong + bieu do; 3 bang (benh chinh, nhom benh, benh kem theo)
+    getDiagnosisOverview: ({ from, to, limit } = {}, signal) =>
+      client.request(withQuery('/statistics/diagnoses/overview', { from, to, limit }), { signal }),
+    getDiagnosisRows: ({ list, from, to, limit, page, size } = {}, signal) =>
+      client.request(withQuery(`/statistics/diagnoses/${list}`, { from, to, limit, page, size }), { signal }),
+
     // UC-33: tai file Excel cac bao cao da chon (khong chon = tat ca)
     exportExcel: ({ from, to, reports = [], groupBy, limit } = {}) =>
       client.download(withQuery('/statistics/export', {
