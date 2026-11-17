@@ -40,6 +40,8 @@ import PaymentResultPage from "../pages/payment/PaymentResultPage.jsx";
 import DoctorWaitingListPage from "../pages/doctor/DoctorWaitingListPage.jsx";
 import ClinicalExaminationPage from "../pages/doctor/ClinicalExaminationPage.jsx";
 import { ExaminedPatientsPage } from "../pages/doctor/ExaminedPatientsPage.jsx";
+import { MedicalRecordsPage } from "../pages/doctor/medicalRecords/MedicalRecordsPage.jsx";
+import { MedicalRecordDetailPage } from "../pages/doctor/medicalRecords/MedicalRecordDetailPage.jsx";
 import OwnProfilePage from "../pages/profile/OwnProfilePage.jsx";
 import {
   TechnicianDashboardPage,
@@ -390,7 +392,9 @@ export function AppRoutes({
             path="skipped-patients"
             element={<DoctorWaitingListPage initialTab="skipped" />}
           />
-          <Route path="medical-records" element={<Navigate to="../appointments" replace />} />
+          <Route path="medical-records" element={<MedicalRecordsPage />} />
+          <Route path="medical-records/:id" element={<MedicalRecordDetailPage />} />
+          <Route path="medical-records/visits/:visitId" element={<MedicalRecordDetailPage isVisitRoute />} />
           <Route path="prescriptions" element={<Navigate to="../appointments" replace />} />
           <Route path="follow-ups" element={<Navigate to="../appointments" replace />} />
           <Route path="examined-patients" element={<ExaminedPatientsPage />} />

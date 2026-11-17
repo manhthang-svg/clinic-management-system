@@ -73,7 +73,7 @@ export function ReacceptSkippedModal({ isOpen, onClose, order, room, onConfirmRe
                 Tiếp nhận lại bệnh nhân
               </h3>
               <p className="text-[11px] text-teal-800 mt-0.5">
-                Khôi phục lượt khám/chỉ định quay trở lại hàng đợi phục vụ (UC-46)
+                Khôi phục lượt khám/chỉ định quay trở lại hàng đợi phục vụ
               </p>
             </div>
           </div>
