@@ -29,6 +29,7 @@ public class ClinicFacilityController {
 
     private final ClinicFacilityService service;
 
+    // UC-77: xem thong tin co so
     @Operation(summary = "UC-77 View the clinic facility information",
             description = "Returns configured=false until the facility is declared. "
                     + "maCskcbLocked is true once a visit exists.")
@@ -37,6 +38,7 @@ public class ClinicFacilityController {
         return ApiResponse.success(service.getFacility());
     }
 
+    // UC-77: khai bao / cap nhat thong tin co so
     @Operation(summary = "UC-77 Declare or update the clinic facility information",
             description = "Send version=null for the first declaration. Returns 409 FACILITY_CODE_LOCKED when "
                     + "the facility code changes after the first visit, and 409 CONCURRENT_MODIFICATION when "
