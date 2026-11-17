@@ -19,19 +19,20 @@ const slip = (patient) => ({
 });
 
 describe('ParaclinicalOrderSlip (UC-50)', () => {
-    it('prints the gender and the age in years and months on the order date, without a reprint mark', () => {
+    it('prints the gender, the year of birth and the age in years and months on the order date, without a reprint mark', () => {
         render(<ParaclinicalOrderSlip slip={slip({ dateOfBirth: '1950-03-10' })} />);
 
         expect(screen.getByText('Giới tính:').parentElement).toHaveTextContent('Giới tính: Nam');
-        expect(screen.getByText('Tuổi:').parentElement).toHaveTextContent('Tuổi: 76 tuổi 8 tháng');
+        expect(screen.getByText('Năm sinh:').parentElement).toHaveTextContent('Năm sinh: 1950 (76 tuổi 8 tháng)');
+        expect(screen.getByText('CD1-01')).toBeInTheDocument();
         expect(screen.queryByText('BẢN IN LẠI')).not.toBeInTheDocument();
         // The print time in the top margin, in clinic time.
         expect(screen.getByText('In lúc: 11:42 17/11/2026')).toBeInTheDocument();
     });
 
     it('prints the months only for a baby under one year', () => {
-        render(<ParaclinicalOrderSlip slip={slip({ dateOfBirth: '2026-02-01', gender: 'Nữ' })} />);
+        render(<ParaclinicalOrderSlip slip={slip({ dateOfBirth: '2026-02-01', birthYear: 2026, gender: 'Nữ' })} />);
 
-        expect(screen.getByText('Tuổi:').parentElement).toHaveTextContent('Tuổi: 9 tháng');
+        expect(screen.getByText('Năm sinh:').parentElement).toHaveTextContent('Năm sinh: 2026 (9 tháng)');
     });
 });

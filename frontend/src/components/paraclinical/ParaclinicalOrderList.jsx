@@ -173,9 +173,8 @@ function OrderCard({ order, api, results, onCancel }) {
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     <p className="text-xs text-slate-500">Chỉ định lúc {formatDateTime(order.createdAt)}</p>
-                    {/* UC-50: in phiếu chỉ định khi phiếu chưa hủy và còn dịch vụ cần làm (BR-50-05) */}
-                    {/* All services cancelled: nothing left to print, so the button is disabled. */}
-                    <PrintOrderButton orderId={order.id} api={api} className="text-right" disabled={!isPrintable(order)} />
+                    {/* UC-50 EF-03: no print button for a cancelled order or one whose services are all cancelled. */}
+                    {isPrintable(order) && <PrintOrderButton orderId={order.id} api={api} className="text-right" />}
                 </div>
             </header>
 
