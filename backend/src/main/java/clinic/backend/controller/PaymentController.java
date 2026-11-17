@@ -74,7 +74,7 @@ public class PaymentController {
             @RequestParam(defaultValue = "true") boolean mine,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @PageableDefault(size = 50, sort = "paidAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 20, sort = "paidAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         UUID cashierId = mine ? StaffPrincipal.from(jwt).accountId() : null;
         return ApiResponse.success(
