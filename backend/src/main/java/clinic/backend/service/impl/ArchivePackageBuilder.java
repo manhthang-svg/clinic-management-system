@@ -111,7 +111,7 @@ public class ArchivePackageBuilder {
             LocalDate expiresOn) {
     }
 
-    public byte[] build(Closing closing) {
+    public Map<String, Object> buildPayload(Closing closing) {
         Visit visit = closing.visit();
         Room room = roomRepository.findById(visit.getRoomId()).orElse(null);
         Department department = room == null || room.getDepartmentId() == null
@@ -144,11 +144,19 @@ public class ArchivePackageBuilder {
         root.put("DuLieuChu", metadata(closing));
         root.put("HoSoBenhAn", hoSo);
         root.put("extensions", extensions(closing, prescription, followUp));
+        return root;
+    }
+
+    public byte[] build(Closing closing) {
         try {
-            return JSON.writeValueAsBytes(root);
+            return JSON.writeValueAsBytes(buildPayload(closing));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot serialize the archive package", exception);
         }
+    }
+
+    public byte[] buildXml(Closing closing) {
+        return clinic.backend.utils.Cv365XmlSerializer.serialize(buildPayload(closing));
     }
 
     private Map<String, Object> metadata(Closing closing) {
@@ -161,11 +169,11 @@ public class ArchivePackageBuilder {
         values.put("soluutru", closing.soluutru());
         values.put("soba", closing.record().getSoba());
         values.put("sovaovien", closing.visit().getSovaovien());
-        values.put("nguoidonghoso_ma", closing.doctor().getId().toString());
+        values.put("nguoidonghoso_ma", closing.doctor() == null ? null : closing.doctor().getId().toString());
         values.put("nguoidonghoso", staffName(closing.doctor()));
         values.put("thoidiemdonghoso", dateTime(closing.closedAt()));
-        values.put("loaihosoluutru", closing.retentionCategory().name());
-        values.put("thoihanluutru_nam", closing.retentionCategory().retentionYears());
+        values.put("loaihosoluutru", closing.retentionCategory() == null ? null : closing.retentionCategory().name());
+        values.put("thoihanluutru_nam", closing.retentionCategory() == null ? 10 : closing.retentionCategory().retentionYears());
         values.put("hanluutru", date(closing.expiresOn()));
         return values;
     }
@@ -288,25 +296,25 @@ public class ArchivePackageBuilder {
     /** CV 365 group III. */
     private Map<String, Object> treatmentGroup(Closing closing, Department department) {
         Conclusion conclusion = closing.conclusion();
-        String secondaryCodes = conclusion.getSecondaryDiagnoses().stream()
+        String secondaryCodes = conclusion == null ? "" : conclusion.getSecondaryDiagnoses().stream()
                 .map(diagnosis -> diagnosis.getMaicd()).collect(Collectors.joining(";"));
-        String secondaryNames = conclusion.getSecondaryDiagnoses().stream()
+        String secondaryNames = conclusion == null ? "" : conclusion.getSecondaryDiagnoses().stream()
                 .map(diagnosis -> diagnosis.getTenicd()).collect(Collectors.joining(";"));
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("bacsidieutri", staffName(closing.doctor()));
-        values.put("bacsidieutri_ma", closing.doctor().getPracticeLicenseNo());
+        values.put("bacsidieutri_ma", closing.doctor() == null ? null : closing.doctor().getPracticeLicenseNo());
         values.put("khoadieutri_ma", department == null ? null : department.getDepartmentCode());
         values.put("khoadieutri", department == null ? null : department.getDepartmentName());
-        values.put("ngayravien", date(conclusion.getNgayravien()));
-        values.put("chandoan", conclusion.getChandoan());
-        values.put("chandoan_ma", conclusion.getChandoanMa());
-        values.put("maicd", conclusion.getMaicd());
-        values.put("tenicd", conclusion.getTenicd());
+        values.put("ngayravien", conclusion == null ? null : date(conclusion.getNgayravien()));
+        values.put("chandoan", conclusion == null ? null : conclusion.getChandoan());
+        values.put("chandoan_ma", conclusion == null ? null : conclusion.getChandoanMa());
+        values.put("maicd", conclusion == null ? null : conclusion.getMaicd());
+        values.put("tenicd", conclusion == null ? null : conclusion.getTenicd());
         values.put("maicd_khac", secondaryCodes.isEmpty() ? null : secondaryCodes);
         values.put("tenicd_khac", secondaryNames.isEmpty() ? null : secondaryNames);
-        values.put("ghichu", conclusion.getGhichu());
-        values.put("tomtat", conclusion.getTomtat());
-        values.put("huongdieutri", conclusion.getHuongdieutri());
+        values.put("ghichu", conclusion == null ? null : conclusion.getGhichu());
+        values.put("tomtat", conclusion == null ? null : conclusion.getTomtat());
+        values.put("huongdieutri", conclusion == null ? null : conclusion.getHuongdieutri());
         List<Map<String, Object>> vitals = new ArrayList<>();
         for (VitalSign sign : vitalSignRepository.findAllByMedicalRecordIdOrderByThoidiemAsc(closing.record().getId())) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -322,9 +330,9 @@ public class ArchivePackageBuilder {
         }
         values.put("danhsachsinhhieu", vitals);
         Map<String, Object> discharge = new LinkedHashMap<>();
-        discharge.put("ketquadieutri", conclusion.getKetquadieutri());
-        discharge.put("loidanbacsi", conclusion.getLoidanbacsi());
-        discharge.put("ngayravien", date(conclusion.getNgayravien()));
+        discharge.put("ketquadieutri", conclusion == null ? null : conclusion.getKetquadieutri());
+        discharge.put("loidanbacsi", conclusion == null ? null : conclusion.getLoidanbacsi());
+        discharge.put("ngayravien", conclusion == null ? null : date(conclusion.getNgayravien()));
         values.put("tinhtrangravien", discharge);
         return values;
     }

@@ -63,4 +63,13 @@ public interface MedicalRecordService {
      * UC-53, BR-42: Ghi nhận xuất hồ sơ bệnh án ra PDF.
      */
     void recordExportLog(UUID medicalRecordId, String scope, UUID actorAccountId);
+
+    /**
+     * UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án dạng XML hoặc JSON theo chuẩn CV 365.
+     */
+    clinic.backend.dto.response.ExportMedicalRecordDataResponse exportMedicalRecordData(
+            UUID medicalRecordId,
+            clinic.backend.dto.request.ExportMedicalRecordDataRequest request,
+            UUID actorAccountId
+    );
 }
