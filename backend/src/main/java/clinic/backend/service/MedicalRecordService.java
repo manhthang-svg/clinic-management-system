@@ -59,8 +59,4 @@ public interface MedicalRecordService {
      */
     void recordFileAccess(UUID imageId, UUID actorAccountId);
 
-    /**
-     * UC-53, BR-42: Ghi nhận xuất hồ sơ bệnh án ra PDF.
-     */
-    void recordExportLog(UUID medicalRecordId, String scope, UUID actorAccountId);
 }

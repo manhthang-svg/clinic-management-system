@@ -98,17 +98,23 @@ export class ApiClient {
                 cause,
             });
         }
-        return (isApiResponse(responseBody) ? responseBody.data : responseBody);
+        return (isApiResponse(responseBody) ? (responseBody.data ?? null) : responseBody);
     }
 
     /**
      * Downloads a file (e.g. UC-33 Excel export): same authentication and error handling as {@link request}, but
-     * returns the body as a Blob with the file name taken from Content-Disposition.
+     * returns the body as a Blob with the file name taken from Content-Disposition. An optional {@code body} is sent
+     * as JSON (UC-53 keeps the export purpose and recipient out of the URL).
      */
     async download(path, options = {}) {
         assertRelativeApiPath(path);
         const headers = new Headers(options.headers);
         headers.set('Accept', '*/*');
+        let body;
+        if (options.body !== undefined) {
+            headers.set('Content-Type', 'application/json');
+            body = JSON.stringify(options.body);
+        }
         const accessToken = await this.accessTokenProvider?.();
         if (accessToken && !headers.has('Authorization')) {
             headers.set('Authorization', `Bearer ${accessToken}`);
@@ -118,6 +124,7 @@ export class ApiClient {
             response = await this.fetchImplementation(`${this.baseUrl}${path}`, {
                 method: options.method ?? 'GET',
                 headers,
+                body,
                 signal: options.signal,
                 credentials: options.credentials ?? this.credentials,
             });

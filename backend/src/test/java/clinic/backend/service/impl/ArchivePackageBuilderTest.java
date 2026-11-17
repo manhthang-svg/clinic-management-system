@@ -120,6 +120,22 @@ class ArchivePackageBuilderTest {
         assertThat(treatment.get("tinhtrangravien").get("loidanbacsi").asText()).isEqualTo("Uống nhiều nước");
         assertThat(record.get("YLenhThuocVatTu").get("danhsach")).isEmpty();
         assertThat(root.get("extensions").get("donthuoc").isNull()).isTrue();
+        // UC-53 BR-53-10: the keys exist even when the examination has no value.
+        assertThat(root.get("extensions").has("khambenh_bophan")).isTrue();
+        assertThat(root.get("extensions").has("daxuly")).isTrue();
+    }
+
+    @Test
+    void form15Bv1RendersFromTheBuiltPackage() throws Exception {
+        JsonNode root = new ObjectMapper().readTree(builder.build(closing));
+
+        String html = new Form15Bv1Renderer().html(root, new Form15Bv1Renderer.Stamp(
+                "Sở Y tế Hà Nội", "ThS.BS Bác sĩ An", CLOSED));
+
+        assertThat(html).contains("NGUYỄN VĂN AN", "Viêm họng cấp",
+                "Đã xác nhận điện tử lúc 10:30 17/11/2026", "Số lưu trữ: LT-DK0000000001",
+                "Uống nhiều nước", "Không chỉ định cận lâm sàng.");
+        assertThat(html).doesNotContain(Form15Bv1Renderer.NOT_IN_PACKAGE);
     }
 
     @Test

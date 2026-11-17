@@ -84,6 +84,43 @@ public class ExportLog extends UuidEntity {
         return log;
     }
 
+    /** UC-53 BR-53-07: a PDF in form 15/BV1, written and stored. */
+    public static ExportLog pdfExport(
+            UUID id, UUID medicalRecordId, String sovaovien, ExportLogPurpose purpose, String recipient,
+            String fileUri, String fileSha256, String specVersion, UUID exportedByAccountId, Instant exportedAt) {
+        ExportLog log = new ExportLog(id);
+        log.medicalRecordId = medicalRecordId;
+        log.sovaovien = sovaovien;
+        log.exportFormat = ExportFormat.PDF;
+        log.purpose = purpose;
+        log.recipient = recipient;
+        log.fileUri = fileUri;
+        log.fileSha256 = fileSha256;
+        log.specVersion = specVersion;
+        log.status = ExportLogStatus.SUCCESS;
+        log.exportedByAccountId = exportedByAccountId;
+        log.exportedAt = exportedAt;
+        return log;
+    }
+
+    /** UC-53 EF-03: an export that failed; {@code errorMessage} is a reason code, never medical data. */
+    public static ExportLog failed(
+            UUID id, UUID medicalRecordId, String sovaovien, ExportFormat format, ExportLogPurpose purpose,
+            String recipient, String specVersion, String errorMessage, UUID exportedByAccountId, Instant exportedAt) {
+        ExportLog log = new ExportLog(id);
+        log.medicalRecordId = medicalRecordId;
+        log.sovaovien = sovaovien;
+        log.exportFormat = format;
+        log.purpose = purpose;
+        log.recipient = recipient;
+        log.specVersion = specVersion;
+        log.status = ExportLogStatus.FAILED;
+        log.errorMessage = errorMessage;
+        log.exportedByAccountId = exportedByAccountId;
+        log.exportedAt = exportedAt;
+        return log;
+    }
+
     private ExportLog(UUID id) {
         super(id);
     }

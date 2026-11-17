@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import clinic.backend.config.properties.ArchiveProperties;
@@ -61,6 +62,53 @@ public class ArchiveStore {
             throw new UncheckedIOException(exception);
         }
         return new StoredPackage(relative, sha256(content));
+    }
+
+    /**
+     * UC-53 BR-53-07: writes an exported file once, read-only, as {@code exports/<year>/<id>.<extension>} and returns
+     * its relative path and SHA-256. The name is a fresh export-log ID, so an existing file is never replaced.
+     */
+    public StoredPackage storeExport(int year, UUID exportId, String extension, byte[] content) {
+        if (!SAFE_NAME.matcher(extension).matches()) {
+            throw new IllegalArgumentException("Unsafe extension: " + extension);
+        }
+        String name = exportId + "." + extension;
+        Path directory = properties.root().resolve("exports").resolve(Integer.toString(year));
+        Path target = directory.resolve(name);
+        try {
+            Files.createDirectories(directory);
+            Path temporary = Files.createTempFile(directory, exportId + "-", ".tmp");
+            try {
+                Files.write(temporary, content);
+                Files.move(temporary, target);
+            } finally {
+                Files.deleteIfExists(temporary);
+            }
+            if (!target.toFile().setReadOnly()) {
+                throw new IOException("Cannot make the export read-only: " + target);
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+        return new StoredPackage("exports/" + year + "/" + name, sha256(content));
+    }
+
+    /**
+     * UC-53 BR-53-04: reads a stored file by its relative path. A path that leaves the root is refused.
+     *
+     * @throws UncheckedIOException when the file is missing or unreadable
+     */
+    public byte[] read(String uri) {
+        Path root = properties.root().toAbsolutePath().normalize();
+        Path target = root.resolve(uri).normalize();
+        if (!target.startsWith(root)) {
+            throw new IllegalArgumentException("Path outside the archive root: " + uri);
+        }
+        try {
+            return Files.readAllBytes(target);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
     static String sha256(byte[] content) {

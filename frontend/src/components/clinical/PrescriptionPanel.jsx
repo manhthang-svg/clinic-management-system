@@ -349,7 +349,7 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                 // AF-06: a request still waiting for the Doctor's approval reopens the dialog.
                 if (response?.prescriptionId && response.status !== 'ACCEPTED' && api.getCurrentPrescriptionSigning) {
                     api.getCurrentPrescriptionSigning(response.prescriptionId, controller.signal)
-                        .then((pending) => { if (pending) setSigning({ resume: pending }); })
+                        .then((pending) => { if (pending?.id) setSigning({ resume: pending }); })
                         .catch(() => undefined);
                 }
             })

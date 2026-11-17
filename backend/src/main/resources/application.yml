@@ -69,6 +69,9 @@ clinic:
   # UC-58 BR-58-06: write-once archive packages of closed medical records (git-ignored by default).
   archive:
     root: ${CLINIC_ARCHIVE_ROOT:.clinic-archive}
+  # UC-53: "Sở Y tế" printed on form 15/BV1 (not held by UC-77 yet).
+  facility:
+    health-department: ${CLINIC_HEALTH_DEPARTMENT:}
   insurance-billing:
     # BR-27: mức lương cơ sở (VND). A visit below 15% of it is covered at 100%.
     base-salary: ${INSURANCE_BASE_SALARY:2340000}

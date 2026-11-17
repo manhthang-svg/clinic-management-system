@@ -60,11 +60,13 @@ export const medicalRecordApi = {
   },
 
   /**
-   * UC-53: Ghi nhận nhật ký xuất hồ sơ bệnh án
+   * UC-53: xuất hồ sơ bệnh án đã đóng ra PDF theo mẫu 15/BV1. Mục đích và người nhận đi trong body, không đưa
+   * vào URL. Trả về { blob, fileName }.
    */
-  async recordExportLog(id, scope = 'CURRENT_VISIT', signal) {
-    return apiClient.request(`/medical-records/${encodeURIComponent(id)}/export-log?scope=${encodeURIComponent(scope)}`, {
+  async exportPdf(id, { purpose, recipient }, signal) {
+    return apiClient.download(`/medical-records/${encodeURIComponent(id)}/commands/export-pdf`, {
       method: 'POST',
+      body: { purpose, recipient: recipient || null },
       signal,
     });
   },
