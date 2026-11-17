@@ -71,6 +71,7 @@ public class PayOSPaymentService {
 
 
     @Transactional
+    // UC-71: tao link / ma QR PayOS cho phieu thu
     public PaymentQrResponse createQr(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -85,7 +86,7 @@ public class PayOSPaymentService {
             );
         }
 
-        // Lượt BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận, khi mức hưởng đã chốt (BR-15, BR-26, BR-27)
+        // luot BHYT chi thu sau khi bac si ket luan (BR-15, BR-26, BR-27)
         visitRepository.findById(payment.getVisitId())
                 .filter(Visit::awaitsConclusionBeforePayment)
                 .ifPresent(visit -> {
@@ -163,6 +164,7 @@ public class PayOSPaymentService {
     }
 
     @Transactional
+    // PayOS bao da thanh toan: kiem tra chu ky roi danh dau da thu
     public void handleWebhook(Webhook webhook) {
         final WebhookData data;
 
@@ -213,6 +215,7 @@ public class PayOSPaymentService {
     }
 
     @Transactional
+    // hoi PayOS trang thai, da tra thi danh dau da thu
     public PaymentQrResponse syncPayOSStatus(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -245,6 +248,7 @@ public class PayOSPaymentService {
     }
 
     @Transactional
+    // xac nhan ket qua khi quay ve tu trang PayOS
     public UUID confirmPayOSResult(ConfirmPayOSResultRequest request) {
         if (request.orderCode() == null) {
             throw new ResponseStatusException(
@@ -268,7 +272,7 @@ public class PayOSPaymentService {
             return payment.getId();
         }
 
-        // Chỉ tin xác nhận của chính PayOS: code/status trong request do trình duyệt gửi lên nên có thể giả mạo.
+        // chi tin ket qua hoi truc tiep PayOS, khong tin code/status trinh duyet gui len (co the gia mao)
         boolean isSuccess = false;
         try {
             PaymentLink paymentLink = payOS.paymentRequests().get(request.orderCode());
@@ -287,12 +291,8 @@ public class PayOSPaymentService {
         return payment.getId();
     }
 
-    /**
-     * End-of-day job (BR-22): closes the PayOS link of an unpaid receipt before the receipt is cancelled, so the
-     * patient cannot pay a cancelled receipt. Returns {@code true} when the receipt has no link or its link can no
-     * longer be paid; {@code false} when the link may have been paid or PayOS cannot be reached, in which case the
-     * caller leaves the receipt for a later run. Not transactional: it only calls PayOS.
-     */
+    // job cuoi ngay (BR-22): dong link PayOS truoc khi huy phieu chua thu
+    // true = khong co link / link da dong; false = co the da tra hoac khong goi duoc PayOS (de lan sau)
     public boolean closeLinkBeforeCancel(Payment payment) {
         Long orderCode = payment.getPayosOrderCode();
         if (orderCode == null) {
@@ -306,7 +306,7 @@ public class PayOSPaymentService {
         } catch (Exception ex) {
             log.warn("Không thể hủy link PayOS cho đơn hàng {}: {}", orderCode, ex.getMessage());
         }
-        // The link may already be cancelled or expired (for example after an earlier run that rolled back).
+        // link co the da huy / het han tu truoc
         try {
             PaymentLink link = payOS.paymentRequests().get(orderCode);
             return link != null && isClosed(link.getStatus());
@@ -320,6 +320,7 @@ public class PayOSPaymentService {
         return status == PaymentLinkStatus.CANCELLED || status == PaymentLinkStatus.EXPIRED;
     }
 
+    // tim phieu thu theo ma don PayOS
     public UUID getPaymentIdByOrderCode(Long orderCode) {
         return paymentRepository.findByPayosOrderCode(orderCode)
                 .map(Payment::getId)
@@ -329,6 +330,7 @@ public class PayOSPaymentService {
                 ));
     }
 
+    // danh dau da thu qua chuyen khoan
     private void completePayment(Payment payment) {
         String receiptNumber = "PT"
                 + LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))
@@ -338,7 +340,7 @@ public class PayOSPaymentService {
         payment.markAsPaidByPayOS(receiptNumber);
         paymentRepository.save(payment);
 
-        // Bước 8 và audit như thu tại quầy (UC-71); xác nhận tự động nên không có thu ngân.
+        // xu ly sau thu giong thu tai quay, khong co thu ngan
         paymentCompletionService.completePaidReceipt(payment, null);
     }
 

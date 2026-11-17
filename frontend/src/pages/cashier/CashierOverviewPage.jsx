@@ -52,17 +52,18 @@ function formatDate(dateStr) {
     }
 }
 
+// UC-69: trang Tong quan thu ngan (phieu cho thu, thu tien mat / QR)
 export default function CashierOverviewPage() {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
     const [pendingPage, setPendingPage] = useState(0);
     const [notice, setNotice] = useState('');
-    // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
+    // luot kham can in phieu so thu tu sau khi thu phi kham
     const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
     const [error, setError] = useState('');
 
-    // Modal Tiền mặt
+    // Modal Tien mat
     const [cashModal, setCashModal] = useState(null);
     const [cashReceived, setCashReceived] = useState('');
     const [confirmingCash, setConfirmingCash] = useState(false);
@@ -72,7 +73,7 @@ export default function CashierOverviewPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [syncingQr, setSyncingQr] = useState(false);
 
-    // Tải danh sách phiếu thu
+    // Tai danh sach phieu thu
     const fetchPayments = useCallback(async () => {
         setLoading(true);
         setError('');
@@ -97,7 +98,7 @@ export default function CashierOverviewPage() {
         return () => window.clearTimeout(timer);
     }, [fetchPayments]);
 
-    // Thống kê nhanh
+    // Thong ke nhanh
     const stats = useMemo(() => {
         let pendingExam = 0;
         let pendingPara = 0;
@@ -128,7 +129,7 @@ export default function CashierOverviewPage() {
         };
     }, [payments]);
 
-    // Danh sách chờ thanh toán (PENDING)
+    // Danh sach cho thanh toan (PENDING)
     const pendingList = useMemo(() => {
         return payments
             .filter((p) => p.status === 'PENDING')
@@ -152,21 +153,21 @@ export default function CashierOverviewPage() {
         setPendingPage(0);
     };
 
-    // Danh sách đã thanh toán gần đây (PAID)
+    // Danh sach da thanh toan gan day (PAID)
     const recentPaidList = useMemo(() => {
         return payments
             .filter((p) => p.status === 'PAID')
             .slice(0, 6);
     }, [payments]);
 
-    // Xử lý mở Modal tiền mặt
+    // Xu ly mo Modal tien mat
     const handleOpenCashModal = (payment) => {
         setCashModal(payment);
         const amount = payment.patientTotalAmount ?? payment.totalAmount ?? payment.amount ?? 0;
         setCashReceived(String(amount || ''));
     };
 
-    // Xác nhận thu tiền mặt
+    // Xac nhan thu tien mat
     const handleConfirmCash = async () => {
         if (!cashModal) return;
         const due = Number(cashModal.patientTotalAmount ?? cashModal.totalAmount ?? cashModal.amount ?? 0);
@@ -197,7 +198,7 @@ export default function CashierOverviewPage() {
         }
     };
 
-    // Xử lý mở Modal PayOS QR
+    // Xu ly mo Modal PayOS QR
     const handleOpenQrModal = async (payment) => {
         setQrModal({ payment, qrData: null });
         setLoadingQr(true);
@@ -215,7 +216,7 @@ export default function CashierOverviewPage() {
         }
     };
 
-    // Kiểm tra đồng bộ PayOS
+    // Kiem tra dong bo PayOS
     const handleSyncQr = async () => {
         if (!qrModal?.payment) return;
         setSyncingQr(true);
@@ -242,7 +243,7 @@ export default function CashierOverviewPage() {
         }
     };
 
-    // Polling tự động khi modal QR mở
+    // Polling tu dong khi modal QR mo
     useEffect(() => {
         if (!qrModal?.payment || qrModal?.qrData?.status === 'PAID') return undefined;
 
@@ -262,7 +263,7 @@ export default function CashierOverviewPage() {
                     fetchPayments();
                 }
             } catch {
-                // polling background ignore
+                // loi khi hoi ngam thi bo qua
             }
         }, 3000);
 
@@ -304,7 +305,7 @@ export default function CashierOverviewPage() {
                     </div>
                 </header>
 
-                {/* Banner thông báo */}
+                {/* Banner thong bao */}
                 {notice && (
                     <div className="flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900 shadow-sm">
                         <div className="flex items-center gap-3">
@@ -337,9 +338,9 @@ export default function CashierOverviewPage() {
                     </div>
                 )}
 
-                {/* Thống kê 4 thẻ */}
+                {/* Thong ke 4 the */}
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    {/* Chờ thu tiền khám Lần 1 */}
+                    {/* Cho thu tien kham Lan 1 */}
                     <article className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Tiền khám (Lần 1)</p>
@@ -351,7 +352,7 @@ export default function CashierOverviewPage() {
                         <p className="mt-1 text-xs text-[#60737d]">Lượt khám mới cần thu tiền để vào khám</p>
                     </article>
 
-                    {/* Chờ thu tiền CLS Lần 2 */}
+                    {/* Cho thu tien CLS Lan 2 */}
                     <article className="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Cận lâm sàng (Lần 2)</p>
@@ -363,7 +364,7 @@ export default function CashierOverviewPage() {
                         <p className="mt-1 text-xs text-[#60737d]">Đơn CLS cần thu tiền để đi xét nghiệm</p>
                     </article>
 
-                    {/* Đã thanh toán hôm nay */}
+                    {/* Da thanh toan hom nay */}
                     <article className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Đã thu hôm nay</p>
@@ -375,7 +376,7 @@ export default function CashierOverviewPage() {
                         <p className="mt-1 text-xs text-[#60737d]">Số giao dịch đã ghi nhận</p>
                     </article>
 
-                    {/* Tổng doanh thu */}
+                    {/* Tong doanh thu */}
                     <article className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Tổng doanh thu</p>
@@ -388,7 +389,7 @@ export default function CashierOverviewPage() {
                     </article>
                 </section>
 
-                {/* BẢNG CHÍNH: LƯỢT KHÁM MỚI NHẬN - CHỜ THU TIỀN */}
+                {/* BANG CHINH: LUOT KHAM MOI NHAN - CHO THU TIEN */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
                     <div className="flex flex-col justify-between gap-3 border-b border-[#edf2f0] p-5 sm:flex-row sm:items-center">
                         <div>
@@ -403,7 +404,7 @@ export default function CashierOverviewPage() {
                             </p>
                         </div>
 
-                        {/* Tabs lọc loại đơn */}
+                        {/* Tabs loc loai don */}
                         <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-slate-100 p-1 text-xs font-medium">
                             <button
                                 type="button"
@@ -482,7 +483,7 @@ export default function CashierOverviewPage() {
 
                                         return (
                                             <tr key={payment.id} className="transition hover:bg-[#f8fbfa]">
-                                                {/* Mã phiếu / Số vào viện */}
+                                                {/* Ma phieu / So vao vien */}
                                                 <td className="px-5 py-4">
                                                     <p className="font-mono text-xs font-bold text-teal-800">
                                                         {payment.paymentCode}
@@ -494,7 +495,7 @@ export default function CashierOverviewPage() {
                                                     )}
                                                 </td>
 
-                                                {/* Thông tin bệnh nhân */}
+                                                {/* Thong tin benh nhan */}
                                                 <td className="px-5 py-4">
                                                     <p className="font-semibold text-[#142534]">
                                                         {payment.patientName || 'Bệnh nhân'}
@@ -504,7 +505,7 @@ export default function CashierOverviewPage() {
                                                     </p>
                                                 </td>
 
-                                                {/* Nguồn đơn & Giai đoạn */}
+                                                {/* Nguon don & Giai doan */}
                                                 <td className="px-5 py-4">
                                                     {isExam ? (
                                                         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-inset ring-amber-200">
@@ -517,7 +518,7 @@ export default function CashierOverviewPage() {
                                                     )}
                                                 </td>
 
-                                                {/* Phòng khám */}
+                                                {/* Phong kham */}
                                                 <td className="px-5 py-4 text-xs font-medium text-slate-700">
                                                     <div className="flex items-center gap-1.5">
                                                         <Building2 className="h-3.5 w-3.5 text-slate-400" />
@@ -525,19 +526,19 @@ export default function CashierOverviewPage() {
                                                     </div>
                                                 </td>
 
-                                                {/* Số tiền cần thu */}
+                                                {/* So tien can thu */}
                                                 <td className="px-5 py-4">
                                                     <p className="text-base font-bold tabular-nums text-teal-700">
                                                         {formatMoney(amountToPay)}
                                                     </p>
                                                 </td>
 
-                                                {/* Thời gian */}
+                                                {/* Thoi gian */}
                                                 <td className="px-5 py-4 text-xs text-slate-500">
                                                     {formatDate(payment.createdAt)}
                                                 </td>
 
-                                                {/* Thao tác tạo đơn & thu tiền */}
+                                                {/* Thao tac tao don & thu tien */}
                                                 <td className="px-5 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
                                                         {payment.awaitingConclusion ? (
@@ -613,7 +614,7 @@ export default function CashierOverviewPage() {
                     )}
                 </section>
 
-                {/* BẢNG PHỤ: GIAO DỊCH ĐÃ THANH TOÁN GẦN ĐÂY */}
+                {/* BANG PHU: GIAO DICH DA THANH TOAN GAN DAY */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
                     <div className="flex items-center justify-between border-b border-[#edf2f0] p-5">
                         <div>
@@ -676,7 +677,7 @@ export default function CashierOverviewPage() {
                 </section>
             </div>
 
-            {/* MODAL: THU TIỀN MẶT */}
+            {/* MODAL: THU TIEN MAT */}
             {cashModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
                     <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -698,7 +699,7 @@ export default function CashierOverviewPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Tóm tắt thông tin */}
+                            {/* Tom tat thong tin */}
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs space-y-1.5">
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Bệnh nhân:</span>
@@ -722,7 +723,7 @@ export default function CashierOverviewPage() {
                                 </div>
                             </div>
 
-                            {/* Tiền khách đưa & tiền thối */}
+                            {/* Tien khach dua & tien thoi */}
                             <div>
                                 <label className="block text-xs font-semibold text-slate-700">
                                     Số tiền khách đưa (VNĐ)

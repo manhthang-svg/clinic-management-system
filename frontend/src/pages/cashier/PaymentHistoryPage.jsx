@@ -36,14 +36,14 @@ function Select({ id, label, value, onChange, options }) {
     );
 }
 
-/** UC-73 View Payment History. */
+// UC-73: trang lich su thanh toan
 export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
     const [draft, setDraft] = useState(() => ({
         from: today(), to: today(), status: 'ALL', type: 'ALL', method: 'ALL', mine: true, sort: SORTS[0].value,
         search: '',
     }));
     const [filters, setFilters] = useState(draft);
-    // Phân trang: trang hiện tại (đếm từ 0); bấm "Xem" với bộ lọc mới thì về trang đầu
+    // Phan trang: trang hien tai (dem tu 0); bam "Xem" voi bo loc moi thi ve trang dau
     const [pageNumber, setPageNumber] = useState(0);
     const [history, setHistory] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
 
     const set = (key) => (value) => setDraft((current) => ({ ...current, [key]: value }));
 
-    // Bước 3: bấm Xem; khoảng ngày sai thì MSG53 (EF-01)
+    // Buoc 3: bam Xem; khoang ngay sai thi MSG53 (EF-01)
     const handleView = (event) => {
         event.preventDefault();
         const { error: rangeError } = historyParams(draft);
@@ -83,6 +83,7 @@ export default function PaymentHistoryPage({ paymentApi = defaultPaymentApi }) {
         setFilters(draft);
     };
 
+    // chuyen trang, giu bo loc dang xem
     const goToPage = (target) => {
         setLoading(true);
         setPageNumber(target);

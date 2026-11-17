@@ -80,9 +80,10 @@ function TypeBadge({ type }) {
     );
 }
 
+// UC-70: trang quan ly / tim kiem phieu thu
 export default function PaymentManagementPage() {
     const [payments, setPayments] = useState([]);
-    // Phân trang: trang hiện tại (đếm từ 0) và tổng số phiếu khớp bộ lọc
+    // Phan trang: trang hien tai (dem tu 0) va tong so phieu khop bo loc
     const [pageNumber, setPageNumber] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -93,7 +94,7 @@ export default function PaymentManagementPage() {
     const [toDate, setToDate] = useState('');
     const [searchError, setSearchError] = useState('');
     const [notice, setNotice] = useState('');
-    // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
+    // luot kham can in phieu so thu tu sau khi thu phi kham
     const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
 
     // Modal state
@@ -107,8 +108,7 @@ export default function PaymentManagementPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
 
-    // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; luôn trả về danh sách, bấm vào phiếu mới mở chi tiết
-    // pageToLoad: trang cần tải; không truyền (bộ lọc đổi) thì về trang đầu
+    // tai 1 trang phieu thu theo bo loc; luon ra danh sach, bam phieu moi mo chi tiet
     const fetchPayments = useCallback(async (pageToLoad = 0) => {
         const { params, error } = searchParams({
             search, status: statusFilter, type: typeTab, from: fromDate, to: toDate, page: pageToLoad,
@@ -141,13 +141,13 @@ export default function PaymentManagementPage() {
         return payments;
     }, [payments]);
 
-    // Sau khi thu tiền / làm mới thì tải lại đúng trang đang xem
+    // Sau khi thu tien / lam moi thi tai lai dung trang dang xem
     const reloadCurrentPage = () => fetchPayments(pageNumber);
     const totalPages = Math.max(1, Math.ceil(totalElements / PAYMENT_PAGE_SIZE));
     const firstRow = totalElements === 0 ? 0 : pageNumber * PAYMENT_PAGE_SIZE + 1;
     const lastRow = pageNumber * PAYMENT_PAGE_SIZE + payments.length;
 
-    // Xử lý xác nhận tiền mặt
+    // Xu ly xac nhan tien mat
     const handleConfirmCash = async () => {
         if (!cashModalPayment || submittingCash) return;
         setSubmittingCash(true);
@@ -171,7 +171,7 @@ export default function PaymentManagementPage() {
         }
     };
 
-    // Mở modal QR PayOS
+    // Mo modal QR PayOS
     const handleOpenPayosQr = async (payment) => {
         setQrModalPayment(payment);
         setLoadingQr(true);
@@ -190,7 +190,7 @@ export default function PaymentManagementPage() {
         }
     };
 
-    // Kiểm tra trạng thái PayOS
+    // Kiem tra trang thai PayOS
     const handleCheckPayosStatus = async () => {
         if (!qrModalPayment || checkingQr) return;
         setCheckingQr(true);
@@ -213,7 +213,7 @@ export default function PaymentManagementPage() {
         }
     };
 
-    // Polling tự động khi mở QR modal
+    // Polling tu dong khi mo QR modal
     useEffect(() => {
         if (!qrModalPayment || qrModalPayment.status === 'PAID') return;
         const timer = setInterval(async () => {
@@ -228,7 +228,7 @@ export default function PaymentManagementPage() {
                     fetchPayments(pageNumber);
                 }
             } catch {
-                // Ignore background polling error
+                // loi khi hoi ngam thi bo qua
             }
         }, 3000);
         return () => clearInterval(timer);
@@ -266,7 +266,7 @@ export default function PaymentManagementPage() {
                     </div>
                 )}
 
-                {/* Thống kê nhanh */}
+                {/* Thong ke nhanh */}
                 <section className="grid gap-4 sm:grid-cols-3">
                     <div className="rounded-2xl border border-[#e3ece9] bg-white p-5 shadow-sm">
                         <p className="text-sm text-[#60737d]">Tổng số phiếu thu</p>
@@ -286,9 +286,9 @@ export default function PaymentManagementPage() {
                     </div>
                 </section>
 
-                {/* Danh sách & Bộ lọc */}
+                {/* Danh sach & Bo loc */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
-                    {/* Tab chuyển đổi Lần 1 / Lần 2 */}
+                    {/* Tab chuyen doi Lan 1 / Lan 2 */}
                     <div className="flex flex-wrap items-center gap-2 border-b border-[#edf2f0] bg-[#f8fbfa] p-4">
                         {[
                             { key: 'ALL', label: 'Tất cả phiếu' },
@@ -501,7 +501,7 @@ export default function PaymentManagementPage() {
                 </section>
             </div>
 
-            {/* MODAL XÁC NHẬN TIỀN MẶT */}
+            {/* MODAL XAC NHAN TIEN MAT */}
             {cashModalPayment && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
@@ -566,7 +566,7 @@ export default function PaymentManagementPage() {
                 </div>
             )}
 
-            {/* MODAL THANH TOÁN QR PAYOS */}
+            {/* MODAL THANH TOAN QR PAYOS */}
             {qrModalPayment && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
@@ -607,7 +607,7 @@ export default function PaymentManagementPage() {
                                                 alt="PayOS QR"
                                                 className="h-56 w-56 object-contain"
                                                 onError={(e) => {
-                                                    // Fallback QR render
+                                                    // anh QR du phong
                                                     e.currentTarget.src = `https://quickchart.io/qr?size=300&text=${encodeURIComponent(qrData.qrCode)}`;
                                                 }}
                                             />
