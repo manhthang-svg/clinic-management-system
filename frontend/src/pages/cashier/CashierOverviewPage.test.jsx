@@ -88,6 +88,28 @@ describe('CashierOverviewPage (UC-69)', () => {
     expect(screen.getByText('Trang 7/7')).toBeInTheDocument();
   }, 15000);
 
+  // trang chia 2 nua: tab "Da thu tien" lay 20 phieu da thu / trang tu server
+  it('shows the paid receipts in their own half, 20 per page', async () => {
+    const user = userEvent.setup();
+    const paidList = Array.from({ length: 23 }, (_, i) => ({
+      ...pending(200 + i), status: 'PAID', patientName: `Đã thu ${i + 1}`, paidAt: '2026-11-18T03:00:00Z',
+    }));
+    serve({ pendingList: [pending(1)], paidList });
+    render(<MemoryRouter><CashierOverviewPage /></MemoryRouter>);
+
+    await user.click(await screen.findByRole('tab', { name: 'Đã thu tiền (23)' }));
+
+    expect(paymentApi.list).toHaveBeenCalledWith({ status: 'PAID', page: 0, size: 20, sort: 'paidAt,desc' });
+    expect(screen.getByText('Đã thu 20')).toBeInTheDocument();
+    expect(screen.queryByText('Đã thu 21')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bệnh nhân 1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect(await screen.findByText('Đã thu 23')).toBeInTheDocument();
+    expect(screen.getByText('Trang 2/2')).toBeInTheDocument();
+  });
+
   it('hides the pagination when 20 or fewer receipts wait', async () => {
     serve({ pendingList: [pending(1)] });
     render(<MemoryRouter><CashierOverviewPage /></MemoryRouter>);
