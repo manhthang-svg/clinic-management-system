@@ -42,7 +42,7 @@ const DEPARTMENT_TYPE_LABEL = { CLINICAL: 'Lâm sàng', PARACLINICAL: 'Cận lâ
 
 const workload = (item) => item.visits + item.services;
 
-/** "9 lượt (6 hoàn thành)" for an examination room, "18 dịch vụ (14 đã làm)" for a paraclinical one. */
+// tom tat khoi luong: phong kham "9 luot (6 hoan thanh)", phong CLS "18 dich vu (14 da lam)"
 function workSummary(item, isParaclinical) {
   return isParaclinical
     ? `${formatNumber(item.services)} dịch vụ (${formatNumber(item.performedServices)} đã làm)`
@@ -57,7 +57,7 @@ function InactiveBadge() {
   );
 }
 
-/** UC-29 View Department and Room Statistics. */
+// UC-29: trang thong ke khoa / phong
 export function DepartmentStatisticsPage({
   currentAdmin,
   onLogout,

@@ -41,6 +41,7 @@ function formatDate(dateStr) {
     }
 }
 
+// trang ket qua sau khi thanh toan PayOS (trang cong khai)
 export default function PaymentResultPage() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -69,7 +70,7 @@ export default function PaymentResultPage() {
             try {
                 let data = null;
                 if (isSuccess) {
-                    // Gọi API xác nhận kết quả thanh toán PayOS
+                    // Goi API xac nhan ket qua thanh toan PayOS
                     const res = await paymentApi.confirmPayosResult({
                         orderCode: Number(orderCode),
                         code: code || '00',
@@ -78,7 +79,7 @@ export default function PaymentResultPage() {
                     });
                     data = res?.data || res;
                 } else {
-                    // Gọi lấy thông tin phiếu thu nếu hủy
+                    // Goi lay thong tin phieu thu neu huy
                     const res = await paymentApi.getByOrderCode(Number(orderCode));
                     data = res?.data || res;
                 }
@@ -110,7 +111,7 @@ export default function PaymentResultPage() {
     return (
         <main className="min-h-screen bg-[#f1f6f5] py-8 px-4 sm:px-6 lg:px-8 text-slate-800">
             <div className="mx-auto max-w-2xl space-y-6">
-                {/* Header điều hướng */}
+                {/* Header dieu huong */}
                 <div className="flex items-center justify-between no-print">
                     <button
                         type="button"
@@ -138,7 +139,7 @@ export default function PaymentResultPage() {
                     </div>
                 </div>
 
-                {/* Trạng thái tải */}
+                {/* Trang thai tai */}
                 {loading && (
                     <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-lg">
                         <RefreshCw className="mx-auto h-12 w-12 animate-spin text-teal-600" />
@@ -151,10 +152,10 @@ export default function PaymentResultPage() {
                     </div>
                 )}
 
-                {/* THÀNH CÔNG */}
+                {/* THANH CONG */}
                 {!loading && (isSuccess || payment?.status === 'PAID') && (
                     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl print:border-none print:shadow-none">
-                        {/* Banner đầu trang */}
+                        {/* Banner dau trang */}
                         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-8 text-center text-white">
                             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm ring-8 ring-white/10">
                                 <CheckCircle2 className="h-12 w-12 text-white" />
@@ -170,7 +171,7 @@ export default function PaymentResultPage() {
                             </p>
                         </div>
 
-                        {/* Hướng dẫn tiếp theo cho bệnh nhân */}
+                        {/* Huong dan tiep theo cho benh nhan */}
                         <div className="border-b border-emerald-100 bg-emerald-50/70 p-5 text-sm text-emerald-950">
                             <div className="flex items-start gap-3">
                                 <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-200 font-bold text-emerald-800 text-xs">
@@ -198,9 +199,9 @@ export default function PaymentResultPage() {
                             </div>
                         </div>
 
-                        {/* Phiếu thu / Biên lai chi tiết */}
+                        {/* Phieu thu / Bien lai chi tiet */}
                         <div className="p-6 sm:p-8 space-y-6">
-                            {/* Tiêu đề biên lai */}
+                            {/* Tieu de bien lai */}
                             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                                 <div>
                                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -222,7 +223,7 @@ export default function PaymentResultPage() {
                                 </div>
                             </div>
 
-                            {/* Thông tin thanh toán (trang công khai: không hiện thông tin bệnh nhân) */}
+                            {/* Thong tin thanh toan (trang cong khai: khong hien thong tin benh nhan) */}
                             <div className="space-y-1.5 rounded-2xl bg-slate-50 p-4 text-xs">
                                 <p className="font-bold text-slate-500 uppercase tracking-wide">Thông tin thanh toán</p>
                                 <p className="text-slate-700">
@@ -236,7 +237,7 @@ export default function PaymentResultPage() {
                                 </p>
                             </div>
 
-                            {/* Chi tiết dịch vụ */}
+                            {/* Chi tiet dich vu */}
                             {payment?.items && payment.items.length > 0 && (
                                 <div className="overflow-hidden rounded-2xl border border-slate-200">
                                     <table className="w-full text-left text-xs">
@@ -280,7 +281,7 @@ export default function PaymentResultPage() {
                                 </div>
                             )}
 
-                            {/* Thao tác cuối trang */}
+                            {/* Thao tac cuoi trang */}
                             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 no-print">
                                 <button
                                     type="button"
@@ -311,7 +312,7 @@ export default function PaymentResultPage() {
                     </div>
                 )}
 
-                {/* THẤT BẠI / BỊ HỦY */}
+                {/* THAT BAI / BI HUY */}
                 {!loading && !isSuccess && payment?.status !== 'PAID' && (
                     <div className="overflow-hidden rounded-3xl border border-rose-200 bg-white shadow-xl">
                         <div className="bg-gradient-to-r from-rose-600 to-red-700 px-6 py-8 text-center text-white">

@@ -67,6 +67,7 @@ function TypeBadge({ type }) {
     );
 }
 
+// UC-71, UC-72: chi tiet phieu thu (thu tien, in phieu)
 export default function PaymentDetailPage() {
     const { id } = useParams();
     const [payment, setPayment] = useState(null);
@@ -75,7 +76,7 @@ export default function PaymentDetailPage() {
     const [copied, setCopied] = useState(false);
     const [notice, setNotice] = useState('');
 
-    // Modal Thu tiền mặt
+    // Modal Thu tien mat
     const [cashModalOpen, setCashModalOpen] = useState(false);
     const [cashNote, setCashNote] = useState('');
     const [submittingCash, setSubmittingCash] = useState(false);
@@ -87,7 +88,7 @@ export default function PaymentDetailPage() {
     const [checkingQr, setCheckingQr] = useState(false);
     const isPrintable = payment?.status === 'PAID' || payment?.status === 'FEE_EXEMPT';
     const [receipt, setReceipt] = useState(null);
-    // I1-D48: a paid examination fee lets the Cashier print the ticket with the queue number.
+    // da thu phi kham thi in duoc phieu so thu tu
     const [queueTicketOpen, setQueueTicketOpen] = useState(false);
     const ticketVisitId = payment?.status === 'PAID' ? queueTicketVisitId(payment) : null;
     const openQueueTicket = () => {
@@ -95,7 +96,7 @@ export default function PaymentDetailPage() {
         setQueueTicketOpen(true);
     };
 
-    // UC-72: lấy nội dung phiếu (ghi log in / bản sao), hiện bản xem trước rồi mở hộp thoại in
+    // UC-72: lay noi dung phieu (ghi log in / ban sao), hien ban xem truoc roi mo hop thoai in
     const handlePrint = async () => {
         try {
             setReceipt(await paymentApi.prepareReceiptPrint(payment.id));
@@ -105,8 +106,7 @@ export default function PaymentDetailPage() {
         }
     };
 
-    // Sau khi thu tiền: phí khám thì mở ngay phiếu số thứ tự để in cho bệnh nhân (số vừa được cấp, I1-D48);
-    // các khoản khác thì in phiếu thu như trước (UC-71 bước 9). Phiếu thu vẫn in được bằng nút "In phiếu thu".
+    // thu xong: phi kham thi mo phieu so thu tu; khoan khac thi in phieu thu
     const afterPaid = async () => {
         if (queueTicketVisitId(payment)) {
             openQueueTicket();
@@ -114,12 +114,13 @@ export default function PaymentDetailPage() {
             await handlePrint();
         }
     };
-    // The PayOS polling effect calls the latest afterPaid without restarting its timer.
+    // giu ham afterPaid moi nhat cho vong hoi PayOS
     const afterPaidRef = useRef(afterPaid);
     useEffect(() => {
         afterPaidRef.current = afterPaid;
     });
 
+    // tai chi tiet phieu thu
     const loadPayment = useCallback(async () => {
         if (!id) return;
         setLoading(true);
@@ -149,7 +150,7 @@ export default function PaymentDetailPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Xác nhận tiền mặt
+    // Xac nhan tien mat
     const handleConfirmCash = async () => {
         if (submittingCash) return;
         setSubmittingCash(true);
@@ -171,7 +172,7 @@ export default function PaymentDetailPage() {
         }
     };
 
-    // Mở PayOS QR
+    // Mo PayOS QR
     const handleOpenPayosQr = async () => {
         setQrModalOpen(true);
         setLoadingQr(true);
@@ -189,7 +190,7 @@ export default function PaymentDetailPage() {
         }
     };
 
-    // Kiểm tra trạng thái PayOS
+    // Kiem tra trang thai PayOS
     const handleCheckPayosStatus = async () => {
         if (checkingQr) return;
         setCheckingQr(true);
@@ -211,7 +212,7 @@ export default function PaymentDetailPage() {
         }
     };
 
-    // Polling tự động khi mở QR modal
+    // Polling tu dong khi mo QR modal
     useEffect(() => {
         if (!qrModalOpen || payment?.status === 'PAID') return;
         const timer = setInterval(async () => {
@@ -225,7 +226,7 @@ export default function PaymentDetailPage() {
                     await afterPaidRef.current();
                 }
             } catch {
-                // Ignore
+                // loi khi hoi ngam thi bo qua
             }
         }, 3000);
         return () => clearInterval(timer);
@@ -292,7 +293,7 @@ export default function PaymentDetailPage() {
                     <StatusBadge value={payment.status} />
                 </header>
 
-                {/* THÔNG TIN TÀI CHÍNH TỔNG QUAN */}
+                {/* THONG TIN TAI CHINH TONG QUAN */}
                 <section className="rounded-2xl border border-[#e3ece9] bg-white p-5 shadow-sm sm:p-6">
                     <div className="flex flex-col justify-between gap-4 border-b border-[#edf2f0] pb-5 sm:flex-row sm:items-center">
                         <div>
@@ -318,7 +319,7 @@ export default function PaymentDetailPage() {
                         </div>
                     </div>
 
-                    {/* THÔNG TIN BỆNH NHÂN & LƯỢT KHÁM */}
+                    {/* THONG TIN BENH NHAN & LUOT KHAM */}
                     <div className="grid gap-x-8 gap-y-4 pt-5 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-[#8c9da6]">Họ và tên bệnh nhân</p>
@@ -349,7 +350,7 @@ export default function PaymentDetailPage() {
                         </div>
                     </div>
 
-                    {/* VISIT ID VỚI NÚT SAO CHÉP */}
+                    {/* VISIT ID VOI NUT SAO CHEP */}
                     {payment.visitId && (
                         <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2 text-xs text-slate-500 border border-slate-100">
                             <span>Mã lượt khám (Visit ID):</span>
@@ -365,7 +366,7 @@ export default function PaymentDetailPage() {
                     )}
                 </section>
 
-                {/* CHI TIẾT CÁC KHOẢN THU */}
+                {/* CHI TIET CAC KHOAN THU */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
                     <div className="border-b border-[#edf2f0] p-5">
                         <h2 className="text-lg font-bold text-slate-800">Bảng chi tiết các dịch vụ thu phí</h2>
@@ -424,7 +425,7 @@ export default function PaymentDetailPage() {
                     </div>
                 </section>
 
-                {/* NÚT THAO TÁC */}
+                {/* NUT THAO TAC */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                     <Link
                         to="../payments"
@@ -478,7 +479,7 @@ export default function PaymentDetailPage() {
                 </div>
             </div>
 
-            {/* MODAL TIỀN MẶT */}
+            {/* MODAL TIEN MAT */}
             {cashModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">

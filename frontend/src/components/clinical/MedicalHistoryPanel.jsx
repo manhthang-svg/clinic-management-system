@@ -13,7 +13,7 @@ function formatDateTime(value) {
     return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
-/** UC-39 Update Medical History: "Tiền sử bệnh" (Bản thân / Gia đình) on the Doctor's examination screen. */
+// UC-39: khung "Tien su benh" tren man hinh kham cua bac si
 export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitApi, onLoaded }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -47,7 +47,7 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
         return () => controller.abort();
     }, [visitApi, visitId, reloadKey]);
 
-    /** Retry after a load failure, or fetch the other Doctor's changes after MSG75; unsaved edits are dropped. */
+    // tai lai (sau loi hoac sau MSG75), bo cac thay doi chua luu
     const reload = () => {
         setLoading(true);
         setLoadError('');
@@ -58,6 +58,7 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
         setReloadKey((key) => key + 1);
     };
 
+    // bam Cap nhat: mo o nhap voi du lieu hien tai
     const startEditing = () => {
         setDraft(draftFrom(data));
         setErrors({});
@@ -66,6 +67,7 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
         setEditing(true);
     };
 
+    // bam Huy: da sua thi hoi xac nhan
     const cancel = () => {
         if (!isSameDraft(draft, draftFrom(data))) {
             setConfirmDiscard(true);
@@ -84,6 +86,7 @@ export default function MedicalHistoryPanel({ visitId, visitApi = defaultVisitAp
         setDraft((current) => ({ ...current, [key]: value }));
     };
 
+    // bam Luu: kiem tra roi gui len; bi nguoi khac sua truoc thi hien nut Tai lai
     const save = async () => {
         const found = validateDraft(draft);
         setErrors(found);

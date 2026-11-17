@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Admin-only statistics (UC-26 → UC-32) and their export (UC-33). Route access is restricted in SecurityConfig. */
+// API thong ke cho admin (UC-26 den UC-32) va xuat bao cao (UC-33)
 @RestController
 @RequestMapping("/api/v1/statistics")
 @RequiredArgsConstructor
@@ -41,6 +41,7 @@ public class StatisticsController {
     private final StatisticsService statisticsService;
     private final StatisticsExportService statisticsExportService;
 
+    // UC-26: tong quan
     @Operation(summary = "UC-26 Xem bảng thống kê tổng quan trong khoảng ngày (mặc định: đầu tháng đến hôm nay)")
     @GetMapping("/dashboard")
     public ApiResponse<DashboardStatisticsResponse> getDashboard(
@@ -49,6 +50,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDashboard(from, to));
     }
 
+    // UC-27: thong ke luot kham
     @Operation(summary = "UC-27 Thống kê lượt khám theo ngày hoặc tháng, kết quả, đối tượng, tái khám, ưu tiên")
     @GetMapping("/visits")
     public ApiResponse<VisitStatisticsResponse> getVisitStatistics(
@@ -58,6 +60,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getVisitStatistics(from, to, groupBy));
     }
 
+    // UC-28: thong ke theo bac si
     @Operation(summary = "UC-28 Thống kê số lượt khám và số bệnh nhân của từng bác sĩ trong khoảng ngày")
     @GetMapping("/doctors")
     public ApiResponse<DoctorStatisticsResponse> getDoctorStatistics(
@@ -66,6 +69,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDoctorStatistics(from, to));
     }
 
+    // UC-29: thong ke khoa / phong
     @Operation(summary = "UC-29 Thống kê khối lượng công việc của từng khoa và từng phòng trong khoảng ngày")
     @GetMapping("/departments")
     public ApiResponse<DepartmentStatisticsResponse> getDepartmentStatistics(
@@ -74,6 +78,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDepartmentStatistics(from, to));
     }
 
+    // UC-30: thong ke dich vu CLS
     @Operation(summary = "UC-30 Thống kê dịch vụ cận lâm sàng đã thực hiện theo loại dịch vụ và theo phòng")
     @GetMapping("/paraclinical")
     public ApiResponse<ParaclinicalStatisticsResponse> getParaclinicalStatistics(
@@ -82,6 +87,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getParaclinicalStatistics(from, to));
     }
 
+    // UC-31: thong ke doanh thu
     @Operation(summary = "UC-31 Thống kê doanh thu đã thu, tách phần BHYT chi trả và phần bệnh nhân trả")
     @GetMapping("/revenue")
     public ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
@@ -91,6 +97,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getRevenueStatistics(from, to, groupBy));
     }
 
+    // UC-32: benh thuong gap
     @Operation(summary = "UC-32 Thống kê các bệnh thường gặp theo mã ICD-10 trong khoảng ngày")
     @GetMapping("/diagnoses")
     public ApiResponse<DiagnosisStatisticsResponse> getDiagnosisStatistics(
@@ -100,6 +107,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDiagnosisStatistics(from, to, limit));
     }
 
+    // UC-33: xuat file Excel
     @Operation(summary = "UC-33 Xuất báo cáo thống kê ra tệp Excel (.xlsx); mặc định xuất mọi báo cáo")
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportStatistics(

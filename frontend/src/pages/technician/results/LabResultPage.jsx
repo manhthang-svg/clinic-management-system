@@ -3,7 +3,7 @@ import { LabResultTable } from '../../../components/paraclinicalResult';
 import { ResultEditor, ResultSection } from '../../../components/paraclinicalResult/ResultEditor';
 import { ConclusionSection, FilesSection } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu kết quả xét nghiệm (MS 17/BV2): blood, biochemistry and urine tests. */
+// UC-67: phieu ket qua xet nghiem
 export function LabResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>

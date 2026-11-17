@@ -20,6 +20,7 @@ public class PaymentWebhookController {
 
     private final PayOSPaymentService payOSPaymentService;
 
+    // PayOS goi ve khi thanh toan xong
     @PostMapping("/payos-webhook")
     @Operation(summary = "Nhận webhook thanh toán từ PayOS")
     public ResponseEntity<String> handleWebhook(

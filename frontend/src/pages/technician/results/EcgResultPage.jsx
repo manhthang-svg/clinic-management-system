@@ -3,7 +3,7 @@ import {
   ConclusionSection, FilesSection, SectionFields, SignerField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu điện tim (MS 12/BV-02): blood pressure and the ECG analysis items. */
+// UC-67: phieu dien tim (huyet ap + cac muc phan tich)
 export function EcgResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>

@@ -1,6 +1,6 @@
 import { apiClient } from '../services/session';
 
-/** UC-34 View Examined Patient List (Doctor): GET /examined-patients, always for the logged-in Doctor (BR-39). */
+// UC-34: API benh nhan da kham cua bac si dang dang nhap
 export function createExaminedPatientApi(client = apiClient) {
   return {
     list: ({ from, to, keyword, page, size } = {}, signal) => {

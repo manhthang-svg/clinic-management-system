@@ -46,7 +46,7 @@ public class PaymentController {
     private final PayOSPaymentService payOSPaymentService;
     private final PaymentService paymentService;
 
-    // 1. Danh sách và tra cứu phiếu thu (lọc trạng thái, loại, khoảng ngày tạo)
+    // UC-70: danh sach / tim kiem phieu thu (loc trang thai, loai, khoang ngay)
     @PreAuthorize("hasRole('CASHIER')")
     @GetMapping
     @Operation(summary = "UC-69, UC-70 Xem và tìm kiếm phiếu thu")
@@ -61,7 +61,7 @@ public class PaymentController {
         return ApiResponse.success(paymentService.getPayments(status, type, search, from, to, pageable));
     }
 
-    // 1b. Lịch sử thanh toán: phiếu đã thu / đã hủy và tổng theo phương thức
+    // UC-73: lich su thanh toan + tong theo phuong thuc
     @PreAuthorize("hasRole('CASHIER')")
     @GetMapping("/history")
     @Operation(summary = "UC-73 Xem lịch sử thanh toán")
@@ -81,7 +81,7 @@ public class PaymentController {
                 paymentService.getHistory(cashierId, status, type, method, search, from, to, pageable));
     }
 
-    // 2. Danh sách phiếu thu đang chờ thanh toán
+    // UC-69: phieu thu dang cho thanh toan
     @PreAuthorize("hasRole('CASHIER')")
     @GetMapping("/pending")
     @Operation(summary = "UC-69 Xem danh sách phiếu thu chờ thanh toán")
@@ -93,7 +93,7 @@ public class PaymentController {
                 paymentService.getPayments(PaymentStatus.PENDING, type, null, null, null, pageable));
     }
 
-    // 3. Chi tiết phiếu thu
+    // chi tiet 1 phieu thu
     @PreAuthorize("hasRole('CASHIER')")
     @GetMapping("/{paymentId}")
     @Operation(summary = "UC-70 Xem chi tiết phiếu thu")
@@ -104,6 +104,7 @@ public class PaymentController {
     }
 
     @PreAuthorize("hasRole('CASHIER')")
+    // UC-72: chuan bi in / in lai phieu thu (ghi audit)
     @PostMapping("/{paymentId}/commands/prepare-receipt-print")
     @Operation(summary = "UC-72 Chuẩn bị in hoặc in lại phiếu thu và ghi audit")
     public ApiResponse<ReceiptPrintResponse> prepareReceiptPrint(
@@ -114,7 +115,7 @@ public class PaymentController {
                 paymentService.prepareReceiptPrint(StaffPrincipal.from(jwt).accountId(), paymentId));
     }
 
-    // 4. Xác nhận thanh toán tại quầy (Tiền mặt / Thẻ)
+    // UC-71: xac nhan thu tien tai quay
     @PreAuthorize("hasRole('CASHIER')")
     @PostMapping("/{paymentId}/confirm")
     @Operation(summary = "UC-71 Xác nhận thanh toán")
@@ -127,7 +128,7 @@ public class PaymentController {
                 paymentService.confirmPayment(StaffPrincipal.from(jwt).accountId(), paymentId, request));
     }
 
-    // 5. Tạo mã QR PayOS
+    // UC-71: tao ma QR PayOS
     @PreAuthorize("hasRole('CASHIER')")
     @PostMapping("/{paymentId}/payos-qr")
     @Operation(summary = "Tạo mã QR thanh toán PayOS")
@@ -137,7 +138,7 @@ public class PaymentController {
         return ApiResponse.success(payOSPaymentService.createQr(paymentId));
     }
 
-    // 6. Đồng bộ / kiểm tra trạng thái thanh toán từ PayOS
+    // hoi PayOS trang thai thanh toan
     @PreAuthorize("hasRole('CASHIER')")
     @PostMapping("/{paymentId}/sync-payos")
     @Operation(summary = "Đồng bộ trạng thái thanh toán PayOS")
@@ -147,7 +148,7 @@ public class PaymentController {
         return ApiResponse.success(payOSPaymentService.syncPayOSStatus(paymentId));
     }
 
-    // 7. Xác nhận kết quả thanh toán PayOS từ trang chuyển hướng kết quả (Return URL)
+    // xac nhan ket qua PayOS khi quay ve tu trang thanh toan
     @PostMapping("/confirm-payos-result")
     @Operation(summary = "Xác nhận kết quả thanh toán PayOS")
     public ApiResponse<PayOSResultResponse> confirmPayOSResult(
@@ -157,7 +158,7 @@ public class PaymentController {
         return ApiResponse.success(payOSPaymentService.getResult(paymentId));
     }
 
-    // 8. Tra cứu phiếu thu theo mã đơn hàng PayOS
+    // tim phieu thu theo ma don PayOS
     @GetMapping("/by-order-code/{orderCode}")
     @Operation(summary = "Tra cứu phiếu thu theo mã đơn hàng PayOS")
     public ApiResponse<PayOSResultResponse> getPaymentByOrderCode(

@@ -55,21 +55,19 @@ export function ResultBreadcrumb({ title }) {
   );
 }
 
-/**
- * Shared frame of every result page (UC-67, UC-68): patient card, read-only banners, files, preview,
- * save draft / submit / print. `children` renders the page's own fields with
- * { form, set, errors, readOnly, template }.
- */
+// khung dung chung cho moi trang ket qua (UC-67, UC-68): thong tin BN, anh, xem truoc, luu nhap / gui / in
+// children ve cac truong rieng cua tung loai phieu
 export function ResultEditor({ order: initialOrder, api, children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [order, setOrder] = useState(initialOrder);
 
-  // Danh sách dịch vụ cùng đợt của bệnh nhân (ưu tiên từ order.siblingServices, sau đó từ location.state)
+  // cac dich vu cung dot cua benh nhan (cac tab)
   const siblingServices = (order.siblingServices && order.siblingServices.length > 0)
     ? order.siblingServices
     : (location.state?.siblingServices || []);
 
+  // chuyen sang tab dich vu khac
   const handleSwitchTab = (targetId) => {
     if (targetId === order.id) return;
     navigate(`/technician/results/${targetId}`, {
@@ -96,6 +94,7 @@ export function ResultEditor({ order: initialOrder, api, children }) {
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
+  // chay 1 thao tac (luu nhap / gui), bao loi neu that bai
   const run = async (kind, action) => {
     setBusy(kind);
     setSubmitError('');
@@ -110,7 +109,7 @@ export function ResultEditor({ order: initialOrder, api, children }) {
         try {
           setOrder(await api.get(order.id));
         } catch {
-          // Keep the form; the alert already explains the problem.
+          // giu nguyen form, thong bao da hien loi
         }
       }
       return null;
@@ -123,6 +122,7 @@ export function ResultEditor({ order: initialOrder, api, children }) {
     if (await run('draft', () => api.saveDraft(order.id, saveable))) toast.success(MSG.draftSaved);
   };
 
+  // bam Gui: kiem tra truoc, hop le thi hoi xac nhan
   const askSubmit = () => {
     setTouched(true);
     if (Object.keys(errors).length > 0) {
@@ -137,8 +137,8 @@ export function ResultEditor({ order: initialOrder, api, children }) {
     if (await run('submit', () => api.submit(order.id, saveable))) toast.success(MSG.saved);
   };
 
-  // UC-68: print, then count the print so that the next one is marked "Bản sao" (AF-01).
-  // UC-68: only the performer prints a submitted result, and the slip needs the clinic header (null = not configured).
+  // UC-68: in phieu roi ghi nhan so lan in (lan sau in co chu "Ban sao")
+  // chi KTV thuc hien in duoc ket qua da gui; can co thong tin co so
   const printBlocked = !order.isPerformer ? MSG.printerOnly : order.clinic === null ? MSG.clinicMissing : '';
   const print = async () => {
     try {
@@ -150,11 +150,12 @@ export function ResultEditor({ order: initialOrder, api, children }) {
     try {
       setOrder(await api.recordPrint(order.id));
     } catch (error) {
-      // Printing already happened; only the copy mark is missing.
+      // da in roi, chi thieu dau ban sao lan sau
       toast.error(resultErrorMessage(error));
     }
   };
 
+  // dien mau ket qua binh thuong
   const applyTemplate = () => {
     setConfirm(null);
     setForm((prev) => ({
@@ -193,7 +194,7 @@ export function ResultEditor({ order: initialOrder, api, children }) {
     <div className="space-y-6 pb-10">
       <ResultBreadcrumb title={title} />
 
-      {/* Tab chuyển đổi giữa các dịch vụ của bệnh nhân */}
+      {/* tab cac dich vu cua benh nhan */}
       {siblingServices.length > 1 && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-2.5">
           <div className="flex items-center justify-between text-xs px-1">

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** UC-34 View Examined Patient List: Doctor only, always for the logged-in Doctor (BR-39). */
+// UC-34: API benh nhan da kham (chi bac si, luon la bac si dang dang nhap)
 @RestController
 @RequestMapping("/api/v1/examined-patients")
 @RequiredArgsConstructor

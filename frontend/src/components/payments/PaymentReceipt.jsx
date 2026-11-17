@@ -4,7 +4,7 @@ import { VISIT_TYPE_LABELS } from '../../constants/visitData';
 const TYPE_LABEL = { EXAMINATION_FEE: 'Phí khám bệnh', PARACLINICAL_FEE: 'Phí cận lâm sàng' };
 const METHOD_LABEL = { CASH: 'Tiền mặt', BANK_TRANSFER: 'Chuyển khoản', CARD: 'Thẻ' };
 
-/** UC-72 Print Payment Receipt (PF-06). TBD: receipt printer integration; it uses the browser print dialog. */
+// UC-72: mau in phieu thu (in qua hop thoai in cua trinh duyet)
 export function PaymentReceipt({ receipt }) {
     const payment = receipt.payment;
     const paraclinical = payment.type === 'PARACLINICAL_FEE';

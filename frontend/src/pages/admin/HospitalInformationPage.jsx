@@ -32,7 +32,7 @@ function errorProps(id, error) {
   return error ? { 'aria-invalid': true, 'aria-describedby': `${id}-error` } : {};
 }
 
-/** UC-77 Update Hospital Information. */
+// UC-77: trang thong tin benh vien
 export function HospitalInformationPage({ currentAdmin, onLogout, onChangePassword, api = clinicFacilityApi }) {
   const navigate = useNavigate();
   const [facility, setFacility] = useState(null);
@@ -51,7 +51,7 @@ export function HospitalInformationPage({ currentAdmin, onLogout, onChangePasswo
     setServerErrors({});
   }, []);
 
-  // State is only set after the request settles, so the effect below never sets it synchronously.
+  // tai thong tin co so
   const load = useCallback(async (signal) => {
     try {
       const data = await api.get(signal);
@@ -90,6 +90,7 @@ export function HospitalInformationPage({ currentAdmin, onLogout, onChangePasswo
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // luu; loi ma bi khoa / nguoi khac vua sua thi tai lai du lieu moi
   const save = async () => {
     setConfirmOpen(false);
     setSubmitting(true);
@@ -111,7 +112,7 @@ export function HospitalInformationPage({ currentAdmin, onLogout, onChangePasswo
             setForm(facilityToForm(latest));
           }
         } catch {
-          // Keep the form; the alert already tells the Admin to reload.
+          // giu form, thong bao da hien
         }
       }
     } finally {
@@ -119,6 +120,7 @@ export function HospitalInformationPage({ currentAdmin, onLogout, onChangePasswo
     }
   };
 
+  // bam Luu: kiem tra, doi dia chi / hinh thuc to chuc thi hoi xac nhan
   const submit = (event) => {
     event.preventDefault();
     setTouched(true);
@@ -130,6 +132,7 @@ export function HospitalInformationPage({ currentAdmin, onLogout, onChangePasswo
     save();
   };
 
+  // huy thay doi, ve gia tri da luu
   const reset = () => {
     setForm(initialForm);
     setTouched(false);

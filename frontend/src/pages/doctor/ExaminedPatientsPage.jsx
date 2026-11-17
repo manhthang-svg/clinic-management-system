@@ -11,6 +11,7 @@ import { usePeriod, useStatisticsQuery } from '../../components/statistics/useSt
 
 const PAGE_SIZE = 20;
 
+// doi loi tai danh sach thanh thong bao
 function examinedListError(error) {
   if (!(error instanceof ApiError)) return 'Đã xảy ra lỗi. Vui lòng thử lại.';
   if (error.errorResponse?.code === 'REQUEST_VALIDATION_FAILED') return 'Khoảng thời gian không hợp lệ. Vui lòng chọn lại.';
@@ -20,7 +21,7 @@ function examinedListError(error) {
   return 'Đã xảy ra lỗi. Vui lòng thử lại.';
 }
 
-/** Age in whole years on `day` (YYYY-MM-DD strings). */
+// tuoi tai ngay kham
 function ageOn(dateOfBirth, day) {
   if (!dateOfBirth || !day) return null;
   const [by, bm, bd] = dateOfBirth.split('-').map(Number);
@@ -46,7 +47,7 @@ function StatusBadge({ status }) {
   );
 }
 
-/** UC-34 View Examined Patient List: the visits the logged-in Doctor examined (BR-39). */
+// UC-34: trang benh nhan da kham cua bac si dang dang nhap
 export function ExaminedPatientsPage({ api = examinedPatientApi, today = new Date() }) {
   const navigate = useNavigate();
   const { period, presetId, periodError, choosePreset, changeDate } = usePeriod(today);
@@ -59,7 +60,7 @@ export function ExaminedPatientsPage({ api = examinedPatientApi, today = new Dat
   );
   const { data, error, loading, reload } = useStatisticsQuery(api.list, params, !periodError, examinedListError);
 
-  // A new period or search starts again from the first page.
+  // doi khoang ngay / tu khoa thi ve trang dau
   const onPreset = (preset) => {
     setPage(0);
     choosePreset(preset);

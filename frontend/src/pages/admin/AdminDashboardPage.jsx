@@ -36,7 +36,7 @@ import { usePeriod, useStatisticsQuery } from '../../components/statistics/useSt
 
 const { ADMIN } = ROUTES;
 
-/** UC-26 View Statistics Dashboard. */
+// UC-26: trang Tong quan cua admin
 export function AdminDashboardPage({
   currentAdmin,
   onLogout,

@@ -2,7 +2,7 @@ import { TriangleAlert } from 'lucide-react';
 import { ResultEditor, ResultSection } from '../../../components/paraclinicalResult/ResultEditor';
 import { CtMriResultFields } from './CtMriResultFields';
 
-/** UC-67 Phiếu chụp cộng hưởng từ (MS 09/BV2), with the safety screening from the order. */
+// UC-67: phieu chup MRI (kem cau hoi sang loc an toan)
 export function MriResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>

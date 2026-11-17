@@ -5,7 +5,7 @@ import { statisticsApi } from '../../apis/statisticsApi';
 import { FormAlert } from '../shared/FormFields';
 import { formatDayLong } from './dashboardPeriod';
 
-/** UC-33: the reports of the export, in the order of the report tabs and of the workbook sheets. */
+// UC-33: cac bao cao co the xuat, theo thu tu tab
 const REPORTS = [
   { value: 'VISITS', label: 'Lượt khám' },
   { value: 'DOCTORS', label: 'Bác sĩ' },
@@ -15,6 +15,7 @@ const REPORTS = [
   { value: 'DIAGNOSES', label: 'Bệnh thường gặp' },
 ];
 
+// doi loi xuat file thanh thong bao
 function exportError(error) {
   if (!(error instanceof ApiError)) return 'Không tạo được tệp. Vui lòng thử lại.';
   if (error.errorResponse?.code === 'REQUEST_VALIDATION_FAILED') {
@@ -26,7 +27,7 @@ function exportError(error) {
   return 'Không tạo được tệp. Vui lòng thử lại.';
 }
 
-/** Hands a downloaded file to the browser. */
+// cho trinh duyet tai file ve
 function saveFile({ blob, fileName }) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -38,7 +39,7 @@ function saveFile({ blob, fileName }) {
   URL.revokeObjectURL(url);
 }
 
-/** UC-33: choose the reports of the period shown on the page and download them as one Excel workbook. */
+// UC-33: hop thoai chon bao cao va tai file Excel
 function ExportDialog({ api, period, report, groupBy, limit, onClose }) {
   const [selected, setSelected] = useState(() => new Set(report ? [report] : REPORTS.map((r) => r.value)));
   const [bucket, setBucket] = useState(groupBy ?? 'DAY');
@@ -160,10 +161,7 @@ function ExportDialog({ api, period, report, groupBy, limit, onClose }) {
   );
 }
 
-/**
- * UC-33 actions of a report page: "Xuất Excel" (server-built workbook) and "In / Lưu PDF" (the browser prints the
- * page; the print styles keep only the report, and "Save as PDF" makes the PDF).
- */
+// nut "Xuat Excel" va "In / Luu PDF" (in trang bang trinh duyet)
 export function ReportActions({ api = statisticsApi, period, report, groupBy, limit, disabled }) {
   const [open, setOpen] = useState(false);
   const button = 'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';

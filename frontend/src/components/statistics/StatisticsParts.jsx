@@ -4,11 +4,12 @@ import { RefreshCw } from 'lucide-react';
 import { FormAlert } from '../shared/FormFields';
 import { PRESETS, formatNumber } from './dashboardPeriod';
 
-/** Shared building blocks of the Admin statistics pages (UC-26 → UC-32). */
+// cac thanh phan dung chung cho trang thong ke (UC-26 den UC-32)
 
 const CARD = 'bg-white rounded-2xl border border-slate-200/70 shadow-2xs p-5';
 const INPUT = 'px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#127e7a]/30 focus:border-[#127e7a]';
 
+// the so lieu
 export function KpiCard({ icon: Icon, label, value, hint }) {
   return (
     <div className={`${CARD} flex items-start gap-4`}>
@@ -24,6 +25,7 @@ export function KpiCard({ icon: Icon, label, value, hint }) {
   );
 }
 
+// khung bieu do / bang
 export function ChartCard({ title, description, actions, children, className = '' }) {
   return (
     <section className={`${CARD} ${className}`} aria-label={title}>
@@ -39,6 +41,7 @@ export function ChartCard({ title, description, actions, children, className = '
   );
 }
 
+// hien khi khong co du lieu
 export function EmptyChart() {
   return (
     <div className="h-56 flex items-center justify-center text-sm text-slate-400 bg-slate-50 rounded-xl">
@@ -61,7 +64,7 @@ function Legend({ items }) {
   );
 }
 
-/** Donut chart with a value legend; items are { name, value, color, display? }. */
+// bieu do tron kem chu thich
 export function DonutWithLegend({ items, label }) {
   const hasData = items.some((item) => item.value > 0);
   if (!hasData) return <EmptyChart />;
@@ -82,7 +85,7 @@ export function DonutWithLegend({ items, label }) {
   );
 }
 
-/** Segmented single choice, e.g. day / month. */
+// nut chon 1 trong nhieu (vd theo ngay / thang)
 export function SegmentedControl({ label, options, value, onChange }) {
   return (
     <div className="statistics-print-hide inline-flex p-1 rounded-xl bg-slate-100" role="group" aria-label={label}>
@@ -103,7 +106,7 @@ export function SegmentedControl({ label, options, value, onChange }) {
   );
 }
 
-/** Quick periods plus from/to date inputs; `periodError` is shown as the single alert. */
+// chon nhanh khoang thoi gian + o tu ngay / den ngay
 export function PeriodFilter({ idPrefix, period, presetId, periodError, onPreset, onDateChange }) {
   return (
     <section className={`${CARD} statistics-print-hide flex flex-wrap items-end gap-4`} aria-label="Khoảng thời gian">
@@ -151,6 +154,7 @@ export function RefreshButton({ loading, disabled, onClick }) {
   );
 }
 
+// loi tai du lieu + nut Thu lai
 export function LoadError({ message, onRetry }) {
   return (
     <div className="statistics-print-hide space-y-3 max-w-xl">
@@ -175,7 +179,7 @@ const REPORT_TABS = [
   { to: '/admin/reports/diagnoses', label: 'Bệnh thường gặp' },
 ];
 
-/** Tabs of the "Báo cáo thống kê" section, one per statistics use case. */
+// cac tab cua muc Bao cao thong ke
 export function ReportTabs() {
   return (
     <nav aria-label="Loại báo cáo" className="statistics-print-hide flex flex-wrap gap-1 border-b border-slate-200">

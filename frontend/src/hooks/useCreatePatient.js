@@ -15,12 +15,12 @@ import {
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
 
-/** UC-37 Create New Patient Profile: form state, checks, duplicate warning and saving. */
+// UC-37: state form tao ho so, kiem tra, canh bao trung va luu
 export function useCreatePatient(patientApi = defaultPatientApi) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // UC-35 EF-02: the keyword of an unsuccessful search pre-fills the form.
+    // tu khoa tim khong ra duoc dien san vao form
     const [initialForm] = useState(() => ({ ...INITIAL_PATIENT_FORM, ...(location.state?.prefill ?? {}) }));
     const [form, setForm] = useState(initialForm);
     const [fieldErrors, setFieldErrors] = useState({});
@@ -47,7 +47,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patientId }));
     }, [navigate]);
 
-    // Step 8–9: create, record (backend) and open UC-36 with MSG04.
+    // luu ho so, xong thi mo trang ho so (MSG04)
     const save = useCallback(async () => {
         setDuplicates(null);
         setSubmitting(true);
@@ -59,7 +59,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         } catch (err) {
             const details = err?.errorResponse?.details;
             if (err?.errorResponse?.code === 'PATIENT_IDENTIFICATION_EXISTS' && details) {
-                // EF-02: MSG19 with Open profile.
+                // trung CCCD / ho chieu: hien MSG19 + nut mo ho so
                 setConflict(details);
                 setFieldErrors((previous) => ({
                     ...previous,
@@ -87,7 +87,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
             return;
         }
 
-        // Step 7 / AF-02: warn about profiles with the same full name and date of birth.
+        // canh bao ho so trung ho ten + ngay sinh truoc khi luu
         setSubmitting(true);
         try {
             const res = await patientApi.possibleDuplicates(form.hoten.trim(), form.ngaysinh);
@@ -98,12 +98,12 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
                 return;
             }
         } catch {
-            // The warning is advisory; creation still checks the identification numbers.
+            // chi canh bao, van cho tao tiep
         }
         await save();
     }, [form, patientApi, save, submitting]);
 
-    // AF-03: Cancel asks for confirmation (MSG40) when something was entered.
+    // huy khi da nhap du lieu thi hoi xac nhan (MSG40)
     const goBack = useCallback(() => {
         if (submitting) return;
         if (isDirty(form, initialForm)) setConfirmCancel(true);

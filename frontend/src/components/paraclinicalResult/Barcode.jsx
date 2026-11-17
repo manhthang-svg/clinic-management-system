@@ -1,6 +1,6 @@
 import { code128Widths } from './code128';
 
-/** Code 128 barcode as SVG, with the text under it. */
+// ve ma vach dang SVG, chu ben duoi
 export function Barcode({ value, height = 34, module = 1.2 }) {
   const widths = code128Widths(value);
   const bars = [];

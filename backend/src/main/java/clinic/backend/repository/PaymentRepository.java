@@ -42,10 +42,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             Pageable pageable
     );
 
-    /**
-     * UC-70 / UC-69: receipts of the given statuses created in [from, to). The keyword matches the receipt number,
-     * patient code, registration code (case-insensitive) or patient name (case- and accent-insensitive).
-     */
+    // UC-69, UC-70: tim phieu theo trang thai, loai, ngay tao
+    // tu khoa khop 1 phan: ma phieu, so bien lai, ma luot kham, ma BN, ho ten (khong dau)
     @Query("""
             select p from Payment p
             join Visit v on v.id = p.visitId
@@ -72,10 +70,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             Pageable pageable
     );
 
-    /**
-     * UC-73: paid or cancelled receipts whose paid / cancelled time is in [from, to). The keyword matches like
-     * UC-70: receipt number, patient code, registration code or patient name (accent-insensitive).
-     */
+    // UC-73: phieu da thu / da huy theo ngay thu hoac ngay huy, tu khoa giong UC-70
     @Query("""
             select p from Payment p
             join Visit v on v.id = p.visitId
@@ -107,7 +102,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             Pageable pageable
     );
 
-    /** UC-73 step 4: patient amount collected per payment method for the same filters (Paid receipts only). */
+    // UC-73: tong tien benh nhan tra theo tung phuong thuc (chi phieu da thu)
     @Query("""
             select p.paymentMethod as method, sum(p.patientTotalAmount) as total, count(p) as count
             from Payment p

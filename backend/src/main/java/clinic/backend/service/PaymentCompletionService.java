@@ -37,13 +37,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * UC-71 steps 7–8 after a receipt becomes Paid, shared by the counter confirmation and PayOS: the examination
- * fee issues the visit's queue number and puts it in its room's waiting list (BR-15, I1-D48); the paraclinical fee
- * releases the orders of UC-49, each service to the staffed room with the fewest waiting services (BR-28, BA decision
- * 12/11/2026). Both write the audit entry (BR-37). UC-49 releases orders that do not wait for payment to the rooms the
- * Doctor chose (BR-26, I1-D47).
- */
+// xu ly sau khi phieu thu da thanh toan (dung chung thu tai quay va PayOS)
+// phi kham: cap so thu tu, vao hang cho phong kham; phi CLS: chia tung dich vu vao phong CLS it nguoi cho nhat
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -59,10 +54,7 @@ public class PaymentCompletionService {
     private final ParaclinicalRoomDuty paraclinicalRoomDuty;
     private final Clock clock;
 
-    /**
-     * Runs in the caller's transaction so the receipt, the visit and the orders change together (all or nothing).
-     * {@code actorAccountId} is the cashier, or {@code null} when PayOS confirmed the payment.
-     */
+    // chay chung transaction voi ben goi (thanh cong het hoac khong gi ca); PayOS thi khong co thu ngan
     @Transactional(propagation = Propagation.MANDATORY)
     public void completePaidReceipt(Payment payment, UUID actorAccountId) {
         Instant now = clock.instant();
@@ -73,13 +65,13 @@ public class PaymentCompletionService {
         Integer issuedQueueNumber = null;
         if (payment.getType() == PaymentType.EXAMINATION_FEE) {
             if (visit.getStatus() == VisitStatus.WAITING_FEE_PAYMENT) {
-                // I1-D48: the queue number is issued only now, in the room and on the date of registration.
+                // cap so thu tu luc nay, dung phong + ngay dang ky
                 visit.markAsWaiting(queueCounterRepository.takeNext(visit.getRoomId(), visit.getQueueDate()));
                 visitRepository.save(visit);
                 issuedQueueNumber = visit.getQueueNumber();
             }
         } else if (payment.getType() == PaymentType.PARACLINICAL_FEE) {
-            // An insurance visit's orders were already released at order time (BR-26); only pending ones move.
+            // luot BHYT da chuyen phong luc chi dinh (BR-26), chi chuyen cac dich vu con cho
             paraclinicalOrderRepository.findByPaymentId(payment.getId())
                     .ifPresent(order -> unroutedServices.addAll(release(order, now, true)));
         }
@@ -96,7 +88,7 @@ public class PaymentCompletionService {
             audit.put("unroutedServices", unroutedServices);
         }
         if (actorAccountId == null) {
-            // Confirmed by PayOS, not by a cashier: the audit row has no actor.
+            // PayOS xac nhan nen audit khong co nguoi thuc hien
             auditLogService.recordSystemChange(
                     AuditLogAction.UPDATE, "payments", payment.getId(), visit.getSovaovien(), audit, now);
         } else {
@@ -106,21 +98,13 @@ public class PaymentCompletionService {
         }
     }
 
-    /**
-     * UC-49: releases an order without waiting for payment, for an insurance visit or a receipt the patient pays
-     * nothing for (BR-26, UC-49 AF-01). Runs in the caller's transaction. Returns the services no Active room
-     * performs.
-     */
+    // UC-49: chuyen phieu CLS vao phong ngay (luot BHYT hoac phieu 0 dong); tra ve dich vu khong co phong lam
     @Transactional(propagation = Propagation.MANDATORY)
     public List<String> releaseOrder(ParaclinicalOrder order) {
         return release(order, clock.instant(), false);
     }
 
-    /**
-     * {@code atPayment}: the patient paid the paraclinical fee (self-pay visit), so each service goes to the room
-     * picked now by {@link #roomAtPayment} instead of the room chosen when ordering, which may have been minutes or
-     * hours earlier (BA decision 12/11/2026, replaces the "keep the chosen room" part of I1-D47 / BR-50-02).
-     */
+    // chuyen cac dich vu vao phong; atPayment = vua thanh toan thi chon lai phong luc nay
     private List<String> release(ParaclinicalOrder order, Instant now, boolean atPayment) {
         Set<UUID> staffed = atPayment ? paraclinicalRoomDuty.staffedRooms(now) : Set.of();
         order.release();
@@ -135,10 +119,7 @@ public class PaymentCompletionService {
         return unrouted;
     }
 
-    /**
-     * The Active room with the fewest waiting services among the rooms of a service group; ties go to the lower room
-     * code. It is the room preselected for the Doctor in UC-49 (I1-D47, BR-50-01) and the fallback at release.
-     */
+    // phong dang hoat dong it dich vu cho nhat trong nhom; bang nhau thi lay ma phong nho hon
     public Optional<Room> leastBusyRoom(UUID serviceGroupId) {
         if (serviceGroupId == null) {
             return Optional.empty();
@@ -150,12 +131,8 @@ public class PaymentCompletionService {
                         .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING)));
     }
 
-    /**
-     * Room of a service paid now (BR-28 as clarified by the BA on 12/11/2026): among the Active rooms of the
-     * service group, the rooms with a staff member on duty in the current shift; among them the room with the
-     * fewest waiting services; ties go to the lower room code. ASSUMPTION: when no room of the group is staffed
-     * now, every Active room of the group is a candidate, so the paid service still gets a room.
-     */
+    // chon phong luc thanh toan: phong co nguoi truc ca nay, it dich vu cho nhat (BR-28)
+    // khong phong nao co nguoi truc thi xet tat ca phong dang hoat dong
     Optional<Room> roomAtPayment(UUID serviceGroupId, Set<UUID> staffedRooms) {
         if (serviceGroupId == null) {
             return Optional.empty();
@@ -169,13 +146,8 @@ public class PaymentCompletionService {
                         .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING)));
     }
 
-    /**
-     * Sends one service to its room. At payment the room is picked again by {@link #roomAtPayment}; the room chosen
-     * when ordering is only used when the service group is unknown. Without payment (UC-49, insurance visit or
-     * fee-exempt receipt) the service goes to the room the Doctor chose (I1-D47), or to the least busy Active room
-     * when none was chosen or the chosen room is no longer Active (BR-50-03). Returns false when no Active room
-     * performs the service (UC-71 AF-02).
-     */
+    // chuyen 1 dich vu vao phong: luc thanh toan chon lai phong; khong qua thanh toan thi dung phong bac si chon
+    // (phong do ngung thi lay phong it nguoi nhat); khong co phong nao thi tra false
     private boolean routeToRoom(ParaclinicalOrderDetail detail, Instant now, boolean atPayment, Set<UUID> staffed) {
         Optional<UUID> groupId = medicalServiceRepository.findById(detail.getServiceId())
                 .map(MedicalService::getServiceGroupId);
@@ -200,8 +172,7 @@ public class PaymentCompletionService {
         if (room == null) {
             detail.releaseTo(null, null, now);
         } else {
-            // Case 1 (Check-in tại phòng): Chỉ phân bổ phòng, không cấp số thứ tự ngay.
-            // Bệnh nhân sẽ được cấp STT khi KTV bấm xác nhận có mặt tại phòng.
+            // chi chia phong, chua cap so thu tu; KTV xac nhan co mat thi moi cap
             detail.releaseTo(room.getId(), null, now);
         }
         paraclinicalOrderDetailRepository.save(detail);

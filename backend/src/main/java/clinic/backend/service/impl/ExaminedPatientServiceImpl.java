@@ -20,7 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** UC-34 View Examined Patient List. The Doctor is always the logged-in account (BR-39), never a parameter. */
+// UC-34: danh sach benh nhan da kham cua bac si dang dang nhap (BR-39)
 @Service
 @RequiredArgsConstructor
 public class ExaminedPatientServiceImpl implements ExaminedPatientService {
@@ -33,6 +33,7 @@ public class ExaminedPatientServiceImpl implements ExaminedPatientService {
     private final VisitRepository visitRepository;
     private final Clock clock;
 
+    // kiem tra khoang ngay + trang, tra ve tong so va 1 trang luot kham (moi nhat truoc)
     @Override
     @Transactional(readOnly = true)
     public ExaminedPatientListResponse getExaminedPatients(

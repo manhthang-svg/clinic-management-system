@@ -43,6 +43,7 @@ public class PatientController {
     private final PatientService patientService;
     private final FollowUpAppointmentService followUpAppointmentService;
 
+    // UC-37: tao ho so benh nhan
     @PostMapping
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @Operation(summary = "UC-37 Tạo hồ sơ bệnh nhân")
@@ -50,10 +51,11 @@ public class PatientController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreatePatientRequest request
     ) {
-        // The creator comes from the token, never from the request body (same as UC-36 and UC-38).
+        // nguoi tao lay tu token, khong lay tu body
         return ApiResponse.success(patientService.createPatient(StaffPrincipal.from(jwt).accountId(), request));
     }
 
+    // UC-37: tim ho so co the trung (cung ho ten + ngay sinh)
     @GetMapping("/possible-duplicates")
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @Operation(summary = "UC-37 AF-02 Hồ sơ có thể trùng (cùng họ tên và ngày sinh)")
@@ -64,6 +66,7 @@ public class PatientController {
         return ApiResponse.success(patientService.findPossibleDuplicates(hoten, ngaysinh));
     }
 
+    // UC-38: cap nhat thong tin benh nhan
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @Operation(summary = "UC-38 Cập nhật thông tin bệnh nhân")
@@ -75,8 +78,8 @@ public class PatientController {
         return ApiResponse.success(patientService.updatePatient(StaffPrincipal.from(jwt).accountId(), id, request));
     }
 
+    // UC-35: tim kiem benh nhan (le tan va bac si)
     @GetMapping
-    // ASSUMPTION: Permission Matrix 4.4 gives the Doctor full search; Technician and Cashier scopes are TBD.
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
     @Operation(summary = "UC-35 Tìm kiếm và xem danh sách bệnh nhân (20 bệnh nhân mỗi trang)")
     public ApiResponse<Page<PatientResponse>> listPatients(
@@ -87,6 +90,7 @@ public class PatientController {
         return ApiResponse.success(patientService.listPatients(keyword, type, pageable));
     }
 
+    // lay ho so hanh chinh 1 benh nhan (dung cho UC-38, UC-40)
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
     @Operation(summary = "Hồ sơ hành chính của bệnh nhân (dùng cho UC-38, UC-40)")
@@ -94,6 +98,7 @@ public class PatientController {
         return ApiResponse.success(patientService.getPatientById(id));
     }
 
+    // UC-36: xem ho so + lich su kham (co ghi audit)
     @GetMapping("/{id}/overview")
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
     @Operation(summary = "UC-36 Xem thông tin bệnh nhân và lịch sử khám (ghi audit)")

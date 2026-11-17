@@ -23,15 +23,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Technician home dashboard. The queue and pending-result figures reuse the queue screens (UC-63, UC-64), so the
- * dashboard always shows the same numbers as those screens.
- */
+// dashboard KTV: dung lai so lieu man hang cho (UC-63, UC-64) nen luon khop voi cac man do
 @Service
 @RequiredArgsConstructor
 public class TechnicianDashboardServiceImpl implements TechnicianDashboardService {
 
-    /** Rows of each short list on the dashboard; the full lists are on the queue screens. */
+    // so dong moi danh sach ngan tren dashboard
     static final int LIST_LIMIT = 5;
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -41,6 +38,7 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     private final Clock clock;
 
+    // so lieu hom nay + 5 luot cho tiep theo + 5 ca cho nhap ket qua cua 1 phong
     @Override
     @Transactional(readOnly = true)
     public TechnicianDashboardResponse getDashboard(UUID roomId, UUID currentUserId) {
@@ -75,7 +73,7 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
                 pending.items().stream().limit(LIST_LIMIT).toList());
     }
 
-    /** The requested room, else the room the technician may work in now, else the first active room. */
+    // chon phong: phong yeu cau > phong KTV dang truc > phong dau tien
     private static TechnicianRoomResponse chooseRoom(List<TechnicianRoomResponse> rooms, UUID roomId) {
         if (roomId != null) {
             return rooms.stream()
