@@ -156,13 +156,13 @@ export function ParaclinicalOrderSlip({ slip }) {
 }
 
 /**
- * "In phiếu chỉ định": loads the slip (the server records the print, BR-50-08) and opens the browser print dialog.
+ * "In phiếu chỉ định": loads the slip and opens the browser print dialog. The print is not logged and every print
+ * is the same (no first print / reprint distinction).
  * The slip is rendered straight into `document.body`: inside the page it would sit in the scrolling `main` of the
  * layout, which the print view clips. It is hidden on screen and shown only when printing.
  */
 export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
     const [job, setJob] = useState(null);
-    const [printed, setPrinted] = useState(null);
     const [printing, setPrinting] = useState(false);
     const [error, setError] = useState('');
 
@@ -180,7 +180,6 @@ export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
         setError('');
         try {
             const slip = await api.prepareParaclinicalOrderPrint(orderId);
-            setPrinted(slip);
             setJob({ slip, id: Date.now() });
         } catch (err) {
             setError(printErrorMessage(err));
@@ -200,14 +199,9 @@ export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
                 {printing
                     ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
                     : <Printer aria-hidden="true" className="h-4 w-4" />}
-                {printing ? 'Đang chuẩn bị phiếu…' : printed ? 'In lại phiếu chỉ định' : 'In phiếu chỉ định'}
+                {printing ? 'Đang chuẩn bị phiếu…' : 'In phiếu chỉ định'}
             </button>
             {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-            {printed && !error && (
-                <p role="status" className="text-xs text-slate-600">
-                    Đã mở hộp thoại in phiếu {printed.sophieu}.
-                </p>
-            )}
             {job && createPortal(
                 <div className="hidden print:block">
                     <ParaclinicalOrderSlip slip={job.slip} />

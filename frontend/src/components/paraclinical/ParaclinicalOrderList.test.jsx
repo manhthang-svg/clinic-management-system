@@ -145,13 +145,13 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         print.mockRestore();
     });
 
-    it('prints again without a reprint mark and explains an order that can no longer be printed', async () => {
+    it('keeps one "In phiếu chỉ định" button for every print and explains an order that can no longer be printed', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const api = {
             getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound])),
             prepareParaclinicalOrderPrint: vi.fn()
-                .mockResolvedValueOnce({ ...slip, reprint: true })
+                .mockResolvedValueOnce(slip)
                 .mockRejectedValueOnce(new ApiError('raw', {
                     status: 409, errorResponse: { code: 'PARACLINICAL_ORDER_NOT_PRINTABLE' },
                 })),
@@ -159,10 +159,13 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         render(<ParaclinicalOrderList visitId="v1" api={api} />);
 
         await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
-        // A reprinted slip carries no "BẢN IN LẠI" mark.
-        expect(await screen.findByRole('button', { name: 'In lại phiếu chỉ định' })).toBeInTheDocument();
+        expect(print).toHaveBeenCalled();
+        // The same button stays after printing: no "In lại", no reprint mark, no status line.
+        expect(await screen.findByRole('button', { name: 'In phiếu chỉ định' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'In lại phiếu chỉ định' })).not.toBeInTheDocument();
         expect(screen.queryByText('BẢN IN LẠI')).not.toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'In lại phiếu chỉ định' }));
+        expect(screen.queryByText(/Đã mở hộp thoại in/)).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'In phiếu chỉ định' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.');
         expect(screen.queryByText('raw')).not.toBeInTheDocument();
