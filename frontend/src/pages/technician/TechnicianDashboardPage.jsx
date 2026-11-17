@@ -390,7 +390,7 @@ export function TechnicianDashboardPage() {
               toast.info(
                 !isInShift
                   ? 'Đã chuyển sang trạng thái: Đang trong ca trực'
-                  : 'Đã chuyển sang trạng thái: Ngoài ca trực (MSG48: Chế độ chỉ xem)'
+                  : 'Đã chuyển sang trạng thái: Ngoài ca trực (Chế độ chỉ xem)'
               );
             }}
             className="h-11 px-3 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer"
@@ -407,7 +407,7 @@ export function TechnicianDashboardPage() {
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
-            <strong>Thông báo ngoài ca trực (MSG48):</strong> Bạn hiện đang ngoài ca trực hoặc ở chế độ chỉ xem. Các thao tác tiếp nhận bệnh nhân, gọi số hoặc gửi kết quả sẽ bị hạn chế.
+            <strong>Thông báo ngoài ca trực:</strong> Bạn hiện đang ngoài ca trực hoặc ở chế độ chỉ xem. Các thao tác tiếp nhận bệnh nhân, gọi số hoặc gửi kết quả sẽ bị hạn chế.
           </span>
         </div>
       )}

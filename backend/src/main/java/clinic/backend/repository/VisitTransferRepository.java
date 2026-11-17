@@ -12,4 +12,6 @@ public interface VisitTransferRepository extends JpaRepository<VisitTransfer, UU
     List<VisitTransfer> findAllByVisitIdInAndToRoomIdOrderByTransferredAtDesc(
             Collection<UUID> visitIds,
             UUID toRoomId);
+
+    List<VisitTransfer> findAllByVisitIdOrderByTransferredAtAsc(UUID visitId);
 }

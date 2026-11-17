@@ -64,6 +64,9 @@ export const ROUTES = {
     ROOM_TRANSFERS: '/doctor/room-transfers',
     SKIPPED_PATIENTS: '/doctor/skipped-patients',
     EXAMINED_PATIENTS: '/doctor/examined-patients',
+    MEDICAL_RECORDS: '/doctor/medical-records',
+    MEDICAL_RECORD_DETAIL: '/doctor/medical-records/:id',
+    MEDICAL_RECORD_VISIT_DETAIL: '/doctor/medical-records/visits/:visitId',
   },
 
   TECHNICIAN: {
