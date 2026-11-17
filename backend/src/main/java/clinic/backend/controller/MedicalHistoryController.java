@@ -21,9 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * UC-39 Update Medical History and Allergies. Only the Doctor reads and changes them (BR-23).
- */
+// UC-39: API tien su benh va di ung (chi bac si - BR-23)
 @RestController
 @RequestMapping("/api/v1/visits/{visitId}/medical-history")
 @RequiredArgsConstructor
@@ -32,6 +30,7 @@ public class MedicalHistoryController {
 
     private final MedicalHistoryService medicalHistoryService;
 
+    // xem tien su + di ung trong luot kham
     @GetMapping
     @PreAuthorize("hasRole('DOCTOR')")
     @Operation(summary = "UC-39 Xem tiền sử và dị ứng thuốc của bệnh nhân trong lượt khám")
@@ -42,6 +41,7 @@ public class MedicalHistoryController {
         return ApiResponse.success(medicalHistoryService.getForVisit(StaffPrincipal.from(jwt).accountId(), visitId));
     }
 
+    // cap nhat tien su + di ung
     @PutMapping
     @PreAuthorize("hasRole('DOCTOR')")
     @Operation(summary = "UC-39 Cập nhật tiền sử và dị ứng thuốc")

@@ -36,10 +36,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * UC-39 Update Medical History and Allergies. History and allergies belong to the patient profile and are
- * changed only by the Doctor examining the patient in their own room while the record is open (BR-19, BR-23).
- */
+// UC-39: tien su benh va di ung thuoc cua benh nhan
+// chi bac si dang kham dung phong minh, benh an chua dong moi duoc sua (BR-19, BR-23)
 @Service
 @RequiredArgsConstructor
 public class MedicalHistoryServiceImpl implements MedicalHistoryService {
@@ -58,6 +56,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
     private final UuidV7Generator ids;
     private final Clock clock;
 
+    // xem tien su + di ung, kem ly do chi xem (neu co)
     @Override
     @Transactional(readOnly = true)
     public MedicalHistoryResponse getForVisit(UUID doctorAccountId, UUID visitId) {
@@ -67,40 +66,36 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
                 medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(visit.getPatientId()));
     }
 
+    // cap nhat tien su + di ung: thay toan bo danh sach cu bang danh sach moi
     @Override
     @Transactional
     public MedicalHistoryResponse updateForVisit(
             UUID doctorAccountId, UUID visitId, UpdateMedicalHistoryRequest request) {
-        // lay luot kham
         Visit visit = requireVisit(visitId);
-
-        // lay benh an
         Optional<MedicalRecord> record = medicalRecordRepository.findByVisitId(visitId);
-        // EF-02: only while examining the patient in the Doctor's room, and the record is not closed.
 
-        // hoi ly do
+        // kiem tra quyen sua
         String reason = readOnlyReason(doctorAccountId, visit, record);
-        //ượt khám không ở trạng thái Đang khám / Chờ kết luận, hoặc không phải phòng của bác sĩ này
+        // luot kham khong dang kham, hoac khong phai phong cua bac si nay
         if (NOT_IN_EXAMINATION.equals(reason)) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
-        //đang khám đúng phòng, nhưng bệnh án đã khóa
+        // dung phong nhung benh an da dong
         if (MEDICAL_RECORD_CLOSED.equals(reason)) {
             throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
         }
-        // kiem tra du lieu co hop le ko
+        // kiem tra du lieu
         validate(request);
 
-        // tiền sử và dị ứng HIỆN ĐANG LƯU
+        // tien su + di ung dang luu
         List<MedicalHistory> current = medicalHistoryRepository.findByPatientIdOrderByCreatedAtAsc(
                 visit.getPatientId());
-        // Another Doctor saved in between: the Doctor reloads instead of overwriting (MSG75).
-        //Chống ghi đè
+        // bac si khac vua luu thi khong ghi de, bao tai lai (MSG75)
         if (!sameInstant(lastUpdatedAt(current), request.lastUpdatedAt())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
-        // dung danh sach moi
+        // tao danh sach moi tu request
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         UUID recordId = record.map(MedicalRecord::getId).orElse(null);
         List<MedicalHistory> replacement = new ArrayList<>();
@@ -116,14 +111,15 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
                     blankToNull(item.reaction()), item.severity(), doctorAccountId)));
         }
 
+        // xoa danh sach cu, luu danh sach moi
         medicalHistoryRepository.deleteAllInBatch(current);
         medicalHistoryRepository.saveAll(replacement);
 
-        // Step 5: audit trail with old and new values (IV.2.3).
+        // ghi audit gia tri cu va moi
         Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("visitId", visit.getId());  // sửa trong lượt khám nao
-        audit.put("old", summary(current)); // danh sách TRƯỚC khi sửa
-        audit.put("new", summary(replacement)); // danh sách SAU khi sửa
+        audit.put("visitId", visit.getId());
+        audit.put("old", summary(current));
+        audit.put("new", summary(replacement));
         auditLogService.recordBusinessChange(
                 doctorAccountId, AuditLogAction.UPDATE, PATIENT_AUDIT_ENTITY, visit.getPatientId(),
                 visit.getSovaovien(), audit, now);
@@ -136,6 +132,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
     }
 
+    // ly do chi xem: khong dang kham dung phong, hoac benh an da dong; null la duoc sua
     private String readOnlyReason(UUID doctorAccountId, Visit visit, Optional<MedicalRecord> record) {
         boolean examining = visit.getStatus() == VisitStatus.IN_EXAMINATION
                 || visit.getStatus() == VisitStatus.WAITING_CONCLUSION;
@@ -152,6 +149,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
         return null;
     }
 
+    // tien su toi da 2000 ky tu; da chon "khong di ung" thi khong duoc nhap di ung
     private static void validate(UpdateMedicalHistoryRequest request) {
         int historyLength = request.history().stream()
                 .mapToInt(item -> item.content().strip().length())
@@ -166,6 +164,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
         }
     }
 
+    // tach tien su / di ung, lay nguoi cap nhat cuoi
     private MedicalHistoryResponse toResponse(Visit visit, String readOnlyReason, List<MedicalHistory> items) {
         List<MedicalHistoryResponse.HistoryEntry> history = items.stream()
                 .filter(item -> item.getHistoryType() == MedicalHistoryType.PERSONAL)
@@ -190,6 +189,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
                 noKnownAllergy, latest.map(MedicalHistory::getUpdatedAt).orElse(null), updatedByName);
     }
 
+    // thoi diem sua gan nhat, dung de chong ghi de
     private static Instant lastUpdatedAt(List<MedicalHistory> items) {
         return items.stream().map(MedicalHistory::getUpdatedAt).max(Comparator.naturalOrder()).orElse(null);
     }
@@ -201,6 +201,7 @@ public class MedicalHistoryServiceImpl implements MedicalHistoryService {
         return left.truncatedTo(ChronoUnit.MILLIS).equals(right.truncatedTo(ChronoUnit.MILLIS));
     }
 
+    // tom tat danh sach de ghi audit
     private static List<String> summary(List<MedicalHistory> items) {
         return items.stream()
                 .map(item -> String.join(" | ", item.getHistoryType().name(),
