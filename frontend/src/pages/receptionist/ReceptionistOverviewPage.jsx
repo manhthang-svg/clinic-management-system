@@ -85,7 +85,7 @@ export default function ReceptionistOverviewPage() {
         try {
             const res = await patientApi.list({
                 keyword: searchQuery || undefined,
-                size: 50,
+                size: 20,
             });
             const list =
                 res?.content ||
