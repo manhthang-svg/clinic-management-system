@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
 import { ConfirmModal } from '../ui/confirm-modal';
+import { ConfirmConclusionSection } from './ConfirmConclusionSection';
 import {
     EMPTY_CONCLUSION, MSG, TREATMENT_RESULTS, conclusionError, formFromResponse, sameConclusion, toPayload,
     validateConclusion,
@@ -144,8 +145,11 @@ function formatDateTime(value) {
     return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
-/** UC-56 Conclude Examination: the conclusion form of the visit; the record stays open after saving. */
-export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved }) {
+/**
+ * UC-56 Conclude Examination: the conclusion form of the visit; the record stays open after saving. UC-58: below
+ * it, "Xác nhận kết luận" closes the record.
+ */
+export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClosed, onOpenPrescription }) {
     const resultName = useId();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -235,6 +239,7 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved }) {
 
     const locked = Boolean(data?.diagnosesLocked);
     return (
+        <div className="space-y-3">
         <form
             noValidate
             aria-label="Kết luận khám"
@@ -339,6 +344,15 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                 onClose={() => setDiscouragedCode(null)}
             />
         </form>
+        <ConfirmConclusionSection
+            visitId={visitId}
+            saved={Boolean(data?.conclusionId)}
+            dirty={dirty}
+            api={api}
+            onClosed={onClosed}
+            onOpenPrescription={onOpenPrescription}
+        />
+        </div>
     );
 }
 

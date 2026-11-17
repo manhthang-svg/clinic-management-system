@@ -16,7 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * A follow-up appointment created at conclusion (BR-34).
+ * A follow-up appointment of a visit (BR-34, UC-61), printed as the Phiếu hẹn khám lại of TT 01/2025/TT-BYT
+ * Phụ lục V (UC-62).
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -64,6 +65,53 @@ public class FollowUpAppointment extends VersionedEntity {
 
     @Column(name = "created_by_account_id", nullable = false)
     private UUID createdByAccountId;
+
+    /**
+     * UC-61 step 5: the visit's appointment, scheduled by its Doctor (BR-61-01). The slip number never changes
+     * (BR-61-03).
+     */
+    public static FollowUpAppointment schedule(
+            UUID id, Instant now, UUID medicalRecordId, String soGiayHen, UUID patientId, UUID doctorAccountId,
+            String maicd, LocalDate followUpDate, String loidanbacsi) {
+        FollowUpAppointment appointment = new FollowUpAppointment(id, now);
+        appointment.medicalRecordId = medicalRecordId;
+        appointment.soGiayHen = soGiayHen;
+        appointment.patientId = patientId;
+        appointment.doctorAccountId = doctorAccountId;
+        appointment.createdByAccountId = doctorAccountId;
+        appointment.maicd = maicd;
+        appointment.followUpDate = followUpDate;
+        appointment.loidanbacsi = loidanbacsi;
+        appointment.status = FollowUpAppointmentStatus.SCHEDULED;
+        return appointment;
+    }
+
+    private FollowUpAppointment(UUID id, Instant createdAt) {
+        super(id, createdAt);
+    }
+
+    /** UC-61 AF-01: a change while the appointment is still scheduled (BR-61-04). */
+    public void reschedule(LocalDate followUpDate, String loidanbacsi, String maicd, Instant now) {
+        if (status != FollowUpAppointmentStatus.SCHEDULED) {
+            throw new IllegalStateException("Follow-up appointment is no longer scheduled");
+        }
+        this.followUpDate = followUpDate;
+        this.loidanbacsi = loidanbacsi;
+        this.maicd = maicd;
+        touch(now);
+    }
+
+    /** UC-62 step 3: {@code printed_at} keeps the first print; later prints are only audited. */
+    public void markPrinted(Instant now) {
+        if (printedAt == null) {
+            printedAt = now;
+            touch(now);
+        }
+    }
+
+    public boolean isScheduled() {
+        return status == FollowUpAppointmentStatus.SCHEDULED;
+    }
 
     public void markArrived(UUID visitId, Instant now) {
         if (status != FollowUpAppointmentStatus.SCHEDULED) {

@@ -371,6 +371,17 @@ public class Visit extends VersionedEntity {
         skippedAt = null;
     }
 
+    /** UC-58 BR-58-04: the Doctor confirmed the conclusion and closed the record (BR-32, V19). */
+    public void complete(Instant now) {
+        if (isSkipped
+                || (status != VisitStatus.IN_EXAMINATION && status != VisitStatus.WAITING_CONCLUSION)) {
+            throw new IllegalStateException("Visit cannot be completed from " + status);
+        }
+        status = VisitStatus.COMPLETED;
+        completedAt = now;
+        touch(now);
+    }
+
     /** End-of-day job: the patient left before paying the examination fee (BR-22, V04). */
     public void cancelAtEndOfDay(Instant now) {
         if (status != VisitStatus.WAITING_FEE_PAYMENT) {

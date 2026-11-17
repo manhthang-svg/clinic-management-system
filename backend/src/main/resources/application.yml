@@ -66,6 +66,9 @@ clinic:
     failure-mode: ${NATIONAL_PRESCRIPTION_SIMULATOR_FAILURE_MODE:NONE}
     # Comma-separated prescriber link codes the simulator knows; empty accepts every code.
     registered-prescriber-codes: ${NATIONAL_PRESCRIPTION_SIMULATOR_PRESCRIBER_CODES:}
+  # UC-58 BR-58-06: write-once archive packages of closed medical records (git-ignored by default).
+  archive:
+    root: ${CLINIC_ARCHIVE_ROOT:.clinic-archive}
   insurance-billing:
     # BR-27: mức lương cơ sở (VND). A visit below 15% of it is covered at 100%.
     base-salary: ${INSURANCE_BASE_SALARY:2340000}

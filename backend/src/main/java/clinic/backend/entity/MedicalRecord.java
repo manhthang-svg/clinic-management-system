@@ -90,6 +90,21 @@ public class MedicalRecord extends VersionedEntity {
         this.openedByAccountId = openedByAccountId;
     }
 
+    /**
+     * UC-58 BR-58-04, BR-58-06: the Doctor confirms the conclusion; the record is locked with its archive number
+     * (R02). Every write use case refuses a record that is not open.
+     */
+    public void close(UUID doctorAccountId, String soluutru, Instant now) {
+        if (status != MedicalRecordStatus.OPEN) {
+            throw new IllegalStateException("Medical record is not open");
+        }
+        status = MedicalRecordStatus.LOCKED;
+        closedAt = now;
+        closedByAccountId = doctorAccountId;
+        this.soluutru = soluutru;
+        touch(now);
+    }
+
     /** End-of-day job: the record of a visit that ended without a conclusion is locked by the system (S7, R03). */
     public void lockAtEndOfDay(Instant now) {
         if (status != MedicalRecordStatus.OPEN) {

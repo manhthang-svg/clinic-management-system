@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import clinic.backend.enums.RecordArchiveRetentionCategory;
 import clinic.backend.enums.RecordArchiveStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,6 +47,11 @@ public class RecordArchive extends UuidEntity {
     @Column(name = "package_sha256", nullable = false, length = 64)
     private String packageSha256;
 
+    /** TT 33/2025/TT-BYT Phụ lục dòng 40, 44 (UC-58 BR-58-06). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "retention_category", nullable = false, length = 30)
+    private RecordArchiveRetentionCategory retentionCategory;
+
     @Column(name = "retention_years", nullable = false)
     private short retentionYears;
 
@@ -58,4 +64,30 @@ public class RecordArchive extends UuidEntity {
 
     @Column(name = "archived_at", nullable = false)
     private Instant archivedAt;
+
+    /**
+     * UC-58 BR-58-06: the archive created when the record is closed (BR-126). The retention period follows the
+     * category (TT 33/2025/TT-BYT Phụ lục); {@code expiresOn} comes from {@code RetentionRules}.
+     */
+    public static RecordArchive archive(
+            UUID id, UUID medicalRecordId, String soluutru, UUID exportLogId, String packageUri,
+            String packageSha256, RecordArchiveRetentionCategory retentionCategory, LocalDate expiresOn,
+            Instant archivedAt) {
+        RecordArchive archive = new RecordArchive(id);
+        archive.medicalRecordId = medicalRecordId;
+        archive.soluutru = soluutru;
+        archive.exportLogId = exportLogId;
+        archive.packageUri = packageUri;
+        archive.packageSha256 = packageSha256;
+        archive.retentionCategory = retentionCategory;
+        archive.retentionYears = retentionCategory.retentionYears();
+        archive.expiresOn = expiresOn;
+        archive.status = RecordArchiveStatus.ARCHIVED;
+        archive.archivedAt = archivedAt;
+        return archive;
+    }
+
+    private RecordArchive(UUID id) {
+        super(id);
+    }
 }

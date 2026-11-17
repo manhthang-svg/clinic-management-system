@@ -121,7 +121,7 @@ stateDiagram-v2
 | V16 | `CHO_KET_LUAN` | Bác sĩ gọi bệnh nhân vào nghe kết luận | Bệnh nhân vắng; ghi `bo_qua_tu = CHO_KET_LUAN` | `DA_BO_QUA` | Bác sĩ | UC-40 | F04-01 | Đề xuất (Q-28) |
 | V17 | `DA_BO_QUA` | Bác sĩ bấm "Gọi lại" | `bo_qua_tu = CHO_KET_LUAN`; bệnh nhân có mặt | `CHO_KET_LUAN` | Bác sĩ | UC-40 | F04-01 | Đề xuất (Q-28) |
 | V18 | `CHO_KET_LUAN` | Bác sĩ chỉ định CLS bổ sung sau khi xem kết quả | Hồ sơ chưa khóa | `CHO_CLS` | Bác sĩ | UC-43 | — | Đề xuất (Q-30) |
-| V19 | `CHO_KET_LUAN` | Bác sĩ đóng hồ sơ | Đã lưu kết luận (UC-50); đơn thuốc và lịch tái khám nếu có đã lưu | `HOAN_THANH` | Bác sĩ, Hệ thống | UC-52 | F04-08, F04-09; BR-11, BR-28 | Nguồn |
+| V19 | `CHO_KET_LUAN`, `DANG_KHAM` | Bác sĩ xác nhận kết luận, hệ thống đóng hồ sơ trong cùng thao tác | Đã lưu kết luận (UC-56); mọi chỉ định chưa hủy đã có kết quả (BR-30); đơn thuốc nếu có đã được chấp nhận (BR-47) | `HOAN_THANH` | Bác sĩ, Hệ thống | UC-58 | BR-30, BR-32, BR-47 | Nguồn; nhánh `DANG_KHAM` (không có CLS): BR-32 v7, sửa 17/11/2026 theo [`uc-58-close-medical-record.md`](uc-58-close-medical-record.md) |
 | V20 | `CHO_KHAM`, `DANG_KHAM`, `CHO_CLS`, `CHO_KET_LUAN` | Tác vụ cuối ngày | Lượt của ngày trước, chưa ở trạng thái kết thúc lúc chạy tác vụ | `BO_KHAM` | Hệ thống | — | Mục 8; BR-22 | Quyết định (Q-31) |
 
 ### 2.4 Ghi chú
@@ -288,7 +288,7 @@ Khi hồ sơ `MO`: bác sĩ ghi sinh hiệu, khám, kết luận, đơn thuốc,
 | S4 | Hóa đơn `CLS` → `DA_HUY` với lý do `BN_TU_CHOI_CLS` | Mọi chỉ định thuộc hóa đơn → `DA_HUY`, `ly_do_huy = BN_TU_CHOI` (O04); sau đó kiểm tra S5 | Đề xuất (Q-25) |
 | S5 | Một chỉ định chuyển `HOAN_THANH` hoặc `DA_HUY (BN_TU_CHOI)` | Nếu mọi chỉ định của lượt đã kết thúc và không có chỉ định nào `DA_HUY (BO_KHAM)`: lượt khám `CHO_CLS` → `CHO_KET_LUAN` (V14), thông báo cho bác sĩ | Nguồn; phần từ chối: Đề xuất |
 | S6 | Một chỉ định chuyển `DA_HUY (BO_KHAM)` | Lượt khám → `BO_KHAM` (V15); các chỉ định khác chưa kết thúc → `DA_HUY (BO_KHAM)` (O11); hóa đơn CLS còn `CHO_TT` → `DA_HUY (HET_NGAY)` | Đề xuất (Q-18) |
-| S7 | Lượt khám vào trạng thái kết thúc (`HOAN_THANH`, `BO_KHAM`, `DA_HUY`) | Hồ sơ → `DA_KHOA` (R02, R03); hóa đơn còn `CHO_TT` của lượt → `DA_HUY` | Nguồn với `HOAN_THANH`; còn lại: Đề xuất |
+| S7 | Lượt khám vào trạng thái kết thúc (`HOAN_THANH`, `BO_KHAM`, `DA_HUY`) | Hồ sơ → `DA_KHOA` (R02, R03). Với `BO_KHAM`, `DA_HUY`: hóa đơn còn `CHO_TT` của lượt → `DA_HUY`. Với `HOAN_THANH`: hóa đơn `CHO_TT` giữ nguyên để thu ở quầy (lượt BHYT thu sau kết luận), hóa đơn bệnh nhân trả 0 là Miễn phí | Nguồn với `HOAN_THANH`; còn lại: Đề xuất. Sửa 17/11/2026 theo BR-15, BR-22 (2), BR-37 v7 (UC-58) |
 
 Các quy tắc S chạy trong cùng một giao dịch với sự kiện gốc, để không tồn tại trạng thái lệch giữa hóa đơn, chỉ định và lượt khám.
 

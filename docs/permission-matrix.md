@@ -80,7 +80,7 @@ Status values:
 | Doctor | Prescription | Create, update, print | UC-59, UC-60 | Current visit: the Doctor of the visit, on duty in its room, record open (BR-59-15). Print only an accepted prescription (BR-59-13). | Source |
 | Doctor | Medicine catalog | Search prescribable medicines | UC-59 | Active ordinary medicines only (BR-59-03); no catalog maintenance. | Decided (PO 15/11, [`uc-59-e-prescription.md`](uc-59-e-prescription.md#decisions-needed)) |
 | Doctor | Prescription | Sign and send, resend, view send history and result, correct a rejected one, delete a never-sent one | UC-90 → UC-92, UC-59 AF-03 | Same scope as create. Signing needs the Doctor's registered signing certificate (BR-59-10, BR-59-16); delete only while `PENDING` with no send and no signature. | Decided (PO 15/11, [`uc-59-e-prescription.md`](uc-59-e-prescription.md#decisions-needed)) |
-| Doctor | Follow-up appointment | Create, print | UC-61, UC-62 | Periodic-monitoring patients; date after visit date (BR-34). | Source |
+| Doctor | Follow-up appointment | Create, change, print | UC-61, UC-62 | Doctor of the visit, on duty in its room, record open, conclusion saved; one appointment per visit, changed only while scheduled; the Doctor decides who needs one (TT 01/2025 Điều 11); date after the visit date, at most 365 days (BR-108). | Decided (PO 15/11, [`uc-61-follow-up-appointment.md`](uc-61-follow-up-appointment.md#decisions-needed)) |
 | Doctor | Visit / medical record | Close | UC-58 | Locks the record (BR-32). | Source |
 | Technician | Paraclinical waiting list | View | UC-63 | Assigned room only; paid or released orders (BR-19, BR-26). | Source |
 | Technician | Paraclinical order | Call and accept | UC-65 | Assigned room only (BR-19, BR-20). | Source |

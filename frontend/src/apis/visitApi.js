@@ -179,6 +179,19 @@ export const visitApi = {
         });
     },
 
+    // UC-58: what "Xác nhận kết luận" needs (BR-58-01); records nothing.
+    getConclusionClosure(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/closure`, { signal });
+    },
+
+    // UC-58: confirms the conclusion; the record is closed and archived and the visit completed.
+    confirmConclusion(visitId, payload) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/commands/confirm`, {
+            method: 'POST',
+            body: payload,
+        });
+    },
+
     // UC-59: the visit's prescription form, with the conclusion diagnoses and drug allergies.
     getPrescription(visitId, signal) {
         return apiClient.request(`/prescriptions/visits/${encodeURIComponent(visitId)}`, { signal });
@@ -199,6 +212,31 @@ export const visitApi = {
     // UC-91: every send of the prescription, newest first, each with its signature status.
     getPrescriptionSubmissions(prescriptionId, signal) {
         return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/submissions`, { signal });
+    },
+
+    // UC-61: the visit's follow-up form, with its appointment if one is saved.
+    getFollowUp(visitId, signal) {
+        return apiClient.request(`/follow-up-appointments/visits/${encodeURIComponent(visitId)}`, { signal });
+    },
+
+    // UC-61: create the visit's appointment or change it while it is scheduled.
+    saveFollowUp(visitId, payload) {
+        return apiClient.request(`/follow-up-appointments/visits/${encodeURIComponent(visitId)}`, {
+            method: 'PUT',
+            body: payload,
+        });
+    },
+
+    // UC-62 step 2: the Phiếu hẹn khám lại for the preview (nothing is recorded).
+    getFollowUpPrint(appointmentId, signal) {
+        return apiClient.request(`/follow-up-appointments/${encodeURIComponent(appointmentId)}/print`, { signal });
+    },
+
+    // UC-62 step 3: the server records the print and returns the slip.
+    prepareFollowUpPrint(appointmentId) {
+        return apiClient.request(`/follow-up-appointments/${encodeURIComponent(appointmentId)}/commands/prepare-print`, {
+            method: 'POST',
+        });
     },
 
     // UC-60 step 2: the printed form of an accepted prescription, for the preview (nothing is recorded).
