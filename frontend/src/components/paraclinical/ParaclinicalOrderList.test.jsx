@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
+import { MOCK_RESULT_ORDERS } from '../paraclinicalResult/resultMockData';
 import { ParaclinicalOrderList } from './ParaclinicalOrderList';
 
 function order(details) {
@@ -13,7 +14,7 @@ function order(details) {
 }
 
 const ultrasound = {
-    id: 'd1', machidinh: 'CD1-01', tenchidinh: 'Siêu âm ổ bụng', thanhtien: 200000, status: 'PENDING_PAYMENT',
+    id: 'd1', machidinh: 'CD1-01', tenchidinh: 'Siêu âm ổ bụng', thanhtien: 200000, status: 'PENDING_PAYMENT', roomName: 'Phòng siêu âm 1', roomLocation: 'Tầng 2',
     cancellable: true, cancelReason: null,
 };
 const blood = {
@@ -43,6 +44,18 @@ const slip = {
 };
 
 describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
+    it('shows the performing room instead of the amount of each service', async () => {
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])) }} />);
+
+        const row = (await screen.findByText('Siêu âm ổ bụng')).closest('tr');
+        expect(row).toHaveTextContent('Phòng siêu âm 1');
+        expect(within(row).getByText('Tầng 2')).toBeInTheDocument();
+        expect(within(screen.getByText('Tổng phân tích máu').closest('tr')).getByText('Chưa xếp phòng')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Nơi thực hiện' })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Thành tiền (₫)' })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Tổng cộng/)).not.toBeInTheDocument();
+    });
+
     it('offers to cancel only the services that can still be cancelled', async () => {
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, blood])) }} />);
 
@@ -133,13 +146,13 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         print.mockRestore();
     });
 
-    it('marks a reprint and explains an order that can no longer be printed', async () => {
+    it('keeps one "In phiếu chỉ định" button for every print and explains an order that can no longer be printed', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const api = {
             getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound])),
             prepareParaclinicalOrderPrint: vi.fn()
-                .mockResolvedValueOnce({ ...slip, reprint: true })
+                .mockResolvedValueOnce(slip)
                 .mockRejectedValueOnce(new ApiError('raw', {
                     status: 409, errorResponse: { code: 'PARACLINICAL_ORDER_NOT_PRINTABLE' },
                 })),
@@ -147,19 +160,57 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         render(<ParaclinicalOrderList visitId="v1" api={api} />);
 
         await user.click(await screen.findByRole('button', { name: 'In phiếu chỉ định' }));
-        expect((await screen.findAllByText('BẢN IN LẠI')).length).toBeGreaterThan(0);
-        await user.click(screen.getByRole('button', { name: 'In lại phiếu chỉ định' }));
+        expect(print).toHaveBeenCalled();
+        // The same button stays after printing: no "In lại", no reprint mark, no status line.
+        expect(await screen.findByRole('button', { name: 'In phiếu chỉ định' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'In lại phiếu chỉ định' })).not.toBeInTheDocument();
+        expect(screen.queryByText('BẢN IN LẠI')).not.toBeInTheDocument();
+        expect(screen.queryByText(/Đã mở hộp thoại in/)).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'In phiếu chỉ định' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.');
         expect(screen.queryByText('raw')).not.toBeInTheDocument();
         print.mockRestore();
     });
 
-    it('offers no print for an order whose services were all cancelled (BR-50-05)', async () => {
+    it('disables the print button of an order whose services were all cancelled (BR-50-05)', async () => {
         const cancelled = { ...ultrasound, status: 'CANCELLED', cancellable: false, cancelReason: 'Bệnh nhân từ chối' };
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([cancelled])) }} />);
 
         expect(await screen.findByText('Phiếu chỉ định CD1')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'In phiếu chỉ định' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'In phiếu chỉ định' })).toBeDisabled();
+    });
+});
+
+describe('ParaclinicalOrderList – submitted results', () => {
+    it('opens the result of a completed service below its row, as the technician prints it', async () => {
+        const user = userEvent.setup();
+        const completed = { ...blood, status: 'COMPLETED' };
+        const labOrder = {
+            ...MOCK_RESULT_ORDERS.find((item) => item.id === 'cls-002'),
+            result: { status: 'SUBMITTED', submittedAt: '2026-11-01T08:09:00Z', values: { GLU: '11.4' } },
+        };
+        const resultApi = { viewForDoctor: vi.fn().mockResolvedValue(labOrder) };
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([ultrasound, completed])) }} resultApi={resultApi} />);
+
+        // The submitted result is loaded in the background as soon as the list shows, only for completed services.
+        await screen.findByText('Siêu âm ổ bụng');
+        expect(resultApi.viewForDoctor).toHaveBeenCalledTimes(1);
+        expect(resultApi.viewForDoctor).toHaveBeenCalledWith('d2');
+
+        // A service without a result does not open anything.
+        await user.click(screen.getByText('Siêu âm ổ bụng'));
+        expect(screen.queryByRole('article', { name: 'Phiếu kết quả in' })).not.toBeInTheDocument();
+
+        const row = screen.getByRole('row', { name: 'Xem kết quả Tổng phân tích máu' });
+        await user.click(row);
+        expect(await screen.findByRole('article', { name: 'Phiếu kết quả in' })).toBeInTheDocument();
+        await user.click(row);
+        expect(screen.queryByRole('article', { name: 'Phiếu kết quả in' })).not.toBeInTheDocument();
+
+        // Reopening shows it at once, without asking the server again.
+        await user.click(row);
+        expect(screen.getByRole('article', { name: 'Phiếu kết quả in' })).toBeInTheDocument();
+        expect(resultApi.viewForDoctor).toHaveBeenCalledTimes(1);
     });
 });

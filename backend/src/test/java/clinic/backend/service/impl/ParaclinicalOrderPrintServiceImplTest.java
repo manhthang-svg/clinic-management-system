@@ -21,7 +21,6 @@ import clinic.backend.entity.ServiceGroup;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.ActivationStatus;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -41,12 +40,10 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VisitRepository;
-import clinic.backend.service.AuditLogService;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -76,7 +73,6 @@ class ParaclinicalOrderPrintServiceImplTest {
     @Mock private ServiceGroupRepository serviceGroupRepository;
     @Mock private StaffAccountRepository staffAccountRepository;
     @Mock private ClinicFacilityRepository clinicFacilityRepository;
-    @Mock private AuditLogService auditLogService;
 
     private ParaclinicalOrderPrintServiceImpl service;
     private Visit visit;
@@ -87,7 +83,7 @@ class ParaclinicalOrderPrintServiceImplTest {
         service = new ParaclinicalOrderPrintServiceImpl(
                 paraclinicalOrderRepository, medicalRecordRepository, visitRepository, patientRepository,
                 roomRepository, departmentRepository, medicalServiceRepository, serviceGroupRepository,
-                staffAccountRepository, clinicFacilityRepository, auditLogService,
+                staffAccountRepository, clinicFacilityRepository,
                 Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
 
         visit = new Visit(UUID.randomUUID(), NOW, "DK0000000001", UUID.randomUUID(), UUID.randomUUID(),
@@ -139,21 +135,6 @@ class ParaclinicalOrderPrintServiceImplTest {
         assertThat(slip.sheets().get(1).services()).extracting(s -> s.machidinh())
                 .containsExactly("CD0000000042-02", "CD0000000042-03");
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> audit = ArgumentCaptor.forClass(Map.class);
-        verify(auditLogService).recordBusinessChange(eq(DOCTOR_ID), eq(AuditLogAction.PRINT),
-                eq("paraclinical_orders"), eq(order.getId()), eq("DK0000000001"), audit.capture(), eq(NOW));
-        assertThat(audit.getValue()).containsEntry("sheets", 2).containsEntry("reprint", false);
-    }
-
-    @Test
-    void marksALaterPrintAsAReprint() {
-        addDetail("CD0000000042-01", "Siêu âm ổ bụng", room("SA1", "Phòng siêu âm 1", "Tầng 2"),
-                ParaclinicalOrderDetailStatus.WAITING);
-        stubHeader();
-        when(auditLogService.hasAction(AuditLogAction.PRINT, "paraclinical_orders", order.getId())).thenReturn(true);
-
-        assertThat(service.preparePrint(DOCTOR_ID, order.getId()).reprint()).isTrue();
     }
 
     @Test
@@ -182,7 +163,6 @@ class ParaclinicalOrderPrintServiceImplTest {
         assertThatThrownBy(() -> service.preparePrint(DOCTOR_ID, order.getId()))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PARACLINICAL_ORDER_NOT_PRINTABLE));
-        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

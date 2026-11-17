@@ -19,7 +19,6 @@ import clinic.backend.entity.ParaclinicalOrderDetail;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.Visit;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
 import clinic.backend.enums.ParaclinicalOrderStatus;
@@ -35,7 +34,6 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.ServiceGroupRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VisitRepository;
-import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ParaclinicalOrderPrintService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,8 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrintService {
 
-    private static final String ORDER_AUDIT_ENTITY = "paraclinical_orders";
-
     private final ParaclinicalOrderRepository paraclinicalOrderRepository;
     private final MedicalRecordRepository medicalRecordRepository;
     private final VisitRepository visitRepository;
@@ -60,11 +56,10 @@ public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrint
     private final ServiceGroupRepository serviceGroupRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
-    private final AuditLogService auditLogService;
     private final Clock clock;
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public ParaclinicalOrderPrintResponse preparePrint(UUID doctorAccountId, UUID orderId) {
         Instant now = clock.instant();
 
@@ -91,16 +86,7 @@ public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrint
 
         List<ParaclinicalOrderPrintResponse.Sheet> sheets = buildSheets(printable);
 
-        // 3. BR-50-08: every print is audited; a print after the first one is a reprint
-        boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, ORDER_AUDIT_ENTITY, order.getId());
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("sophieu", order.getSophieu());
-        audit.put("sheets", sheets.size());
-        audit.put("reprint", reprint);
-        auditLogService.recordBusinessChange(
-                doctorAccountId, AuditLogAction.PRINT, ORDER_AUDIT_ENTITY, order.getId(), visit.getSovaovien(), audit,
-                now);
-
+        // 3. The print is not logged and every print is the same slip (no reprint mark).
         Room orderingRoom = roomRepository.findById(visit.getRoomId()).orElse(null);
         String orderingDepartment = orderingRoom == null ? null : departmentRepository
                 .findById(orderingRoom.getDepartmentId())
@@ -111,7 +97,7 @@ public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrint
                 .orElse(null);
 
         return new ParaclinicalOrderPrintResponse(
-                order.getId(), order.getSophieu(), reprint, now, facility(), patient(visit),
+                order.getId(), order.getSophieu(), false, now, facility(), patient(visit),
                 orderingDepartment, order.getNoichidinh(), order.getChandoansobo(), order.getMucdochidinh(),
                 order.getCreatedAt(), doctorName, sheets);
     }
@@ -185,7 +171,8 @@ public class ParaclinicalOrderPrintServiceImpl implements ParaclinicalOrderPrint
                 patient.getMabenhnhan(),
                 visit.getSovaovien(),
                 visit.getDoituongbnLoai(),
-                insured ? visit.getMabhyt() : null);
+                insured ? visit.getMabhyt() : null,
+                birthDate);
     }
 
     private static String gender(short code) {

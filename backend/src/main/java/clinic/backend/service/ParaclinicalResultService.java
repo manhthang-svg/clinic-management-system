@@ -14,6 +14,12 @@ public interface ParaclinicalResultService {
     /** UC-67 step 2: the service with its result form; read-only for anyone but its performer (EF-03). */
     ParaclinicalResultResponse get(UUID technicianAccountId, UUID orderDetailId);
 
+    /**
+     * The submitted result of a service of the Doctor's own order or visit, read-only, as the technician prints it
+     * ("Danh sách đã chỉ định"). Not submitted yet: RESULT_NOT_SUBMITTED; another Doctor's visit: ACCESS_DENIED.
+     */
+    ParaclinicalResultResponse viewForDoctor(UUID doctorAccountId, UUID orderDetailId);
+
     /** UC-67 AF-01: saves the result without locking it. */
     ParaclinicalResultResponse saveDraft(UUID technicianAccountId, UUID orderDetailId, SaveParaclinicalResultRequest request);
 
