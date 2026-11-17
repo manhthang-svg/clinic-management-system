@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apis/apiError';
 import { createStatisticsApi } from '../../apis/statisticsApi';
+import { fakeStatisticsServer } from '../../test/fakeStatisticsServer';
 import { DiagnosisStatisticsPage } from './DiagnosisStatisticsPage';
 
 const admin = { id: 'admin-1', username: 'admin', fullName: 'Quản trị hệ thống', role: 'ADMIN' };
@@ -51,11 +52,11 @@ function renderPage(api) {
 
 describe('DiagnosisStatisticsPage (UC-32)', () => {
   it('loads the current month with the top 10 and shows the totals', async () => {
-    const api = { getDiagnoses: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ diagnoses: stats });
     renderPage(api);
 
     expect(await screen.findByText('Số liệu từ 01/11/2026', { exact: false })).toBeInTheDocument();
-    expect(api.getDiagnoses).toHaveBeenCalledWith(
+    expect(api.getDiagnosisOverview).toHaveBeenCalledWith(
       { from: '2026-11-01', to: '2026-11-12', limit: 10 }, expect.any(AbortSignal));
     expect(screen.getByText('100% số kết luận')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
@@ -64,7 +65,7 @@ describe('DiagnosisStatisticsPage (UC-32)', () => {
   });
 
   it('ranks the main diagnoses with cases, patients and share', async () => {
-    const api = { getDiagnoses: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ diagnoses: stats });
     renderPage(api);
 
     const table = await screen.findByRole('table');
@@ -75,7 +76,7 @@ describe('DiagnosisStatisticsPage (UC-32)', () => {
   });
 
   it('shows the ICD-10 categories and the secondary diagnoses', async () => {
-    const api = { getDiagnoses: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ diagnoses: stats });
     renderPage(api);
 
     const categories = await screen.findByRole('region', { name: 'Theo nhóm bệnh' });
@@ -85,20 +86,20 @@ describe('DiagnosisStatisticsPage (UC-32)', () => {
   });
 
   it('asks for a longer ranking', async () => {
-    const api = { getDiagnoses: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ diagnoses: stats });
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('table');
 
     await user.click(screen.getByRole('button', { name: 'Top 50' }));
 
-    await waitFor(() => expect(api.getDiagnoses).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(api.getDiagnosisOverview).toHaveBeenLastCalledWith(
       { from: '2026-11-01', to: '2026-11-12', limit: 50 }, expect.any(AbortSignal)));
     expect(screen.getByRole('button', { name: 'Top 50' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows the empty state when no conclusion was saved in the period', async () => {
-    const api = { getDiagnoses: vi.fn().mockResolvedValue(empty) };
+    const api = fakeStatisticsServer({ diagnoses: empty });
     renderPage(api);
 
     await screen.findByText('Số liệu từ 01/11/2026', { exact: false });
@@ -108,11 +109,8 @@ describe('DiagnosisStatisticsPage (UC-32)', () => {
   });
 
   it('shows a Vietnamese error and retries', async () => {
-    const api = {
-      getDiagnoses: vi.fn()
-        .mockRejectedValueOnce(new ApiError('Bad', { status: 400, errorResponse: { code: 'REQUEST_VALIDATION_FAILED' } }))
-        .mockResolvedValueOnce(stats),
-    };
+    const api = fakeStatisticsServer({ diagnoses: stats });
+    api.getDiagnosisOverview.mockRejectedValueOnce(new ApiError('Bad', { status: 400, errorResponse: { code: 'REQUEST_VALIDATION_FAILED' } }));
     const user = userEvent.setup();
     renderPage(api);
 

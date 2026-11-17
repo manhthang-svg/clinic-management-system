@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apis/apiError';
 import { createStatisticsApi } from '../../apis/statisticsApi';
+import { fakeStatisticsServer } from '../../test/fakeStatisticsServer';
 import { formatMoneyShort } from '../../components/statistics/dashboardPeriod';
 import { RevenueStatisticsPage } from './RevenueStatisticsPage';
 
@@ -63,7 +64,7 @@ function renderPage(api) {
 
 describe('RevenueStatisticsPage (UC-31)', () => {
   it('loads the current month by day and separates insurance and patient amounts', async () => {
-    const api = { getRevenue: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ revenue: byDay });
     renderPage(api);
 
     expect(await screen.findByRole('heading', { name: 'Doanh thu theo ngày' })).toBeInTheDocument();
@@ -76,7 +77,7 @@ describe('RevenueStatisticsPage (UC-31)', () => {
   });
 
   it('lists only the days with receipts and a total row', async () => {
-    const api = { getRevenue: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ revenue: byDay });
     renderPage(api);
 
     const table = await screen.findByRole('table');
@@ -87,10 +88,12 @@ describe('RevenueStatisticsPage (UC-31)', () => {
       .toEqual(['5', '200.000 ₫', '850.000 ₫', '1.050.000 ₫']);
     expect(within(rows[3]).getByRole('rowheader')).toHaveTextContent('Tổng');
     expect(within(table).queryByText('01/11/2026')).not.toBeInTheDocument();
+    // bang lay tu server, 20 dong / trang
+    expect(api.getRevenueRows).toHaveBeenCalledWith(expect.objectContaining({ page: 0, size: 20 }), expect.any(AbortSignal));
   });
 
   it('shows the receipt types and the payment methods with Vietnamese labels', async () => {
-    const api = { getRevenue: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ revenue: byDay });
     renderPage(api);
 
     const types = await screen.findByRole('region', { name: 'Theo loại khoản thu' });
@@ -102,7 +105,7 @@ describe('RevenueStatisticsPage (UC-31)', () => {
   });
 
   it('switches to monthly buckets', async () => {
-    const api = { getRevenue: vi.fn().mockResolvedValueOnce(byDay).mockResolvedValueOnce(byMonth) };
+    const api = fakeStatisticsServer({ revenue: (params) => (params.groupBy === 'MONTH' ? byMonth : byDay) });
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('heading', { name: 'Doanh thu theo ngày' });
@@ -116,7 +119,7 @@ describe('RevenueStatisticsPage (UC-31)', () => {
   });
 
   it('shows the empty state when nothing was paid', async () => {
-    const api = { getRevenue: vi.fn().mockResolvedValue(empty) };
+    const api = fakeStatisticsServer({ revenue: empty });
     renderPage(api);
 
     await screen.findByRole('heading', { name: 'Doanh thu theo ngày' });
@@ -125,11 +128,8 @@ describe('RevenueStatisticsPage (UC-31)', () => {
   });
 
   it('shows a Vietnamese error and retries', async () => {
-    const api = {
-      getRevenue: vi.fn()
-        .mockRejectedValueOnce(new ApiError('Forbidden', { status: 403, errorResponse: { code: 'FORBIDDEN' } }))
-        .mockResolvedValueOnce(byDay),
-    };
+    const api = fakeStatisticsServer({ revenue: byDay });
+    api.getRevenue.mockRejectedValueOnce(new ApiError('Forbidden', { status: 403, errorResponse: { code: 'FORBIDDEN' } }));
     const user = userEvent.setup();
     renderPage(api);
 

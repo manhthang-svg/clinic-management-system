@@ -87,6 +87,24 @@ export const visitApi = {
         return apiClient.request('/visits/queue-status', { signal });
     },
 
+    // UC-42: 1 trang phong (loc roomId o server) + so phong tiep nhan duoc; page tu 0, size mac dinh 20
+    getQueueStatusPage({ roomId, page, size } = {}, signal) {
+        const query = new URLSearchParams();
+        if (roomId) query.set('roomId', roomId);
+        if (page) query.set('page', page);
+        if (size) query.set('size', size);
+        const suffix = query.size ? `?${query.toString()}` : '';
+        return apiClient.request(`/visits/queue-status/page${suffix}`, { signal });
+    },
+
+    // UC-42: 1 trang danh sach cho cua 1 phong
+    getQueuePage({ roomId, page, size } = {}, signal) {
+        const query = new URLSearchParams({ roomId });
+        if (page) query.set('page', page);
+        if (size) query.set('size', size);
+        return apiClient.request(`/visits/queue/page?${query.toString()}`, { signal });
+    },
+
     verifyInsurance(data, signal) {
         return apiClient.request('/insurance/verifications', {
             method: 'POST',

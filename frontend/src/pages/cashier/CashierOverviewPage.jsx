@@ -26,6 +26,50 @@ import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 
 // so dong moi trang cua danh sach cho thu
 const PENDING_PAGE_SIZE = 20;
+// phieu da thu: tai tung trang 100 phieu (moi thu truoc) cho den khi het phieu cua hom nay
+const PAID_LOAD_SIZE = 100;
+const RECENT_PAID_COUNT = 6;
+// chan tren de khong lap vo han neu du lieu bat thuong
+const MAX_PAID_PAGES = 50;
+
+// lay mang phieu tu ket qua Page cua API
+function contentOf(res) {
+    return res?.content
+        || res?.data?.content
+        || (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
+}
+
+// tong so phieu khop bo loc (server dem)
+function totalOf(res) {
+    const page = res?.data ?? res;
+    return page?.totalElements ?? page?.page?.totalElements ?? contentOf(res).length;
+}
+
+// 6 phieu thu gan nhat + tat ca phieu thu trong hom nay (khong gioi han so luong)
+async function loadPaid() {
+    const recent = [];
+    const today = [];
+    for (let page = 0; page < MAX_PAID_PAGES; page += 1) {
+        const rows = contentOf(await paymentApi.list({
+            status: 'PAID', page, size: PAID_LOAD_SIZE, sort: 'paidAt,desc',
+        }));
+        if (page === 0) recent.push(...rows.slice(0, RECENT_PAID_COUNT));
+        const paidToday = rows.filter((p) => isToday(p.paidAt));
+        today.push(...paidToday);
+        // het trang, hoac da gap phieu thu tu hom truoc -> dung
+        if (rows.length < PAID_LOAD_SIZE || paidToday.length < rows.length) break;
+    }
+    return { recent, today };
+}
+
+// cung ngay (theo gio may) voi hom nay
+function isToday(dateStr, today = new Date()) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return d.getFullYear() === today.getFullYear()
+        && d.getMonth() === today.getMonth()
+        && d.getDate() === today.getDate();
+}
 const PAGE_BUTTON_CLASS =
     'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
@@ -54,7 +98,12 @@ function formatDate(dateStr) {
 
 // UC-69: trang Tong quan thu ngan (phieu cho thu, thu tien mat / QR)
 export default function CashierOverviewPage() {
-    const [payments, setPayments] = useState([]);
+    // trang phieu cho thu dang xem + tong so phieu cho thu (server dem, khong gioi han)
+    const [pendingRows, setPendingRows] = useState([]);
+    const [pendingTotal, setPendingTotal] = useState(0);
+    const [pendingCounts, setPendingCounts] = useState({ exam: 0, para: 0 });
+    // phieu da thu: 6 phieu gan nhat + tat ca phieu thu hom nay
+    const [paid, setPaid] = useState({ recent: [], today: [] });
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
     const [pendingPage, setPendingPage] = useState(0);
@@ -73,23 +122,35 @@ export default function CashierOverviewPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [syncingQr, setSyncingQr] = useState(false);
 
-    // Tai danh sach phieu thu
+    // Tai du lieu (goi song song): 1 trang phieu cho thu (moi nhat truoc), so phieu cho thu theo loai,
+    // phieu da thu hom nay. Phan trang o server nen khong bo sot phieu nao.
     const fetchPayments = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const res = await paymentApi.list({ size: 100 });
-            const list =
-                res?.content ||
-                res?.data?.content ||
-                (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
-            setPayments(list);
+            const [pageRes, examRes, paraRes, paidResult] = await Promise.all([
+                paymentApi.list({ status: 'PENDING', type: filterType, page: pendingPage, size: PENDING_PAGE_SIZE }),
+                paymentApi.list({ status: 'PENDING', type: 'EXAMINATION_FEE', size: 1 }),
+                paymentApi.list({ status: 'PENDING', type: 'PARACLINICAL_FEE', size: 1 }),
+                loadPaid(),
+            ]);
+            const total = totalOf(pageRes);
+            const lastPage = Math.max(0, Math.ceil(total / PENDING_PAGE_SIZE) - 1);
+            // trang dang xem khong con phieu (vd vua thu phieu cuoi) -> lui ve trang cuoi
+            if (pendingPage > lastPage) {
+                setPendingPage(lastPage);
+                return;
+            }
+            setPendingRows(contentOf(pageRes));
+            setPendingTotal(total);
+            setPendingCounts({ exam: totalOf(examRes), para: totalOf(paraRes) });
+            setPaid(paidResult);
         } catch (err) {
             setError(err?.message || 'Không thể tải danh sách phiếu thu');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [filterType, pendingPage]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -98,54 +159,20 @@ export default function CashierOverviewPage() {
         return () => window.clearTimeout(timer);
     }, [fetchPayments]);
 
-    // Thong ke nhanh
-    const stats = useMemo(() => {
-        let pendingExam = 0;
-        let pendingPara = 0;
-        let paidCount = 0;
-        let totalRevenue = 0;
+    // Thong ke nhanh: so cho thu do server dem; da thu / doanh thu = cac phieu thu hom nay
+    const stats = useMemo(() => ({
+        pendingExam: pendingCounts.exam,
+        pendingPara: pendingCounts.para,
+        pendingTotal: pendingCounts.exam + pendingCounts.para,
+        paidCount: paid.today.length,
+        totalRevenue: paid.today.reduce(
+            (sum, p) => sum + Number(p.patientTotalAmount ?? p.totalAmount ?? p.amount ?? 0), 0),
+    }), [pendingCounts, paid]);
 
-        payments.forEach((p) => {
-            const pType = p.type || p.paymentType;
-            const pAmount = Number(p.patientTotalAmount ?? p.totalAmount ?? p.amount ?? 0);
-            if (p.status === 'PENDING') {
-                if (pType === 'EXAMINATION_FEE') {
-                    pendingExam++;
-                } else if (pType === 'PARACLINICAL_FEE') {
-                    pendingPara++;
-                }
-            } else if (p.status === 'PAID') {
-                paidCount++;
-                totalRevenue += pAmount;
-            }
-        });
-
-        return {
-            pendingExam,
-            pendingPara,
-            pendingTotal: pendingExam + pendingPara,
-            paidCount,
-            totalRevenue,
-        };
-    }, [payments]);
-
-    // Danh sach cho thanh toan (PENDING)
-    const pendingList = useMemo(() => {
-        return payments
-            .filter((p) => p.status === 'PENDING')
-            .filter((p) => {
-                const pType = p.type || p.paymentType;
-                if (filterType === 'EXAMINATION_FEE') return pType === 'EXAMINATION_FEE';
-                if (filterType === 'PARACLINICAL_FEE') return pType === 'PARACLINICAL_FEE';
-                return true;
-            });
-    }, [payments, filterType]);
-
-    // phan trang danh sach cho thu: 20 dong / trang
-    const pendingPageCount = Math.max(1, Math.ceil(pendingList.length / PENDING_PAGE_SIZE));
-    const pendingCurrentPage = Math.min(pendingPage, pendingPageCount - 1);
-    const pendingPageRows = pendingList.slice(
-        pendingCurrentPage * PENDING_PAGE_SIZE, (pendingCurrentPage + 1) * PENDING_PAGE_SIZE);
+    // phan trang danh sach cho thu (o server): 20 dong / trang
+    const pendingPageCount = Math.max(1, Math.ceil(pendingTotal / PENDING_PAGE_SIZE));
+    const pendingCurrentPage = pendingPage;
+    const pendingPageRows = pendingRows;
 
     // doi loai phieu thi ve trang dau
     const chooseFilter = (type) => {
@@ -154,11 +181,7 @@ export default function CashierOverviewPage() {
     };
 
     // Danh sach da thanh toan gan day (PAID)
-    const recentPaidList = useMemo(() => {
-        return payments
-            .filter((p) => p.status === 'PAID')
-            .slice(0, 6);
-    }, [payments]);
+    const recentPaidList = paid.recent;
 
     // Xu ly mo Modal tien mat
     const handleOpenCashModal = (payment) => {
@@ -396,7 +419,7 @@ export default function CashierOverviewPage() {
                             <h2 className="text-lg font-bold text-[#142534]">
                                 Lượt khám chờ thu tiền
                                 <span className="ml-2.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                                    {pendingList.length} đơn chờ xử lý
+                                    {pendingTotal} đơn chờ xử lý
                                 </span>
                             </h2>
                             <p className="mt-1 text-xs text-[#60737d]">
@@ -464,7 +487,7 @@ export default function CashierOverviewPage() {
                                             <p className="mt-2 text-sm font-medium">Đang tải dữ liệu phiếu thu...</p>
                                         </td>
                                     </tr>
-                                ) : pendingList.length === 0 ? (
+                                ) : pendingPageRows.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} className="py-14 text-center">
                                             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
@@ -584,10 +607,10 @@ export default function CashierOverviewPage() {
                         </table>
                     </div>
 
-                    {pendingList.length > PENDING_PAGE_SIZE && (
+                    {pendingTotal > PENDING_PAGE_SIZE && (
                         <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e3ece9] px-5 py-4 text-sm text-[#60737d] sm:flex-row">
                             <span>
-                                Hiển thị {pendingCurrentPage * PENDING_PAGE_SIZE + 1}–{pendingCurrentPage * PENDING_PAGE_SIZE + pendingPageRows.length} trên tổng số {pendingList.length} phiếu chờ thu
+                                Hiển thị {pendingCurrentPage * PENDING_PAGE_SIZE + 1}–{pendingCurrentPage * PENDING_PAGE_SIZE + pendingPageRows.length} trên tổng số {pendingTotal} phiếu chờ thu
                             </span>
                             <nav aria-label="Phân trang" className="flex items-center gap-1.5">
                                 <button

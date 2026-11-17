@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apis/apiError';
 import { createStatisticsApi } from '../../apis/statisticsApi';
+import { fakeStatisticsServer } from '../../test/fakeStatisticsServer';
 import { DepartmentStatisticsPage } from './DepartmentStatisticsPage';
 
 const admin = { id: 'admin-1', username: 'admin', fullName: 'Quản trị hệ thống', role: 'ADMIN' };
@@ -65,11 +66,11 @@ function rowOf(table, name) {
 
 describe('DepartmentStatisticsPage (UC-29)', () => {
   it('loads the current month and shows the totals', async () => {
-    const api = { getDepartments: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ departments: stats });
     renderPage(api);
 
     expect(await screen.findByText('Số liệu từ 01/11/2026', { exact: false })).toBeInTheDocument();
-    expect(api.getDepartments).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-12' }, expect.any(AbortSignal));
+    expect(api.getDepartmentOverview).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-12' }, expect.any(AbortSignal));
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('18')).toBeInTheDocument();
     expect(screen.getByText('Trên 3 khoa')).toBeInTheDocument();
@@ -78,7 +79,7 @@ describe('DepartmentStatisticsPage (UC-29)', () => {
   });
 
   it('lists each department with its rooms and the right workload for each kind of room', async () => {
-    const api = { getDepartments: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ departments: stats });
     renderPage(api);
 
     const table = await screen.findByRole('table');
@@ -91,24 +92,25 @@ describe('DepartmentStatisticsPage (UC-29)', () => {
   });
 
   it('filters the detail by department type', async () => {
-    const api = { getDepartments: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ departments: stats });
     const user = userEvent.setup();
     renderPage(api);
     const table = await screen.findByRole('table');
 
+    // loc loai khoa o server
     await user.click(screen.getByRole('button', { name: 'Cận lâm sàng' }));
+    await waitFor(() => expect(within(table).queryByRole('rowheader', { name: /^Khoa Nội/ })).not.toBeInTheDocument());
     expect(within(table).getByRole('rowheader', { name: /^Khoa Xét nghiệm/ })).toBeInTheDocument();
-    expect(within(table).queryByRole('rowheader', { name: /^Khoa Nội/ })).not.toBeInTheDocument();
+    expect(api.getDepartmentRows).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'PARACLINICAL', page: 0, size: 20 }), expect.any(AbortSignal));
 
     await user.click(screen.getByRole('button', { name: 'Lâm sàng' }));
-    expect(within(table).queryByRole('rowheader', { name: /^Khoa Xét nghiệm/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(table).queryByRole('rowheader', { name: /^Khoa Xét nghiệm/ })).not.toBeInTheDocument());
     expect(within(table).getByRole('rowheader', { name: /^Khoa Ngoại/ })).toBeInTheDocument();
   });
 
   it('shows the empty chart when no department worked in the period', async () => {
-    const api = {
-      getDepartments: vi.fn().mockResolvedValue({ ...stats, visits: 0, services: 0, departments: [idle] }),
-    };
+    const api = fakeStatisticsServer({ departments: { ...stats, visits: 0, services: 0, departments: [idle] } });
     renderPage(api);
 
     expect(await screen.findByText('Chưa có dữ liệu trong khoảng thời gian này.')).toBeInTheDocument();
@@ -116,18 +118,14 @@ describe('DepartmentStatisticsPage (UC-29)', () => {
   });
 
   it('reloads with a quick period and shows a Vietnamese error with retry', async () => {
-    const api = {
-      getDepartments: vi.fn()
-        .mockResolvedValueOnce(stats)
-        .mockRejectedValueOnce(new ApiError('Network', {}))
-        .mockResolvedValue(stats),
-    };
+    const api = fakeStatisticsServer({ departments: stats });
+    api.getDepartmentOverview.mockImplementationOnce(api.getDepartmentOverview.getMockImplementation()).mockRejectedValueOnce(new ApiError('Network', {}));
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('table');
 
     await user.click(screen.getByRole('button', { name: '7 ngày qua' }));
-    await waitFor(() => expect(api.getDepartments).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(api.getDepartmentOverview).toHaveBeenLastCalledWith(
       { from: '2026-11-06', to: '2026-11-12' }, expect.any(AbortSignal)));
     expect(await screen.findByText('Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.')).toBeInTheDocument();
 

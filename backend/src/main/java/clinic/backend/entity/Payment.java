@@ -24,6 +24,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * A receipt to collect for a visit.
@@ -124,6 +125,8 @@ public class Payment extends VersionedEntity {
     @Column(name = "payos_expired_at")
     private Instant payosExpiredAt;
 
+    // danh sach phieu: tai dong thu cua nhieu phieu trong 1 cau truy van
+    @BatchSize(size = 100)
     @Getter(AccessLevel.NONE)
     @OneToMany(
             mappedBy = "payment",

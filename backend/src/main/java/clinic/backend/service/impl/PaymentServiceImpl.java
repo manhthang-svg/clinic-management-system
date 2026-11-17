@@ -12,7 +12,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.PageResponse;
@@ -46,7 +50,9 @@ import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,9 +95,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
         }
         Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
-        return paymentRepository.search(
-                        statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, pageable)
-                .map(this::toResponse);
+        return toResponses(paymentRepository.search(
+                statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, newestFirst(pageable)));
+    }
+
+    // khong chon cach sap xep thi phieu moi tao len dau (phieu vua dang ky khong bi day xuong trang cuoi)
+    private static Pageable newestFirst(Pageable pageable) {
+        if (pageable.isUnpaged() || pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
     }
 
     // UC-73: lich su thanh toan + tong tien theo phuong thuc
@@ -129,9 +143,8 @@ public class PaymentServiceImpl implements PaymentService {
         Instant fromTime = startOf(fromDate, ALL_TIME_START);
         Instant toTime = endOf(toDate, ALL_TIME_END);
 
-        Page<PaymentResponse> page = paymentRepository
-                .history(statuses, type, method, cashierAccountId, fromTime, toTime, keyword, pageable)
-                .map(this::toResponse);
+        Page<PaymentResponse> page = toResponses(paymentRepository
+                .history(statuses, type, method, cashierAccountId, fromTime, toTime, keyword, pageable));
         List<PaymentHistoryResponse.MethodTotal> totals = status == PaymentStatus.CANCELLED
                 ? List.of()
                 : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime, keyword).stream()
@@ -165,11 +178,11 @@ public class PaymentServiceImpl implements PaymentService {
     public Page<PaymentResponse> getPendingExaminationPayments(
             Pageable pageable
     ) {
-        return paymentRepository.findByStatusAndType(
+        return toResponses(paymentRepository.findByStatusAndType(
                 PaymentStatus.PENDING,
                 PaymentType.EXAMINATION_FEE,
                 pageable
-        ).map(this::toResponse);
+        ));
     }
 
     // chi tiet 1 phieu thu
@@ -274,35 +287,79 @@ public class PaymentServiceImpl implements PaymentService {
         return toResponse(payment);
     }
 
-    // doi phieu thu sang dang tra ve (kem thong tin luot kham, benh nhan, cac dong thu)
+    // du lieu di kem phieu thu: luot kham, benh nhan, phong, chi dinh CLS (theo id)
+    private record Lookups(
+            Map<UUID, Visit> visits,
+            Map<UUID, Patient> patients,
+            Map<UUID, Room> rooms,
+            Map<UUID, ParaclinicalOrderDetail> details
+    ) {
+    }
+
+    // danh sach phieu: tai du lieu di kem cho ca trang trong vai cau truy van, khong goi DB rieng cho tung phieu
+    private Page<PaymentResponse> toResponses(Page<Payment> payments) {
+        List<Payment> content = payments.getContent();
+        Map<UUID, Visit> visits = byId(visitRepository.findAllById(
+                idsOf(content.stream().map(Payment::getVisitId))), Visit::getId);
+        Map<UUID, Patient> patients = byId(patientRepository.findAllById(
+                idsOf(visits.values().stream().map(Visit::getPatientId))), Patient::getId);
+        Map<UUID, ParaclinicalOrderDetail> details = byId(paraclinicalOrderDetailRepository.findAllById(
+                idsOf(content.stream().flatMap(payment -> orderDetailIdsOf(payment).stream()))),
+                ParaclinicalOrderDetail::getId);
+        Map<UUID, Room> rooms = byId(roomRepository.findAllById(idsOf(Stream.concat(
+                visits.values().stream().map(Visit::getRoomId),
+                details.values().stream().map(ParaclinicalOrderDetail::getRoomId)))), Room::getId);
+        Lookups lookups = new Lookups(visits, patients, rooms, details);
+        return payments.map(payment -> toResponse(payment, lookups));
+    }
+
+    // doi 1 phieu thu sang dang tra ve (kem thong tin luot kham, benh nhan, cac dong thu)
     private PaymentResponse toResponse(Payment payment) {
+        Map<UUID, Visit> visits = new HashMap<>();
+        Map<UUID, Patient> patients = new HashMap<>();
+        Map<UUID, Room> rooms = new HashMap<>();
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
-        Patient patient = null;
-        Room room = null;
-
         if (visit != null) {
-            patient = patientRepository.findById(visit.getPatientId()).orElse(null);
-            room = roomRepository.findById(visit.getRoomId()).orElse(null);
+            visits.put(visit.getId(), visit);
+            patientRepository.findById(visit.getPatientId()).ifPresent(patient -> patients.put(patient.getId(), patient));
+            roomRepository.findById(visit.getRoomId()).ifPresent(room -> rooms.put(room.getId(), room));
         }
+        Map<UUID, ParaclinicalOrderDetail> details = byId(
+                paraclinicalOrderDetailRepository.findAllById(orderDetailIdsOf(payment)), ParaclinicalOrderDetail::getId);
+        rooms.putAll(byId(roomRepository.findAllById(idsOf(
+                details.values().stream().map(ParaclinicalOrderDetail::getRoomId))), Room::getId));
+        return toResponse(payment, new Lookups(visits, patients, rooms, details));
+    }
 
-        Map<UUID, ParaclinicalOrderDetail> details = new HashMap<>();
-        Map<UUID, Room> performingRooms = new HashMap<>();
-        if (payment.getType() == PaymentType.PARACLINICAL_FEE && payment.getItems() != null) {
-            List<UUID> detailIds = payment.getItems().stream()
-                    .map(PaymentItem::getOrderDetailId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            for (ParaclinicalOrderDetail detail : paraclinicalOrderDetailRepository.findAllById(detailIds)) {
-                details.put(detail.getId(), detail);
-            }
-            List<UUID> roomIds = details.values().stream()
-                    .map(ParaclinicalOrderDetail::getRoomId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            for (Room performingRoom : roomRepository.findAllById(roomIds)) {
-                performingRooms.put(performingRoom.getId(), performingRoom);
-            }
+    // chi dinh CLS cua cac dong thu (chi phieu thu phi CLS)
+    private static List<UUID> orderDetailIdsOf(Payment payment) {
+        if (payment.getType() != PaymentType.PARACLINICAL_FEE || payment.getItems() == null) {
+            return List.of();
         }
+        return payment.getItems().stream()
+                .map(PaymentItem::getOrderDetailId)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private static Set<UUID> idsOf(Stream<UUID> ids) {
+        return ids.filter(Objects::nonNull).collect(Collectors.toSet());
+    }
+
+    private static <T> Map<UUID, T> byId(Iterable<T> items, Function<T, UUID> idOf) {
+        Map<UUID, T> result = new HashMap<>();
+        for (T item : items) {
+            result.put(idOf.apply(item), item);
+        }
+        return result;
+    }
+
+    private PaymentResponse toResponse(Payment payment, Lookups lookups) {
+        Visit visit = lookups.visits().get(payment.getVisitId());
+        Patient patient = visit != null ? lookups.patients().get(visit.getPatientId()) : null;
+        Room room = visit != null && visit.getRoomId() != null ? lookups.rooms().get(visit.getRoomId()) : null;
+        Map<UUID, ParaclinicalOrderDetail> details = lookups.details();
+        Map<UUID, Room> performingRooms = lookups.rooms();
 
         List<PaymentItemResponse> itemResponses = new ArrayList<>();
         if (payment.getItems() != null) {
