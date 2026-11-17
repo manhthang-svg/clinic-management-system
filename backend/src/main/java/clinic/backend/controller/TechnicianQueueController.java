@@ -6,11 +6,13 @@ import java.util.UUID;
 import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.TechnicianDashboardResponse;
 import clinic.backend.dto.response.TechnicianPendingResultResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.TechnicianDashboardService;
 import clinic.backend.service.TechnicianQueueService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +36,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class TechnicianQueueController {
 
     private final TechnicianQueueService technicianQueueService;
+    private final TechnicianDashboardService technicianDashboardService;
+
+    @GetMapping("/dashboard")
+    @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
+    @Operation(summary = "Tổng quan của kỹ thuật viên: số liệu hôm nay, lượt chờ tiếp theo và ca chờ nhập kết quả của một phòng")
+    public ApiResponse<TechnicianDashboardResponse> getDashboard(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) UUID roomId
+    ) {
+        UUID currentUserId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
+        return ApiResponse.success(technicianDashboardService.getDashboard(roomId, currentUserId));
+    }
 
     @GetMapping("/rooms")
     @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")

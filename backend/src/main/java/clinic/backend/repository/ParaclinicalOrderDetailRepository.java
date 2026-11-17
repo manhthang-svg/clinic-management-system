@@ -12,6 +12,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ParaclinicalOrderDetailRepository extends JpaRepository<ParaclinicalOrderDetail, UUID> {
+
+    /** Technician dashboard: services of the room whose lab or imaging result was submitted at or after {@code since}. */
+    @Query("""
+            select count(d) from ParaclinicalOrderDetail d
+            where d.roomId = :roomId
+              and d.status = clinic.backend.enums.ParaclinicalOrderDetailStatus.COMPLETED
+              and (exists (select 1 from LabResult l where l.orderDetailId = d.id and l.submittedAt >= :since)
+                   or exists (select 1 from ImagingResult i where i.orderDetailId = d.id and i.submittedAt >= :since))
+            """)
+    long countCompletedSince(@Param("roomId") UUID roomId, @Param("since") Instant since);
+
     // đếm số lượng dịch vụ cls theo id của ktv
     long countByPerformerAccountIdAndStatus(UUID performerAccountId, ParaclinicalOrderDetailStatus status);
 
