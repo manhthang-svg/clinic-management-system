@@ -31,6 +31,7 @@ import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +68,7 @@ class VisitTransferIT extends PostgresIntegrationTest {
     @Autowired ClinicalExaminationRepository examinationRepository;
     @Autowired RoomQueueCounterRepository queueCounterRepository;
     @Autowired ExaminationRoomDuty examinationRoomDuty;
+    @Autowired DutyShiftConfigService dutyShiftConfigService;
     @Autowired AuditLogService auditLogService;
     @Autowired UuidV7Generator ids;
     @Autowired PlatformTransactionManager transactionManager;
@@ -190,7 +192,8 @@ class VisitTransferIT extends PostgresIntegrationTest {
         return new VisitTransferServiceImpl(
                 visitRepository, visitTransferRepository, roomRepository, departmentRepository,
                 staffAccountRepository, assignmentRepository, dutyScheduleRepository, medicalRecordRepository,
-                examinationRepository, queueCounterRepository, examinationRoomDuty, auditLogService, ids, clock);
+                examinationRepository, queueCounterRepository, examinationRoomDuty, dutyShiftConfigService,
+                auditLogService, ids, clock);
     }
 
     private Clock at(int hour, int minute) {
