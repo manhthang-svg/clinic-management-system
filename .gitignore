@@ -40,3 +40,4 @@ docs/paraclinical-results-db.md
 
 # Simulated signing CA keys (UC-90 dev profile); test keys, never committed
 .signing-simulator/
+.clinic-archive/

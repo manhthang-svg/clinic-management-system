@@ -179,6 +179,19 @@ export const visitApi = {
         });
     },
 
+    // UC-58: what "Xác nhận kết luận" needs (BR-58-01); records nothing.
+    getConclusionClosure(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/closure`, { signal });
+    },
+
+    // UC-58: confirms the conclusion; the record is closed and archived and the visit completed.
+    confirmConclusion(visitId, payload) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/commands/confirm`, {
+            method: 'POST',
+            body: payload,
+        });
+    },
+
     // UC-59: the visit's prescription form, with the conclusion diagnoses and drug allergies.
     getPrescription(visitId, signal) {
         return apiClient.request(`/prescriptions/visits/${encodeURIComponent(visitId)}`, { signal });

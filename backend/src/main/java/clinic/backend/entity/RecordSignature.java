@@ -140,6 +140,27 @@ public class RecordSignature extends CreatedOnlyEntity {
         return signature;
     }
 
+    /**
+     * UC-58 BR-58-09: the signed-in Doctor's "Xác nhận" confirms the whole record (TT 13/2025/TT-BYT Điều 3
+     * khoản 3). It is tied to the archive package by its hash; no certificate is involved.
+     */
+    public static RecordSignature staffElectronicConfirmation(
+            UUID id, Instant now, UUID medicalRecordId, long documentVersion, String documentSha256,
+            UUID signerAccountId, String signerName) {
+        RecordSignature signature = new RecordSignature(id, now);
+        signature.medicalRecordId = medicalRecordId;
+        signature.documentType = RecordSignatureDocumentType.BENH_AN_TONG_HOP;
+        signature.documentId = medicalRecordId;
+        signature.documentVersion = documentVersion;
+        signature.documentSha256 = documentSha256;
+        signature.signerType = RecordSignatureSignerType.STAFF;
+        signature.signerAccountId = signerAccountId;
+        signature.signerName = signerName;
+        signature.signatureMethod = RecordSignatureMethod.ELECTRONIC_CONFIRMATION;
+        signature.signedAt = now;
+        return signature;
+    }
+
     private RecordSignature(UUID id, Instant createdAt) {
         super(id, createdAt);
     }

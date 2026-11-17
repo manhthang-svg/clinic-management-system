@@ -65,4 +65,26 @@ public class ExportLog extends UuidEntity {
 
     @Column(name = "exported_at", nullable = false)
     private Instant exportedAt;
+
+    /** UC-58 BR-58-06: the archive package written when the record is closed (BR-43 purpose "Lưu trữ"). */
+    public static ExportLog archivePackage(
+            UUID id, UUID medicalRecordId, String sovaovien, String fileUri, String fileSha256, String specVersion,
+            UUID exportedByAccountId, Instant exportedAt) {
+        ExportLog log = new ExportLog(id);
+        log.medicalRecordId = medicalRecordId;
+        log.sovaovien = sovaovien;
+        log.exportFormat = ExportFormat.JSON;
+        log.purpose = ExportLogPurpose.LUU_TRU;
+        log.fileUri = fileUri;
+        log.fileSha256 = fileSha256;
+        log.specVersion = specVersion;
+        log.status = ExportLogStatus.SUCCESS;
+        log.exportedByAccountId = exportedByAccountId;
+        log.exportedAt = exportedAt;
+        return log;
+    }
+
+    private ExportLog(UUID id) {
+        super(id);
+    }
 }

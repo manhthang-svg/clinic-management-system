@@ -467,7 +467,7 @@ export default function ClinicalExaminationPage() {
             ) : shownSection === 'follow-up' ? (
                 <FollowUpPanel visitId={visit.id} />
             ) : shownSection === 'conclusion' ? (
-                <ConclusionPanel visitId={visit.id} />
+                <ConclusionPanel visitId={visit.id} onClosed={goToWaitingList} onOpenPrescription={() => setActiveSection('prescription')} />
             ) : shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} />
             ) : shownSection === 'orders' ? (

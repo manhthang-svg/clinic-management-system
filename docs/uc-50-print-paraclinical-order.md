@@ -10,7 +10,7 @@
 
 ## Description
 
-After confirming a paraclinical order (UC-49), the Doctor prints the order slip that the patient carries to the paraclinical rooms. The slip lists the ordered services and, for each, the room and its location, so the patient knows where to go. The Doctor chooses the performing room of each service when ordering (I1-D47); the system suggests the least busy room. One sheet is printed per performing room, following the request part of the TT 32/2023/TT-BYT forms 08/BV2 to 26/BV2.
+After confirming a paraclinical order (UC-49), the Doctor prints the order slip that the patient carries to the paraclinical rooms. The slip lists the ordered services and, for each, the room and its location, so the patient knows where to go. The Doctor chooses the performing room of each service when ordering (I1-D47); the system suggests the least busy room. All services are printed on one sheet, each with its performing room, laid out like the clinic's paraclinical forms (request part of the TT 32/2023/TT-BYT forms 08/BV2 to 26/BV2).
 
 ## Preconditions
 
@@ -23,7 +23,7 @@ After confirming a paraclinical order (UC-49), the Doctor prints the order slip 
 - **BR-50-01 (I1-D47, replaces the automatic choice of BR-28).** The Doctor chooses the performing room of each service in UC-49. The choice list holds the Active paraclinical rooms of the service's group, each with name, location and number of waiting services; the room with the fewest waiting services is preselected (ties: lower room code). A group with one Active room needs no choice. The room is stored on the order line when the order is confirmed.
 - **BR-50-02 (I1-D47, changed by the BA on 12/11/2026).** Release without payment (an insurance visit or a fee-exempt receipt, BR-26) sends each service to its chosen room. Release at payment of a self-pay visit (UC-71) picks the room again: among the Active rooms of the service group, the rooms with staff on duty in the current shift; among them the one with the fewest waiting services; ties go to the lower room code (**ASSUMPTION:** when no room of the group is staffed now, every Active room is a candidate). The room on the printed slip may therefore differ from the room the patient is sent to; the Cashier's confirmation lists the actual rooms. The queue number is taken at the on-site check-in, does not exist before release and is **not printed**.
 - **BR-50-03 (I1-D47, extends I1-D32).** A paraclinical room cannot be deactivated while any order line has it as chosen room and is Pending Payment, Waiting (skipped included) or In Progress. MSG55.
-- **BR-50-04 (ASSUMPTION).** One sheet per performing room. All sheets share the order number and show "Tờ {i}/{n}". Sheets are ordered by room code; services in a sheet keep their order line order.
+- **BR-50-04 (ASSUMPTION, changed 11/11/2026 at the team's request).** One sheet for the whole order. The request table lists every printable service with its performing room and location; services are grouped by room (ordered by room code, unrouted groups last) and the room cell spans the services of that room. The API still returns the services grouped as `sheets`, one per room; the client prints them on one sheet.
 - **BR-50-05 (ASSUMPTION).** Cancelled and abandoned services are not printed. An order with no printable service (all cancelled) cannot be printed.
 - **BR-50-06 (ASSUMPTION).** Amounts are not printed. The TT 32 forms have no money fields; the receipt (UC-72) shows them.
 - **BR-50-07 (BR-120).** Only Doctors print the slip; it contains the initial diagnosis, which Receptionists and Cashiers cannot see.
@@ -31,17 +31,16 @@ After confirming a paraclinical order (UC-49), the Doctor prints the order slip 
 
 ## Slip content
 
-Per sheet. Field sources in brackets; CV 365 references in the last column.
+Layout follows the clinic's sample X-ray slip (form 09/BV2). Field sources in brackets; CV 365 references in the last column.
 
 | Part | Content | CV 365 |
 | --- | --- | --- |
-| Header | Facility name, address, phone (UC-77); title "PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG"; "Số: {sophieu}"; "Tờ {i}/{n}"; "Bản in lại" on a reprint | V.2.1 |
-| Patient | Full name, year of birth and age, sex, address, patient code, visit code; visit type (BHYT / Viện phí) and insurance card number for an insurance visit | V.2.5 |
-| Ordering place | Department and room of the ordering Doctor | V.2.10, V.2.13, V.2.14 |
-| Clinical | Initial diagnosis (`chandoansobo`); priority "Thường" / "Cấp cứu" (`mucdochidinh`) | V.2.4, V.2.11 |
-| Services | Table: No., order line code (`machidinh`), service name, quantity | V.2.6.1, V.2.6.9, V.2.6.10 |
-| Where to go | "Nơi thực hiện: {room name} – {location}" | V.2.6.7, V.2.6.8 |
-| Footer | Order time (dd/MM/yyyy HH:mm, Asia/Ho_Chi_Minh); "Bác sĩ chỉ định" with space for a hand signature and the Doctor's full name | V.2.2, V.2.6.2 |
+| Header | Logo box; clinic name printed as "PHÒNG KHÁM ĐA KHOA METPH" (team decision, not `ten_cskcb`); address and phone (UC-77); "Số: {sophieu}" with a Code 128 barcode; "Bản in lại" on a reprint. Title "PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG" with "Thường" / "Cấp cứu" boxes (`mucdochidinh`) | V.2.1, V.2.11 |
+| Patient | Full name, age, sex; visit type (BHYT / Viện phí), insurance card number for an insurance visit, patient code; address | V.2.5 |
+| Ordering place | "Phòng:" room of the ordering Doctor, with the department in brackets | V.2.10, V.2.13, V.2.14 |
+| Clinical | Initial diagnosis (`chandoansobo`) | V.2.4 |
+| Services | Bordered table "Yêu cầu chỉ định": No., service name, quantity, "Nơi thực hiện" ({room name} – {location}) | V.2.6.6, V.2.6.7, V.2.6.8, V.2.6.10 |
+| Footer | "Ngày dd tháng MM năm yyyy" of the order (Asia/Ho_Chi_Minh); "Bác sĩ điều trị" with space for a hand signature and the Doctor's full name | V.2.2, V.2.6.2 |
 
 Not printed: queue number (BR-50-02), amounts (BR-50-06), cancelled services (BR-50-05), bed (V.2.9: outpatient clinic), blood delivery time (V.2.7).
 
@@ -49,15 +48,15 @@ Not printed: queue number (BR-50-02), amounts (BR-50-06), cancelled services (BR
 
 1. The Doctor confirms an order in UC-49, or opens an existing order in the order list of the visit, and clicks "In phiếu chỉ định".
 2. The client sends `prepare-print`. The server checks the Doctor and the order (EF-01 to EF-04).
-3. The server groups the printable services by chosen room (BR-50-04, BR-50-05), builds the sheets with the content above, works out whether this is a reprint from earlier `PRINT` rows (BR-50-08), and writes the `PRINT` audit row.
-4. The client shows the sheets and opens the browser print dialog.
-5. The patient takes the sheets to the rooms. The use case ends.
+3. The server groups the printable services by chosen room (BR-50-04, BR-50-05), works out whether this is a reprint from earlier `PRINT` rows (BR-50-08), and writes the `PRINT` audit row.
+4. The client lays the groups out on one sheet with the content above and opens the browser print dialog.
+5. The patient takes the sheet to the rooms. The use case ends.
 
 ## Alternative flows
 
 - **AF-01 (step 1): Print right after ordering.** After MSG63 the order result shows "In phiếu chỉ định"; clicking it starts at step 2.
-- **AF-02 (step 3): Reprint.** Same flow; the sheets show "Bản in lại" and reflect the current order (cancelled services left out).
-- **AF-03 (step 3): A service has no chosen room.** Only for orders made before I1-D47 and not yet released. The sheet shows the service group name and "Phòng sẽ được chỉ định sau khi thanh toán" instead of a room. Once released, the routed room is printed.
+- **AF-02 (step 3): Reprint.** Same flow; the sheet shows "Bản in lại" and reflect the current order (cancelled services left out).
+- **AF-03 (step 3): A service has no chosen room.** Only for orders made before I1-D47 and not yet released. The room cell shows the service group name and "phòng sẽ được chỉ định sau khi thanh toán" instead of a room. Once released, the routed room is printed.
 
 ## Exception flows
 
@@ -70,7 +69,7 @@ Not printed: queue number (BR-50-02), amounts (BR-50-06), cancelled services (BR
 
 ## Postconditions
 
-- **Success:** one `PRINT` audit row (entity `paraclinical_orders`, details: `sophieu`, sheet count, `reprint`). No order, payment or queue data changes.
+- **Success:** one `PRINT` audit row (entity `paraclinical_orders`, details: `sophieu`, `sheets` = number of room groups, `reprint`). No order, payment or queue data changes.
 - **Failure:** nothing changes.
 
 ## API
@@ -156,6 +155,5 @@ Not printed: queue number (BR-50-02), amounts (BR-50-06), cancelled services (BR
 - **TBD:** compare with Report 3 UC-50 once the SRS file is back in `docs/source/`.
 - **TBD:** `loaichidinh` and `loaimachidinh` are stored as `null` by `ParaclinicalOrderServiceImpl` (line 170); `schema.yaml` says they come from the service group (V.2.6.5–6). Fill them in UC-49 so sheets and the export can use them.
 - **TBD:** the ordering department and room (V.2.10, V.2.14) are not stored on the order; this print reads them from the Doctor's room (`noichidinh`) and its department.
-- **TBD:** a barcode of the order number on the sheet, as on the result slips (UC-68).
 - **TBD:** printer integration (HW-01); the browser print dialog is used.
 - **TBD:** the Business Rules owner updates BR-28 in `Business_Rules_v7.xlsx`.

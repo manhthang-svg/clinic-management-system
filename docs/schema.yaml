@@ -6992,6 +6992,28 @@ tables:
         proposal: keep
         standard: Không – toàn vẹn
         description: Mã băm gói
+      retention_category:
+        field: retentionCategory
+        sql_type: varchar(30)
+        base_type: varchar
+        length: 30
+        nullable: false
+        default: '''STANDARD'''
+        java_type: RecordArchiveRetentionCategory
+        enumerated: STRING
+        enum_name: RecordArchiveRetentionCategory
+        enum_values:
+        - STANDARD
+        - WORK_ACCIDENT
+        - TRAFFIC_ACCIDENT
+        - PSYCHIATRIC
+        checks:
+        - (retention_category IN ('STANDARD', 'WORK_ACCIDENT', 'TRAFFIC_ACCIDENT', 'PSYCHIATRIC'))
+        - (retention_category = 'STANDARD' OR retention_years >= 20)
+        proposal: required
+        standard: Có – TT 33/2025/TT-BYT Phụ lục dòng 40, 44
+        description: Loại hồ sơ lưu trữ do bác sĩ chọn khi đóng hồ sơ (UC-58); STANDARD 10 năm, các loại còn lại 20 năm
+        note: Thêm ở V61 (duyệt 17/11/2026, docs/uc-58-close-medical-record.md S1)
       retention_years:
         field: retentionYears
         sql_type: smallint

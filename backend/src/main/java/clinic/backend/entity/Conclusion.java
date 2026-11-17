@@ -107,6 +107,12 @@ public class Conclusion extends VersionedEntity {
         touch(now);
     }
 
+    /** UC-58 BR-58-05: the outpatient visit ends when the record is closed (CV 365 III.31.4). */
+    public void discharge(LocalDate ngayravien, Instant now) {
+        this.ngayravien = ngayravien;
+        touch(now);
+    }
+
     /** Replaces the secondary diagnoses, in the order given (thu_tu from 1). */
     public void replaceSecondaryDiagnoses(List<ConclusionSecondaryDiagnosis> values) {
         secondaryDiagnoses.clear();

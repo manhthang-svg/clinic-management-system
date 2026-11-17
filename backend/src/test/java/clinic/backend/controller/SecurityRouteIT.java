@@ -85,6 +85,16 @@ class SecurityRouteIT extends PostgresIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
+        // UC-58: the close check and the confirmation reach the service too.
+        mockMvc.perform(get("/api/v1/conclusions/visits/{id}/closure", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
+        mockMvc.perform(post("/api/v1/conclusions/visits/{id}/commands/confirm", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"conclusionVersion\":0}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
     }
 
     @Test
