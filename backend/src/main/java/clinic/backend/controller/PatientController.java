@@ -78,7 +78,7 @@ public class PatientController {
     @GetMapping
     // ASSUMPTION: Permission Matrix 4.4 gives the Doctor full search; Technician and Cashier scopes are TBD.
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR')")
-    @Operation(summary = "UC-35 Tìm kiếm và xem danh sách bệnh nhân (tối đa 50 kết quả)")
+    @Operation(summary = "UC-35 Tìm kiếm và xem danh sách bệnh nhân (20 bệnh nhân mỗi trang)")
     public ApiResponse<Page<PatientResponse>> listPatients(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) PatientSearchType type,

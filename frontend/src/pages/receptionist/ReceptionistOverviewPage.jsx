@@ -16,10 +16,17 @@ import {
     AlertCircle,
     ArrowRight,
     Users,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import patientApi from '../../apis/patientApi';
 import visitApi from '../../apis/visitApi';
 import { PRIORITY_REASON_OPTIONS } from '../../constants/visitData';
+
+// so benh nhan moi trang
+const PAGE_SIZE = 20;
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
 function formatGender(gender) {
     if (gender === 1 || gender === '1') return 'Nam';
@@ -57,6 +64,7 @@ export default function ReceptionistOverviewPage() {
 
     const [patients, setPatients] = useState([]);
     const [totalPatients, setTotalPatients] = useState(0);
+    const [pageNumber, setPageNumber] = useState(0);
     const [loading, setLoading] = useState(false);
     const [keyword, setKeyword] = useState('');
     const [searchInput, setSearchInput] = useState('');
@@ -78,14 +86,15 @@ export default function ReceptionistOverviewPage() {
     const [submittingVisit, setSubmittingVisit] = useState(false);
     const [visitSuccessData, setVisitSuccessData] = useState(null);
 
-    // Tải danh sách bệnh nhân
-    const fetchPatients = useCallback(async (searchQuery = '') => {
+    // tai 1 trang danh sach benh nhan (20 dong / trang)
+    const fetchPatients = useCallback(async (searchQuery = '', pageToLoad = 0) => {
         setLoading(true);
         setError('');
         try {
             const res = await patientApi.list({
                 keyword: searchQuery || undefined,
-                size: 50,
+                page: pageToLoad,
+                size: PAGE_SIZE,
             });
             const list =
                 res?.content ||
@@ -95,6 +104,7 @@ export default function ReceptionistOverviewPage() {
                 res?.totalElements ?? res?.data?.totalElements ?? list.length;
             setPatients(list);
             setTotalPatients(total);
+            setPageNumber(pageToLoad);
         } catch (err) {
             setError(err?.message || 'Không thể tải danh sách bệnh nhân.');
         } finally {
@@ -123,6 +133,8 @@ export default function ReceptionistOverviewPage() {
         }, 0);
         return () => window.clearTimeout(timer);
     }, [fetchPatients, keyword]);
+
+    const totalPages = Math.max(1, Math.ceil(totalPatients / PAGE_SIZE));
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -233,7 +245,7 @@ export default function ReceptionistOverviewPage() {
                 <div className="flex flex-wrap items-center gap-3">
                     <button
                         type="button"
-                        onClick={() => fetchPatients(keyword)}
+                        onClick={() => fetchPatients(keyword, pageNumber)}
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                     >
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-teal-600' : 'text-slate-500'}`} />
@@ -358,7 +370,7 @@ export default function ReceptionistOverviewPage() {
                         <h2 className="text-base font-bold text-slate-900">
                             Danh sách bệnh nhân tiếp đón
                             <span className="ml-2.5 rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-700">
-                                {patients.length} bệnh nhân
+                                {totalPatients} bệnh nhân
                             </span>
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
@@ -470,6 +482,35 @@ export default function ReceptionistOverviewPage() {
                         </tbody>
                     </table>
                 </div>
+
+                {totalPatients > PAGE_SIZE && (
+                    <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:flex-row">
+                        <span>
+                            Hiển thị {pageNumber * PAGE_SIZE + 1}–{pageNumber * PAGE_SIZE + patients.length} trên tổng số {totalPatients} bệnh nhân
+                        </span>
+                        <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                aria-label="Trang trước"
+                                disabled={loading || pageNumber === 0}
+                                onClick={() => void fetchPatients(keyword, pageNumber - 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsLeft className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="px-2">Trang {pageNumber + 1}/{totalPages}</span>
+                            <button
+                                type="button"
+                                aria-label="Trang sau"
+                                disabled={loading || pageNumber + 1 >= totalPages}
+                                onClick={() => void fetchPatients(keyword, pageNumber + 1)}
+                                className={PAGE_BUTTON_CLASS}
+                            >
+                                <ChevronsRight className="h-3.5 w-3.5" />
+                            </button>
+                        </nav>
+                    </div>
+                )}
             </section>
 
             {/* MODAL: TẠO ĐƠN ĐI KHÁM (VISIT) VÀ CHUYỂN SANG THU NGÂN */}

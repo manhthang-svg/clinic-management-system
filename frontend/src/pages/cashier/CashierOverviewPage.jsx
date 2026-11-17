@@ -14,6 +14,8 @@ import {
     X,
     ExternalLink,
     FileText,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import paymentApi from '../../apis/paymentApi';
 import {
@@ -21,6 +23,11 @@ import {
 } from '../../components/payments/paymentConfirm';
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
+
+// so dong moi trang cua danh sach cho thu
+const PENDING_PAGE_SIZE = 20;
+const PAGE_BUTTON_CLASS =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
 
 function formatMoney(amount) {
     if (amount === undefined || amount === null) return '0 ₫';
@@ -49,6 +56,7 @@ export default function CashierOverviewPage() {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState('ALL'); // ALL, EXAMINATION_FEE, PARACLINICAL_FEE
+    const [pendingPage, setPendingPage] = useState(0);
     const [notice, setNotice] = useState('');
     // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
     const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
@@ -131,6 +139,18 @@ export default function CashierOverviewPage() {
                 return true;
             });
     }, [payments, filterType]);
+
+    // phan trang danh sach cho thu: 20 dong / trang
+    const pendingPageCount = Math.max(1, Math.ceil(pendingList.length / PENDING_PAGE_SIZE));
+    const pendingCurrentPage = Math.min(pendingPage, pendingPageCount - 1);
+    const pendingPageRows = pendingList.slice(
+        pendingCurrentPage * PENDING_PAGE_SIZE, (pendingCurrentPage + 1) * PENDING_PAGE_SIZE);
+
+    // doi loai phieu thi ve trang dau
+    const chooseFilter = (type) => {
+        setFilterType(type);
+        setPendingPage(0);
+    };
 
     // Danh sách đã thanh toán gần đây (PAID)
     const recentPaidList = useMemo(() => {
@@ -387,7 +407,7 @@ export default function CashierOverviewPage() {
                         <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-slate-100 p-1 text-xs font-medium">
                             <button
                                 type="button"
-                                onClick={() => setFilterType('ALL')}
+                                onClick={() => chooseFilter('ALL')}
                                 className={`rounded-lg px-3 py-1.5 transition ${
                                     filterType === 'ALL'
                                         ? 'bg-white font-bold text-teal-800 shadow-sm'
@@ -398,7 +418,7 @@ export default function CashierOverviewPage() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setFilterType('EXAMINATION_FEE')}
+                                onClick={() => chooseFilter('EXAMINATION_FEE')}
                                 className={`rounded-lg px-3 py-1.5 transition ${
                                     filterType === 'EXAMINATION_FEE'
                                         ? 'bg-white font-bold text-amber-800 shadow-sm'
@@ -409,7 +429,7 @@ export default function CashierOverviewPage() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setFilterType('PARACLINICAL_FEE')}
+                                onClick={() => chooseFilter('PARACLINICAL_FEE')}
                                 className={`rounded-lg px-3 py-1.5 transition ${
                                     filterType === 'PARACLINICAL_FEE'
                                         ? 'bg-white font-bold text-indigo-800 shadow-sm'
@@ -454,7 +474,7 @@ export default function CashierOverviewPage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    pendingList.map((payment) => {
+                                    pendingPageRows.map((payment) => {
                                         const pType = payment.type || payment.paymentType;
                                         const isExam = pType === 'EXAMINATION_FEE';
                                         const amountToPay = payment.patientTotalAmount ?? payment.totalAmount ?? payment.amount ?? 0;
@@ -562,6 +582,35 @@ export default function CashierOverviewPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {pendingList.length > PENDING_PAGE_SIZE && (
+                        <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e3ece9] px-5 py-4 text-sm text-[#60737d] sm:flex-row">
+                            <span>
+                                Hiển thị {pendingCurrentPage * PENDING_PAGE_SIZE + 1}–{pendingCurrentPage * PENDING_PAGE_SIZE + pendingPageRows.length} trên tổng số {pendingList.length} phiếu chờ thu
+                            </span>
+                            <nav aria-label="Phân trang" className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    aria-label="Trang trước"
+                                    disabled={pendingCurrentPage === 0}
+                                    onClick={() => setPendingPage(pendingCurrentPage - 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <span className="px-2">Trang {pendingCurrentPage + 1}/{pendingPageCount}</span>
+                                <button
+                                    type="button"
+                                    aria-label="Trang sau"
+                                    disabled={pendingCurrentPage + 1 >= pendingPageCount}
+                                    onClick={() => setPendingPage(pendingCurrentPage + 1)}
+                                    className={PAGE_BUTTON_CLASS}
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </nav>
+                        </div>
+                    )}
                 </section>
 
                 {/* BẢNG PHỤ: GIAO DỊCH ĐÃ THANH TOÁN GẦN ĐÂY */}

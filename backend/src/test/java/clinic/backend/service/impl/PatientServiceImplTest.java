@@ -378,7 +378,7 @@ class PatientServiceImplTest {
 
     @Test
     void searchesByTypeWithTheMatchingQuery() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 20, Sort.by("mabenhnhan"));
         Page<Patient> found = new PageImpl<>(List.of(patient()));
         when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
         when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
@@ -399,7 +399,7 @@ class PatientServiceImplTest {
 
     @Test
     void addsLastVisitAndActiveVisitToEachResult() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 20, Sort.by("mabenhnhan"));
         when(patientRepository.searchByName("nguyen", page)).thenReturn(new PageImpl<>(List.of(patient())));
         Instant lastVisitAt = Instant.parse("2026-11-01T02:00:00Z");
         VisitRepository.PatientLastVisit lastVisit = mock(VisitRepository.PatientLastVisit.class);
@@ -451,15 +451,17 @@ class PatientServiceImplTest {
     }
 
     @Test
-    void returnsAtMostFiftyResults() {
+    void returnsTwentyPatientsPerPageWhateverSizeIsAsked() {
         when(patientRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
 
         service.listPatients(null, null, PageRequest.of(2, 500));
+        service.listPatients(null, null, PageRequest.of(0, 5));
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(patientRepository).findAll(pageable.capture());
-        assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
-        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+        verify(patientRepository, org.mockito.Mockito.times(2)).findAll(pageable.capture());
+        assertThat(pageable.getAllValues().get(0).getPageSize()).isEqualTo(20);
+        assertThat(pageable.getAllValues().get(0).getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getAllValues().get(1).getPageSize()).isEqualTo(20);
     }
 
     @Test
