@@ -71,13 +71,17 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             Pageable pageable
     );
 
-    /** Free search of the reception dashboard, without a search type. */
+    /**
+     * Free search of the reception dashboard, without a search type. Patient code, name and phone match a part of
+     * the keyword (people do not remember them exactly); the citizen ID is read from the card, so only the full
+     * number matches.
+     */
     @Query("""
             select p from Patient p
             where lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
                or lower(function('unaccent', p.hoten))
                   like lower(function('unaccent', concat('%', cast(:keyword as String), '%')))
-               or lower(coalesce(p.cccdSo, '')) like lower(concat('%', cast(:keyword as String), '%'))
+               or p.cccdSo = cast(:keyword as String)
                or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', cast(:keyword as String), '%'))
             """)
     Page<Patient> search(
