@@ -15,7 +15,7 @@ import {
   XRayResultPage,
 } from './results';
 
-/** Each printed form has its own result page. */
+// moi mau phieu co 1 trang nhap rieng
 const PAGES = {
   LAB: LabResultPage,
   ULTRASOUND: UltrasoundResultPage,
@@ -26,17 +26,12 @@ const PAGES = {
   ECG: EcgResultPage,
 };
 
-/**
- * UC-67 entry: loads the order and opens the result page of its service.
- *
- * Switching between the services of the same order (the tabs on top of the form) must feel instant, so the page keeps
- * the forms it loaded in a cache, preloads the other tabs in the background once a form is shown, and refreshes the
- * cache with every save. The tabs always show the latest statuses known on this page.
- */
+// UC-67: tai phieu va mo trang nhap dung loai dich vu
+// luu cache cac tab da tai + tai truoc cac tab khac de chuyen tab khong phai cho
 export function ParaclinicalResultPage({ api: injectedApi }) {
   const { orderId } = useParams();
   const baseApi = injectedApi ?? resultApiFor(orderId, resultMockApi);
-  // Form of each service, as a promise: a tab clicked while it is still preloading reuses that request.
+  // cache phieu tung dich vu (promise): tab dang tai truoc thi dung lai request do
   const cacheRef = useRef(new Map());
   const [order, setOrder] = useState(null);
   const [siblings, setSiblings] = useState(null);
@@ -52,7 +47,7 @@ export function ParaclinicalResultPage({ api: injectedApi }) {
     return request;
   }, [baseApi]);
 
-  // Saving a form updates the cache and the tab statuses, so going back to that tab shows what was saved.
+  // luu xong thi cap nhat cache + trang thai tab
   const api = useMemo(() => {
     const remember = (saved) => {
       if (saved?.id) cacheRef.current.set(saved.id, Promise.resolve(saved));
@@ -86,7 +81,7 @@ export function ParaclinicalResultPage({ api: injectedApi }) {
     };
   }, [load, orderId]);
 
-  // Preload the other tabs once a form is on screen; a failed preload is ignored and the tab loads on click.
+  // tai truoc cac tab khac; loi thi bo qua, bam tab se tai lai
   useEffect(() => {
     (siblings ?? []).forEach((service) => {
       if (service.id) load(service.id).catch(() => {});

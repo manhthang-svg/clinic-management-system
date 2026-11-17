@@ -1,4 +1,4 @@
-// Field blocks shared by the per-service result pages.
+// cac khoi truong dung chung cho trang ket qua tung loai dich vu
 import { Field, INPUT_CLASS } from '../shared/FormFields';
 import { useContext } from 'react';
 import { ResultFiles } from './ResultFiles';
@@ -26,7 +26,7 @@ export function TextAreaField({ id, label, value, onChange, readOnly, error, req
   );
 }
 
-/** One input per organ / site / ECG item, in the order printed on the slip. */
+// moi co quan / vi tri / muc dien tim 1 o nhap, theo thu tu in tren phieu
 export function SectionFields({ order, form, set, errors, readOnly, columns = 1 }) {
   const sections = sectionsFor(order) ?? [];
   const update = (key, value) => set('sections', { ...form.sections, [key]: value });
@@ -93,10 +93,7 @@ export function RecommendationField({ form, set, readOnly }) {
   );
 }
 
-/**
- * UC-68: the slip is signed by the account that performed the service. Only that account records and prints the
- * result (BR-29), so it is the signed-in technician; the name cannot be typed in.
- */
+// nguoi ky phieu = KTV thuc hien (dang dang nhap), khong cho nhap tay
 export function SignerField({ order, label = 'Người ký phiếu' }) {
   return (
     <Field id="result-signer" label={label} hint="Cố định là tài khoản thực hiện dịch vụ (đang đăng nhập).">

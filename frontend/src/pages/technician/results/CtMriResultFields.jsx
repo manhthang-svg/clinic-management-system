@@ -3,7 +3,7 @@ import {
   ConclusionSection, ImageLinkField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** Fields shared by the CT and MRI slips (MS 09/BV2): technique, description, conclusion, QR link. */
+// truong dung chung phieu CT va MRI: ky thuat, mo ta, ket luan, link
 export function CtMriResultFields({ order, form, set, errors, readOnly, templateButton }) {
   return (
     <>
