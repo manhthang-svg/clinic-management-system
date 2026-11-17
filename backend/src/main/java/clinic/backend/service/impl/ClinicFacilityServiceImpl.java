@@ -25,9 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * UC-77. Rules BR-77-01 to BR-77-05 are described in docs/uc-77-clinic-facility.md.
- */
+// UC-77: thong tin co so kham chua benh (quy tac trong docs/uc-77-clinic-facility.md)
 @Service
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
@@ -40,6 +38,7 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
     private final UuidV7Generator ids;
     private final Clock clock;
 
+    // xem thong tin co so; da co luot kham thi khoa ma co so
     @Override
     @Transactional(readOnly = true)
     public ClinicFacilityResponse getFacility() {
@@ -49,6 +48,7 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
                 .orElseGet(() -> mapper.unconfigured(locked));
     }
 
+    // khai bao lan dau hoac cap nhat thong tin co so
     @Override
     @Transactional
     public ClinicFacilityResponse saveFacility(StaffPrincipal principal, UpdateClinicFacilityRequest request) {
@@ -57,6 +57,7 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
         Instant now = clock.instant();
         ClinicFacility facility = facilityRepository.findCurrentForUpdate().orElse(null);
 
+        // chua khai bao: tao moi
         if (facility == null) {
             if (request.version() != null) throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
             facility = new ClinicFacility(ids.next(), request.maCskcb(), strip(request.tenCskcb()),
@@ -68,12 +69,14 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
             return mapper.toResponse(facility, locked);
         }
 
+        // nguoi khac vua sua thi bao loi; da co luot kham thi khong cho doi ma co so
         if (!Objects.equals(facility.getVersion(), request.version())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         if (locked && !facility.getMaCskcb().equals(request.maCskcb())) {
             throw new AppException(ErrorCode.FACILITY_CODE_LOCKED);
         }
+        // chi giu cac truong bi doi; khong doi gi thi khong luu, khong ghi audit
         Map<String, Object> oldValues = values(facility);
         oldValues.keySet().removeIf(field -> Objects.equals(oldValues.get(field), newValues.get(field)));
         newValues.keySet().retainAll(oldValues.keySet());
@@ -89,7 +92,7 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
         return mapper.toResponse(facility, locked);
     }
 
-    // A concurrent first declaration hits uq_clinic_facility_single_row.
+    // 2 nguoi cung khai bao lan dau thi nguoi sau bi loi trung (chi 1 dong)
     private void save(ClinicFacility facility) {
         try {
             facilityRepository.saveAndFlush(facility);
@@ -98,6 +101,7 @@ public class ClinicFacilityServiceImpl implements ClinicFacilityService {
         }
     }
 
+    // gia tri cac truong de so sanh / ghi audit
     private static Map<String, Object> values(ClinicFacility facility) {
         return values(facility.getMaCskcb(), facility.getTenCskcb(), facility.getDiachi(),
                 facility.getSodienthoai(), facility.getSoGiayPhepHoatDong(), facility.getHinhThucToChuc().name());

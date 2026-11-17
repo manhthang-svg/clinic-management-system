@@ -72,6 +72,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ClinicFacilityRepository clinicFacilityRepository;
     private final Clock clock;
 
+    // UC-69, UC-70: danh sach / tim kiem phieu thu (luon tra ve danh sach co phan trang)
     @Override
     @Transactional(readOnly = true)
     public Page<PaymentResponse> getPayments(
@@ -82,7 +83,7 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate to,
             Pageable pageable
     ) {
-        // UC-70 bước 2: từ khóa ít nhất 2 ký tự (EF-01, MSG05)
+        // tu khoa it nhat 2 ky tu (MSG05)
         String keyword = search == null || search.isBlank() ? null : search.trim();
         if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
@@ -93,6 +94,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .map(this::toResponse);
     }
 
+    // UC-73: lich su thanh toan + tong tien theo phuong thuc
     @Override
     @Transactional(readOnly = true)
     public PaymentHistoryResponse getHistory(
@@ -105,19 +107,19 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate to,
             Pageable pageable
     ) {
-        // UC-73 bước 2: mặc định hôm nay; khoảng ngày sai thì MSG53 (EF-01)
+        // mac dinh hom nay; tu ngay sau den ngay thi bao loi
         LocalDate today = LocalDate.now(clock);
         LocalDate fromDate = from != null ? from : today;
         LocalDate toDate = to != null ? to : today;
         if (fromDate.isAfter(toDate)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
         }
-        // Tìm kiếm như UC-70: từ khóa ít nhất 2 ký tự (MSG05)
+        // tu khoa giong UC-70: it nhat 2 ky tu
         String keyword = search == null || search.isBlank() ? null : search.trim();
         if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
         }
-        // Lịch sử chỉ gồm phiếu Đã thu và Đã hủy
+        // lich su chi gom phieu da thu va da huy
         if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("status", "INVALID_FORMAT"));
         }
@@ -147,14 +149,17 @@ public class PaymentServiceImpl implements PaymentService {
                 grandTotal);
     }
 
+    // dau ngay (khong chon ngay thi lay gia tri mac dinh)
     private Instant startOf(LocalDate date, Instant fallback) {
         return date == null ? fallback : date.atStartOfDay(clock.getZone()).toInstant();
     }
 
+    // het ngay = dau ngay hom sau
     private Instant endOf(LocalDate date, Instant fallback) {
         return date == null ? fallback : date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
     }
 
+    // phieu phi kham dang cho thu
     @Override
     @Transactional(readOnly = true)
     public Page<PaymentResponse> getPendingExaminationPayments(
@@ -167,6 +172,7 @@ public class PaymentServiceImpl implements PaymentService {
         ).map(this::toResponse);
     }
 
+    // chi tiet 1 phieu thu
     @Override
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId) {
@@ -176,7 +182,7 @@ public class PaymentServiceImpl implements PaymentService {
         return toResponse(payment);
     }
 
-    // in phieu thu (UC-72)
+    // UC-72: chuan bi du lieu in phieu thu
     @Override
     @Transactional
     public ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId) {
@@ -184,13 +190,12 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // EF-01: chỉ in phiếu đã thu (hoặc miễn phí) – MSG62 (BR-37)
+        // chi in phieu da thu hoac mien phi (BR-37)
         if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
             throw new AppException(ErrorCode.PAYMENT_NOT_PAID, Map.of("status", payment.getStatus().name()));
         }
 
-        // AF-01: từ lần in thứ hai là bản sao; mọi lần in đều ghi log
-        // da co log PRINT -> in lai -> ban sao
+                // da in roi thi lan nay la ban sao; lan nao cung ghi log
         boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId);
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
         // ghi log in
@@ -222,6 +227,7 @@ public class PaymentServiceImpl implements PaymentService {
                 toResponse(payment));
     }
 
+    // UC-71: xac nhan thu tien (tien mat / chuyen khoan)
     @Override
     @Transactional
     public PaymentResponse confirmPayment(
@@ -229,11 +235,11 @@ public class PaymentServiceImpl implements PaymentService {
             UUID paymentId,
             ConfirmPaymentRequest request
     ) {
-        // 1. Khóa phiếu thu để hai thu ngân không xác nhận cùng lúc (UC-71 bước 4).
+        // khoa phieu de 2 thu ngan khong xac nhan cung luc
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // 2. Phiếu đã thu hoặc đã hủy thì báo MSG64 (EF-02).
+        // phieu da thu hoac da huy thi bao loi
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new AppException(ErrorCode.PAYMENT_NOT_PENDING, Map.of(
                     "receiptNumber", payment.getReceiptNumber() != null
@@ -242,7 +248,7 @@ public class PaymentServiceImpl implements PaymentService {
                     "status", payment.getStatus().name()));
         }
 
-        // Lượt BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận, khi mức hưởng đã chốt (BR-15, BR-26, BR-27)
+        // luot BHYT chi thu sau khi bac si ket luan (muc huong da chot - BR-15, BR-26, BR-27)
         visitRepository.findById(payment.getVisitId())
                 .filter(Visit::awaitsConclusionBeforePayment)
                 .ifPresent(visit -> {
@@ -250,7 +256,7 @@ public class PaymentServiceImpl implements PaymentService {
                             Map.of("paymentCode", payment.getPaymentCode()));
                 });
 
-        // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
+        // ghi nhan da thu: phuong thuc, thu ngan, so bien lai
         String receiptNumber = "PT"
                 + LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "-"
@@ -262,12 +268,13 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentRepository.save(payment);
 
-        // 4. Bước 8 và audit: dùng chung với PayOS (lượt khám vào hàng chờ, hoặc chia phòng CLS – BR-28).
+        // xu ly sau khi thu (dung chung voi PayOS): phi kham -> vao hang cho; phi CLS -> chia phong (BR-28)
         paymentCompletionService.completePaidReceipt(payment, cashierAccountId);
 
         return toResponse(payment);
     }
 
+    // doi phieu thu sang dang tra ve (kem thong tin luot kham, benh nhan, cac dong thu)
     private PaymentResponse toResponse(Payment payment) {
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
         Patient patient = null;

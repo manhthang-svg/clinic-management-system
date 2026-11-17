@@ -22,11 +22,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-/**
- * Read-only aggregate queries for UC-26 View Statistics Dashboard.
- * Visits are counted by their queue date; payments, paraclinical services and diagnoses by the
- * instant they happened, within {@code [start, end)}.
- */
+// cac query thong ke (chi doc) cho UC-26 den UC-32
+// luot kham tinh theo ngay vao hang cho; thanh toan, CLS, chan doan tinh theo thoi diem xay ra trong [start, end)
 public interface StatisticsRepository extends Repository<Visit, UUID> {
 
     interface StatusCount {
@@ -73,7 +70,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         BigDecimal getPatientAmount();
     }
 
-    /** UC-32: one ICD-10 code as main diagnosis. */
+    // UC-32: 1 ma ICD-10 chan doan chinh
     interface MainDiagnosisCount {
         String getCode();
 
@@ -84,7 +81,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         long getPatients();
     }
 
-    /** UC-32: one ICD-10 code (or category) and its number of cases. */
+    // UC-32: 1 ma ICD-10 (hoac nhom) va so ca
     interface CodeCount {
         String getCode();
 
@@ -93,7 +90,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         long getCases();
     }
 
-    /** UC-32: conclusions saved in the period, and those with an ICD-10 code. */
+    // UC-32: so ket luan trong ky, so co ma ICD-10
     interface ConclusionTotals {
         long getConclusions();
 
@@ -120,7 +117,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
     List<MainDiagnosisCount> topMainDiagnoses(
             @Param("start") Instant start, @Param("end") Instant end, Pageable limit);
 
-    /** Categories: the first three characters of the main diagnosis code; the name comes from the ICD-10 catalog. */
+    // nhom benh = 3 ky tu dau cua ma chan doan chinh
     @Query("""
             select substring(c.maicd, 1, 3) as code, max(i.tenicd) as name, count(c) as cases
             from Conclusion c left join Icd10 i on i.maicd = substring(c.maicd, 1, 3)
@@ -139,7 +136,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
             """)
     List<CodeCount> topSecondaryDiagnoses(@Param("start") Instant start, @Param("end") Instant end, Pageable limit);
 
-    /** UC-31: paid receipts of one clinic day (YYYY-MM-DD), receipt type and payment method. */
+    // UC-31: phieu da thu cua 1 ngay, theo loai phieu va phuong thuc
     interface RevenueRow {
         String getDay();
 
@@ -156,10 +153,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         BigDecimal getPatientAmount();
     }
 
-    /**
-     * Receipts paid in {@code [start, end)}, grouped by the clinic-time day they were paid, their type and payment
-     * method. Native because the day must be taken in the clinic time zone, not in UTC.
-     */
+    // doanh thu theo ngay thu (gio Viet Nam), loai phieu, phuong thuc; dung SQL thuan de doi mui gio
     @Query(value = """
             select to_char(p.paid_at at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') as day,
                    p.type as type,
@@ -174,7 +168,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
             """, nativeQuery = true)
     List<RevenueRow> revenueByDayTypeAndMethod(@Param("start") Instant start, @Param("end") Instant end);
 
-    /** UC-30: performed services of one service in one room, by status (awaiting result or with result). */
+    // UC-30: so dich vu da thuc hien theo dich vu, phong, trang thai
     interface PerformedServiceCount {
         UUID getServiceId();
 
@@ -185,7 +179,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         long getTotal();
     }
 
-    /** Services performed in {@code [start, end)}: still awaiting their result, or with the result submitted. */
+    // dich vu da thuc hien trong ky (dang cho ket qua hoac da co ket qua)
     @Query("""
             select d.serviceId as serviceId, d.roomId as roomId, d.status as status, count(d) as total
             from ParaclinicalOrderDetail d
@@ -205,7 +199,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
     @Query("select r from Room r where r.id in :ids")
     List<Room> roomsByIds(@Param("ids") Collection<UUID> ids);
 
-    /** UC-29: visits registered in one examination room, by status. */
+    // UC-29: luot kham cua 1 phong kham theo trang thai
     interface RoomVisitCount {
         UUID getRoomId();
 
@@ -214,7 +208,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         long getTotal();
     }
 
-    /** UC-29: paraclinical services sent to one room, by status. */
+    // UC-29: dich vu CLS chuyen ve 1 phong theo trang thai
     interface RoomServiceCount {
         UUID getRoomId();
 
@@ -231,7 +225,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
             """)
     List<RoomVisitCount> countVisitsByRoomAndStatus(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
-    /** Services sent to a room in {@code [start, end)}: they reached the room when they were released to it. */
+    // dich vu chuyen ve phong trong ky (tinh theo luc chuyen phong)
     @Query("""
             select d.roomId as roomId, d.status as status, count(d) as total
             from ParaclinicalOrderDetail d
@@ -246,7 +240,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
     @Query("select d from Department d")
     List<Department> allDepartments();
 
-    /** UC-28: visits of one doctor in one status. */
+    // UC-28: luot kham cua 1 bac si theo trang thai
     interface DoctorStatusCount {
         UUID getDoctorId();
 
@@ -255,7 +249,7 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
         long getTotal();
     }
 
-    /** UC-28: distinct patients of one doctor. */
+    // UC-28: so benh nhan khac nhau cua 1 bac si
     interface DoctorPatientCount {
         UUID getDoctorId();
 
@@ -285,14 +279,14 @@ public interface StatisticsRepository extends Repository<Visit, UUID> {
             """)
     long countVisitsWithoutDoctor(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
-    /** UC-28: every Doctor account, and any other account that examined patients in the period. */
+    // UC-28: moi tai khoan bac si + tai khoan khac co kham trong ky
     @Query("""
             select a from StaffAccount a
             where a.role = clinic.backend.enums.Role.DOCTOR or a.id in :ids
             """)
     List<StaffAccount> doctorsOrAccounts(@Param("ids") Collection<UUID> ids);
 
-    /** UC-27: one row per (day, status, patient type, priority); {@code followUps} counts follow-up visits. */
+    // UC-27: 1 dong / (ngay, trang thai, doi tuong, uu tien); followUps = so luot tai kham
     interface VisitBreakdown {
         LocalDate getDay();
 

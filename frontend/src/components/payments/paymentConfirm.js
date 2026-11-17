@@ -1,4 +1,4 @@
-/** UC-71 Confirm Payment: messages shown after the Cashier confirms a receipt. */
+// UC-71: thong bao sau khi thu ngan xac nhan thu tien
 
 const STATUS_LABEL = {
     PAID: 'thanh toán',
@@ -14,10 +14,10 @@ export const MSG = {
     AWAITS_CONCLUSION: 'Lượt khám BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận.',
 };
 
-/** Short label in place of the collect buttons for an insurance receipt waiting for the conclusion (BR-15, BR-26). */
+// nhan thay cho nut thu tien khi phieu BHYT con cho bac si ket luan
 export const AWAITING_CONCLUSION_LABEL = 'Chờ kết luận (BHYT)';
 
-/** MSG64 when the receipt is no longer Pending (EF-02), MSG12 / MSG99 otherwise (EF-03). */
+// doi loi xac nhan thu thanh thong bao tieng Viet
 export function confirmErrorMessage(error) {
     const code = error?.errorResponse?.code;
     if (code === 'PAYMENT_NOT_PENDING') {
@@ -36,16 +36,13 @@ export const PRINT_MSG = {
     NOT_PAID: 'Chỉ in được phiếu thu sau khi đã xác nhận thanh toán.',
 };
 
-/** UC-72: MSG62 when the receipt is not Paid, MSG12 / MSG99 otherwise. */
+// UC-72: doi loi in phieu thu thanh thong bao
 export function printErrorMessage(error) {
     if (error?.errorResponse?.code === 'PAYMENT_NOT_PAID') return PRINT_MSG.NOT_PAID;
     return confirmErrorMessage(error);
 }
 
-/**
- * MSG30 plus, for an examination fee, the queue number issued with the payment (I1-D48); for a paraclinical fee,
- * where each service is performed (BR-28) and which services have no Active room yet (AF-02).
- */
+// thong bao thu xong: phi kham kem so thu tu; phi CLS kem phong lam tung dich vu
 export function confirmedNotice(payment) {
     const lines = [`Đã xác nhận thanh toán phiếu ${payment?.receiptNumber || payment?.paymentCode || ''}.`.trim()];
     if (payment?.type !== 'PARACLINICAL_FEE') {
@@ -70,7 +67,7 @@ export function confirmedNotice(payment) {
     return { message: lines[0], rooms, unrouted };
 }
 
-/** One text line for places that only show a plain notice. */
+// ban 1 dong cua thong bao tren
 export function confirmedNoticeText(payment) {
     const { message, rooms, unrouted } = confirmedNotice(payment);
     const parts = [message];
@@ -84,7 +81,7 @@ export function confirmedNoticeText(payment) {
     return parts.join(' ');
 }
 
-/** I1-D48: the visit whose queue-number ticket the Cashier prints once its examination fee is paid; otherwise null. */
+// luot kham can in phieu so thu tu sau khi thu phi kham; khong co thi null
 export function queueTicketVisitId(payment) {
     const type = payment?.type ?? payment?.paymentType;
     return type === 'EXAMINATION_FEE' && payment?.visitId ? payment.visitId : null;

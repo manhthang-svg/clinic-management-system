@@ -3,7 +3,7 @@ import {
   ConclusionSection, FilesSection, SectionFields, SignerField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu nội soi (MS 11/BV-02): four images, then one line per site. */
+// UC-67: phieu noi soi (4 anh + tung vi tri)
 export function EndoscopyResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>

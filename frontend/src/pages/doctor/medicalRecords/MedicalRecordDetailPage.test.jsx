@@ -9,7 +9,7 @@ vi.mock('../../../apis/medicalRecordApi', () => ({
   medicalRecordApi: {
     getMedicalRecordDetail: vi.fn(),
     getMedicalRecordByVisitId: vi.fn(),
-    recordExportLog: vi.fn(),
+    exportPdf: vi.fn(),
     recordFileAccessLog: vi.fn(),
   },
 }));
@@ -18,7 +18,7 @@ const mockRecordDetail = {
   medicalRecordId: 'mr-123',
   recordNumber: 'BA00000012',
   storageNumber: 'LT-01',
-  status: 'CLOSED',
+  status: 'LOCKED',
   openedAt: '2026-11-10T08:00:00Z',
   closedAt: '2026-11-10T10:00:00Z',
   // Patient header
@@ -253,10 +253,26 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     expect(medicalRecordApi.recordFileAccessLog).toHaveBeenCalledWith('att-1');
   });
 
-  it('opens export modal and logs export', async () => {
+  it('opens the UC-53 export dialog for a closed record', async () => {
     const user = userEvent.setup();
     medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
-    medicalRecordApi.recordExportLog.mockResolvedValue({});
+
+    render(
+      <MemoryRouter initialEntries={['/doctor/medical-records/mr-123']}>
+        <Routes>
+          <Route path="/doctor/medical-records/:id" element={<MedicalRecordDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Xuất hồ sơ bệnh án/i }));
+
+    expect(await screen.findByRole('dialog', { name: 'Xuất hồ sơ bệnh án (PDF)' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Mục đích xuất/)).toBeInTheDocument();
+  });
+
+  it('disables the export of a record that is not closed (MSG131)', async () => {
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue({ ...mockRecordDetail, status: 'OPEN' });
 
     render(
       <MemoryRouter initialEntries={['/doctor/medical-records/mr-123']}>
@@ -267,11 +283,7 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     );
 
     const exportBtn = await screen.findByRole('button', { name: /Xuất hồ sơ bệnh án/i });
-    await user.click(exportBtn);
-
-    const confirmExportBtn = await screen.findByRole('button', { name: /Xác nhận xuất bệnh án/i });
-    await user.click(confirmExportBtn);
-
-    expect(medicalRecordApi.recordExportLog).toHaveBeenCalledWith('mr-123', 'CURRENT_VISIT');
+    expect(exportBtn).toBeDisabled();
+    expect(exportBtn).toHaveAttribute('title', 'Chỉ xuất được hồ sơ bệnh án đã đóng.');
   });
 });

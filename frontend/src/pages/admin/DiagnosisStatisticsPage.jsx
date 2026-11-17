@@ -42,7 +42,7 @@ function percent(part, total) {
   return `${(Math.round((part / total) * 1000) / 10).toLocaleString('vi-VN')}%`;
 }
 
-/** A small ranked list: code, name and number of cases. */
+// danh sach xep hang nho: ma, ten, so ca
 function RankedList({ rows, codeKey, nameKey }) {
   if (rows.length === 0) return <EmptyChart />;
   return (
@@ -59,7 +59,7 @@ function RankedList({ rows, codeKey, nameKey }) {
   );
 }
 
-/** UC-32 View Diagnosis Statistics (ICD-10, BR-31). */
+// UC-32: trang benh thuong gap (ICD-10)
 export function DiagnosisStatisticsPage({
   currentAdmin,
   onLogout,

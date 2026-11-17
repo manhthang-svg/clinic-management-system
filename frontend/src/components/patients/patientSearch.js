@@ -1,5 +1,4 @@
-// UC-35 Search Patient: search types and keyword rules. Mirrors the backend PatientSearchType for feedback
-// only; the backend repeats every check.
+// UC-35: loai tim kiem va quy tac tu khoa (giong backend, backend kiem tra lai)
 
 export const SEARCH_TYPES = [
     { value: 'CITIZEN_ID', label: 'CCCD', placeholder: 'Đủ 12 chữ số trên thẻ', prefillField: 'cccdSo' },
@@ -12,7 +11,7 @@ export const SEARCH_TYPES = [
 
 export const DEFAULT_SEARCH_TYPE = 'CITIZEN_ID';
 
-// Report 3 System Messages (Vietnamese).
+// thong bao theo bang System Messages
 export const MSG = {
     NO_RESULT: 'Không tìm thấy kết quả.',
     REQUIRED: 'Vui lòng nhập từ khóa tìm kiếm.',
@@ -22,9 +21,7 @@ export const MSG = {
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
 };
 
-// Document numbers (citizen ID, passport, insurance card) in full; what a patient remembers (name, phone,
-// patient code) may be partial; the minimum length follows how sensitive the field is.
-// Same rules as PatientServiceImpl.isValidKeyword.
+// giay to (CCCD, ho chieu, BHYT) nhap du; ho ten, SDT, ma BN nhap 1 phan (giong backend)
 const RULES = {
     CITIZEN_ID: (keyword) => /^\d{12}$/.test(keyword),
     PASSPORT: (keyword) => /^[A-Za-z0-9]{1,15}$/.test(keyword),
@@ -34,14 +31,14 @@ const RULES = {
     NAME: (keyword) => keyword.length >= 2 && keyword.length <= 100,
 };
 
-/** Returns a Vietnamese error message, or '' when the keyword is valid for the type. */
+// kiem tra tu khoa theo loai tim, hop le thi tra ''
 export function validateKeyword(type, keyword) {
     const value = keyword.trim();
     if (!value) return MSG.REQUIRED;
     return RULES[type](value) ? '' : MSG.INVALID_FORMAT;
 }
 
-/** Maps an API failure to a Vietnamese message; never shows the raw backend message. */
+// doi loi API thanh thong bao tieng Viet
 export function searchErrorMessage(error) {
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
     if (error?.status === 403) return MSG.FORBIDDEN;
@@ -51,7 +48,7 @@ export function searchErrorMessage(error) {
     return MSG.SYSTEM_ERROR;
 }
 
-/** Form values of UC-37 pre-filled with the keyword of an unsuccessful search (UC-35 EF-02). */
+// tim khong ra thi dien san tu khoa vao form tao ho so moi
 export function createPrefill(type, keyword) {
     const field = SEARCH_TYPES.find((item) => item.value === type)?.prefillField;
     return field ? { [field]: keyword.trim() } : {};

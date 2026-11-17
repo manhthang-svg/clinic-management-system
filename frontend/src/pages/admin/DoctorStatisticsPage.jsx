@@ -31,7 +31,7 @@ import { usePeriod, useStatisticsQuery } from '../../components/statistics/useSt
 
 const { ADMIN } = ROUTES;
 
-/** Outcome columns of a doctor row, in the order of the stacked bars. */
+// cac cot ket qua cua 1 bac si (theo thu tu cot chong)
 const DOCTOR_OUTCOMES = [
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'inProgress', label: 'Đang xử lý' },
@@ -41,17 +41,18 @@ const DOCTOR_OUTCOMES = [
 
 const CHART_LIMIT = 10;
 
+// trung binh 1 so le
 function average(total, count) {
   if (!count) return '0';
   return (Math.round((total / count) * 10) / 10).toLocaleString('vi-VN');
 }
 
-/** Folds Vietnamese accents so "tran van an" finds "Trần Văn An". */
+// bo dau de tim ten khong can go dau
 function fold(text) {
   return (text ?? '').normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 }
 
-/** UC-28 View Doctor Statistics. */
+// UC-28: trang thong ke theo bac si
 export function DoctorStatisticsPage({
   currentAdmin,
   onLogout,

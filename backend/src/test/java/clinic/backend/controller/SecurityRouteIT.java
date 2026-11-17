@@ -95,6 +95,28 @@ class SecurityRouteIT extends PostgresIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"conclusionVersion\":0}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ROOM_ASSIGNMENT_REQUIRED"));
+        // UC-53: the PDF export reaches the service; an unknown record is not found.
+        mockMvc.perform(post("/api/v1/medical-records/{id}/commands/export-pdf", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"purpose\":\"LUU_TRU\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void adminCannotReadOrExportMedicalRecords() throws Exception {
+        // BR-120: the Admin does not see clinical content on screen; BR-43: the PDF is the Doctor's.
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get("/api/v1/medical-records/patients")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/medical-records/by-visit/{id}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/medical-records/{id}/commands/export-pdf", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"purpose\":\"LUU_TRU\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

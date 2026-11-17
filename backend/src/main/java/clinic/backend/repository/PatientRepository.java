@@ -29,7 +29,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findFirstByHochieuSoIgnoreCase(String hochieuSo);
 
-    /** UC-37 step 7: possible duplicates have the same full name (ignoring case) and date of birth. */
+    // UC-37: ho so trung = cung ho ten (khong phan biet hoa thuong) + cung ngay sinh
     @Query("""
             select p from Patient p
             where lower(trim(p.hoten)) = lower(trim(cast(:name as String))) and p.ngaysinh = :birthDate
@@ -37,8 +37,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             """)
     List<Patient> findPossibleDuplicates(@Param("name") String name, @Param("birthDate") LocalDate birthDate);
 
-    // UC-35 typed searches. Numbers read from a document match exactly; what a patient says from memory
-    // (patient code, phone) matches any part.
+    // UC-35 tim theo loai: CCCD, ho chieu khop dung; ma BN, SDT khop 1 phan
     Page<Patient> findAllByCccdSo(String cccdSo, Pageable pageable);
 
     Page<Patient> findAllByHochieuSoIgnoreCase(String hochieuSo, Pageable pageable);
@@ -47,7 +46,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Page<Patient> findAllBySodienthoaiContaining(String sodienthoai, Pageable pageable);
 
-    /** Patients whose previous visits used the insurance card. */
+    // tim benh nhan theo the BHYT da dung o cac lan kham truoc (khop dung)
     @Query("""
             select p from Patient p
             where exists (
@@ -60,7 +59,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             Pageable pageable
     );
 
-    /** Name search ignoring case and Vietnamese accents (unaccent extension, V11). */
+    // tim theo ho ten, khong phan biet hoa thuong va dau
     @Query("""
             select p from Patient p
             where lower(function('unaccent', p.hoten))
@@ -71,13 +70,13 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             Pageable pageable
     );
 
-    /** Free search of the reception dashboard, without a search type. */
+    // tim tu do o Tong quan le tan: ma BN, ho ten, SDT khop 1 phan; CCCD phai nhap du (khop dung)
     @Query("""
             select p from Patient p
             where lower(p.mabenhnhan) like lower(concat('%', cast(:keyword as String), '%'))
                or lower(function('unaccent', p.hoten))
                   like lower(function('unaccent', concat('%', cast(:keyword as String), '%')))
-               or lower(coalesce(p.cccdSo, '')) like lower(concat('%', cast(:keyword as String), '%'))
+               or p.cccdSo = cast(:keyword as String)
                or lower(coalesce(p.sodienthoai, '')) like lower(concat('%', cast(:keyword as String), '%'))
             """)
     Page<Patient> search(

@@ -1,5 +1,5 @@
-// Code 128 (set B) encoder for the order code barcode on printed slips. Returns bar/space widths in modules.
-// TBD: verify with the clinic's barcode scanner before go-live.
+// ma vach Code 128 cho ma phieu in tren phieu ket qua
+// TBD: thu voi may quet ma vach cua phong kham
 
 const PATTERNS = [
   '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213',
@@ -17,7 +17,7 @@ const PATTERNS = [
 const START_B = 104;
 const STOP = 106;
 
-/** Symbol values (start, data, checksum, stop) for printable ASCII text. */
+// cac gia tri ky hieu: start, du lieu, checksum, stop
 export function code128Values(text) {
   const data = Array.from(text).map((char) => {
     const code = char.charCodeAt(0);
@@ -28,7 +28,7 @@ export function code128Values(text) {
   return [START_B, ...data, checksum, STOP];
 }
 
-/** Alternating bar/space widths, starting with a bar. */
+// do rong vach den / trang xen ke
 export function code128Widths(text) {
   return code128Values(text).flatMap((value) => Array.from(PATTERNS[value], Number));
 }

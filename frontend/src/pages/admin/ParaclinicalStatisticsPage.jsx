@@ -32,7 +32,7 @@ import { usePeriod, useStatisticsQuery } from '../../components/statistics/useSt
 
 const { ADMIN } = ROUTES;
 
-/** Labels of the paraclinical service types (MedicalServiceType). */
+// nhan cac loai dich vu CLS
 const SERVICE_TYPES = {
   LAB: { label: 'Xét nghiệm', color: COLORS.completed },
   IMAGING: { label: 'Chẩn đoán hình ảnh', color: COLORS.inProgress },
@@ -46,11 +46,12 @@ function percent(part, total) {
   return `${(Math.round((part / total) * 1000) / 10).toLocaleString('vi-VN')}%`;
 }
 
+// bo dau de tim kiem
 function fold(text) {
   return (text ?? '').normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 }
 
-/** UC-30 View Paraclinical Service Statistics. */
+// UC-30: trang thong ke dich vu CLS
 export function ParaclinicalStatisticsPage({
   currentAdmin,
   onLogout,

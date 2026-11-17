@@ -7,7 +7,7 @@ const CELL_INPUT =
   'focus:outline-none focus:border-[#127e7a] focus:ring-2 focus:ring-[#127e7a]/10 ' +
   'aria-invalid:border-rose-400 aria-invalid:bg-rose-50/60';
 
-/** UC-67 lab result: one row per parameter with value, reference range, unit and interpretation. */
+// UC-67: bang ket qua xet nghiem, moi chi so 1 dong (gia tri, khoang tham chieu, don vi, danh gia)
 export function LabResultTable({ parameters, values, errors = {}, readOnly, onChange }) {
   let lastGroup = null;
   const rows = [];

@@ -822,7 +822,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Xác nhận KTV đã làm xong kỹ thuật trên người bệnh nhân, chuyển sang chờ nhập kết quả
+    // UC-66: KTV xac nhan da thuc hien xong, dich vu chuyen sang cho nhap ket qua
     @Override
     @Transactional
     public TechnicianQueueItemResponse completeOrder(UUID detailId, UUID technicianAccountId) {
@@ -830,13 +830,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
+        // KTV phai truc phong nay va dang lam dich vu nay
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
         requireInProgressBy(detail, technicianAccountId);
 
-        // UC-66 step 3: Performed, waiting for its result (UC-64).
+        // dich vu -> cho nhap ket qua
         detail.completePerformance(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
+        // cac dich vu khac cung phieu, cung phong, KTV nay dang lam thi xong cung luc
         List<ParaclinicalOrderDetail> completeSiblings = paraclinicalOrderDetailRepository
                 .findByOrderId(detail.getOrder().getId());
         for (ParaclinicalOrderDetail sib : completeSiblings) {
@@ -866,7 +868,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Trả y lệnh đang làm về trạng thái chờ tiếp nhận kèm lý do khi gặp sự cố kỹ thuật
+    // UC-66: tra dich vu dang lam ve hang cho (giu so thu tu) kem ly do
     @Override
     @Transactional
     public TechnicianQueueItemResponse returnToWaiting(
@@ -878,7 +880,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
         requireInProgressBy(detail, technicianAccountId);
 
-        // UC-66 AF-02: back to Waiting at its original place; the reason is recorded in the audit log.
+        // ve lai hang cho dung vi tri cu, ly do ghi vao audit
         detail.returnToWaiting(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
@@ -893,7 +895,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Kiểm tra điều kiện y lệnh phải đang IN_PROGRESS và do đúng KTV tiếp nhận thực hiện
+    // dich vu phai dang thuc hien va do chinh KTV nay tiep nhan
     private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
         if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);

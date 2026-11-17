@@ -5,7 +5,7 @@ import { ADULT_AGE, MSG, formAge } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
 import { clinicToday } from '../../components/visits/visitForm';
 
-/** UC-38 Update Patient Information (administrative data only; BR-23). */
+// UC-38: trang sua thong tin hanh chinh benh nhan (BR-23)
 export default function ReceptionistUpdatePatientPage({ patientApi }) {
     const { id } = useParams();
     const {

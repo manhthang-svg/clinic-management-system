@@ -1,11 +1,8 @@
-// Per-organ / per-site fields of the descriptive result forms, taken from the clinic's printed slips.
-// The fields are joined into one description text, which is what imaging_results.kqcls_mota stores.
+// cac muc mo ta tung co quan / vi tri cua phieu ket qua, gop lai thanh 1 doan mo ta khi luu
 
-// ULTRASOUND uses one free-text description like the X-ray slip (no per-organ fields): one fixed list of
-// abdominal organs did not fit cardiac, obstetric or vascular ultrasound. "Điền kết quả bình thường" fills the
-// description from RESULT_TEMPLATES instead.
+// sieu am dung 1 o mo ta tu do (nhieu loai sieu am khac nhau)
 
-/** ENDOSCOPY: upper GI endoscopy slip. */
+// phieu noi soi da day
 const ENDOSCOPY = [
   { key: 'thucQuan', label: 'Thực quản', normal: 'Niêm mạc bình thường.' },
   { key: 'tamVi', label: 'Tâm vị', normal: 'Đóng kín bình thường.' },
@@ -18,7 +15,7 @@ const ENDOSCOPY = [
   { key: 'taTrang', label: 'Tá tràng', normal: 'Bình thường.' },
 ];
 
-/** ECG slip: blood pressure, then the analysis lines. */
+// phieu dien tim: huyet ap roi cac dong phan tich
 const ECG = [
   { key: 'huyetAp', label: 'HA', normal: '', unit: 'mmHg', placeholder: '120/70', short: true },
   { key: 'chuyenDao', label: 'Chuyển đạo mẫu', normal: 'DII', short: true },
@@ -35,7 +32,7 @@ const ECG = [
 
 const SECTIONS = { ENDOSCOPY, ECG };
 
-/** Fields of a descriptive form, or null when the form uses one free-text description. */
+// cac muc cua phieu; null neu phieu chi co 1 o mo ta
 export function sectionsFor(order) {
   const list = SECTIONS[order.printForm];
   if (!list) return null;
@@ -50,7 +47,7 @@ export function normalSections(order) {
   return Object.fromEntries((sectionsFor(order) ?? []).map((section) => [section.key, section.normal]));
 }
 
-/** The description text printed on the slip and stored as kqcls_mota. */
+// gop cac muc thanh doan mo ta de in va luu
 export function composeDescription(order, sections) {
   const list = sectionsFor(order);
   if (!list) return null;

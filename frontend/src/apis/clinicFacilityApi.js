@@ -1,6 +1,6 @@
 import { apiClient } from '../services/session';
 
-/** UC-77 clinic facility endpoints (GET and PUT /clinic-facility). */
+// UC-77: API xem / luu thong tin co so
 export function createClinicFacilityApi(client = apiClient) {
   return {
     get: (signal) => client.request('/clinic-facility', { signal }),

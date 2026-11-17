@@ -45,15 +45,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PatientServiceImpl implements PatientService {
 
-    /** UC-35 step 6: at most 50 results. */
-    static final int MAX_SEARCH_RESULTS = 50;
+    // UC-35: moi trang 20 benh nhan
+    static final int PAGE_SIZE = 20;
     static final Sort DEFAULT_SEARCH_SORT = Sort.by("mabenhnhan");
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
     private static final int MAX_AGE_YEARS = 120;
     private static final int MAX_CODE_ATTEMPTS = 10;
-    /** UC-37 AF-02: the possible duplicates shown with MSG57. */
+    // UC-37: so ho so trung toi da hien len
     private static final int MAX_DUPLICATES = 10;
 
     private final PatientRepository patientRepository;
@@ -64,6 +64,7 @@ public class PatientServiceImpl implements PatientService {
     private final UuidV7Generator uuidV7Generator;
     private final Clock clock;
 
+    // sinh ma BN ngau nhien: BN + 7 so
     private String generatePatientCode() {
         int number = java.util.concurrent.ThreadLocalRandom
                 .current()
@@ -72,6 +73,7 @@ public class PatientServiceImpl implements PatientService {
         return "BN" + number;
     }
 
+    // bo khoang trang 2 dau, chuoi rong thi tra null
     private String normalize(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -80,13 +82,14 @@ public class PatientServiceImpl implements PatientService {
         return value.trim();
     }
 
+    // UC-37: tao ho so benh nhan moi
     @Override
     @Transactional
     public PatientResponse createPatient(UUID createdByAccountId, CreatePatientRequest request) {
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
         checkAgeRules(request);
-        // Step 6 / EF-02: one profile per citizen ID or passport (BR-12); MSG19 offers to open it.
+        // CCCD / ho chieu da co ho so thi bao trung (BR-12, MSG19)
         if (cccdSo != null) {
             patientRepository.findByCccdSo(cccdSo).ifPresent(existing -> identificationExists("cccdSo", existing));
         }
@@ -98,6 +101,7 @@ public class PatientServiceImpl implements PatientService {
         String mabenhnhan = uniquePatientCode();
         Instant now = clock.instant();
 
+        // tao va luu ho so
         Patient patient = new Patient(
                 uuidV7Generator.next(),
                 now,
@@ -131,12 +135,13 @@ public class PatientServiceImpl implements PatientService {
         );
 
         Patient savedPatient = patientRepository.save(patient);
-        // Step 8: the creation is recorded in the audit log.
+        // ghi audit log tao ho so
         auditLogService.recordBusinessChange(createdByAccountId, AuditLogAction.CREATE, PATIENT_AUDIT_ENTITY,
                 savedPatient.getId(), null, Map.of("mabenhnhan", mabenhnhan), now);
         return toResponse(savedPatient);
     }
 
+    // UC-37: tim ho so co the trung (cung ho ten + ngay sinh)
     @Override
     @Transactional(readOnly = true)
     public List<PatientResponse> findPossibleDuplicates(String fullName, LocalDate birthDate) {
@@ -152,7 +157,7 @@ public class PatientServiceImpl implements PatientService {
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
     }
 
-    /** UC-37 step 4 (also UC-38 step 4): phone from 18 years old; guardian name and relationship under 18. */
+    // kiem tra theo tuoi: tu 18 tuoi bat buoc SDT, duoi 18 bat buoc nguoi than
     private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation) {
         LocalDate today = LocalDate.now(clock);
         int age = Period.between(birthDate, today).getYears();
@@ -174,6 +179,7 @@ public class PatientServiceImpl implements PatientService {
         }
     }
 
+    // bao loi trung giay to, tra ve ho so dang dung giay to do
     private static void identificationExists(String field, Patient existing) {
         throw new AppException(ErrorCode.PATIENT_IDENTIFICATION_EXISTS, Map.of(
                 "field", field,
@@ -182,7 +188,7 @@ public class PatientServiceImpl implements PatientService {
                 "fullName", existing.getHoten()));
     }
 
-    /** Step 8: a random code is drawn again while it is already used. */
+    // sinh ma BN, trung thi sinh lai (toi da 10 lan)
     private String uniquePatientCode() {
         for (int attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
             String code = generatePatientCode();
@@ -193,20 +199,21 @@ public class PatientServiceImpl implements PatientService {
         throw new IllegalStateException("No free patient code after " + MAX_CODE_ATTEMPTS + " attempts");
     }
 
+    // UC-38: cap nhat thong tin hanh chinh cua benh nhan
     @Override
     @Transactional
     public PatientResponse updatePatient(UUID actorAccountId, UUID id, UpdatePatientRequest request) {
         Patient patient = requiredPatient(id);
-        // check chong race condition
+        // ho so da bi nguoi khac sua thi khong cho luu (MSG75)
         if (!patient.getVersion().equals(request.version())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
-        // Step 4: the checks of UC-37 steps 4–5 (annotations and age rules).
+        // kiem tra tuoi giong luc tao ho so
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
 
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
-        // Step 5 / EF-02: a citizen ID or passport used by another patient (BR-12); MSG19 offers to open it.
+        // CCCD / ho chieu dang thuoc benh nhan khac thi bao trung (BR-12, MSG19)
         if (cccdSo != null) {
             patientRepository.findByCccdSo(cccdSo).filter(other -> !other.getId().equals(id))
                     .ifPresent(other -> identificationExists("cccdSo", other));
@@ -216,7 +223,7 @@ public class PatientServiceImpl implements PatientService {
                     .ifPresent(other -> identificationExists("hochieuSo", other));
         }
 
-        // AF-02: compare before touching the managed entity, so an unchanged form saves and records nothing.
+        // so sanh truoc khi sua: khong doi gi thi khong luu, khong ghi audit
         Map<String, Object> changes = changedFields(administrativeValues(patient),
                 requestedValues(request, cccdSo, hochieuSo));
         if (changes.isEmpty()) {
@@ -252,13 +259,13 @@ public class PatientServiceImpl implements PatientService {
                 now
         );
         Patient saved = patientRepository.save(patient);
-        // Step 6: changed fields with old and new values (Security: Audit trail).
+        // ghi audit cac truong da doi (gia tri cu va moi)
         auditLogService.recordBusinessChange(actorAccountId, AuditLogAction.UPDATE, PATIENT_AUDIT_ENTITY, id, null,
                 Map.of("mabenhnhan", patient.getMabenhnhan(), "changes", changes), now);
         return toResponse(saved);
     }
 
-    /** The administrative fields a Receptionist can change (BR-23: no history or allergies). */
+    // cac truong le tan duoc sua (khong gom tien su, di ung - BR-23)
     private static Map<String, Object> administrativeValues(Patient patient) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("hoten", patient.getHoten());
@@ -289,7 +296,7 @@ public class PatientServiceImpl implements PatientService {
         return values;
     }
 
-    /** The same fields as {@link #administrativeValues}, normalized the way they are saved. */
+    // cung cac truong tren nhung lay tu request, chuan hoa nhu khi luu
     private Map<String, Object> requestedValues(UpdatePatientRequest request, String cccdSo, String hochieuSo) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("hoten", request.hoten().trim());
@@ -320,7 +327,7 @@ public class PatientServiceImpl implements PatientService {
         return values;
     }
 
-    /** { field: { old, new } } for every field whose value changed. */
+    // tra ve cac truong bi doi: { truong: { old, new } }
     private static Map<String, Object> changedFields(Map<String, Object> before, Map<String, Object> after) {
         Map<String, Object> changes = new LinkedHashMap<>();
         before.forEach((field, oldValue) -> {
@@ -335,37 +342,32 @@ public class PatientServiceImpl implements PatientService {
         return changes;
     }
 
-    /**
-     * UC-35 Tìm kiếm bệnh nhân (sequence diagram bước 15–24).
-     * Chỉ đọc dữ liệu nên dùng readOnly = true (không ghi audit như UC-36).
-     */
+    // UC-35: tim kiem benh nhan, luon tra ve danh sach co phan trang
     @Override
     @Transactional(readOnly = true)
     public Page<PatientResponse> listPatients(String keyword, PatientSearchType type, Pageable pageable) {
-        // - Sắp theo mã BN nếu FE không gửi sort
-        // - Mỗi trang tối đa 50 dòng (MAX_SEARCH_RESULTS), FE có gửi size lớn hơn cũng bị ép về 50.
+        // mac dinh sap theo ma BN, moi trang 20 dong
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : DEFAULT_SEARCH_SORT;
-        Pageable limited = PageRequest.of(
-                pageable.getPageNumber(), Math.min(pageable.getPageSize(), MAX_SEARCH_RESULTS), sort);
+        Pageable limited = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE, sort);
 
-        // Bỏ khoảng trắng 2 đầu; từ khóa trống hoặc toàn dấu cách thì thành null.
         String normalizedKeyword = normalize(keyword);
         Page<Patient> patients;
 
         if (type == null) {
-            // Không có từ khóa → lấy tất cả; có từ khóa → tìm tự do trên mã BN, họ tên, CCCD, SĐT.
+            // khong chon loai tim: khong co tu khoa thi lay het; co thi tim tu do
+            // (ma BN, ho ten, SDT khop 1 phan; CCCD khop dung)
             patients = normalizedKeyword == null
                     ? patientRepository.findAll(limited)
                     : patientRepository.search(normalizedKeyword, limited);
         } else {
+            // co chon loai tim thi bat buoc tu khoa va dung dinh dang
             if (normalizedKeyword == null) {
                 throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "REQUIRED"));
             }
             if (!isValidKeyword(normalizedKeyword, type)) {
                 throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("keyword", "INVALID_FORMAT"));
             }
-            // - Giấy tờ cầm trên tay (CCCD, hộ chiếu, BHYT) → khớp đúng.
-            // - Thứ bệnh nhân nhớ miệng (mã BN, SĐT, họ tên) → chứa từ khóa (like '%...%').
+            // giay to (CCCD, ho chieu, BHYT) khop dung; ma BN, SDT, ho ten khop 1 phan
             patients = switch (type) {
                 case CITIZEN_ID -> patientRepository.findAllByCccdSo(normalizedKeyword, limited);
                 case PASSPORT -> patientRepository.findAllByHochieuSoIgnoreCase(normalizedKeyword, limited);
@@ -376,17 +378,12 @@ public class PatientServiceImpl implements PatientService {
             };
         }
 
-        // rồi trả Page<PatientResponse> về controller.
+        // gan them lan kham gan nhat va luot kham dang mo
         return withVisitSummary(patients);
     }
 
-    /**
-     * UC-35 step 4: keyword format by search type.
-     * DECISION (team, 2026-11-15): numbers read from a document (citizen ID, passport, insurance card) must be
-     * typed in full and match exactly, so a partial number cannot list other patients' identities. What a
-     * patient says from memory may be partial. The minimum length follows how sensitive the field is: the
-     * internal patient code from 1 character, the phone (personal data) from 4 digits, the name from 2.
-     */
+    // kiem tra dinh dang tu khoa theo loai tim
+    // giay to phai nhap du so (khong lo thong tin nguoi khac); SDT tu 4 so, ho ten tu 2 ky tu
     private static boolean isValidKeyword(String keyword, PatientSearchType type) {
         return switch (type) {
             case CITIZEN_ID -> keyword.matches("\\d{12}");
@@ -398,7 +395,7 @@ public class PatientServiceImpl implements PatientService {
         };
     }
 
-    /** UC-35 step 6: last visit date and active visit of each result, loaded with two queries per page. */
+    // gan lan kham gan nhat + luot kham dang mo cho moi benh nhan (2 query cho ca trang)
     private Page<PatientResponse>  withVisitSummary(Page<Patient> patients) {
         List<UUID> ids = patients.map(Patient::getId).getContent();
         if (ids.isEmpty()) {
@@ -414,6 +411,7 @@ public class PatientServiceImpl implements PatientService {
                         VisitRepository.PatientActiveVisit::getPatientId,
                         visit -> new PatientActiveVisitResponse(
                                 visit.getRegistrationCode(), visit.getStatus(), visit.getRoomName()),
+                        // 1 benh nhan co nhieu luot dang mo thi lay luot dau
                         (first, second) -> first));
         return patients.map(patient -> toResponse(
                 patient, lastVisits.get(patient.getId()), activeVisits.get(patient.getId())));
@@ -425,27 +423,26 @@ public class PatientServiceImpl implements PatientService {
         return toResponse(requiredPatient(id));
     }
 
+    // UC-36: xem ho so benh nhan (thong tin, lich su kham, luot kham hien tai, di ung)
     @Override
     @Transactional
     public PatientOverviewResponse getPatientOverview(UUID actorAccountId, UUID id) {
-        // tim benh nhan
         Patient patient = requiredPatient(id);
-        // lich su kham
+        // lich su kham, moi nhat truoc
         List<VisitRepository.PatientVisitHistory> history = visitRepository.findPatientHistory(id);
-        // kham hien tai
         List<PatientOverviewResponse.VisitHistoryItem> visits = history.stream()
                 .map(visit -> new PatientOverviewResponse.VisitHistoryItem(
                         visit.getVisitId(), visit.getRegistrationCode(), visit.getRegisteredAt(),
                         visit.getRoomName(), doctorName(visit.getDoctorTitle(), visit.getDoctorName()),
                         visit.getVisitType(), visit.getStatus()))
                 .toList();
-        // lay bao hiem y te gan nhat
+        // the BHYT dung o lan kham gan nhat
         String lastInsuranceCard = history.stream()
                 .map(VisitRepository.PatientVisitHistory::getInsuranceCard)
                 .filter(card -> card != null && !card.isBlank())
                 .findFirst().orElse(null);
 
-        // luot kham + phi kham
+        // luot kham dang mo + trang thai phi kham
         PatientOverviewResponse.CurrentVisit activeVisit = history.stream()
                 .filter(visit -> !VisitRepository.FINISHED_STATUSES.contains(visit.getStatus()))
                 .findFirst()
@@ -455,15 +452,15 @@ public class PatientServiceImpl implements PatientService {
                                 .map(Payment::getStatus).orElse(null)))
                 .orElse(null);
 
-        // thuoc di ung
+        // di ung thuoc
         List<String> drugAllergies = medicalHistoryRepository
                 .findByPatientIdAndHistoryTypeOrderByCreatedAtAsc(id, MedicalHistoryType.DRUG_ALLERGY).stream()
-                // UC-39 AF-01: the "no known drug allergy" statement is not an allergy.
+                // bo dong "khong di ung" (khong phai di ung that)
                 .filter(item -> !item.isNoKnownDrugAllergy())
                 .map(MedicalHistory::getThongtinNoidung)
                 .toList();
 
-        // BR-48: every view of a patient profile is recorded.
+        // ghi audit moi lan xem ho so (BR-48)
         auditLogService.recordBusinessChange(actorAccountId, AuditLogAction.VIEW_RECORD, PATIENT_AUDIT_ENTITY,
                 id, null, Map.of("mabenhnhan", patient.getMabenhnhan()), Instant.now());
 

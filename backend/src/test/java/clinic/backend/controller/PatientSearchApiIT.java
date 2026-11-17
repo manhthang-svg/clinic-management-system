@@ -21,7 +21,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -67,6 +69,27 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         mockMvc.perform(search(receptionist, "PHONE", phone.substring(2)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[*].mabenhnhan", contains(code)));
+    }
+
+    @Test
+    void freeSearchMatchesTheFullCitizenIdOnlyButAPartOfCodeAndPhone() throws Exception {
+        StaffAccount receptionist = account(Role.RECEPTIONIST);
+        String citizenId = digits(12);
+        String phone = "09" + digits(8);
+        String code = insertPatient(receptionist, "Lê Văn " + suffix(), citizenId, phone);
+
+        mockMvc.perform(freeSearch(receptionist, citizenId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[*].mabenhnhan", hasItem(code)));
+        mockMvc.perform(freeSearch(receptionist, citizenId.substring(0, 11)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[*].mabenhnhan", not(hasItem(code))));
+        mockMvc.perform(freeSearch(receptionist, code.substring(3).toLowerCase()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[*].mabenhnhan", hasItem(code)));
+        mockMvc.perform(freeSearch(receptionist, phone.substring(2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[*].mabenhnhan", hasItem(code)));
     }
 
     @Test
@@ -282,12 +305,13 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void returnsAtMostFiftyResults() throws Exception {
+    void returnsTwentyPatientsPerPage() throws Exception {
         mockMvc.perform(get("/api/v1/patients")
                         .param("size", "500")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.size", lessThanOrEqualTo(50)));
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.content.length()", lessThanOrEqualTo(20)));
     }
 
     @Test
@@ -308,6 +332,13 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
             StaffAccount account, String type, String keyword) throws Exception {
         return get("/api/v1/patients")
                 .param("type", type)
+                .param("keyword", keyword)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account));
+    }
+
+    private org.springframework.test.web.servlet.RequestBuilder freeSearch(
+            StaffAccount account, String keyword) throws Exception {
+        return get("/api/v1/patients")
                 .param("keyword", keyword)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account));
     }

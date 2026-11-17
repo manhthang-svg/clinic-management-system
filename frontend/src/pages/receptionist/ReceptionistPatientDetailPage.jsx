@@ -31,7 +31,7 @@ function Info({ label, children }) {
     );
 }
 
-/** UC-36 View Patient Information (actions: UC-38, UC-40, UC-41 reprint). */
+// UC-36: trang xem ho so benh nhan (sua ho so, dang ky kham, in lai phieu kham)
 export default function ReceptionistPatientDetailPage({ patientApi = defaultPatientApi, visitApi = defaultVisitApi }) {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -41,6 +41,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
 
     const goToPatients = useCallback(() => navigate(ROUTES.RECEPTIONIST.PATIENTS), [navigate]);
 
+    // tai ho so + lich hen tai kham
     const load = useCallback(async (signal) => {
         setState((current) => ({ ...current, loading: true, error: '' }));
         try {
@@ -50,7 +51,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
             if (error?.name !== 'AbortError') setState({ loading: false, error: overviewErrorMessage(error), data: null });
         }
         try {
-            // AF-03: a follow-up appointment is optional; a failure here does not block the profile.
+            // loi tai lich hen thi van hien ho so
             setAppointment((await visitApi.getFollowUpAppointment(id, signal)) ?? null);
         } catch {
             setAppointment(null);
@@ -66,7 +67,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
         };
     }, [load]);
 
-    // AF-02 / UC-41 AF-02: reprint the ticket of the active visit.
+    // in lai phieu kham cua luot kham dang mo
     const openReprint = useCallback(async (activeVisit) => {
         const visit = { id: activeVisit.visitId, sovaovien: activeVisit.registrationCode, status: activeVisit.status };
         setReprint({ visit, ticket: null, loading: true, error: null });
@@ -80,7 +81,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
 
     const printTicket = async () => {
         if (!reprint?.ticket) return;
-        // The payment guide is printed as shown; it needs no fresh ticket from the server.
+        // phieu huong dan thanh toan in luon, khong can goi server
         if (needsPaymentGuide(reprint.ticket)) {
             window.print();
             return;

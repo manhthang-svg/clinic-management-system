@@ -23,6 +23,16 @@ describe('ApiClient', () => {
         const request = fetchImplementation.mock.calls[0]?.[1];
         expect(new Headers(request?.headers).get('Authorization')).toBe('Bearer access-token');
     });
+    it('returns null when the envelope leaves out a null data field', async () => {
+        // ApiResponse is @JsonInclude(NON_NULL), e.g. GET /signing-requests/current with no pending request.
+        const fetchImplementation = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, message: 'Operation successful', timestamp: '2026-11-17T13:44:56Z' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        }));
+        const client = new ApiClient({ baseUrl: '/api/v1', fetchImplementation });
+
+        await expect(client.request('/prescriptions/p1/signing-requests/current')).resolves.toBeNull();
+    });
     it('sends FormData as is so the browser sets the multipart boundary', async () => {
         const fetchImplementation = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, message: 'ok', data: null }), {
             status: 200,
@@ -90,5 +100,26 @@ describe('ApiClient', () => {
             fetchImplementation: vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
         });
         await expect(client.request('/status')).resolves.toBeUndefined();
+    });
+    it('downloads a file with a JSON body and its Content-Disposition name', async () => {
+        const fetchImplementation = vi.fn().mockResolvedValue(new Response('%PDF', {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': 'attachment; filename="BA-LT-1.pdf"',
+            },
+        }));
+        const client = new ApiClient({ baseUrl: '/api/v1', fetchImplementation });
+
+        const file = await client.download('/medical-records/r1/commands/export-pdf', {
+            method: 'POST',
+            body: { purpose: 'LUU_TRU' },
+        });
+
+        expect(file.fileName).toBe('BA-LT-1.pdf');
+        const request = fetchImplementation.mock.calls[0]?.[1];
+        expect(request.method).toBe('POST');
+        expect(request.body).toBe('{"purpose":"LUU_TRU"}');
+        expect(new Headers(request.headers).get('Content-Type')).toBe('application/json');
     });
 });

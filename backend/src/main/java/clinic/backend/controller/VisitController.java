@@ -156,6 +156,7 @@ public class VisitController {
         return ApiResponse.success(visitTransferService.transfer(StaffPrincipal.from(jwt), visitId, request));
     }
 
+    // UC-42: tinh trang hang doi theo phong kham
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @GetMapping("/queue-status")
     @Operation(summary = "UC-42 Xem tình trạng hàng đợi theo phòng khám")

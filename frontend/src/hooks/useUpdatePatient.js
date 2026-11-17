@@ -15,7 +15,7 @@ import {
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
 
-/** UC-38 Update Patient Information: load, check, save changed fields, back to UC-36. */
+// UC-38: tai ho so, kiem tra, luu cac truong da sua, quay ve ho so
 export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const navigate = useNavigate();
     const [patient, setPatient] = useState(null);
@@ -31,7 +31,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const profilePath = useCallback(
         (id) => generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id }), []);
 
-    // Step 2: the form of UC-37 with the current data.
+    // tai ho so hien tai vao form
     useEffect(() => {
         const controller = new AbortController();
         patientApi.detail(patientId, controller.signal)
@@ -68,12 +68,12 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         setError('');
         setConflict(null);
 
-        // AF-02: nothing changed, so go back to UC-36 without saving.
+        // khong sua gi thi quay ve, khong luu
         if (!isDirty(form, initialForm)) {
             navigate(profilePath(patientId));
             return;
         }
-        // Step 4: the checks of UC-37 steps 4–5.
+        // kiem tra giong luc tao ho so
         const errors = validatePatientForm(form, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
@@ -84,14 +84,14 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         setSubmitting(true);
         try {
             await patientApi.update(patientId, { ...buildPatientPayload(form), version: patient.version });
-            // Step 7: MSG03 and back to UC-36 with the new data.
+            // luu xong: MSG03 va quay ve ho so
             toast.success(MSG.UPDATED);
             navigate(profilePath(patientId), { replace: true });
         } catch (err) {
             const code = err?.errorResponse?.code;
             const details = err?.errorResponse?.details;
             if (code === 'PATIENT_IDENTIFICATION_EXISTS' && details) {
-                // EF-02: MSG19 with Open profile; nothing is saved.
+                // trung CCCD / ho chieu: hien MSG19, khong luu
                 setConflict(details);
                 setFieldErrors((previous) => ({
                     ...previous,
@@ -108,7 +108,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         }
     }, [form, initialForm, navigate, patient, patientApi, patientId, profilePath, submitting]);
 
-    // AF-01: Cancel asks for confirmation (MSG40) when something was changed.
+    // huy khi da sua thi hoi xac nhan (MSG40)
     const goBack = useCallback(() => {
         if (submitting) return;
         if (form && isDirty(form, initialForm)) setConfirmCancel(true);

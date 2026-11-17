@@ -1,7 +1,4 @@
 import { createContext } from 'react';
 
-/**
- * What the result API in use can do. uploadImage / deleteImage are set when the API stores images (the real one,
- * on Cloudinary); without them the files stay a local preview (demo API).
- */
+// API ket qua dang dung lam duoc gi (co tai / xoa anh hay chi xem truoc)
 export const ResultApiContext = createContext({ supportsFiles: true });

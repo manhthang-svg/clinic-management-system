@@ -1,5 +1,6 @@
 import { apiClient } from '../services/session';
 
+// ghep tham so vao duong dan
 function withQuery(path, values) {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
@@ -9,41 +10,38 @@ function withQuery(path, values) {
   return query ? `${path}?${query}` : path;
 }
 
-/** Admin statistics endpoints. Dates are YYYY-MM-DD, both inclusive. */
+// API thong ke admin (ngay YYYY-MM-DD, tinh ca 2 dau)
 export function createStatisticsApi(client = apiClient) {
   return {
-    /** UC-26 View Statistics Dashboard. */
+    // UC-26: tong quan
     getDashboard: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/dashboard', { from, to }), { signal }),
 
-    /** UC-27 View Patient Visit Statistics; groupBy is DAY or MONTH. */
+    // UC-27: luot kham (theo ngay / thang)
     getVisits: ({ from, to, groupBy } = {}, signal) =>
       client.request(withQuery('/statistics/visits', { from, to, groupBy }), { signal }),
 
-    /** UC-28 View Doctor Statistics. */
+    // UC-28: theo bac si
     getDoctors: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/doctors', { from, to }), { signal }),
 
-    /** UC-29 View Department and Room Statistics. */
+    // UC-29: theo khoa / phong
     getDepartments: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/departments', { from, to }), { signal }),
 
-    /** UC-30 View Paraclinical Service Statistics. */
+    // UC-30: dich vu CLS
     getParaclinical: ({ from, to } = {}, signal) =>
       client.request(withQuery('/statistics/paraclinical', { from, to }), { signal }),
 
-    /** UC-31 View Revenue Statistics; groupBy is DAY or MONTH. */
+    // UC-31: doanh thu (theo ngay / thang)
     getRevenue: ({ from, to, groupBy } = {}, signal) =>
       client.request(withQuery('/statistics/revenue', { from, to, groupBy }), { signal }),
 
-    /** UC-32 View Diagnosis Statistics; limit is the size of each ranking (1–100). */
+    // UC-32: benh thuong gap (top 1 - 100)
     getDiagnoses: ({ from, to, limit } = {}, signal) =>
       client.request(withQuery('/statistics/diagnoses', { from, to, limit }), { signal }),
 
-    /**
-     * UC-33 Export Report: the chosen reports (VISITS, DOCTORS, DEPARTMENTS, PARACLINICAL, REVENUE, DIAGNOSES; all
-     * when empty) as one Excel workbook. Resolves to { blob, fileName }.
-     */
+    // UC-33: tai file Excel cac bao cao da chon (khong chon = tat ca)
     exportExcel: ({ from, to, reports = [], groupBy, limit } = {}) =>
       client.download(withQuery('/statistics/export', {
         from, to, reports: reports.join(','), groupBy, limit,

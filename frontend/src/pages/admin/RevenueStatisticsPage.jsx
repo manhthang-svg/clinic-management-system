@@ -63,7 +63,7 @@ function percent(part, total) {
   return `${(Math.round((Number(part) / whole) * 1000) / 10).toLocaleString('vi-VN')}%`;
 }
 
-/** UC-31 View Revenue Statistics. Every amount separates the insurance part from the patient part (BR-38). */
+// UC-31: trang thong ke doanh thu (tach BHYT chi tra / benh nhan tra - BR-38)
 export function RevenueStatisticsPage({
   currentAdmin,
   onLogout,
@@ -108,7 +108,7 @@ export function RevenueStatisticsPage({
     display: formatMoney(item.amounts.totalAmount),
     color: PAYMENT_TYPES[item.type]?.color ?? COLORS.priority,
   }));
-  // Money that reached the clinic's till: what the patients paid, by payment method.
+  // tien benh nhan tra theo phuong thuc thanh toan
   const methodItems = (data?.byMethod ?? []).map((item) => {
     const method = PAYMENT_METHODS[item.method] ?? NO_METHOD;
     return {

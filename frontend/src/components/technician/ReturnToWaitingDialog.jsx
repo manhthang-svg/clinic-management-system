@@ -3,7 +3,7 @@ import { RotateCcw, X } from 'lucide-react';
 
 import { RETURN_REASONS, RETURN_REASON_MAX_LENGTH, validateReturnReason } from './performOrder';
 
-/** UC-66 AF-02: sends an accepted order back to the waiting list with a reason. */
+// UC-66: hop thoai tra dich vu ve hang cho kem ly do
 export function ReturnToWaitingDialog({ order, onClose, onConfirm }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');

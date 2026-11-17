@@ -75,7 +75,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
 
-    /** Longest period one dashboard request may cover (one leap year). */
+    // khoang thoi gian toi da 1 lan xem (366 ngay)
     static final long MAX_PERIOD_DAYS = 366;
     static final int TOP_LIMIT = 5;
     static final int DEFAULT_DIAGNOSIS_LIMIT = 10;
@@ -92,6 +92,7 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final StatisticsRepository statisticsRepository;
     private final Clock clock;
 
+    // UC-26: so lieu trang Tong quan (luot kham, benh nhan, CLS, doanh thu, bieu do)
     @Override
     @Transactional(readOnly = true)
     public DashboardStatisticsResponse getDashboard(LocalDate from, LocalDate to) {
@@ -120,6 +121,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                         .toList());
     }
 
+    // UC-27: thong ke luot kham theo ngay / thang
     @Override
     @Transactional(readOnly = true)
     public VisitStatisticsResponse getVisitStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy) {
@@ -128,6 +130,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         validatePeriod(start, end);
         StatisticsGroupBy bucket = groupBy != null ? groupBy : StatisticsGroupBy.DAY;
 
+        // tao san tung ngay / thang (ky khong co luot van hien 0), roi cong don tung dong
         Map<LocalDate, VisitCounter> byPeriod = new LinkedHashMap<>();
         for (LocalDate key = bucketOf(start, bucket); !key.isAfter(end); key = next(key, bucket)) {
             byPeriod.put(key, new VisitCounter());
@@ -146,6 +149,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         return new VisitStatisticsResponse(start, end, bucket, summary.toCounts(), series);
     }
 
+    // UC-28: thong ke theo bac si
     @Override
     @Transactional(readOnly = true)
     public DoctorStatisticsResponse getDoctorStatistics(LocalDate from, LocalDate to) {
@@ -169,7 +173,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         statisticsRepository.countPatientsByDoctor(start, end)
                 .forEach(row -> patients.put(row.getDoctorId(), row.getTotal()));
 
-        // An empty IN list is avoided: a random id matches no account.
+        // tranh IN rong: dung 1 id ngau nhien khong khop ai
         Set<UUID> examiners = byDoctor.isEmpty() ? Set.of(UUID.randomUUID()) : byDoctor.keySet();
         List<DoctorRow> rows = new ArrayList<>();
         for (StaffAccount account : statisticsRepository.doctorsOrAccounts(examiners)) {
@@ -190,6 +194,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 start, end, examined, statisticsRepository.countVisitsWithoutDoctor(start, end), rows);
     }
 
+    // UC-29: thong ke theo khoa / phong (luot kham phong kham, dich vu phong CLS)
     @Override
     @Transactional(readOnly = true)
     public DepartmentStatisticsResponse getDepartmentStatistics(LocalDate from, LocalDate to) {
@@ -267,6 +272,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 departments);
     }
 
+    // UC-30: thong ke dich vu CLS da thuc hien theo loai, nhom, dich vu, phong
     @Override
     @Transactional(readOnly = true)
     public ParaclinicalStatisticsResponse getParaclinicalStatistics(LocalDate from, LocalDate to) {
@@ -296,7 +302,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         Map<UUID, Room> rooms = roomIds.isEmpty() ? Map.of() : statisticsRepository.roomsByIds(roomIds)
                 .stream().collect(Collectors.toMap(Room::getId, Function.identity()));
 
-        // Each counter is {performed, withResult}.
+        // moi bo dem = {da thuc hien, da co ket qua}
         long[] total = new long[2];
         Map<MedicalServiceType, long[]> byType = new EnumMap<>(MedicalServiceType.class);
         Map<UUID, long[]> byGroup = new HashMap<>();
@@ -371,6 +377,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         counter[1] += withResult;
     }
 
+    // UC-31: doanh thu da thu (chi phieu da thu, theo ngay thu), tach BHYT / benh nhan tra
     @Override
     @Transactional(readOnly = true)
     public RevenueStatisticsResponse getRevenueStatistics(LocalDate from, LocalDate to, StatisticsGroupBy groupBy) {
@@ -422,11 +429,12 @@ public class StatisticsServiceImpl implements StatisticsService {
         return amount != null ? amount : BigDecimal.ZERO;
     }
 
-    /** Adds two amount totals; used to merge rows of the same receipt type or payment method. */
+    // cong 2 tong tien (gop dong cung loai phieu / cung phuong thuc)
     private static Amounts sumAmounts(Amounts left, Amounts right) {
         return left.plus(right.payments(), right.totalAmount(), right.insuranceAmount(), right.patientAmount());
     }
 
+    // UC-32: benh thuong gap theo ma ICD-10 (theo ngay ket luan)
     @Override
     @Transactional(readOnly = true)
     public DiagnosisStatisticsResponse getDiagnosisStatistics(LocalDate from, LocalDate to, Integer limit) {
@@ -467,16 +475,18 @@ public class StatisticsServiceImpl implements StatisticsService {
                         .toList());
     }
 
-    /** Name as shown elsewhere: academic title then full name ("BSCKII Trần Văn An"). */
+    // ten hien thi: hoc ham + ho ten
     private static String displayName(StaffAccount account) {
         String title = account.getAcademicTitle();
         return title == null || title.isBlank() ? account.getFullName() : title.strip() + " " + account.getFullName();
     }
 
+    // khong chon tu ngay thi lay dau thang
     private LocalDate resolveFrom(LocalDate from) {
         return from != null ? from : today().withDayOfMonth(1);
     }
 
+    // khong chon den ngay thi lay hom nay
     private LocalDate resolveTo(LocalDate to) {
         return to != null ? to : today();
     }
@@ -485,6 +495,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         return LocalDate.now(clock.withZone(CLINIC_ZONE));
     }
 
+    // ngay dai dien cua nhom (theo thang thi la ngay 1)
     private static LocalDate bucketOf(LocalDate day, StatisticsGroupBy groupBy) {
         return groupBy == StatisticsGroupBy.MONTH ? day.withDayOfMonth(1) : day;
     }
@@ -493,7 +504,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         return groupBy == StatisticsGroupBy.MONTH ? key.plusMonths(1) : key.plusDays(1);
     }
 
-    /** Running totals for one bucket of UC-27. */
+    // bo dem luot kham cua 1 ngay / thang (UC-27)
     private static final class VisitCounter {
         private long total;
         private long completed;
@@ -534,6 +545,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         }
     }
 
+    // tu ngay khong sau den ngay, toi da 366 ngay
     private static void validatePeriod(LocalDate start, LocalDate end) {
         if (start.isAfter(end)) {
             throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID,
@@ -545,6 +557,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         }
     }
 
+    // tong luot kham theo ket qua va doi tuong (cho trang Tong quan)
     private VisitSummary visitSummary(LocalDate start, LocalDate end) {
         long total = 0;
         long completed = 0;
@@ -577,6 +590,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         return new VisitSummary(total, completed, inProgress, cancelled, abandoned, insurance, selfPay);
     }
 
+    // luot kham tung ngay, ngay khong co luot thi 0
     private List<DailyVisits> dailyVisits(LocalDate start, LocalDate end) {
         Map<LocalDate, Long> byDay = new HashMap<>();
         for (StatisticsRepository.DayCount row : statisticsRepository.countVisitsByDay(start, end)) {

@@ -1,7 +1,7 @@
 import { MAX_NAME_LENGTH } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
 
-// Shared form of UC-37 Create New Patient Profile and UC-38 Update Patient Information.
+// form dung chung cho UC-37 tao ho so va UC-38 sua ho so
 const inputClass =
     'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100';
 
@@ -22,7 +22,7 @@ const sections = [
     },
 ];
 
-// MSG02/MSG05/MSG08 in red under the field (UC-37 EF-01).
+// loi hien mau do duoi truong
 export function FieldError({ name, error }) {
     return error ? (
         <p id={`${name}-error`} className="mt-1 text-xs font-medium text-red-600">{error}</p>
@@ -109,11 +109,11 @@ export function Dialog({ title, children }) {
     );
 }
 
-/** The three sections of the patient form; required marks of phone and guardian follow the age (UC-37 step 4). */
+// 3 phan cua form; dau bat buoc SDT / nguoi than theo tuoi
 export function PatientFormSections({ form, fieldErrors, handleChange, adult, minor }) {
     return (
         <>
-                {/* 1. Thông tin cá nhân */}
+                {/* 1. Thong tin ca nhan */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">
@@ -251,7 +251,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                     </div>
                 </section>
 
-                {/* 2. Thông tin hành chính */}
+                {/* 2. Thong tin hanh chinh */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">
@@ -365,7 +365,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                     </div>
                 </section>
 
-                {/* 3. Thông tin người thân */}
+                {/* 3. Thong tin nguoi than */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">

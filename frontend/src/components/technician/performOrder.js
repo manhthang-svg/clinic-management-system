@@ -1,8 +1,8 @@
-// UC-66 Perform Paraclinical Order: messages and helpers shared by the queue page and its dialog.
+// UC-66: thong bao va ham dung chung cho hang doi KTV va hop thoai tra ve hang cho
 
 export const RETURN_REASON_MAX_LENGTH = 500;
 
-/** Usual reasons of UC-66 AF-02; the technician can also type their own. */
+// ly do tra ve hang cho hay gap (KTV co the tu nhap)
 export const RETURN_REASONS = [
   'Bệnh nhân chưa chuẩn bị (chưa nhịn ăn, chưa uống nước, chưa nhịn tiểu…)',
   'Máy/thiết bị gặp sự cố',
@@ -20,7 +20,7 @@ export const PERFORM_MESSAGES = {
   reasonTooLong: `Vượt quá độ dài tối đa ${RETURN_REASON_MAX_LENGTH} ký tự.`, // MSG08
 };
 
-/** Maps a failed UC-66 command to a Vietnamese message (EF-01, EF-02); never shows the raw backend text. */
+// doi loi thao tac UC-66 thanh thong bao tieng Viet
 export function performErrorMessage(error) {
   const code = error?.errorResponse?.code;
   if (error?.status === 401) return PERFORM_MESSAGES.sessionExpired;
@@ -29,7 +29,7 @@ export function performErrorMessage(error) {
   return PERFORM_MESSAGES.systemError;
 }
 
-/** Returns the error of a return reason, or an empty string when it is valid. */
+// kiem tra ly do tra ve, hop le thi tra ''
 export function validateReturnReason(reason) {
   const text = String(reason ?? '').trim();
   if (!text) return PERFORM_MESSAGES.reasonRequired;

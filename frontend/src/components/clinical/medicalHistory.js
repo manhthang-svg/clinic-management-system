@@ -1,5 +1,4 @@
-// UC-39 Update Medical History: "Tiền sử bệnh" split into "Bản thân" and "Gia đình" (bệnh án mục 2).
-// Each line of a group is one history entry; FAMILY entries form "Gia đình", all others "Bản thân".
+// UC-39: tien su benh chia 2 nhom Ban than / Gia dinh, moi dong la 1 muc
 
 export const FAMILY_CATEGORY = 'FAMILY';
 export const DEFAULT_SELF_CATEGORY = 'OTHER';
@@ -23,7 +22,7 @@ export const MESSAGES = {
 
 const isFamily = (item) => item.category === FAMILY_CATEGORY;
 
-/** Contents of the "Bản thân" and "Gia đình" groups of the stored history. */
+// tach tien su da luu thanh 2 nhom Ban than / Gia dinh
 export function groupHistory(data) {
     const history = data?.history ?? [];
     return {
@@ -36,17 +35,19 @@ export function emptyDraft() {
     return { self: '', family: '' };
 }
 
+// tao ban nhap (2 o text) tu du lieu da luu
 export function draftFrom(data) {
     if (!data) return emptyDraft();
     const { self, family } = groupHistory(data);
     return { self: self.join('\n'), family: family.join('\n') };
 }
 
+// tach text thanh tung dong, bo dong rong
 function linesOf(text) {
     return text.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
-/** UC-39 step 4: returns errors keyed "self", "family" or "history"; empty when valid. */
+// kiem tra: moi dong toi da 255 ky tu, tong toi da 2000 ky tu
 export function validateDraft(draft) {
     const errors = {};
     const self = linesOf(draft.self);
@@ -58,10 +59,8 @@ export function validateDraft(draft) {
     return errors;
 }
 
-/**
- * Builds the UC-39 request. A "Bản thân" line keeps the category it was stored with; a new one is OTHER.
- * Drug allergies are no longer edited on this screen, so the stored ones are sent back unchanged.
- */
+// tao request luu: dong cu giu nhom cu, dong moi vao nhom Khac
+// di ung khong sua o day nen gui lai nguyen nhu cu
 export function toRequest(draft, data) {
     const stored = new Map((data?.history ?? []).filter((item) => !isFamily(item))
         .map((item) => [(item.content ?? '').trim(), item.category]));
@@ -80,11 +79,12 @@ export function toRequest(draft, data) {
     };
 }
 
+// ban nhap co bi sua khong
 export function isSameDraft(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** Maps a save failure to the message of UC-39 EF-01 to EF-03. */
+// doi loi luu thanh thong bao tieng Viet
 export function saveErrorMessage(error) {
     const code = error?.errorResponse?.code;
     if (error?.status === 401) return MESSAGES.sessionExpired;
@@ -95,6 +95,7 @@ export function saveErrorMessage(error) {
     return MESSAGES.systemError;
 }
 
+// thong bao khi chi duoc xem (khong dang kham / benh an da dong)
 export function readOnlyMessage(reason) {
     if (reason === 'MEDICAL_RECORD_CLOSED') return MESSAGES.recordClosed;
     if (reason) return MESSAGES.readOnly;

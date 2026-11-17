@@ -1676,14 +1676,14 @@ UC-19: Activate/Deactivate Room – Merged into UC-18 (Update Room), which alrea
 
 | Primary Actors | Doctor | Secondary Actors | None |
 | ----: | :---- | ----: | :---- |
-| **Description** | As a Doctor, I want to export a medical record to a printable file, so that it can be printed or stored according to the hospital's needs. Doctors can export the records of all patients (BR-35). |  |  |
-| **Preconditions** | 1\. The Doctor is viewing a medical record (UC-52). |  |  |
-| **Normal Flow** | 1\. The Doctor clicks Export Medical Record. 2\. The system asks for the scope: Current visit only, or All visits of the patient. 3\. The Doctor selects the scope and confirms. 4\. The system creates a PDF file (SW-03) using the medical record layout (patient information, visits with vital signs, findings, paraclinical results, diagnosis, prescription, follow-up), with the hospital header, export time and exporting Doctor. 5\. The system downloads the file and shows MSG36. 6\. The system records the export in the audit log (patient, scope, Doctor, time). |  |  |
-| **Alternative Flows** | **AF-01 (at step 3): The Doctor cancels** 1\. No file is created. *\=\>The use case ends.* **AF-02 (at step 4): The visit is not closed yet** 1\. The file is marked "Draft – visit not completed". *\=\>Continue at step 5\.* |  |  |
-| **Exception Flows** | **EF-01 (at step 4): The file cannot be created** 1\. The system shows MSG99. *\=\>Return to step 2\.* **EF-02 (any step): Session expired** 1\. The system shows MSG12. *\=\>The use case ends.* |  |  |
-| **Postconditions** | The file is downloaded and the export is logged. No data in the system is changed. |  |  |
-| **Business Rules** | BR-32, BR-35; Security: Audit trail (IV.2.3); OR-01 |  |  |
-| **Messages** | MSG12, MSG36, MSG99 |  |  |
+| **Description** | As a Doctor, I want to export a closed medical record as a PDF in the Ministry of Health outpatient form 15/BV1 (TT 32/2023/TT-BYT Phụ lục XXVIII), so that it can be printed, archived or given to the patient or an authority. Doctors can export the records of all patients (BR-35); the Admin cannot (BR-43, BR-120). Detailed in docs/uc-53-export-medical-record.md. |  |  |
+| **Preconditions** | 1\. The Doctor is viewing a medical record (UC-52). 2\. The record is closed (UC-58); otherwise the export button is disabled with MSG131. |  |  |
+| **Normal Flow** | 1\. The Doctor clicks "Xuất hồ sơ bệnh án". 2\. The system asks for the purpose (Trao đổi dữ liệu, Lưu trữ, Cung cấp cho người bệnh, Cơ quan có thẩm quyền) and the recipient, which is required for the patient and for authorities (BR-43, BR-131). 3\. The Doctor fills them in and clicks "Xuất PDF". 4\. The system checks the archive package of the record against its SHA-256 and creates the PDF in form 15/BV1 from it, with an export footer (exporting Doctor, time, page). 5\. The system stores the file, records the export (format, purpose, recipient, file hash) and the audit entry, downloads the file and shows MSG34. |  |  |
+| **Alternative Flows** | **AF-01 (at step 2 or 3): The Doctor cancels** 1\. No file is created and nothing is logged. *\=\>The use case ends.* |  |  |
+| **Exception Flows** | **EF-01 (at step 3): Missing or invalid purpose or recipient** 1\. The system shows MSG02, MSG05 or MSG08 under the field. *\=\>Return to step 3\.* **EF-02 (at step 4): The record is not closed** 1\. The system shows MSG131. *\=\>The use case ends.* **EF-03 (at step 4 or 5): The package is missing or altered, or the file cannot be created** 1\. The failed export is logged and the system shows MSG80. *\=\>Return to step 3\.* **EF-04 (any step): Not a Doctor or session expired** 1\. The system shows MSG13 or MSG12. *\=\>The use case ends.* |  |  |
+| **Postconditions** | The file is downloaded, stored read-only and the export is logged. No medical data is changed. |  |  |
+| **Business Rules** | BR-32, BR-35, BR-42, BR-43, BR-120, BR-131; Security: Audit trail (IV.2.3) |  |  |
+| **Messages** | MSG02, MSG05, MSG08, MSG12, MSG13, MSG34, MSG80, MSG131 |  |  |
 
 ## **11\. Examination Conclusion** {#11.-examination-conclusion}
 
