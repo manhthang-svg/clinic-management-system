@@ -1,5 +1,6 @@
 package clinic.backend.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,4 +14,7 @@ public interface ImagingResultImageRepository extends JpaRepository<ImagingResul
     List<ImagingResultImage> findByImagingResultIdOrderByDisplayOrderAsc(UUID imagingResultId);
 
     Optional<ImagingResultImage> findByIdAndImagingResultId(UUID id, UUID imagingResultId);
+
+    /** UC-52: the images of several results in one query, in their printed order. */
+    List<ImagingResultImage> findByImagingResultIdInOrderByDisplayOrderAsc(Collection<UUID> imagingResultIds);
 }

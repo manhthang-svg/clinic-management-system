@@ -2,21 +2,12 @@ import { Fragment, useEffect, useId, useState } from 'react';
 import { ChevronDown, ClipboardList, LoaderCircle } from 'lucide-react';
 
 import visitApi from '../../apis/visitApi';
+import { ORDERED_SERVICE_STATUS_LABELS as SERVICE_STATUS_LABELS } from '../../constants/visitData';
 import { resultApi as defaultResultApi } from '../../apis/paraclinicalResultApi';
 import { ResultPrintView } from '../paraclinicalResult/ResultPrintView';
 import { formForSave, resultToForm } from '../paraclinicalResult/resultForm';
 import { cancelErrorMessage, cancelledMessage, isPrintable } from './paraclinicalOrder';
 import { PrintOrderButton } from './ParaclinicalOrderSlip';
-
-// Labels from docs/state-transitions.md section 3.1. PENDING_RESULT has no documented label yet (TBD).
-const SERVICE_STATUS_LABELS = {
-    PENDING_PAYMENT: 'Chờ thanh toán',
-    WAITING: 'Chờ thực hiện',
-    IN_PROGRESS: 'Đang thực hiện',
-    COMPLETED: 'Hoàn thành',
-    CANCELLED: 'Đã hủy',
-    ABANDONED: 'Đã hủy',
-};
 
 const LOAD_FAILED = 'Không tải được danh sách chỉ định cận lâm sàng.';
 const RESULT_LOAD_FAILED = 'Không tải được phiếu kết quả. Vui lòng thử lại.';

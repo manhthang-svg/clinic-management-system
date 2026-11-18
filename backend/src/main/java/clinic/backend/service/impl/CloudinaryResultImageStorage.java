@@ -38,6 +38,9 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
 
     private static final String API = "https://api.cloudinary.com/v1_1/";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
+    private static final String DELIVERY_HOST = "res.cloudinary.com";
+    /** BR-105: a result file is at most 10 MB. */
+    private static final int MAX_FILE_BYTES = 10 * 1024 * 1024;
 
     private final CloudinaryProperties properties;
     private final ObjectMapper objectMapper;
@@ -79,6 +82,58 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
     public void delete(String publicId) {
         requireConfigured();
         post("image/destroy", signed(Map.of("public_id", publicId, "invalidate", "true")));
+    }
+
+    @Override
+    public byte[] download(String url) {
+        requireConfigured();
+        HttpRequest request = HttpRequest.newBuilder(deliveryUri(url, properties.cloudName()))
+                .timeout(TIMEOUT)
+                .GET()
+                .build();
+        try {
+            HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() / 100 != 2) {
+                log.warn("Cloudinary download failed [status={}]", response.statusCode());
+                throw new AppException(ErrorCode.FILE_STORAGE_UNAVAILABLE);
+            }
+            if (response.body().length > MAX_FILE_BYTES) {
+                log.warn("Cloudinary download larger than a result file may be");
+                throw new AppException(ErrorCode.FILE_STORAGE_UNAVAILABLE);
+            }
+            return response.body();
+        } catch (IOException exception) {
+            log.warn("Cloudinary download unreachable [error={}]", exception.getClass().getSimpleName());
+            throw new AppException(ErrorCode.FILE_STORAGE_UNAVAILABLE);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AppException(ErrorCode.FILE_STORAGE_UNAVAILABLE);
+        }
+    }
+
+    /**
+     * Only an https delivery address of this account (the form {@code upload} returns); anything else is refused,
+     * so a stored address can never make the server call another host. The address is not logged: it opens the
+     * file.
+     */
+    static URI deliveryUri(String url, String cloudName) {
+        try {
+            URI uri = URI.create(url);
+            String path = uri.getRawPath();
+            if ("https".equals(uri.getScheme())
+                    && DELIVERY_HOST.equalsIgnoreCase(uri.getHost())
+                    && uri.getPort() == -1
+                    && uri.getRawUserInfo() == null
+                    && path != null
+                    && path.startsWith("/" + cloudName + "/")
+                    && !path.contains("/../")) {
+                return uri;
+            }
+        } catch (IllegalArgumentException | NullPointerException malformed) {
+            // refused below
+        }
+        log.warn("Result image address refused: not a delivery address of this account");
+        throw new AppException(ErrorCode.FILE_STORAGE_UNAVAILABLE);
     }
 
     private void requireConfigured() {

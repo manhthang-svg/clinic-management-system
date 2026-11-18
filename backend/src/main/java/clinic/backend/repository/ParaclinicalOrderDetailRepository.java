@@ -13,6 +13,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface ParaclinicalOrderDetailRepository extends JpaRepository<ParaclinicalOrderDetail, UUID> {
 
+    /** UC-52: every ordered service of a record with its order, in one query, oldest order first. */
+    @Query("""
+            select d from ParaclinicalOrderDetail d join fetch d.order o
+            where o.medicalRecordId = :medicalRecordId
+            order by o.createdAt, o.id, d.id
+            """)
+    List<ParaclinicalOrderDetail> findWithOrderByMedicalRecordId(@Param("medicalRecordId") UUID medicalRecordId);
+
     /** Technician dashboard: services of the room whose lab or imaging result was submitted at or after {@code since}. */
     @Query("""
             select count(d) from ParaclinicalOrderDetail d

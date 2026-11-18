@@ -6,8 +6,10 @@ import java.util.UUID;
 
 import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
+import clinic.backend.dto.response.ResultFileResponse;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.service.MedicalRecordDataExportService;
 import clinic.backend.service.MedicalRecordExportService;
 import clinic.backend.service.MedicalRecordService;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,11 +39,15 @@ class MedicalRecordControllerTest {
     @Mock
     private MedicalRecordExportService medicalRecordExportService;
 
+    @Mock
+    private MedicalRecordDataExportService medicalRecordDataExportService;
+
     private MedicalRecordController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new MedicalRecordController(medicalRecordService, medicalRecordExportService);
+        controller = new MedicalRecordController(
+                medicalRecordService, medicalRecordExportService, medicalRecordDataExportService);
     }
 
     @Test
@@ -74,7 +80,7 @@ class MedicalRecordControllerTest {
                 ExportLogPurpose.LIEN_THONG
         );
 
-        when(medicalRecordService.exportMedicalRecordData(eq(recordId), eq(request), eq(doctorAccountId)))
+        when(medicalRecordDataExportService.exportMedicalRecordData(eq(recordId), eq(request), eq(doctorAccountId)))
                 .thenReturn(serviceResponse);
 
         ResponseEntity<byte[]> responseEntity = controller.exportMedicalRecordData(recordId, request, jwt);
@@ -90,6 +96,29 @@ class MedicalRecordControllerTest {
                 .isEqualTo(MediaType.parseMediaType("application/json; charset=UTF-8"));
         assertThat(responseEntity.getBody()).isEqualTo(fakeData);
 
-        verify(medicalRecordService).exportMedicalRecordData(eq(recordId), eq(request), eq(doctorAccountId));
+        verify(medicalRecordDataExportService).exportMedicalRecordData(eq(recordId), eq(request), eq(doctorAccountId));
+    }
+
+    @Test
+    @DisplayName("UC-52 BR-52-06: tệp kết quả trả inline, đúng loại tệp, không lưu cache")
+    void downloadResultFile_returnsTheFileInlineWithoutCaching() {
+        UUID recordId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID doctorAccountId = UUID.randomUUID();
+        Jwt jwt = mock(Jwt.class);
+        when(jwt.getSubject()).thenReturn(doctorAccountId.toString());
+        when(jwt.getClaimAsString(clinic.backend.security.jwt.AccessTokenClaims.SESSION_ID))
+                .thenReturn(UUID.randomUUID().toString());
+        byte[] content = {1, 2, 3};
+        when(medicalRecordService.downloadResultFile(recordId, fileId, doctorAccountId))
+                .thenReturn(new ResultFileResponse("KQ-CDHA01-1.png", "image/png", content));
+
+        ResponseEntity<byte[]> response = controller.downloadResultFile(recordId, fileId, jwt);
+
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.IMAGE_PNG);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("inline; filename=\"KQ-CDHA01-1.png\"");
+        assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(response.getBody()).isEqualTo(content);
     }
 }

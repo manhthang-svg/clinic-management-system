@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, RotateCcw, AlertCircle, Building2, Calendar, Activity, Filter, CheckCircle2 } from 'lucide-react';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
+import { TEXT_FILTER_MAX_LENGTH, VISIT_FILTER_OPTIONS, searchFieldErrors } from './medicalRecordView';
 
 /**
- * Khu vực Tìm kiếm & Bộ lọc (Search & Filter Bar) cho Screen #39.
+ * UC-51 bước 2–3: ô tìm kiếm và bộ lọc (BR-51-04). Lỗi kiểm tra phía client chỉ để phản hồi; backend quyết định.
  */
 export function MedicalRecordsFilter({
   filters,
@@ -35,18 +36,16 @@ export function MedicalRecordsFilter({
     return () => { ignore = true; };
   }, []);
 
-  // Tìm kiếm ICD-10 gợi ý khi gõ
+  // Gợi ý ICD-10 khi đã gõ từ 2 ký tự.
+  const icdQuery = (filters.icd10 ?? '').trim().length >= 2 ? filters.icd10.trim() : '';
   useEffect(() => {
-    if (!filters.icd10 || filters.icd10.trim().length < 2) {
-      setIcdOptions([]);
-      return;
-    }
+    if (!icdQuery) return undefined;
 
     let ignore = false;
     const timer = setTimeout(async () => {
       setIcdSearching(true);
       try {
-        const res = await medicalRecordApi.searchIcd10(filters.icd10.trim());
+        const res = await medicalRecordApi.searchIcd10(icdQuery);
         if (!ignore && Array.isArray(res)) {
           setIcdOptions(res);
         }
@@ -61,7 +60,8 @@ export function MedicalRecordsFilter({
       ignore = true;
       clearTimeout(timer);
     };
-  }, [filters.icd10]);
+  }, [icdQuery]);
+  const visibleIcdOptions = icdQuery ? icdOptions : [];
 
   // Click outside để đóng dropdown ICD-10
   useEffect(() => {
@@ -74,14 +74,13 @@ export function MedicalRecordsFilter({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Validation ngày: từ ngày > đến ngày -> MSG50
-  const dateError = Boolean(
-    filters.from && filters.to && new Date(filters.from) > new Date(filters.to)
-  );
+  const errors = searchFieldErrors(filters);
+  const dateError = Boolean(errors.from);
+  const hasErrors = Object.keys(errors).length > 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (dateError) return;
+    if (hasErrors) return;
     onSearch();
   };
 
@@ -99,14 +98,20 @@ export function MedicalRecordsFilter({
               <input
                 id="filter-keyword"
                 type="text"
-                maxLength={100}
+                maxLength={TEXT_FILTER_MAX_LENGTH}
                 value={filters.keyword}
+                aria-invalid={Boolean(errors.keyword)}
+                aria-describedby={errors.keyword ? 'filter-keyword-error' : undefined}
                 onChange={(e) => onChangeFilter('keyword', e.target.value)}
                 placeholder="Mã BN, CCCD, Họ tên, SĐT..."
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#127e7a]/30 focus:border-[#127e7a] text-slate-800 placeholder-slate-400"
               />
             </div>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">Tối đa 100 ký tự</span>
+            {errors.keyword ? (
+              <span id="filter-keyword-error" className="text-[11px] text-rose-600 mt-0.5 block">{errors.keyword}</span>
+            ) : (
+              <span className="text-[11px] text-slate-400 mt-0.5 block">Từ 2 đến 100 ký tự</span>
+            )}
           </div>
 
           {/* 2. Từ ngày - Đến ngày */}
@@ -173,6 +178,7 @@ export function MedicalRecordsFilter({
               id="filter-icd"
               type="text"
               value={filters.icd10}
+              maxLength={TEXT_FILTER_MAX_LENGTH}
               onFocus={() => setShowIcdDropdown(true)}
               onChange={(e) => {
                 onChangeFilter('icd10', e.target.value);
@@ -182,9 +188,9 @@ export function MedicalRecordsFilter({
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#127e7a]/30 focus:border-[#127e7a] text-slate-800 placeholder-slate-400"
             />
             {/* Dropdown gợi ý ICD-10 */}
-            {showIcdDropdown && icdOptions.length > 0 && (
+            {showIcdDropdown && visibleIcdOptions.length > 0 && (
               <ul className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg text-xs">
-                {icdOptions.map((item) => (
+                {visibleIcdOptions.map((item) => (
                   <li
                     key={item.maicd}
                     onClick={() => {
@@ -206,23 +212,23 @@ export function MedicalRecordsFilter({
         {dateError && (
           <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 px-3 py-2 rounded-xl border border-rose-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>Ngày bắt đầu không được sau ngày kết thúc.</span>
+            <span>{errors.from}</span>
           </div>
         )}
 
         {/* Hàng 2: Trạng thái & Các nút thao tác */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-700">Trạng thái:</span>
+            <label htmlFor="filter-status" className="text-xs font-semibold text-slate-700">Trạng thái:</label>
             <select
+              id="filter-status"
               value={filters.status}
               onChange={(e) => onChangeFilter('status', e.target.value)}
               className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#127e7a]/30 focus:border-[#127e7a] text-slate-800 bg-white"
             >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="COMPLETED">Hoàn thành (Completed)</option>
-              <option value="ABANDONED">Bỏ khám (Abandoned)</option>
-              <option value="ACTIVE">Đang hoạt động (Active)</option>
+              {VISIT_FILTER_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
 
@@ -237,7 +243,7 @@ export function MedicalRecordsFilter({
             </button>
             <button
               type="submit"
-              disabled={loading || dateError}
+              disabled={loading || hasErrors}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#127e7a] hover:bg-[#0e6b67] disabled:opacity-50 rounded-xl cursor-pointer shadow-xs transition-colors"
             >
               <Search className="w-3.5 h-3.5" />

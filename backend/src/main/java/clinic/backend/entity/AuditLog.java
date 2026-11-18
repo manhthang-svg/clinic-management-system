@@ -175,6 +175,32 @@ public class AuditLog extends UuidEntity {
         return auditLog;
     }
 
+    /**
+     * BR-42: a staff member read medical data. {@code entityId} is empty when the read addresses no single row,
+     * such as a search.
+     */
+    public static AuditLog recordRead(
+            UUID id,
+            UUID actorAccountId,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Instant occurredAt,
+            String newValue,
+            String correlationId) {
+        AuditLog auditLog = new AuditLog(id);
+        auditLog.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
+        auditLog.actorAccountId = Objects.requireNonNull(actorAccountId, "actorAccountId");
+        auditLog.action = AuditLogAction.VIEW_RECORD;
+        auditLog.entityType = Objects.requireNonNull(entityType, "entityType");
+        auditLog.entityId = entityId;
+        auditLog.sovaovien = sovaovien;
+        auditLog.outcome = AuditOutcome.SUCCESS;
+        auditLog.newValue = newValue;
+        auditLog.correlationId = correlationId;
+        return auditLog;
+    }
+
     /** A business change made by a scheduled system task, so no staff account is the actor. */
     public static AuditLog systemChange(
             UUID id,

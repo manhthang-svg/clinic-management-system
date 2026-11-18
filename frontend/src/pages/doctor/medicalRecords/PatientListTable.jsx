@@ -1,4 +1,5 @@
 import { Users, ChevronLeft, ChevronRight, FileText, ArrowRight } from 'lucide-react';
+import { PATIENT_GENDER_LABELS } from '../../../constants/visitData';
 
 function formatDate(val) {
   if (!val) return '—';
@@ -12,7 +13,7 @@ function formatDate(val) {
 }
 
 /**
- * Cấp 1: Bảng Danh sách Bệnh nhân khớp điều kiện (Screen #39 Cấp 1)
+ * UC-51 cấp 1: danh sách bệnh nhân khớp điều kiện (BR-51-05).
  */
 export function PatientListTable({
   patients = [],
@@ -107,17 +108,12 @@ export function PatientListTable({
                   </td>
                   <td className="py-3 px-4 font-semibold text-slate-800">
                     {patient.fullName}
-                    {patient.phoneNumber && (
-                      <span className="block text-[11px] font-normal text-slate-400 font-mono">
-                        {patient.phoneNumber}
-                      </span>
-                    )}
                   </td>
                   <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
                     {formatDate(patient.birthDate)}
                   </td>
                   <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
-                    {patient.gender}
+                    {PATIENT_GENDER_LABELS[patient.gender] ?? '—'}
                   </td>
                   <td className="py-3 px-4 text-center whitespace-nowrap">
                     <span className="inline-flex items-center justify-center min-w-6 h-6 px-2 text-xs font-bold rounded-full bg-slate-100 text-slate-700">

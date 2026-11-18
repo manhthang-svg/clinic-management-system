@@ -138,6 +138,7 @@ public enum ErrorCode {
     VISIT_NOT_IN_EXAMINATION("VISIT_NOT_IN_EXAMINATION",
             "The visit is not being examined by this doctor.", HttpStatus.CONFLICT),
     MEDICAL_RECORD_CLOSED("MEDICAL_RECORD_CLOSED", "The medical record is closed.", HttpStatus.CONFLICT),
+    MEDICAL_RECORD_NOT_FOUND("MEDICAL_RECORD_NOT_FOUND", "The medical record does not exist.", HttpStatus.NOT_FOUND),
     PARACLINICAL_SERVICE_NOT_FOUND("NOT_FOUND", "The paraclinical service does not exist.", HttpStatus.NOT_FOUND),
     RESULT_ALREADY_SUBMITTED("RESULT_ALREADY_SUBMITTED",
             "The result was already submitted and cannot be edited.", HttpStatus.CONFLICT),
