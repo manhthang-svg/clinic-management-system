@@ -6,8 +6,14 @@ import { MedicalRecordDetailPage } from './MedicalRecordDetailPage';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
 import { ApiError } from '../../../apis/apiError';
 import { toast } from 'sonner';
+import { useSession } from '../../../services/session';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
+
+vi.mock('../../../services/session', () => ({
+  useSession: vi.fn(),
+  apiClient: {},
+}));
 
 vi.mock('../../../apis/medicalRecordApi', () => ({
   medicalRecordApi: {
@@ -15,6 +21,7 @@ vi.mock('../../../apis/medicalRecordApi', () => ({
     getMedicalRecordByVisitId: vi.fn(),
     exportPdf: vi.fn(),
     downloadResultFile: vi.fn(),
+    exportMedicalRecordData: vi.fn(),
   },
 }));
 
@@ -179,6 +186,7 @@ function renderDetail(path = '/doctor/medical-records/mr-123') {
 describe('MedicalRecordDetailPage (UC-52)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useSession.mockReturnValue({ account: { role: 'DOCTOR' } });
   });
 
   it('renders patient header and full record details when loaded', async () => {

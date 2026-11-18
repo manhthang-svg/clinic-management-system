@@ -22,6 +22,8 @@ import clinic.backend.entity.Visit;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ExportFormat;
+import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.RecordArchiveRetentionCategory;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ConclusionRepository;
@@ -73,6 +75,24 @@ public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExpo
         MedicalRecord record = medicalRecordRepository.findById(medicalRecordId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, Map.of("id", "Hồ sơ bệnh án không tồn tại")));
 
+        if (record.getStatus() == MedicalRecordStatus.OPEN) {
+            throw new AppException(ErrorCode.EXPORT_RECORD_NOT_CLOSED, Map.of("status", "Chỉ xuất được hồ sơ bệnh án đã đóng."));
+        }
+
+        RecordArchive archive = recordArchiveRepository.findByMedicalRecordId(record.getId()).orElse(null);
+        if (archive == null) {
+            throw new AppException(ErrorCode.EXPORT_RECORD_NOT_CLOSED, Map.of("archive", "Hồ sơ chưa có gói lưu trữ điện tử."));
+        }
+
+        ExportLogPurpose purpose = request.purpose() != null ? request.purpose() : ExportLogPurpose.LIEN_THONG;
+        String recipient = request.recipient() == null || request.recipient().isBlank() ? null : request.recipient().strip();
+        if (recipient == null && (purpose == ExportLogPurpose.CUNG_CAP_NGUOI_BENH || purpose == ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)) {
+            throw new AppException(ErrorCode.EXPORT_INVALID, Map.of("field", "recipient", "reason", "REQUIRED"));
+        }
+        if (recipient != null && recipient.length() > 255) {
+            throw new AppException(ErrorCode.EXPORT_INVALID, Map.of("field", "recipient", "reason", "TOO_LONG"));
+        }
+
         Visit visit = visitRepository.findById(record.getVisitId()).orElse(null);
         Patient patient = visit != null ? patientRepository.findById(visit.getPatientId()).orElse(null) : null;
         Conclusion conclusion = conclusionRepository.findByMedicalRecordId(record.getId()).orElse(null);
@@ -82,12 +102,11 @@ public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExpo
         String sovaovien = visit != null ? visit.getSovaovien() : record.getSoba();
         String soluutru = record.getSoluutru() != null && !record.getSoluutru().isBlank()
                 ? record.getSoluutru()
-                : ("LT-" + sovaovien);
+                : archive.getSoluutru();
         Instant closedAt = record.getClosedAt() != null ? record.getClosedAt() : clock.instant();
 
-        RecordArchive archive = recordArchiveRepository.findByMedicalRecordId(record.getId()).orElse(null);
-        RecordArchiveRetentionCategory retentionCategory = archive != null ? archive.getRetentionCategory() : RecordArchiveRetentionCategory.STANDARD;
-        LocalDate expiresOn = archive != null ? archive.getExpiresOn() : LocalDate.of(closedAt.atZone(CLINIC_ZONE).getYear() + 10, 12, 31);
+        RecordArchiveRetentionCategory retentionCategory = archive.getRetentionCategory() != null ? archive.getRetentionCategory() : RecordArchiveRetentionCategory.STANDARD;
+        LocalDate expiresOn = archive.getExpiresOn() != null ? archive.getExpiresOn() : LocalDate.of(closedAt.atZone(CLINIC_ZONE).getYear() + 10, 12, 31);
 
         ArchivePackageBuilder.Closing closing = new ArchivePackageBuilder.Closing(
                 visit, patient, record, conclusion, doctor, soluutru, closedAt, retentionCategory, expiresOn
@@ -120,8 +139,8 @@ public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExpo
                 record.getId(),
                 sovaovien,
                 request.format(),
-                request.purpose(),
-                request.recipient(),
+                purpose,
+                recipient,
                 null,
                 sha256,
                 "CV365/2025",
@@ -140,7 +159,7 @@ public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExpo
                     Map.of(
                             "action", "EXPORT_MEDICAL_RECORD_DATA",
                             "format", request.format().name(),
-                            "purpose", request.purpose() != null ? request.purpose().name() : "LIEN_THONG",
+                            "purpose", purpose.name(),
                             "sha256", sha256,
                             "exportLogId", exportLogId.toString()
                     ),

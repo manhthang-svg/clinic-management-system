@@ -71,6 +71,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/clinic-facility").hasRole("ADMIN")
                         .requestMatchers("/api/v1/medicines", "/api/v1/medicines/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/statistics", "/api/v1/statistics/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/record-archives", "/api/v1/record-archives/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/patients", "/api/v1/patients/**").authenticated()
                         .requestMatchers("/api/v1/visits", "/api/v1/visits/**").authenticated()
                         .requestMatchers("/api/v1/clinical-examinations", "/api/v1/clinical-examinations/**").authenticated()

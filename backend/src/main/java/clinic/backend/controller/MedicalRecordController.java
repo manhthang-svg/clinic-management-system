@@ -130,6 +130,7 @@ public class MedicalRecordController {
     }
 
     @Operation(summary = "UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án điện tử (XML / JSON) theo CV 365")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     @PostMapping("/{id}/export-data")
     public ResponseEntity<byte[]> exportMedicalRecordData(
             @PathVariable UUID id,
@@ -139,8 +140,12 @@ public class MedicalRecordController {
         ExportMedicalRecordDataResponse response =
                 medicalRecordDataExportService.exportMedicalRecordData(id, request, actor(jwt));
 
+        String safeFileName = response.fileName() != null
+                ? response.fileName().replaceAll("[^a-zA-Z0-9._-]", "_")
+                : "HoSoBenhAn.dat";
+
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + response.fileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeFileName + "\"")
                 .header("X-File-SHA256", response.fileSha256())
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Disposition, X-File-SHA256")
                 .contentType(MediaType.parseMediaType(response.contentType()))

@@ -72,6 +72,17 @@ export const medicalRecordApi = {
   },
 
   /**
+   * Kết xuất dữ liệu hồ sơ bệnh án (XML / JSON) theo chuẩn Công văn 365
+   */
+  async exportMedicalRecordData(id, { format = 'XML', purpose = 'LIEN_THONG', recipient } = {}, signal) {
+    return apiClient.download(`/medical-records/${encodeURIComponent(id)}/export-data`, {
+      method: 'POST',
+      body: { format, purpose, recipient: recipient?.trim() || null },
+      signal,
+    });
+  },
+
+  /**
    * UC-52 bước 4 (BR-52-06): tải một tệp kết quả CLS của hồ sơ. Backend kiểm tra quyền và ghi audit mỗi lần tải.
    * Trả về { blob, fileName }.
    */
