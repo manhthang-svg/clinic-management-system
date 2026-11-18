@@ -31,6 +31,7 @@ export const ROUTES = {
     REPORTS_DIAGNOSES: '/admin/reports/diagnoses',
     SETTINGS: '/admin/settings',
     HOSPITAL_INFORMATION: '/admin/hospital-information',
+    RECORD_ARCHIVE: '/admin/record-archive',
   },
 
   RECEPTIONIST: {

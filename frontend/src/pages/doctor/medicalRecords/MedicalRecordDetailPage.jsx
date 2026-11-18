@@ -6,20 +6,22 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
+  CheckCircle2,
   Clock,
   Download,
   Edit,
   ExternalLink,
   FileCheck,
+  FileCode2,
   FileText,
   Heart,
   ImageIcon,
   Info,
   MapPin,
   Pill,
-  Printer,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Stethoscope,
   Tag,
   User,
@@ -41,7 +43,6 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
   const { id, visitId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [recordDetail, setRecordDetail] = useState(null);
@@ -49,7 +50,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
   // Modal xem ảnh kết quả CLS phóng to
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Modal xuất hồ sơ bệnh án (UC-53)
+  // Modal xuất bản sao hồ sơ bệnh án cho Bác sĩ (UC-53: Bản in PDF)
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // Target ID xác định theo route
@@ -107,14 +108,6 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
         console.error('Lỗi ghi nhật ký truy cập tệp:', err);
       }
     }
-  };
-
-  // In phiếu với nhãn bản sao
-  const handleReprint = (type) => {
-    toast.info(`Chuẩn bị in lại ${type} (Bản sao)...`);
-    setTimeout(() => {
-      window.print();
-    }, 300);
   };
 
   if (loading) {
@@ -229,19 +222,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             </button>
           )}
 
-          {/* In phiếu (Reprint bản sao) */}
-          <div className="relative inline-block text-left group">
-            <button
-              type="button"
-              onClick={() => handleReprint('phiếu khám')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>In phiếu (Bản sao)</span>
-            </button>
-          </div>
-
-          {/* Nút Xuất hồ sơ bệnh án (UC-53): chỉ hồ sơ đã đóng (BR-53-02, MSG131) */}
+          {/* Nút Xuất hồ sơ bệnh án: chỉ hồ sơ đã đóng */}
           <button
             type="button"
             onClick={() => setExportModalOpen(true)}

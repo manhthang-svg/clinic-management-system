@@ -4,6 +4,12 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MedicalRecordDetailPage } from './MedicalRecordDetailPage';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
+import { useSession } from '../../../services/session';
+
+vi.mock('../../../services/session', () => ({
+  useSession: vi.fn(),
+  apiClient: {},
+}));
 
 vi.mock('../../../apis/medicalRecordApi', () => ({
   medicalRecordApi: {
@@ -11,6 +17,7 @@ vi.mock('../../../apis/medicalRecordApi', () => ({
     getMedicalRecordByVisitId: vi.fn(),
     exportPdf: vi.fn(),
     recordFileAccessLog: vi.fn(),
+    exportMedicalRecordData: vi.fn(),
   },
 }));
 
@@ -164,6 +171,7 @@ const mockRecordDetail = {
 describe('MedicalRecordDetailPage (UC-52)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useSession.mockReturnValue({ account: { role: 'DOCTOR' } });
   });
 
   it('renders patient header and full record details when loaded', async () => {

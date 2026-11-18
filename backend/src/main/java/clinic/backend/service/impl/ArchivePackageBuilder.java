@@ -54,7 +54,10 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VitalSignRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -78,7 +81,10 @@ public class ArchivePackageBuilder {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectWriter PRETTY_JSON = new ObjectMapper()
+            .writer(new DefaultPrettyPrinter()
+                    .withObjectIndenter(new DefaultIndenter("  ", "\n"))
+                    .withArrayIndenter(new DefaultIndenter("  ", "\n")));
 
     private static final Map<String, String> ORGAN_KEYS = Map.of(
             OrganSystem.CARDIOVASCULAR.name(), "tuanhoan",
@@ -149,7 +155,7 @@ public class ArchivePackageBuilder {
 
     public byte[] build(Closing closing) {
         try {
-            return JSON.writeValueAsBytes(buildPayload(closing));
+            return PRETTY_JSON.writeValueAsBytes(buildPayload(closing));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot serialize the archive package", exception);
         }

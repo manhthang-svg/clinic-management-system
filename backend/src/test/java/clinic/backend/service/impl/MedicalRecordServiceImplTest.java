@@ -260,6 +260,10 @@ class MedicalRecordServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK000001");
         when(record.getClosedAt()).thenReturn(Instant.now());
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        clinic.backend.entity.RecordArchive archive = mock(clinic.backend.entity.RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK000001");
@@ -315,6 +319,10 @@ class MedicalRecordServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK000002");
         when(record.getClosedAt()).thenReturn(Instant.now());
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        clinic.backend.entity.RecordArchive archive = mock(clinic.backend.entity.RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK000002");
@@ -333,6 +341,7 @@ class MedicalRecordServiceImplTest {
         ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
                 .format(ExportFormat.XML)
                 .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .recipient("Tòa án nhân dân")
                 .build();
 
         ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
@@ -359,5 +368,48 @@ class MedicalRecordServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi EXPORT_RECORD_NOT_CLOSED khi hồ sơ chưa đóng (BR-131)")
+    void exportMedicalRecordData_notClosed_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.OPEN);
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.LUU_TRU)
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXPORT_RECORD_NOT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi EXPORT_INVALID khi thiếu recipient cho mục đích cấp người bệnh/cơ quan (BR-53-03)")
+    void exportMedicalRecordData_recipientRequired_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        clinic.backend.entity.RecordArchive archive = mock(clinic.backend.entity.RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.CUNG_CAP_NGUOI_BENH)
+                .recipient("   ")
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXPORT_INVALID);
     }
 }

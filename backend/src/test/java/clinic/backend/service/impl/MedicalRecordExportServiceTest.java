@@ -16,12 +16,14 @@ import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import clinic.backend.entity.ExportLog;
 import clinic.backend.entity.MedicalRecord;
+import clinic.backend.entity.RecordArchive;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicalExaminationRepository;
 import clinic.backend.repository.ConclusionRepository;
@@ -139,6 +141,10 @@ class MedicalRecordExportServiceTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK2026-001");
         when(record.getClosedAt()).thenReturn(Instant.parse("2026-11-17T14:30:00Z"));
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive mockArchive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(mockArchive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK2026-001");
@@ -220,6 +226,10 @@ class MedicalRecordExportServiceTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK2026-002");
         when(record.getClosedAt()).thenReturn(Instant.parse("2026-11-17T14:45:00Z"));
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive mockArchive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(mockArchive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK2026-002");

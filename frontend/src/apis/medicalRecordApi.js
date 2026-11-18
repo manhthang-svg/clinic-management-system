@@ -72,7 +72,18 @@ export const medicalRecordApi = {
   },
 
   /**
-   * BR-42 / I.3.3: Ghi nhận nhật ký truy cập tệp kết quả cận lâm sàng
+   * Kết xuất dữ liệu hồ sơ bệnh án (XML / JSON) theo chuẩn Công văn 365
+   */
+  async exportMedicalRecordData(id, { format = 'XML', purpose = 'LIEN_THONG', recipient } = {}, signal) {
+    return apiClient.download(`/medical-records/${encodeURIComponent(id)}/export-data`, {
+      method: 'POST',
+      body: { format, purpose, recipient: recipient?.trim() || null },
+      signal,
+    });
+  },
+
+  /**
+   * Ghi nhận nhật ký truy cập tệp kết quả cận lâm sàng
    */
   async recordFileAccessLog(imageId, signal) {
     return apiClient.request(`/medical-records/paraclinical-files/${encodeURIComponent(imageId)}/access-log`, {
