@@ -48,6 +48,17 @@ export const VISIT_STATUS_LABELS = {
   ABANDONED: 'Bỏ khám',
 };
 
+// ParaclinicalOrderDetailStatus, labels from docs/state-transitions.md section 3.1.
+// PENDING_RESULT has no documented label yet (TBD).
+export const ORDERED_SERVICE_STATUS_LABELS = {
+  PENDING_PAYMENT: 'Chờ thanh toán',
+  WAITING: 'Chờ thực hiện',
+  IN_PROGRESS: 'Đang thực hiện',
+  COMPLETED: 'Hoàn thành',
+  CANCELLED: 'Đã hủy',
+  ABANDONED: 'Đã hủy',
+};
+
 // BR-17: a visit in any other status is active.
 export const CLOSED_VISIT_STATUSES = ['COMPLETED', 'CANCELLED', 'ABANDONED'];
 

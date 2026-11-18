@@ -40,6 +40,18 @@ public interface AuditLogService {
             Map<String, ?> values,
             Instant occurredAt);
 
+    /**
+     * BR-42: a {@code VIEW_RECORD} row for a read of medical data. {@code entityId} may be empty (a search).
+     * {@code values} must hold identifiers and counts only, never personal or medical values.
+     */
+    void recordRead(
+            UUID actorAccountId,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt);
+
     /** A change made by a scheduled system task; the actor stays empty. */
     void recordSystemChange(
             AuditLogAction action,

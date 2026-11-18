@@ -1,7 +1,6 @@
 package clinic.backend.controller;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ExportMedicalRecordRequest;
@@ -10,18 +9,20 @@ import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import jakarta.validation.Valid;
 import clinic.backend.dto.response.MedicalRecordDetailResponse;
-import clinic.backend.dto.response.MedicalRecordItemResponse;
 import clinic.backend.dto.response.MedicalRecordPatientItemResponse;
 import clinic.backend.dto.response.PageResponse;
-import clinic.backend.dto.response.PatientVisitItemResponse;
-import clinic.backend.enums.MedicalRecordStatus;
+import clinic.backend.dto.response.PatientVisitHistoryResponse;
+import clinic.backend.dto.response.ResultFileResponse;
+import clinic.backend.enums.MedicalRecordVisitFilter;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.MedicalRecordDataExportService;
 import clinic.backend.service.MedicalRecordExportService;
 import clinic.backend.service.MedicalRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -38,78 +39,62 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller for Medical Records (Screen #39 / UC-51: Medical Record History, UC-52: Medical Record Detail, UC-53: Export).
+ * UC-51 Medical Record List, UC-52 Medical Record Detail, UC-53 Export (docs/uc-51-52-medical-record-view.md).
  */
 @RestController
 @RequestMapping("/api/v1/medical-records")
 @RequiredArgsConstructor
 // BR-120: Admin exports XML/JSON but does not see clinical content on screen, so only the Doctor reads records.
 @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
-@Tag(name = "Medical Records", description = "Hồ sơ bệnh án / Lịch sử hồ sơ bệnh án (Screen #39, UC-51, UC-52)")
+@Tag(name = "Medical Records", description = "Hồ sơ bệnh án (UC-51, UC-52, UC-53)")
 public class MedicalRecordController {
 
     private final MedicalRecordService medicalRecordService;
     private final MedicalRecordExportService medicalRecordExportService;
+    private final MedicalRecordDataExportService medicalRecordDataExportService;
 
-    @Operation(summary = "Screen #39 Cấp 1: Tìm kiếm danh sách bệnh nhân khớp điều kiện lọc")
+    @Operation(summary = "UC-51 cấp 1: tìm bệnh nhân theo từ khóa và bộ lọc lượt khám")
     @GetMapping("/patients")
     public ApiResponse<PageResponse<MedicalRecordPatientItemResponse>> searchPatients(
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID roomId,
             @RequestParam(required = false) String icd10,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false, defaultValue = "0") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer size,
+            @RequestParam(required = false) MedicalRecordVisitFilter status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        return ApiResponse.success(medicalRecordService.searchPatients(from, to, status, roomId, icd10, keyword, page, size, actorAccountId));
+        return ApiResponse.success(medicalRecordService.searchPatients(
+                keyword, from, to, roomId, icd10, status, page, size, actor(jwt)));
     }
 
-    @Operation(summary = "Screen #39 Cấp 2 / AF-01: Xem danh sách lượt khám của một bệnh nhân")
+    @Operation(summary = "UC-51 cấp 2 / AF-01: bệnh nhân và danh sách lượt khám")
     @GetMapping("/patients/{patientId}/visits")
-    public ApiResponse<List<PatientVisitItemResponse>> getPatientVisits(
+    public ApiResponse<PatientVisitHistoryResponse> getPatientVisits(
             @PathVariable UUID patientId,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        return ApiResponse.success(medicalRecordService.getPatientVisits(patientId, actorAccountId));
+        return ApiResponse.success(medicalRecordService.getPatientVisits(patientId, actor(jwt)));
     }
 
-    @Operation(summary = "UC-51: Tìm kiếm và xem danh sách hồ sơ bệnh án (dạng phẳng)")
-    @GetMapping
-    public ApiResponse<PageResponse<MedicalRecordItemResponse>> getMedicalRecords(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) MedicalRecordStatus status,
-            @RequestParam(required = false) UUID roomId,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false, defaultValue = "0") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer size
-    ) {
-        return ApiResponse.success(medicalRecordService.getMedicalRecords(from, to, status, roomId, keyword, page, size));
-    }
-
-    @Operation(summary = "UC-52: Xem chi tiết hồ sơ bệnh án theo ID")
+    @Operation(summary = "UC-52: chi tiết hồ sơ bệnh án theo ID hồ sơ")
     @GetMapping("/{id}")
     public ApiResponse<MedicalRecordDetailResponse> getMedicalRecordDetail(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        return ApiResponse.success(medicalRecordService.getMedicalRecordDetail(id, actorAccountId));
+        return ApiResponse.success(medicalRecordService.getMedicalRecordDetail(id, actor(jwt)));
     }
 
-    @Operation(summary = "UC-52: Xem chi tiết hồ sơ bệnh án theo lượt khám (visitId)")
+    @Operation(summary = "UC-52: chi tiết hồ sơ bệnh án theo lượt khám")
     @GetMapping("/by-visit/{visitId}")
     public ApiResponse<MedicalRecordDetailResponse> getMedicalRecordByVisitId(
             @PathVariable UUID visitId,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        return ApiResponse.success(medicalRecordService.getMedicalRecordByVisitId(visitId, actorAccountId));
+        return ApiResponse.success(medicalRecordService.getMedicalRecordByVisitId(visitId, actor(jwt)));
     }
 
     @Operation(summary = "UC-53: Xuất hồ sơ bệnh án đã đóng ra PDF theo mẫu 15/BV1 (TT 32/2023)")
@@ -128,15 +113,20 @@ public class MedicalRecordController {
                 .body(file.content());
     }
 
-    @Operation(summary = "BR-42, I.3.3: Ghi nhận nhật ký truy cập/tải tệp kết quả cận lâm sàng")
-    @PostMapping("/paraclinical-files/{imageId}/access-log")
-    public ApiResponse<Void> recordFileAccess(
-            @PathVariable UUID imageId,
+    @Operation(summary = "UC-52 bước 4: tải tệp kết quả CLS sau khi kiểm tra quyền (BR-52-06)")
+    @GetMapping("/{medicalRecordId}/result-files/{fileId}")
+    public ResponseEntity<byte[]> downloadResultFile(
+            @PathVariable UUID medicalRecordId,
+            @PathVariable UUID fileId,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        medicalRecordService.recordFileAccess(imageId, actorAccountId);
-        return ApiResponse.success(null);
+        ResultFileResponse file = medicalRecordService.downloadResultFile(medicalRecordId, fileId, actor(jwt));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.mimeType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(file.fileName()).build().toString())
+                .cacheControl(CacheControl.noStore())
+                .body(file.content());
     }
 
     @Operation(summary = "UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án điện tử (XML / JSON) theo CV 365")
@@ -147,8 +137,8 @@ public class MedicalRecordController {
             @RequestBody @Valid ExportMedicalRecordDataRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID actorAccountId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
-        ExportMedicalRecordDataResponse response = medicalRecordService.exportMedicalRecordData(id, request, actorAccountId);
+        ExportMedicalRecordDataResponse response =
+                medicalRecordDataExportService.exportMedicalRecordData(id, request, actor(jwt));
 
         String safeFileName = response.fileName() != null
                 ? response.fileName().replaceAll("[^a-zA-Z0-9._-]", "_")
@@ -160,5 +150,9 @@ public class MedicalRecordController {
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Disposition, X-File-SHA256")
                 .contentType(MediaType.parseMediaType(response.contentType()))
                 .body(response.content());
+    }
+
+    private static UUID actor(Jwt jwt) {
+        return StaffPrincipal.from(jwt).accountId();
     }
 }

@@ -1,10 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MedicalRecordDetailPage } from './MedicalRecordDetailPage';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
+import { ApiError } from '../../../apis/apiError';
+import { toast } from 'sonner';
 import { useSession } from '../../../services/session';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
 vi.mock('../../../services/session', () => ({
   useSession: vi.fn(),
@@ -16,7 +20,7 @@ vi.mock('../../../apis/medicalRecordApi', () => ({
     getMedicalRecordDetail: vi.fn(),
     getMedicalRecordByVisitId: vi.fn(),
     exportPdf: vi.fn(),
-    recordFileAccessLog: vi.fn(),
+    downloadResultFile: vi.fn(),
     exportMedicalRecordData: vi.fn(),
   },
 }));
@@ -34,7 +38,7 @@ const mockRecordDetail = {
   patientName: 'Nguyễn Văn A',
   dateOfBirth: '1985-05-15',
   age: 41,
-  gender: 'Nam',
+  gender: 1,
   address: 'Hà Nội',
   phoneNumber: '0901234567',
   citizenId: '001085000123',
@@ -107,8 +111,7 @@ const mockRecordDetail = {
             images: [
               {
                 imageId: 'att-1',
-                imageUrl: 'https://example.com/ecg.jpg',
-                fileName: 'ecg_result.jpg',
+                mimeType: 'image/jpeg',
                 caption: 'Bản ghi ECG',
               },
             ],
@@ -160,6 +163,7 @@ const mockRecordDetail = {
       visitDate: '2026-11-10',
       roomName: 'Phòng Khám Nội 1',
       doctorName: 'BS.CKI Trần Văn B',
+      medicalRecordId: 'mr-123',
       visitStatus: 'COMPLETED',
       isCurrent: true,
       diagnosisIcd: 'I10',
@@ -167,6 +171,17 @@ const mockRecordDetail = {
     },
   ],
 };
+
+function renderDetail(path = '/doctor/medical-records/mr-123') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/doctor/medical-records/:id" element={<MedicalRecordDetailPage />} />
+        <Route path="/doctor/medical-records/visits/:visitId" element={<MedicalRecordDetailPage isVisitRoute />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 describe('MedicalRecordDetailPage (UC-52)', () => {
   beforeEach(() => {
@@ -189,6 +204,9 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     expect(await screen.findByText('Nguyễn Văn A')).toBeInTheDocument();
     expect(screen.getByText('BN00000123')).toBeInTheDocument();
     expect(screen.getByText(/Penicillin, Aspirin/i)).toBeInTheDocument();
+    // BR-52-02: the backend sends codes; the page shows their labels.
+    expect(screen.getByText('Nam • 41 tuổi')).toBeInTheDocument();
+    expect(screen.getByText('Đối tượng khám:').nextElementSibling).toHaveTextContent(/^BHYT/);
     expect(screen.getByText(/Tăng huyết áp 5 năm/i)).toBeInTheDocument();
 
     // Vital signs
@@ -206,7 +224,7 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     expect(screen.getByText('10/12/2026')).toBeInTheDocument();
   });
 
-  it('displays "Abandoned – no conclusion" badge for abandoned visits', async () => {
+  it('displays the "Bỏ khám – không có kết luận" badge for abandoned visits (AF-02)', async () => {
     medicalRecordApi.getMedicalRecordDetail.mockResolvedValue({
       ...mockRecordDetail,
       visitStatus: 'ABANDONED',
@@ -221,7 +239,7 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('Abandoned – no conclusion')).toBeInTheDocument();
+    expect(await screen.findByText('Bỏ khám – không có kết luận')).toBeInTheDocument();
   });
 
   it('shows Edit button and navigates when visit is editable by current doctor', async () => {
@@ -242,23 +260,41 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     expect(await screen.findByText('Chỉnh sửa ca khám hiện tại')).toBeInTheDocument();
   });
 
-  it('supports opening image modal and triggers file access log', async () => {
+  it('downloads a result file through the backend and frees it on close (BR-52-06)', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => 'blob:result-1');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
+    medicalRecordApi.downloadResultFile.mockResolvedValue({ blob: new Blob(['x']), fileName: 'KQ-KQ001-1.jpg' });
+
+    try {
+      renderDetail();
+      await user.click(await screen.findByRole('button', { name: /Bản ghi ECG/ }));
+
+      expect(medicalRecordApi.downloadResultFile).toHaveBeenCalledWith('mr-123', 'att-1');
+      expect(await screen.findByRole('img', { name: 'Bản ghi ECG' })).toHaveAttribute('src', 'blob:result-1');
+
+      await user.click(screen.getByRole('button', { name: 'Đóng xem trước' }));
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:result-1');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('shows MSG80 when the result file cannot be loaded (EF-02)', async () => {
     const user = userEvent.setup();
     medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
-    medicalRecordApi.recordFileAccessLog.mockResolvedValue({});
+    medicalRecordApi.downloadResultFile.mockRejectedValue(new ApiError('storage down', {
+      status: 502,
+      errorResponse: { code: 'FILE_STORAGE_UNAVAILABLE', message: 'storage down' },
+    }));
 
-    render(
-      <MemoryRouter initialEntries={['/doctor/medical-records/mr-123']}>
-        <Routes>
-          <Route path="/doctor/medical-records/:id" element={<MedicalRecordDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /Bản ghi ECG/ }));
 
-    const imageBtn = await screen.findByText('ecg_result.jpg');
-    await user.click(imageBtn);
-
-    expect(medicalRecordApi.recordFileAccessLog).toHaveBeenCalledWith('att-1');
+    expect(toast.error).toHaveBeenCalledWith('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
+    expect(screen.queryByRole('img', { name: 'Bản ghi ECG' })).not.toBeInTheDocument();
   });
 
   it('opens the UC-53 export dialog for a closed record', async () => {
@@ -293,5 +329,79 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     const exportBtn = await screen.findByRole('button', { name: /Xuất hồ sơ bệnh án/i });
     expect(exportBtn).toBeDisabled();
     expect(exportBtn).toHaveAttribute('title', 'Chỉ xuất được hồ sơ bệnh án đã đóng.');
+  });
+
+  it('shows MSG39 when the record does not exist, never the backend message (EF-01)', async () => {
+    medicalRecordApi.getMedicalRecordByVisitId.mockRejectedValue(new ApiError('raw backend text', {
+      status: 404,
+      errorResponse: { code: 'MEDICAL_RECORD_NOT_FOUND', message: 'raw backend text' },
+    }));
+
+    renderDetail('/doctor/medical-records/visits/v-9');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không tìm thấy hồ sơ bệnh án.');
+    expect(screen.queryByText('raw backend text')).not.toBeInTheDocument();
+    expect(medicalRecordApi.getMedicalRecordByVisitId).toHaveBeenCalledWith('v-9', expect.any(AbortSignal));
+  });
+
+  it('has no reprint action until reprinting is specified (BR-52-07)', async () => {
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
+
+    renderDetail();
+
+    await screen.findByText('Nguyễn Văn A');
+    expect(screen.queryByRole('button', { name: /In phiếu|Bản sao/i })).not.toBeInTheDocument();
+  });
+
+  it('notes a record that was unlocked again (BR-52-02)', async () => {
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue({ ...mockRecordDetail, unlockedAt: '2026-11-11T02:00:00Z' });
+
+    renderDetail();
+
+    expect(await screen.findByText(/Hồ sơ đã được mở khóa lại lúc/)).toBeInTheDocument();
+  });
+
+  it('lists every visit on one line each and opens another visit with a record (BR-52-08)', async () => {
+    const user = userEvent.setup();
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue({
+      ...mockRecordDetail,
+      visitId: 'v-1',
+      visitTimeline: [
+        ...mockRecordDetail.visitTimeline,
+        {
+          visitId: 'v-2',
+          visitCode: 'DK0000000999',
+          visitDate: '2026-10-27',
+          roomName: 'Phòng Khám Nội 2',
+          medicalRecordId: null,
+          visitStatus: 'ABANDONED',
+          isCurrent: false,
+        },
+        {
+          visitId: 'v-3',
+          visitCode: 'DK0000000777',
+          visitDate: '2026-09-01',
+          roomName: 'Phòng Khám Nội 1',
+          medicalRecordId: 'mr-3',
+          visitStatus: 'COMPLETED',
+          isCurrent: false,
+        },
+      ],
+    });
+    medicalRecordApi.getMedicalRecordByVisitId.mockResolvedValue({ ...mockRecordDetail, visitId: 'v-3' });
+
+    renderDetail();
+
+    const list = await screen.findByRole('list');
+    const current = within(list).getByText('DK0000000456').closest('button');
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(within(current).getByText('Đang xem')).toBeInTheDocument();
+    const noRecord = within(list).getByText('DK0000000999').closest('button');
+    expect(noRecord).toBeDisabled();
+    expect(within(noRecord).getByText('Bỏ khám')).toBeInTheDocument();
+    expect(within(noRecord).getByText('Chưa có hồ sơ')).toBeInTheDocument();
+
+    await user.click(within(list).getByText('DK0000000777'));
+    expect(medicalRecordApi.getMedicalRecordByVisitId).toHaveBeenCalledWith('v-3', expect.any(AbortSignal));
   });
 });
