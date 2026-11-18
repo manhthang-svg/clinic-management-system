@@ -91,7 +91,7 @@ class MedicalRecordApiIT extends PostgresIntegrationTest {
 
     @Test
     void searchMatchesTheNameWithoutAccentsAndSummarisesThePatient() throws Exception {
-        search("keyword=hoa%20" + tag)
+        search("keyword=hoa " + tag)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content", hasSize(1)))
                 .andExpect(jsonPath("$.data.content[0].patientId").value(patientA.toString()))
@@ -123,7 +123,7 @@ class MedicalRecordApiIT extends PostgresIntegrationTest {
         // Patient A has a completed visit and a visit after 15/10, but not one visit that is both.
         search("keyword=" + tag + "&status=COMPLETED&from=2026-10-15")
                 .andExpect(jsonPath("$.data.content", hasSize(0)));
-        search("keyword=" + tag + "&status=COMPLETED&to=2026-10-15&icd10=viem%20hong")
+        search("keyword=" + tag + "&status=COMPLETED&to=2026-10-15&icd10=viem hong")
                 .andExpect(jsonPath("$.data.content", hasSize(1)))
                 .andExpect(jsonPath("$.data.content[0].patientId").value(patientA.toString()));
     }
@@ -190,6 +190,7 @@ class MedicalRecordApiIT extends PostgresIntegrationTest {
         }
     }
 
+    /** {@code query} is unencoded: MockMvc encodes it, so a literal {@code %20} would arrive as {@code %2520}. */
     private ResultActions search(String query) throws Exception {
         return mockMvc.perform(get("/api/v1/medical-records/patients?" + query)
                 .header(HttpHeaders.AUTHORIZATION, bearer()));
