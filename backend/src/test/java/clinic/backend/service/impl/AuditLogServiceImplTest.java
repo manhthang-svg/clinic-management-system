@@ -92,6 +92,24 @@ class AuditLogServiceImplTest {
     }
 
     @Test
+    void recordsAReadOfMedicalDataWithoutAnEntityForASearch() {
+        UUID actorId = UUID.randomUUID();
+        Instant occurredAt = Instant.parse("2026-11-18T02:00:00Z");
+        when(ids.next()).thenReturn(UUID.randomUUID());
+
+        service.recordRead(actorId, "MEDICAL_RECORD_SEARCH", null, null, Map.of("resultCount", 2), occurredAt);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog saved = captor.getValue();
+        assertThat(saved.getActorAccountId()).isEqualTo(actorId);
+        assertThat(saved.getAction()).isEqualTo(AuditLogAction.VIEW_RECORD);
+        assertThat(saved.getEntityType()).isEqualTo("MEDICAL_RECORD_SEARCH");
+        assertThat(saved.getEntityId()).isNull();
+        assertThat(saved.getNewValue()).isEqualTo("{\"resultCount\":2}");
+    }
+
+    @Test
     void rejectsAccountUpdateWhenChangedFieldSetsDiffer() {
         assertThatThrownBy(() -> service.recordAccountUpdate(
                 UUID.randomUUID(),

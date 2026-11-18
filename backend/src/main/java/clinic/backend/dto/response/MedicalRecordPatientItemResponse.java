@@ -4,20 +4,18 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Screen #39 Cấp 1: Thông tin bệnh nhân trong danh sách hồ sơ bệnh án.
+ * UC-51 level 1: one patient of the medical record search (BR-51-05). {@code gender} is the
+ * {@code patients.gioitinh} code; the client shows its label.
  */
 public record MedicalRecordPatientItemResponse(
         UUID patientId,
         String patientCode,
         String fullName,
         LocalDate birthDate,
-        String gender,
-        String citizenId,
-        String phoneNumber,
+        short gender,
         long totalVisits,
         LocalDate lastVisitDate,
         String lastDiagnosisIcd,
         String lastDiagnosisName
 ) {
 }
-

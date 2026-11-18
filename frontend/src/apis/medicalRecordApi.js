@@ -1,7 +1,7 @@
 import { apiClient } from '../services/session';
 
 /**
- * API Hồ sơ bệnh án / Lịch sử hồ sơ bệnh án (SCREEN #39, UC-51, UC-52).
+ * API hồ sơ bệnh án: UC-51, UC-52, UC-53 (docs/uc-51-52-medical-record-view.md).
  * Tuyệt đối không mock hay fallback, kết nối dữ liệu thật từ Backend.
  */
 export const medicalRecordApi = {
@@ -72,13 +72,14 @@ export const medicalRecordApi = {
   },
 
   /**
-   * BR-42 / I.3.3: Ghi nhận nhật ký truy cập tệp kết quả cận lâm sàng
+   * UC-52 bước 4 (BR-52-06): tải một tệp kết quả CLS của hồ sơ. Backend kiểm tra quyền và ghi audit mỗi lần tải.
+   * Trả về { blob, fileName }.
    */
-  async recordFileAccessLog(imageId, signal) {
-    return apiClient.request(`/medical-records/paraclinical-files/${encodeURIComponent(imageId)}/access-log`, {
-      method: 'POST',
-      signal,
-    });
+  async downloadResultFile(medicalRecordId, fileId, signal) {
+    return apiClient.download(
+      `/medical-records/${encodeURIComponent(medicalRecordId)}/result-files/${encodeURIComponent(fileId)}`,
+      { signal },
+    );
   },
 };
 

@@ -5,8 +5,20 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
-import clinic.backend.enums.MedicalRecordStatus;
 
+import clinic.backend.enums.FollowUpAppointmentStatus;
+import clinic.backend.enums.MedicalRecordStatus;
+import clinic.backend.enums.ParaclinicalOrderDetailStatus;
+import clinic.backend.enums.ParaclinicalOrderStatus;
+import clinic.backend.enums.PrescriptionLienthongStatus;
+import clinic.backend.enums.PriorityReason;
+import clinic.backend.enums.VisitDoituongbnLoai;
+import clinic.backend.enums.VisitStatus;
+
+/**
+ * UC-52 View Medical Record Detail (BR-52-02). Coded values are returned as codes ({@code gender} is the
+ * {@code patients.gioitinh} code, statuses are enum names); the client shows their labels.
+ */
 public record MedicalRecordDetailResponse(
         UUID medicalRecordId,
         String recordNumber,
@@ -17,20 +29,20 @@ public record MedicalRecordDetailResponse(
         Instant closedAt,
         Instant unlockedAt,
 
-        // A. Thông tin tổng quan Bệnh nhân (Patient Header)
+        // Patient header (step 1)
         UUID patientId,
         String patientCode,
         String patientName,
         LocalDate dateOfBirth,
         Integer age,
-        String gender,
+        Short gender,
         String address,
         String phoneNumber,
         String citizenId,
         List<String> drugAllergies,
         String medicalHistorySummary,
 
-        // B. Chi tiết Lượt khám được chọn (Selected Visit Detail)
+        // Selected visit (step 2)
         UUID visitId,
         String visitCode,
         LocalDate visitDate,
@@ -39,37 +51,23 @@ public record MedicalRecordDetailResponse(
         String roomName,
         UUID doctorAccountId,
         String doctorName,
-        String visitType,
+        VisitDoituongbnLoai visitType,
         String insuranceCardNumber,
         boolean isPriority,
-        String priorityReason,
-        String visitStatus,
+        PriorityReason priorityReason,
+        VisitStatus visitStatus,
         boolean isAbandoned,
         boolean isEditable,
         String reasonForVisit,
-
-        // Lịch sử chuyển phòng (Transfers)
         List<TransferItem> transfers,
-
-        // Chỉ số sinh hiệu (Vital Signs)
         VitalSignsItem vitalSigns,
-
-        // Khám lâm sàng
         ClinicalExamDetail clinicalExam,
-
-        // Chỉ định & Kết quả Cận lâm sàng
         List<ParaclinicalOrderItem> paraclinicalOrders,
-
-        // Chẩn đoán & Kết luận điều trị
         ConclusionDetail conclusion,
-
-        // Đơn thuốc (Prescription)
         PrescriptionDetail prescription,
-
-        // Lịch hẹn tái khám (Follow-up appointment)
         FollowUpDetail followUpAppointment,
 
-        // C. Thanh điều hướng Lịch sử khám (Visit Timeline)
+        // Visit timeline (step 3)
         List<VisitTimelineItem> visitTimeline
 ) {
     public record TransferItem(
@@ -112,18 +110,19 @@ public record MedicalRecordDetailResponse(
     public record ParaclinicalOrderItem(
             UUID orderId,
             String orderCode,
-            String status,
+            ParaclinicalOrderStatus status,
             Instant orderedAt,
             List<ParaclinicalServiceItem> services
     ) {}
 
+    /** BR-52-05: every ordered service, cancelled ones included; a result only once it is submitted. */
     public record ParaclinicalServiceItem(
             UUID orderDetailId,
             String orderCode,
             String serviceName,
             String category,
             String roomName,
-            String status,
+            ParaclinicalOrderDetailStatus status,
             BigDecimal quantity,
             BigDecimal unitPrice,
             BigDecimal totalPrice,
@@ -147,7 +146,7 @@ public record MedicalRecordDetailResponse(
             String testValue,
             String normalRange,
             String unit,
-            String abnormalEvaluation
+            boolean abnormal
     ) {}
 
     public record ImagingResultDetail(
@@ -160,10 +159,9 @@ public record MedicalRecordDetailResponse(
             List<ImageAttachment> images
     ) {}
 
+    /** BR-52-05: the file itself is served by {@code GET /medical-records/{id}/result-files/{imageId}}. */
     public record ImageAttachment(
             UUID imageId,
-            String imageUrl,
-            String fileName,
             String mimeType,
             String caption
     ) {}
@@ -182,7 +180,7 @@ public record MedicalRecordDetailResponse(
             UUID prescriptionId,
             String prescriptionCode,
             String ticketNumber,
-            String status,
+            PrescriptionLienthongStatus status,
             Instant prescribedAt,
             Instant printedAt,
             String notes,
@@ -209,7 +207,7 @@ public record MedicalRecordDetailResponse(
             String appointmentNumber,
             LocalDate followUpDate,
             String doctorAdvice,
-            String status
+            FollowUpAppointmentStatus status
     ) {}
 
     public record VisitTimelineItem(
@@ -219,7 +217,7 @@ public record MedicalRecordDetailResponse(
             LocalDate visitDate,
             String roomName,
             String doctorName,
-            String visitStatus,
+            VisitStatus visitStatus,
             boolean isCurrent,
             String diagnosisIcd,
             String diagnosisName

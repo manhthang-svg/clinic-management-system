@@ -17,7 +17,6 @@ import {
   Info,
   MapPin,
   Pill,
-  Printer,
   RefreshCw,
   ShieldAlert,
   Stethoscope,
@@ -31,91 +30,84 @@ import { ApiError } from '../../../apis/apiError';
 import { ROUTES } from '../../../routes/routes';
 import { ExportMedicalRecordDialog } from './ExportMedicalRecordDialog';
 import { EXPORT_MSG, isExportable } from './exportMedicalRecord';
+import { RECORD_MSG, formatDate, recordErrorMessage, visitStatusLabel } from './medicalRecordView';
+import {
+  ORDERED_SERVICE_STATUS_LABELS,
+  PATIENT_GENDER_LABELS,
+  PRIORITY_REASON_LABELS,
+  VISIT_TYPE_LABELS,
+} from '../../../constants/visitData';
 
 /**
  * Màn hình Xem chi tiết hồ sơ bệnh án (View Medical Record Detail)
- * Đáp ứng đầy đủ quy tắc chỉ đọc, ngoại lệ chỉnh sửa lượt khám dở dang,
- * thanh timeline lượt khám, xem tệp kết quả CLS và xuất hồ sơ bệnh án.
+ * Đáp ứng quy tắc chỉ đọc, ngoại lệ chỉnh sửa lượt khám dở dang, danh sách lượt khám để chuyển lượt (BR-52-08),
+ * xem tệp kết quả CLS và xuất hồ sơ bệnh án.
  */
 export function MedicalRecordDetailPage({ isVisitRoute = false }) {
   const { id, visitId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [recordDetail, setRecordDetail] = useState(null);
+  // Target ID xác định theo route. Kết quả nhớ khóa của nó, nên "đang tải" = kết quả chưa khớp khóa.
+  const targetId = isVisitRoute ? visitId : id;
+  const requestKey = targetId ? `${isVisitRoute ? 'visit' : 'record'}:${targetId}` : null;
+  const [result, setResult] = useState({ key: null, data: null, error: null });
 
   // Modal xem ảnh kết quả CLS phóng to
   const [previewImage, setPreviewImage] = useState(null);
+  const [openingFileId, setOpeningFileId] = useState(null);
 
   // Modal xuất hồ sơ bệnh án (UC-53)
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
-  // Target ID xác định theo route
-  const targetId = isVisitRoute ? visitId : id;
-
-  const loadDetail = async (identifier, isByVisit) => {
-    if (!identifier) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = isByVisit
-        ? await medicalRecordApi.getMedicalRecordByVisitId(identifier)
-        : await medicalRecordApi.getMedicalRecordDetail(identifier);
-      setRecordDetail(data);
-    } catch (err) {
-      console.error('Lỗi tải chi tiết hồ sơ bệnh án:', err);
-      if (err instanceof ApiError) {
-        if (err.status === 401) {
-          toast.error('Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.');
+  // BR-52-08: chuyển lượt nhanh thì request cũ bị hủy, kết quả cũ không ghi đè lượt mới.
+  useEffect(() => {
+    if (!requestKey) return undefined;
+    const controller = new AbortController();
+    const request = isVisitRoute
+      ? medicalRecordApi.getMedicalRecordByVisitId(targetId, controller.signal)
+      : medicalRecordApi.getMedicalRecordDetail(targetId, controller.signal);
+    request
+      .then((data) => setResult({ key: requestKey, data, error: null }))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        if (err instanceof ApiError && err.status === 401) {
+          toast.error(RECORD_MSG.SESSION_EXPIRED);
           navigate('/login');
           return;
         }
-        if (err.status === 403) {
-          setError('Bạn không có quyền thực hiện thao tác này.');
-          return;
-        }
-        if (err.status === 404) {
-          setError('Hồ sơ bệnh án không tồn tại hoặc đã bị xóa.');
-          return;
-        }
-      }
-      setError('Đã xảy ra lỗi khi tải hồ sơ bệnh án. Vui lòng thử lại sau.');
-    } finally {
-      setLoading(false);
-    }
-  };
+        setResult({ key: requestKey, data: null, error: recordErrorMessage(err) });
+      });
+    return () => controller.abort();
+  }, [requestKey, targetId, isVisitRoute, navigate]);
 
-  useEffect(() => {
-    loadDetail(targetId, isVisitRoute);
-  }, [targetId, isVisitRoute]);
+  const loading = Boolean(requestKey) && result.key !== requestKey;
+  const recordDetail = result.key === requestKey ? result.data : null;
+  const error = result.key === requestKey ? result.error : null;
 
-  // Chuyển sang lượt khám khác trên Timeline
+  // BR-52-08: chuyển sang lượt khác của cùng bệnh nhân.
   const handleSelectTimelineVisit = (timelineVisitId) => {
     if (!timelineVisitId || timelineVisitId === recordDetail?.visitId) return;
-    navigate(`/doctor/medical-records/visits/${encodeURIComponent(timelineVisitId)}`);
+    navigate(`${ROUTES.DOCTOR.MEDICAL_RECORDS}/visits/${encodeURIComponent(timelineVisitId)}`);
   };
 
-  // Mở tệp ảnh kết quả cận lâm sàng và ghi nhật ký kiểm toán (I.3.3 / BR-42)
-  const handleOpenResultImage = async (image) => {
-    setPreviewImage(image);
-    if (image?.imageId) {
-      try {
-        await medicalRecordApi.recordFileAccessLog(image.imageId);
-      } catch (err) {
-        console.error('Lỗi ghi nhật ký truy cập tệp:', err);
-      }
+  // BR-52-06: mỗi lần mở, tệp được tải qua backend (kiểm tra quyền và ghi audit), hiển thị bằng object URL tạm.
+  const handleOpenResultImage = async (image, label) => {
+    setOpeningFileId(image.imageId);
+    try {
+      const { blob } = await medicalRecordApi.downloadResultFile(recordDetail.medicalRecordId, image.imageId);
+      setPreviewImage({ url: URL.createObjectURL(blob), label, caption: image.caption });
+    } catch (err) {
+      toast.error(recordErrorMessage(err));
+    } finally {
+      setOpeningFileId(null);
     }
   };
 
-  // In phiếu với nhãn bản sao
-  const handleReprint = (type) => {
-    toast.info(`Chuẩn bị in lại ${type} (Bản sao)...`);
-    setTimeout(() => {
-      window.print();
-    }, 300);
-  };
+  // Thu hồi object URL khi đóng hoặc đổi ảnh xem trước, để tệp không ở lại trong bộ nhớ trình duyệt.
+  useEffect(() => () => {
+    if (previewImage?.url) URL.revokeObjectURL(previewImage.url);
+  }, [previewImage]);
 
   if (loading) {
     return (
@@ -132,7 +124,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
         <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center space-y-4 shadow-sm">
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
           <h2 className="text-lg font-bold text-slate-900">Không thể hiển thị hồ sơ</h2>
-          <p className="text-sm text-slate-600 max-w-md mx-auto">{error || 'Không tìm thấy hồ sơ bệnh án yêu cầu.'}</p>
+          <p role="alert" className="text-sm text-slate-600 max-w-md mx-auto">{error || RECORD_MSG.RECORD_NOT_FOUND}</p>
           <div className="pt-2">
             <button
               type="button"
@@ -151,6 +143,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
   const {
     recordNumber,
     storageNumber,
+    unlockedAt,
     patientCode,
     patientName,
     age,
@@ -190,9 +183,10 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(ROUTES.DOCTOR.MEDICAL_RECORDS)}
+            onClick={() => navigate(`${ROUTES.DOCTOR.MEDICAL_RECORDS}?patientId=${encodeURIComponent(recordDetail.patientId)}`)}
             className="flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
-            title="Quay lại danh sách hồ sơ bệnh án"
+            title="Quay lại danh sách lượt khám"
+            aria-label="Quay lại danh sách lượt khám"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -212,6 +206,12 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
               Lượt khám: <strong>{visitCode || '—'}</strong>
               {registeredAt && ` • ${new Date(registeredAt).toLocaleString('vi-VN')}`}
             </p>
+            {/* BR-52-02, quyết định 11: lý do mở khóa chưa hiển thị cho đến khi luồng mở khóa được đặc tả (TBD). */}
+            {unlockedAt && (
+              <p className="text-xs font-semibold text-amber-700 mt-0.5">
+                Hồ sơ đã được mở khóa lại lúc {new Date(unlockedAt).toLocaleString('vi-VN')}
+              </p>
+            )}
           </div>
         </div>
 
@@ -229,17 +229,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             </button>
           )}
 
-          {/* In phiếu (Reprint bản sao) */}
-          <div className="relative inline-block text-left group">
-            <button
-              type="button"
-              onClick={() => handleReprint('phiếu khám')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>In phiếu (Bản sao)</span>
-            </button>
-          </div>
+          {/* BR-52-07: in lại bản sao chờ đặc tả riêng, nên không có nút in ở đây. */}
 
           {/* Nút Xuất hồ sơ bệnh án (UC-53): chỉ hồ sơ đã đóng (BR-53-02, MSG131) */}
           <button
@@ -271,7 +261,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
               </div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-0.5">
                 <span>
-                  {gender} • {age !== null ? `${age} tuổi` : '—'}
+                  {PATIENT_GENDER_LABELS[gender] ?? '—'} • {age != null ? `${age} tuổi` : '—'}
                 </span>
                 {citizenId && <span>• CCCD: {citizenId}</span>}
                 {phoneNumber && <span>• SĐT: {phoneNumber}</span>}
@@ -306,63 +296,58 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
         )}
       </section>
 
-      {/* 3. KHU VỰC B: THANH ĐIỀU HƯỚNG LỊCH SỬ KHÁM (VISIT TIMELINE) */}
-      {visitTimeline && visitTimeline.length > 0 && (
-        <section className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs print:hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#127e7a]" />
+      {/* 3. KHU VỰC B: DANH SÁCH LƯỢT KHÁM ĐỂ CHUYỂN LƯỢT (BR-52-08) — mỗi lượt một dòng, mới nhất trước */}
+      {visitTimeline.length > 0 && (
+        <section
+          aria-labelledby="visit-timeline-title"
+          className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs print:hidden"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 id="visit-timeline-title" className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-[#127e7a]" aria-hidden="true" />
               <span>Lịch sử các đợt khám ({visitTimeline.length})</span>
             </h3>
-            <span className="text-[11px] text-slate-400">Chọn đợt khám để chuyển đổi nhanh trên trang</span>
+            <span className="text-xs text-slate-500">Chọn một đợt khám để xem hồ sơ của đợt đó</span>
           </div>
 
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+          <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
             {visitTimeline.map((item) => {
               const isCurrent = item.visitId === recordDetail.visitId;
-              const dateStr = item.visitDate
-                ? new Date(item.visitDate).toLocaleDateString('vi-VN')
+              const hasRecord = Boolean(item.medicalRecordId);
+              const diagnosis = item.diagnosisName
+                ? `${item.diagnosisIcd ? `${item.diagnosisIcd} ` : ''}${item.diagnosisName}`
                 : '—';
-
               return (
-                <button
-                  key={item.visitId}
-                  type="button"
-                  onClick={() => handleSelectTimelineVisit(item.visitId)}
-                  className={`flex flex-col text-left px-3.5 py-2.5 rounded-xl border transition-all shrink-0 cursor-pointer min-w-[170px] ${
-                    isCurrent
-                      ? 'bg-teal-50/90 border-[#127e7a] shadow-xs ring-1 ring-[#127e7a]/20'
-                      : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 w-full">
-                    <span className={`text-xs font-bold ${isCurrent ? 'text-[#127e7a]' : 'text-slate-800'}`}>
-                      {dateStr}
+                <li key={item.visitId}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTimelineVisit(item.visitId)}
+                    disabled={!hasRecord || isCurrent}
+                    aria-current={isCurrent ? 'page' : undefined}
+                    className={`w-full grid grid-cols-[6.5rem_minmax(0,11rem)_minmax(0,1fr)_minmax(0,2fr)_9rem] items-center gap-3 px-4 py-2.5 text-left text-xs border-l-[3px] transition-colors ${
+                      isCurrent
+                        ? 'bg-teal-50/70 border-l-[#127e7a]'
+                        : hasRecord
+                        ? 'border-l-transparent hover:bg-slate-50 cursor-pointer'
+                        : 'border-l-transparent cursor-default'
+                    }`}
+                  >
+                    <span className={`font-bold tabular-nums ${isCurrent ? 'text-[#127e7a]' : 'text-slate-800'}`}>
+                      {formatDate(item.visitDate)}
                     </span>
-                    <span
-                      className={`text-[9.5px] font-extrabold px-1.5 py-0.5 rounded ${
-                        item.visitStatus === 'COMPLETED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : item.visitStatus === 'ABANDONED'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {item.visitStatus === 'COMPLETED' ? 'Hoàn thành' : item.visitStatus === 'ABANDONED' ? 'Bỏ khám' : 'Đang khám'}
+                    <span className="font-mono text-slate-700 truncate">{item.visitCode}</span>
+                    <span className="text-slate-600 truncate">{item.roomName || '—'}</span>
+                    <span className="text-slate-600 truncate" title={diagnosis}>{diagnosis}</span>
+                    <span className="text-right text-slate-700">
+                      {visitStatusLabel(item.visitStatus)}
+                      {isCurrent && <span className="block text-[#127e7a] font-semibold">Đang xem</span>}
+                      {!hasRecord && <span className="block text-slate-500">Chưa có hồ sơ</span>}
                     </span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
-                    {item.visitCode} • {item.roomName || 'Phòng khám'}
-                  </span>
-                  {item.diagnosisName && (
-                    <span className="text-[10px] text-slate-400 truncate mt-0.5 font-mono">
-                      {item.diagnosisIcd ? `[${item.diagnosisIcd}] ` : ''}{item.diagnosisName}
-                    </span>
-                  )}
-                </button>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </section>
       )}
 
@@ -380,17 +365,17 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             <div className="flex items-center gap-2">
               {isAbandoned ? (
                 <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
-                  Abandoned – no conclusion
+                  Bỏ khám – không có kết luận
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {visitStatus === 'COMPLETED' ? 'Hoàn thành' : 'Đang hoạt động'}
+                  {visitStatusLabel(visitStatus)}
                 </span>
               )}
 
               {isPriority && (
                 <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                  Ưu tiên {priorityReason ? `(${priorityReason})` : ''}
+                  Ưu tiên {priorityReason ? `(${PRIORITY_REASON_LABELS[priorityReason] ?? '—'})` : ''}
                 </span>
               )}
             </div>
@@ -412,7 +397,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             <div>
               <span className="text-slate-400 block font-medium">Đối tượng khám:</span>
               <strong className="text-slate-800">
-                {visitType || 'Dịch vụ'}
+                {VISIT_TYPE_LABELS[visitType] ?? '—'}
                 {insuranceCardNumber ? ` (BHYT: ${insuranceCardNumber})` : ''}
               </strong>
             </div>
@@ -613,7 +598,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}
                           >
-                            {svc.status === 'COMPLETED' ? 'Đã có kết quả' : 'Đang xử lý'}
+                            {ORDERED_SERVICE_STATUS_LABELS[svc.status] ?? '—'}
                           </span>
                         </div>
 
@@ -641,7 +626,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
                                     <td className="py-1.5 px-3 text-slate-500 font-mono">{it.normalRange || '—'}</td>
                                     <td className="py-1.5 px-3 text-slate-500">{it.unit || '—'}</td>
                                     <td className="py-1.5 px-3">
-                                      {it.abnormalEvaluation === 'Bất thường' ? (
+                                      {it.abnormal ? (
                                         <span className="font-bold text-rose-600">Bất thường</span>
                                       ) : (
                                         <span className="text-emerald-700">Bình thường</span>
@@ -681,15 +666,18 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
                               <div className="pt-2 border-t border-slate-200/60">
                                 <span className="font-bold text-slate-700 block mb-1.5">Tệp hình ảnh kết quả:</span>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  {svc.imagingResult.images.map((img) => (
+                                  {svc.imagingResult.images.map((img, index) => (
                                     <button
                                       key={img.imageId}
                                       type="button"
-                                      onClick={() => handleOpenResultImage(img)}
+                                      onClick={() => handleOpenResultImage(img, img.caption || `Hình ảnh ${index + 1}`)}
+                                      disabled={openingFileId === img.imageId}
                                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 hover:border-[#127e7a] hover:text-[#127e7a] rounded-lg text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
                                     >
                                       <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                                      <span className="truncate max-w-[150px]">{img.fileName || 'Hình ảnh kết quả'}</span>
+                                      <span className="truncate max-w-[150px]">
+                                        {openingFileId === img.imageId ? 'Đang mở…' : img.caption || `Hình ảnh ${index + 1}`}
+                                      </span>
                                       <ExternalLink className="w-3 h-3 text-slate-400" />
                                     </button>
                                   ))}
@@ -859,11 +847,12 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                 <ImageIcon className="w-4 h-4 text-indigo-600" />
-                <span>{previewImage.fileName || 'Hình ảnh kết quả cận lâm sàng'}</span>
+                <span>{previewImage.label}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setPreviewImage(null)}
+                aria-label="Đóng xem trước"
                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -872,8 +861,8 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
 
             <div className="flex items-center justify-center bg-slate-900/5 rounded-xl overflow-hidden max-h-[70vh]">
               <img
-                src={previewImage.imageUrl}
-                alt={previewImage.fileName || 'Kết quả cận lâm sàng'}
+                src={previewImage.url}
+                alt={previewImage.label}
                 className="object-contain max-h-[65vh] w-auto rounded-lg"
               />
             </div>

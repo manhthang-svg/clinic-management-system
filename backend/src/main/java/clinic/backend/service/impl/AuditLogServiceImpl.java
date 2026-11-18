@@ -97,6 +97,20 @@ public class AuditLogServiceImpl implements AuditLogService {
     }
 
     @Override
+    public void recordRead(
+            UUID actorAccountId,
+            String entityType,
+            UUID entityId,
+            String sovaovien,
+            Map<String, ?> values,
+            Instant occurredAt) {
+        auditLogRepository.save(AuditLog.recordRead(
+                ids.next(), actorAccountId, entityType, entityId, sovaovien, occurredAt,
+                objectMapper.valueToTree(values).toString(),
+                MDC.get(RequestCorrelationFilter.ATTRIBUTE_NAME)));
+    }
+
+    @Override
     public void recordSystemChange(
             AuditLogAction action,
             String entityType,

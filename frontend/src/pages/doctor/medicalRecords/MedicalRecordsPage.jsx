@@ -1,13 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { FolderHeart, RefreshCw, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
-import { ApiError } from '../../../apis/apiError';
+import { ROUTES } from '../../../routes/routes';
 import { MedicalRecordsFilter } from './MedicalRecordsFilter';
 import { PatientListTable } from './PatientListTable';
 import { PatientVisitListTable } from './PatientVisitListTable';
-import { MedicalRecordDetailModal } from './MedicalRecordDetailModal';
+import { recordErrorMessage } from './medicalRecordView';
 
 const INITIAL_FILTERS = {
   keyword: '',
@@ -18,168 +17,97 @@ const INITIAL_FILTERS = {
   status: 'ALL',
 };
 
-function formatErrorMessage(error) {
-  if (!(error instanceof ApiError)) {
-    return error?.message || 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
-  }
-  if (error.status === 401) {
-    return 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.';
-  }
-  if (error.status === 403) {
-    return 'Bạn không có quyền thực hiện thao tác này.';
-  }
-  if (error.errorResponse?.code === 'REQUEST_VALIDATION_FAILED' || error.errorResponse?.code === 'REQUEST_PARAMETER_INVALID') {
-    return error.errorResponse?.message || 'Ngày bắt đầu không được sau ngày kết thúc.';
-  }
-  if (error.status === undefined) {
-    return 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.';
-  }
-  return error.message || 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.';
+const EMPTY_PAGE = { number: 0, size: 20, totalElements: 0, totalPages: 0 };
+
+function searchParamsOf({ filters, page, size }) {
+  return {
+    keyword: filters.keyword.trim() || undefined,
+    from: filters.from || undefined,
+    to: filters.to || undefined,
+    roomId: filters.roomId,
+    icd10: filters.icd10.trim() || undefined,
+    status: filters.status,
+    page,
+    size,
+  };
 }
 
 /**
- * Screen #39 – HỒ SƠ BỆNH ÁN / LỊCH SỬ HỒ SƠ BỆNH ÁN (Medical Record History)
- * Luồng 2 cấp độ: Cấp 1 (Tìm bệnh nhân) -> Cấp 2 (Danh sách lượt khám) -> UC-52 (Chi tiết bệnh án).
+ * UC-51 View List Medical Record: cấp 1 tìm bệnh nhân, cấp 2 danh sách lượt khám, chọn lượt thì sang UC-52.
+ * Bệnh nhân đang chọn nằm trong `?patientId=` (UUID, BR-51-03), nên AF-01 và nút Quay lại dùng chung một đường.
+ * Bộ lọc không bao giờ được đưa vào URL.
  */
 export function MedicalRecordsPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const shortcutPatientId = searchParams.get('patientId');
+  const selectedPatientId = searchParams.get('patientId');
 
-  // Bộ lọc
-  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  // Cấp 1: bộ lọc đang nhập và truy vấn đã gửi. Kết quả nhớ truy vấn của nó, nên "đang tải" = chưa khớp.
+  const [draft, setDraft] = useState(INITIAL_FILTERS);
+  const [query, setQuery] = useState({ filters: INITIAL_FILTERS, page: 0, size: 20, run: 0 });
+  const [list, setList] = useState({ query: null, patients: [], pageInfo: EMPTY_PAGE, error: null });
 
-  // Dữ liệu Cấp 1 (Danh sách bệnh nhân)
-  const [patients, setPatients] = useState([]);
-  const [pageInfo, setPageInfo] = useState({ number: 0, size: 20, totalElements: 0, totalPages: 1 });
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(20);
-  const [loadingPatients, setLoadingPatients] = useState(false);
-  const [listError, setListError] = useState(null);
+  // Cấp 2: kết quả nhớ khóa (bệnh nhân + lần tải lại) của nó.
+  const [visitsReload, setVisitsReload] = useState(0);
+  const visitsKey = selectedPatientId ? `${selectedPatientId}:${visitsReload}` : null;
+  const [history, setHistory] = useState({ key: null, data: null, error: null });
 
-  // Dữ liệu Cấp 2 (Bệnh nhân được chọn & Danh sách lượt khám)
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [patientVisits, setPatientVisits] = useState([]);
-  const [loadingVisits, setLoadingVisits] = useState(false);
-  const [visitsError, setVisitsError] = useState(null);
-
-  // Chi tiết bệnh án Modal (UC-52)
-  const [activeVisitModal, setActiveVisitModal] = useState(null);
-
-  // Handler thay đổi từng trường filter
-  const handleChangeFilter = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // Tải danh sách bệnh nhân (Cấp 1)
-  const loadPatients = useCallback(async (pageNum = page, pageSize = size) => {
-    setLoadingPatients(true);
-    setListError(null);
-    try {
-      const res = await medicalRecordApi.searchPatients({
-        from: filters.from || undefined,
-        to: filters.to || undefined,
-        status: filters.status,
-        roomId: filters.roomId,
-        icd10: filters.icd10 || undefined,
-        keyword: filters.keyword || undefined,
-        page: pageNum,
-        size: pageSize,
-      });
-
-      if (res) {
-        setPatients(res.content ?? []);
-        setPageInfo(res.page ?? { number: pageNum, size: pageSize, totalElements: (res.content ?? []).length, totalPages: 1 });
-      }
-    } catch (err) {
-      console.error('Lỗi tải danh sách hồ sơ bệnh nhân:', err);
-      const msg = formatErrorMessage(err);
-      setListError(msg);
-      toast.error(msg);
-    } finally {
-      setLoadingPatients(false);
-    }
-  }, [filters, page, size]);
-
-  // Tải danh sách lượt khám khi chọn 1 bệnh nhân (Cấp 2)
-  const loadVisitsForPatient = useCallback(async (patientId, patientData = null) => {
-    setLoadingVisits(true);
-    setVisitsError(null);
-    try {
-      const visits = await medicalRecordApi.getPatientVisits(patientId);
-      setPatientVisits(Array.isArray(visits) ? visits : []);
-      if (patientData) {
-        setSelectedPatient(patientData);
-      } else {
-        // Nếu mở shortcut AF-01 mà chưa có patient object
-        setSelectedPatient({
-          patientId,
-          fullName: 'Bệnh nhân đang khám',
-          patientCode: 'BN...',
-        });
-      }
-    } catch (err) {
-      console.error('Lỗi tải lượt khám của bệnh nhân:', err);
-      const msg = formatErrorMessage(err);
-      setVisitsError(msg);
-      toast.error(msg);
-    } finally {
-      setLoadingVisits(false);
-    }
-  }, []);
-
-  // Effect ban đầu: Tự động tải danh sách hoặc xử lý shortcut AF-01
   useEffect(() => {
-    if (shortcutPatientId) {
-      loadVisitsForPatient(shortcutPatientId);
-    } else {
-      loadPatients(0, size);
-    }
-  }, [shortcutPatientId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Nút tìm kiếm
-  const handleSearch = () => {
-    setPage(0);
-    loadPatients(0, size);
-  };
-
-  // Nút xóa bộ lọc
-  const handleReset = () => {
-    setFilters(INITIAL_FILTERS);
-    setPage(0);
-    // Reload với bộ lọc trắng
-    setLoadingPatients(true);
+    if (selectedPatientId) return undefined;
+    const controller = new AbortController();
     medicalRecordApi
-      .searchPatients({ page: 0, size })
+      .searchPatients(searchParamsOf(query), controller.signal)
       .then((res) => {
-        setPatients(res.content ?? []);
-        setPageInfo(res.page ?? { number: 0, size, totalElements: (res.content ?? []).length, totalPages: 1 });
+        setList({ query, patients: res?.content ?? [], pageInfo: res?.page ?? EMPTY_PAGE, error: null });
       })
       .catch((err) => {
-        const msg = formatErrorMessage(err);
-        setListError(msg);
-        toast.error(msg);
-      })
-      .finally(() => setLoadingPatients(false));
+        if (controller.signal.aborted) return;
+        setList({ query, patients: [], pageInfo: EMPTY_PAGE, error: recordErrorMessage(err) });
+      });
+    return () => controller.abort();
+  }, [query, selectedPatientId]);
+
+  useEffect(() => {
+    if (!selectedPatientId) return undefined;
+    const controller = new AbortController();
+    medicalRecordApi
+      .getPatientVisits(selectedPatientId, controller.signal)
+      .then((data) => setHistory({ key: visitsKey, data, error: null }))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setHistory({ key: visitsKey, data: null, error: recordErrorMessage(err) });
+      });
+    return () => controller.abort();
+  }, [selectedPatientId, visitsKey]);
+
+  const loadingPatients = !selectedPatientId && list.query !== query;
+  const loadingVisits = Boolean(visitsKey) && history.key !== visitsKey;
+  const currentHistory = history.key === visitsKey ? history : { data: null, error: null };
+  const error = selectedPatientId ? currentHistory.error : list.error;
+
+  const runSearch = (filters) => {
+    setQuery((current) => ({ filters, page: 0, size: current.size, run: current.run + 1 }));
   };
 
-  // Chọn 1 bệnh nhân từ Cấp 1 để mở Cấp 2
-  const handleSelectPatient = (patient) => {
-    loadVisitsForPatient(patient.patientId, patient);
+  const handleReset = () => {
+    setDraft(INITIAL_FILTERS);
+    runSearch(INITIAL_FILTERS);
   };
 
-  // Quay lại Cấp 1 từ Cấp 2
-  const handleBackToPatients = () => {
-    setSelectedPatient(null);
-    setPatientVisits([]);
-    if (shortcutPatientId) {
-      // Xóa param shortcut khỏi URL để ở lại màn hình Cấp 1
-      setSearchParams({});
+  const handleRefresh = () => {
+    if (selectedPatientId) {
+      setVisitsReload((n) => n + 1);
+    } else {
+      setQuery((current) => ({ ...current, run: current.run + 1 }));
     }
+  };
+
+  const handleViewDetail = (visit) => {
+    navigate(`${ROUTES.DOCTOR.MEDICAL_RECORDS}/visits/${encodeURIComponent(visit.visitId)}`);
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Title & Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -195,80 +123,55 @@ export function MedicalRecordsPage() {
           </p>
         </div>
 
-        {/* Nút tải lại */}
         <button
           type="button"
-          onClick={() => {
-            if (selectedPatient) {
-              loadVisitsForPatient(selectedPatient.patientId, selectedPatient);
-            } else {
-              loadPatients(page, size);
-            }
-          }}
+          onClick={handleRefresh}
           disabled={loadingPatients || loadingVisits}
           className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs cursor-pointer transition-colors"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${(loadingPatients || loadingVisits) ? 'animate-spin' : ''}`} />
-          <span>Làm mới</span>
+          <span>{loadingPatients || loadingVisits ? 'Đang tải…' : 'Làm mới'}</span>
         </button>
       </div>
 
-      {/* Thông báo lỗi tổng nếu có */}
-      {(listError || visitsError) && (
-        <div className="flex items-center gap-2 p-4 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-2xl">
+      {error && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 p-4 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-2xl"
+        >
           <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
-          <span>{listError || visitsError}</span>
+          <span>{error}</span>
         </div>
       )}
 
-      {/* LUỒNG 2 CẤP ĐỘ: CẤP 1 (Danh sách bệnh nhân) hoặc CẤP 2 (Danh sách lượt khám) */}
-      {!selectedPatient ? (
+      {!selectedPatientId ? (
         <>
-          {/* Khu vực Tìm kiếm & Bộ lọc (A) */}
           <MedicalRecordsFilter
-            filters={filters}
-            onChangeFilter={handleChangeFilter}
-            onSearch={handleSearch}
+            filters={draft}
+            onChangeFilter={(field, value) => setDraft((prev) => ({ ...prev, [field]: value }))}
+            onSearch={() => runSearch(draft)}
             onReset={handleReset}
             loading={loadingPatients}
           />
 
-          {/* Cấp 1: Bảng Danh sách Bệnh nhân khớp điều kiện (B) */}
           <PatientListTable
-            patients={patients}
-            pageInfo={pageInfo}
-            page={page}
-            size={size}
-            onChangePage={(newPage) => {
-              setPage(newPage);
-              loadPatients(newPage, size);
-            }}
-            onChangeSize={(newSize) => {
-              setSize(newSize);
-              setPage(0);
-              loadPatients(0, newSize);
-            }}
-            onSelectPatient={handleSelectPatient}
+            patients={list.patients}
+            pageInfo={list.pageInfo}
+            page={query.page}
+            size={query.size}
+            onChangePage={(page) => setQuery((current) => ({ ...current, page }))}
+            onChangeSize={(size) => setQuery((current) => ({ ...current, size, page: 0 }))}
+            onSelectPatient={(patient) => setSearchParams({ patientId: patient.patientId })}
             loading={loadingPatients}
           />
         </>
       ) : (
-        /* Cấp 2: Danh sách Lượt khám của Bệnh nhân được chọn (C) */
         <PatientVisitListTable
-          patient={selectedPatient}
-          visits={patientVisits}
+          patient={currentHistory.data?.patient}
+          visits={currentHistory.data?.visits ?? []}
           loading={loadingVisits}
-          onBack={handleBackToPatients}
-          onViewDetail={(visit) => setActiveVisitModal(visit)}
-        />
-      )}
-
-      {/* Modal Chi tiết Hồ sơ Bệnh án (UC-52) */}
-      {activeVisitModal && (
-        <MedicalRecordDetailModal
-          visitId={activeVisitModal.visitId}
-          recordId={activeVisitModal.medicalRecordId}
-          onClose={() => setActiveVisitModal(null)}
+          onBack={() => setSearchParams({})}
+          onViewDetail={handleViewDetail}
         />
       )}
     </div>
@@ -276,4 +179,3 @@ export function MedicalRecordsPage() {
 }
 
 export default MedicalRecordsPage;
-

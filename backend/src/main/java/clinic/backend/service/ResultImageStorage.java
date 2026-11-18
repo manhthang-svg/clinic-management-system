@@ -13,4 +13,10 @@ public interface ResultImageStorage {
 
     /** Removes the image; a missing image is not an error. */
     void delete(String publicId);
+
+    /**
+     * UC-52 BR-52-06: reads an image this storage returned from {@link #upload}, so the backend can serve it after
+     * checking access. Any other address is refused, so a stored value cannot make the server fetch elsewhere.
+     */
+    byte[] download(String url);
 }

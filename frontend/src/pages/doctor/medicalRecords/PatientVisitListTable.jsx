@@ -1,51 +1,24 @@
-import { ArrowLeft, Clock, Calendar, User, FileText, ExternalLink } from 'lucide-react';
-import { VISIT_STATUS_LABELS } from '../../../constants/visitData';
+import { ArrowLeft, Clock, User, FileText } from 'lucide-react';
+import { PATIENT_GENDER_LABELS, VISIT_TYPE_LABELS } from '../../../constants/visitData';
+import { formatDate, visitStatusLabel } from './medicalRecordView';
 
-function formatDate(val) {
-  if (!val) return '—';
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return val;
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch {
-    return val;
-  }
-}
-
-function formatDateTime(val) {
-  if (!val) return '—';
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return val;
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const hour = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} ${hour}:${min}`;
-  } catch {
-    return val;
-  }
-}
-
-function StatusBadge({ status, statusLabel }) {
+// Badge tones are TBD (CLAUDE.md); ended visits are muted, completed ones green, the rest neutral.
+function StatusBadge({ status, skipped }) {
   let tone = 'bg-sky-50 text-sky-700 border-sky-200';
   if (status === 'COMPLETED') {
     tone = 'bg-emerald-50 text-emerald-700 border-emerald-200';
   } else if (status === 'ABANDONED' || status === 'CANCELLED') {
     tone = 'bg-slate-100 text-slate-600 border-slate-200';
   }
-
-  const label = statusLabel || VISIT_STATUS_LABELS[status] || status;
   return (
     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${tone}`}>
-      {label}
+      {visitStatusLabel(status, skipped)}
     </span>
   );
 }
 
 /**
- * Cấp 2: Danh sách Lượt khám của Bệnh nhân được chọn (Screen #39 Cấp 2).
+ * UC-51 cấp 2 / AF-01: bệnh nhân được chọn và mọi lượt khám, mới nhất trước (BR-51-06).
  */
 export function PatientVisitListTable({
   patient,
@@ -56,7 +29,6 @@ export function PatientVisitListTable({
 }) {
   return (
     <div className="space-y-4">
-      {/* Banner thông tin bệnh nhân & nút quay lại */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <button
@@ -72,7 +44,6 @@ export function PatientVisitListTable({
           </span>
         </div>
 
-        {/* Thông tin vắn tắt của bệnh nhân */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#127e7a]/10 text-[#127e7a]">
@@ -93,28 +64,15 @@ export function PatientVisitListTable({
           </div>
           <div>
             <span className="text-xs text-slate-400 block">Giới tính</span>
-            <span className="text-slate-700 font-medium">{patient?.gender || '—'}</span>
+            <span className="text-slate-700 font-medium">{PATIENT_GENDER_LABELS[patient?.gender] ?? '—'}</span>
           </div>
-          {patient?.citizenId && (
-            <div>
-              <span className="text-xs text-slate-400 block">Số CCCD</span>
-              <span className="font-mono text-slate-700">{patient.citizenId}</span>
-            </div>
-          )}
-          {patient?.phoneNumber && (
-            <div>
-              <span className="text-xs text-slate-400 block">Số điện thoại</span>
-              <span className="font-mono text-slate-700">{patient.phoneNumber}</span>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Bảng lượt khám */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-3">
         <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
           <Clock className="w-4 h-4 text-[#127e7a]" />
-          <span>Lịch sử các lượt khám (Mới nhất lên đầu)</span>
+          <span>Lịch sử các lượt khám (mới nhất lên đầu)</span>
         </h3>
 
         <div className="overflow-x-auto rounded-xl border border-slate-100">
@@ -144,26 +102,23 @@ export function PatientVisitListTable({
               {!loading && visits.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    Bệnh nhân này chưa có dữ liệu lượt khám nào.
+                    Bệnh nhân này chưa có lượt khám nào.
                   </td>
                 </tr>
               )}
 
               {!loading && visits.map((visit) => {
-                const diagDisplay = (visit.finalDiagnosisName && visit.finalDiagnosisName !== '—')
+                const diagnosis = visit.finalDiagnosisName
                   ? `${visit.finalDiagnosisIcd ? `${visit.finalDiagnosisIcd} - ` : ''}${visit.finalDiagnosisName}`
                   : '—';
 
                 return (
-                  <tr
-                    key={visit.visitId}
-                    className="hover:bg-slate-50/60 transition-colors"
-                  >
+                  <tr key={visit.visitId} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3 px-4 font-mono font-semibold text-slate-800 whitespace-nowrap">
                       {visit.registrationCode}
                     </td>
                     <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
-                      {formatDateTime(visit.registeredAt)}
+                      {formatDate(visit.visitDate)}
                     </td>
                     <td className="py-3 px-4 text-slate-700 whitespace-nowrap">
                       {visit.roomName || '—'}
@@ -177,24 +132,29 @@ export function PatientVisitListTable({
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
                           : 'bg-amber-50 text-amber-700 border border-amber-200'
                       }`}>
-                        {visit.patientType || 'Dịch vụ'}
+                        {VISIT_TYPE_LABELS[visit.patientType] ?? '—'}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-slate-700 max-w-xs truncate" title={diagDisplay}>
-                      {diagDisplay}
+                    <td className="py-3 px-4 text-slate-700 max-w-xs truncate" title={diagnosis}>
+                      {diagnosis}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      <StatusBadge status={visit.status} statusLabel={visit.statusLabel} />
+                      <StatusBadge status={visit.status} skipped={visit.skipped} />
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => onViewDetail(visit)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-[#127e7a] border border-[#127e7a]/40 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Xem chi tiết</span>
-                      </button>
+                      {visit.medicalRecordId ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewDetail(visit)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-[#127e7a] border border-[#127e7a]/40 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Xem chi tiết</span>
+                        </button>
+                      ) : (
+                        // BR-51-06: a visit without a medical record cannot be opened in UC-52.
+                        <span className="text-xs text-slate-400">Chưa có hồ sơ</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -208,4 +168,3 @@ export function PatientVisitListTable({
 }
 
 export default PatientVisitListTable;
-
