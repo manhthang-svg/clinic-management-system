@@ -1,4 +1,4 @@
-import { useEffect, useState, useId } from 'react';
+import { useEffect, useState, useId, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import {
   Activity,
@@ -56,7 +56,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
   // Target ID xác định theo route
   const targetId = isVisitRoute ? visitId : id;
 
-  const loadDetail = async (identifier, isByVisit) => {
+  const loadDetail = useCallback(async (identifier, isByVisit) => {
     if (!identifier) return;
     setLoading(true);
     setError(null);
@@ -86,11 +86,14 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
-    loadDetail(targetId, isVisitRoute);
-  }, [targetId, isVisitRoute]);
+    const timer = setTimeout(() => {
+      loadDetail(targetId, isVisitRoute);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [targetId, isVisitRoute, loadDetail]);
 
   // Chuyển sang lượt khám khác trên Timeline
   const handleSelectTimelineVisit = (timelineVisitId) => {

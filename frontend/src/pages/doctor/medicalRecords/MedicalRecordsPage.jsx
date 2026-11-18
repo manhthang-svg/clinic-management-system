@@ -129,11 +129,14 @@ export function MedicalRecordsPage() {
 
   // Effect ban đầu: Tự động tải danh sách hoặc xử lý shortcut AF-01
   useEffect(() => {
-    if (shortcutPatientId) {
-      loadVisitsForPatient(shortcutPatientId);
-    } else {
-      loadPatients(0, size);
-    }
+    const timer = setTimeout(() => {
+      if (shortcutPatientId) {
+        loadVisitsForPatient(shortcutPatientId);
+      } else {
+        loadPatients(0, size);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [shortcutPatientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nút tìm kiếm

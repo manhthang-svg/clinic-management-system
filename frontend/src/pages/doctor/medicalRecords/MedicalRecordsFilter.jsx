@@ -37,13 +37,13 @@ export function MedicalRecordsFilter({
 
   // Tìm kiếm ICD-10 gợi ý khi gõ
   useEffect(() => {
-    if (!filters.icd10 || filters.icd10.trim().length < 2) {
-      setIcdOptions([]);
-      return;
-    }
-
     let ignore = false;
     const timer = setTimeout(async () => {
+      if (!filters.icd10 || filters.icd10.trim().length < 2) {
+        if (!ignore) setIcdOptions([]);
+        return;
+      }
+
       setIcdSearching(true);
       try {
         const res = await medicalRecordApi.searchIcd10(filters.icd10.trim());

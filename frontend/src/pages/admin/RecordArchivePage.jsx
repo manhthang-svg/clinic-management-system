@@ -75,7 +75,10 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
   }, [searchKeyword, category, fromDate, toDate, page, pageSize]);
 
   useEffect(() => {
-    fetchArchives();
+    const timer = setTimeout(() => {
+      fetchArchives();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchArchives]);
 
   const handleSearchSubmit = (e) => {
