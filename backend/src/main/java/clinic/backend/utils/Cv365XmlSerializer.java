@@ -1,3 +1,4 @@
+// chuyen sang xml
 package clinic.backend.utils;
 
 import java.io.ByteArrayOutputStream;
@@ -15,14 +16,26 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
 /**
- * Serializes CV 365 medical record exchange structures to standard XML bytes.
- * Conforms to Công văn 365/TTYQG-GPQLCL Phụ lục "Mô tả dữ liệu trao đổi hồ sơ bệnh án điện tử".
+ * Tiện ích tuần tự hóa (serializer) dữ liệu trao đổi hồ sơ bệnh án sang định dạng XML chuẩn.
+ * Tuân thủ theo Công văn 365/TTYQG-GPQLCL - Phụ lục "Mô tả dữ liệu trao đổi hồ sơ bệnh án điện tử".
+ * Chuyển đổi cấu trúc cây Map/List sang tài liệu DOM XML chuẩn UTF-8, thụt lề 2 khoảng trắng.
  */
 public final class Cv365XmlSerializer {
 
+    /**
+     * Private constructor để ngăn việc khởi tạo đối tượng từ bên ngoài (lớp tiện ích tĩnh - utility class).
+     */
     private Cv365XmlSerializer() {
     }
 
+    /**
+     * Chuyển đổi cấu trúc dữ liệu Map (gồm DuLieuChu, HoSoBenhAn, extensions) thành mảng byte XML chuẩn CV 365.
+     * Cấu trúc thẻ gốc là <HoSoBenhAn>, bên trong lồng thẻ <DuLieuChu> và các nhóm phần mục lâm sàng.
+     *
+     * @param root Map chứa toàn bộ dữ liệu gói lưu trữ hồ sơ bệnh án
+     * @return Mảng byte chứa nội dung XML đã được format (indent 2 khoảng trắng, mã hóa UTF-8)
+     * @throws IllegalStateException Nếu xảy ra lỗi phân tích hoặc xuất XML
+     */
     public static byte[] serialize(Map<String, Object> root) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -63,6 +76,14 @@ public final class Cv365XmlSerializer {
         }
     }
 
+    /**
+     * Đệ quy chuyển đổi từng phần tử trong Map thành các phần tử (Element) XML tương ứng và gắn vào thẻ cha.
+     * Xử lý trường hợp giá trị con là List (tạo nhiều thẻ cùng tên), Map (tạo thẻ lồng nhau), hoặc kiểu nguyên thủy.
+     *
+     * @param doc Tài liệu XML đang xây dựng (W3C Document)
+     * @param parent Thẻ XML cha để gắn các thẻ con vào
+     * @param map Dữ liệu dạng Map cần chuyển đổi
+     */
     @SuppressWarnings("unchecked")
     private static void appendMap(Document doc, Element parent, Map<?, ?> map) {
         for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -93,6 +114,15 @@ public final class Cv365XmlSerializer {
         }
     }
 
+    /**
+     * Chuẩn hóa tên khóa thành tên thẻ XML hợp lệ theo quy chuẩn W3C:
+     * - Thay thế các ký tự không hợp lệ bằng dấu gạch dưới '_'.
+     * - Thêm tiền tố '_' nếu tên bắt đầu bằng số, dấu gạch nối '-' hoặc dấu chấm '.'.
+     * - Trả về "item" nếu chuỗi null hoặc rỗng.
+     *
+     * @param name Tên khóa gốc từ Map
+     * @return Tên thẻ XML hợp lệ
+     */
     private static String sanitizeXmlTagName(String name) {
         if (name == null || name.isBlank()) {
             return "item";
