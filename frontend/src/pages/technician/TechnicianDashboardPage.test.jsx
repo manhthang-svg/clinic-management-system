@@ -64,7 +64,7 @@ describe('TechnicianDashboardPage', () => {
     const queue = screen.getByRole('region', { name: 'Bệnh nhân sắp tới lượt' });
     expect(within(queue).getByText('Trần Thị Mai')).toBeInTheDocument();
     expect(within(queue).getByText('#01')).toBeInTheDocument();
-    expect(within(queue).getByText('Xem tất cả (7)')).toBeInTheDocument();
+    expect(within(queue).getByText('Xem tất cả (1)')).toBeInTheDocument();
 
     const results = screen.getByRole('region', { name: 'Kết quả đang chờ nhập / Bản nháp' });
     expect(within(results).getByText('Bản nháp')).toBeInTheDocument();
@@ -114,5 +114,48 @@ describe('TechnicianDashboardPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải dữ liệu tổng quan. Vui lòng thử lại.');
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+  });
+
+  it('groups multiple services for the same patient into 1 row with badge +X dịch vụ khác', async () => {
+    const data = dashboard({
+      nextQueue: [
+        {
+          id: 'q-1', queueNumber: 5, patientName: 'Nguyễn Văn Phi', patientId: 'BN6013016', age: 34, gender: 'Nam',
+          insuranceType: 'Viện phí', serviceName: 'Đo hoạt độ AST, ALT', doctorName: 'BS An', orderCode: 'CD0000000268-01',
+        },
+        {
+          id: 'q-2', queueNumber: 5, patientName: 'Nguyễn Văn Phi', patientId: 'BN6013016', age: 34, gender: 'Nam',
+          insuranceType: 'Viện phí', serviceName: 'Bộ đường huyết (Glucose, HbA1c)', doctorName: 'BS An', orderCode: 'CD0000000268-02',
+        },
+      ],
+      pendingResults: [
+        {
+          id: 'p-1', orderCode: 'CD0000000268-01', patientName: 'Nguyễn Văn Phi', patientId: 'BN6013016', age: 34,
+          gender: 'Nam', insuranceType: 'Viện phí', serviceName: 'Đo hoạt độ AST, ALT', doctorName: 'BS An',
+          completedAtTime: '00:19', completedMinutesAgo: 35, status: 'WAITING_RESULT',
+        },
+        {
+          id: 'p-2', orderCode: 'CD0000000268-02', patientName: 'Nguyễn Văn Phi', patientId: 'BN6013016', age: 34,
+          gender: 'Nam', insuranceType: 'Viện phí', serviceName: 'Bộ đường huyết (Glucose, HbA1c)', doctorName: 'BS An',
+          completedAtTime: '00:19', completedMinutesAgo: 35, status: 'DRAFT',
+        },
+        {
+          id: 'p-3', orderCode: 'CD0000000268-03', patientName: 'Nguyễn Văn Phi', patientId: 'BN6013016', age: 34,
+          gender: 'Nam', insuranceType: 'Viện phí', serviceName: 'Tổng phân tích nước tiểu', doctorName: 'BS An',
+          completedAtTime: '00:19', completedMinutesAgo: 35, status: 'WAITING_RESULT',
+        },
+      ],
+    });
+    renderPage(technicianApi(vi.fn().mockResolvedValue(data)));
+
+    const queue = await screen.findByRole('region', { name: 'Bệnh nhân sắp tới lượt' });
+    expect(within(queue).getAllByText('Nguyễn Văn Phi')).toHaveLength(1);
+    expect(within(queue).getByText('+1 dịch vụ khác')).toBeInTheDocument();
+
+    const results = screen.getByRole('region', { name: 'Kết quả đang chờ nhập / Bản nháp' });
+    expect(within(results).getAllByText('Nguyễn Văn Phi')).toHaveLength(1);
+    expect(within(results).getByText('+2 dịch vụ khác')).toBeInTheDocument();
+    expect(within(results).getByText('Bản nháp (1/3)')).toBeInTheDocument();
+    expect(within(results).getByText('CD0000000268')).toBeInTheDocument();
   });
 });
