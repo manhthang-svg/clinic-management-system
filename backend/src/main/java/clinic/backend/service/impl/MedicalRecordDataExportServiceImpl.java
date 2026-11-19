@@ -40,7 +40,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** UC-80 / BR-43: XML or JSON export of a medical record in the CV 365 structure. */
+/**
+ * Dịch vụ xử lý nghiệp vụ xuất dữ liệu hồ sơ bệnh án (UC-80 / BR-43).
+ * Xuất hồ sơ bệnh án điện tử đã đóng sang định dạng XML hoặc JSON tuân thủ theo
+ * cấu trúc quy chuẩn của Công văn 365/TTYQG-GPQLCL và Luật Lưu trữ 2024.
+ *
+ * <p>Quy trình nghiệp vụ bao gồm:
+ * 1. Kiểm tra tính hợp lệ của tham số yêu cầu và quyền/trạng thái hồ sơ bệnh án (phải là CLOSED).
+ * 2. Xác thực thông tin gói lưu trữ điện tử (RecordArchive) và thông tin người nhận theo mục đích xuất.
+ * 3. Tái tạo ngữ cảnh Closing và ủy thác cho ArchivePackageBuilder tạo dữ liệu XML/JSON.
+ * 4. Tính toán mã băm toàn vẹn SHA-256 cho nội dung file xuất.
+ * 5. Lưu nhật ký xuất dữ liệu (ExportLog) và ghi vết kiểm toán (AuditLog) theo quy định bảo mật y tế.
+ * 6. Đóng gói kết quả trả về gồm tên file, kiểu MIME, mảng byte dữ liệu, mã SHA-256 và định dạng xuất.
+ */
 @Service
 @RequiredArgsConstructor
 public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExportService {
@@ -59,6 +71,16 @@ public class MedicalRecordDataExportServiceImpl implements MedicalRecordDataExpo
     private final UuidV7Generator ids;
     private final Clock clock;
 
+    /**
+     * Thực hiện xuất dữ liệu hồ sơ bệnh án điện tử đã đóng sang định dạng XML hoặc JSON chuẩn CV 365.
+     *
+     * @param medicalRecordId Định danh UUID của hồ sơ bệnh án cần xuất dữ liệu
+     * @param request DTO chứa thông tin yêu cầu xuất: định dạng (XML/JSON), mục đích xuất (liên thông, cấp người bệnh...), người nhận
+     * @param actorAccountId UUID của tài khoản nhân viên y tế thực hiện thao tác xuất
+     * @return DTO {@link ExportMedicalRecordDataResponse} chứa mảng byte dữ liệu, tên file chuẩn, mã băm SHA-256, Content-Type
+     * @throws AppException Nếu hồ sơ không tồn tại, hồ sơ chưa đóng, thiếu gói lưu trữ, hoặc thông tin người nhận không hợp lệ
+     * @throws IllegalStateException Nếu hệ thống gặp sự cố khi tính toán mã băm SHA-256
+     */
     @Override
     @Transactional
     public ExportMedicalRecordDataResponse exportMedicalRecordData(
