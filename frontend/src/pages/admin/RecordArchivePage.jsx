@@ -1,3 +1,4 @@
+// quan ly kho luu tru ho so benh an
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileCode2,
@@ -50,6 +51,12 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [selectedArchive, setSelectedArchive] = useState(null);
 
+  /**
+   * Gọi API tìm kiếm và phân trang danh sách kho lưu trữ hồ sơ bệnh án (recordArchiveApi.searchArchives).
+   * Hỗ trợ tìm kiếm theo từ khóa (mã bệnh nhân, tên, số BA, số lưu trữ, mã lượt khám),
+   * danh mục thời hạn bảo quản (tiêu chuẩn 10 năm, mạn tính 15 năm, nghiên cứu 20 năm, vĩnh viễn),
+   * và khoảng ngày hết hạn lưu trữ.
+   */
   const fetchArchives = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -74,6 +81,7 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
     }
   }, [searchKeyword, category, fromDate, toDate, page, pageSize]);
 
+  // Tự động tải lại dữ liệu danh sách hồ sơ khi bộ lọc, từ khóa hoặc trang thay đổi
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchArchives();
@@ -81,12 +89,23 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
     return () => clearTimeout(timer);
   }, [fetchArchives]);
 
+  /**
+   * Xử lý sự kiện gửi form tìm kiếm:
+   * Reset trang hiển thị về trang đầu tiên (page 0) và gán giá trị ô nhập liệu vào searchKeyword
+   * để kích hoạt hàm fetchArchives.
+   * 
+   * @param {React.FormEvent} e - Sự kiện submit form
+   */
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setPage(0);
     setSearchKeyword(keyword);
   };
 
+  /**
+   * Đặt lại toàn bộ các trường lọc về giá trị ban đầu:
+   * Xóa từ khóa tìm kiếm, đặt loại bảo quản về 'ALL', xóa khoảng ngày lọc và quay về trang đầu tiên (page 0).
+   */
   const handleResetFilters = () => {
     setKeyword('');
     setSearchKeyword('');
@@ -96,6 +115,12 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
     setPage(0);
   };
 
+  /**
+   * Kích hoạt mở modal kết xuất dữ liệu điện tử (XML / JSON) cho hồ sơ bệnh án được chọn:
+   * Lưu thông tin bản ghi được nhấn vào state selectedArchive và đặt exportModalOpen = true.
+   * 
+   * @param {Object} archive - Bản ghi lưu trữ hồ sơ bệnh án từ bảng
+   */
   const handleOpenExport = (archive) => {
     setSelectedArchive(archive);
     setExportModalOpen(true);

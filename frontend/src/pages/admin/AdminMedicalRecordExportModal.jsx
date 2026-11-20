@@ -1,3 +1,4 @@
+// modal chon json hoac xml
 import { useState } from 'react';
 import { Download, FileCode2, FileText, RefreshCw, ShieldCheck, CheckCircle2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,6 +29,14 @@ export function AdminMedicalRecordExportModal({
 
   if (!isOpen) return null;
 
+  /**
+   * Tạo đường dẫn nhị phân tạm thời (Blob URL) và giả lập thao tác click vào thẻ <a>
+   * để trình duyệt tải tệp (XML hoặc JSON) về máy tính của người dùng.
+   * Tự động thu hồi Blob URL sau 1 giây nhằm giải phóng bộ nhớ RAM (tránh memory leak).
+   * 
+   * @param {Blob} blob - Dữ liệu nhị phân của tệp XML/JSON nhận từ API
+   * @param {string} fileName - Tên tệp lưu về máy (ví dụ: HoSoBenhAn_BA001_DK001.xml)
+   */
   const handleDownloadFile = (blob, fileName) => {
     if (typeof window === 'undefined') return;
     const createUrl = window.URL?.createObjectURL || globalThis.URL?.createObjectURL;
@@ -53,6 +62,15 @@ export function AdminMedicalRecordExportModal({
     }
   };
 
+  /**
+   * Xử lý luồng kết xuất và tải dữ liệu bệnh án điện tử (XML / JSON):
+   * 1. Kiểm tra tính hợp lệ của trường Người/Cơ quan tiếp nhận (bắt buộc đối với
+   *    mục đích CUNG_CAP_NGUOI_BENH và CO_QUAN_CO_THAM_QUYEN theo Điều 69 Luật KBCB).
+   * 2. Gọi API kết xuất `medicalRecordApi.exportMedicalRecordData` với định dạng và mục đích đã chọn.
+   * 3. Nhận phản hồi nhị phân và kích hoạt tải file về máy tính.
+   * 4. Lưu thông tin thành công kèm mã băm SHA-256 nhận từ header backend để phục vụ đối soát toàn vẹn dữ liệu.
+   * 5. Xử lý và hiển thị thông báo lỗi nếu hồ sơ chưa đóng (EXPORT_RECORD_NOT_CLOSED) hoặc dữ liệu không hợp lệ.
+   */
   const handleExportData = async () => {
     if (!recordId) return;
 
