@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -315,19 +315,19 @@ describe('RecordArchivePage (UC-79 & UC-80 / BR-43)', () => {
 
     // Nhập tên cơ quan
     const authNameInput = screen.getByLabelText(/Tên cơ quan \/ đơn vị/i);
-    await user.type(authNameInput, 'Cơ quan CSĐT Công an Quận Cầu Giấy');
+    fireEvent.change(authNameInput, { target: { value: 'Cơ quan CSĐT Công an Quận Cầu Giấy' } });
 
     // Nhập số văn bản
     const docNumInput = screen.getByLabelText(/Số văn bản yêu cầu/i);
-    await user.type(docNumInput, '123/CV-CSĐT');
+    fireEvent.change(docNumInput, { target: { value: '123/CV-CSĐT' } });
 
     // Nhập ngày văn bản
     const docDateInput = screen.getByLabelText(/Ngày văn bản/i);
-    await user.type(docDateInput, '2026-11-15');
+    fireEvent.change(docDateInput, { target: { value: '2026-11-15' } });
 
     // Nhập ghi chú
     const notesInput = screen.getByLabelText(/Ghi chú/i);
-    await user.type(notesInput, 'Phục vụ điều tra vụ án');
+    fireEvent.change(notesInput, { target: { value: 'Phục vụ điều tra vụ án' } });
 
     // Nút download được bật
     expect(downloadBtn).not.toBeDisabled();
@@ -390,10 +390,10 @@ describe('RecordArchivePage (UC-79 & UC-80 / BR-43)', () => {
     expect(downloadBtn).toBeDisabled();
 
     // Nhập các trường thông tin bắt buộc
-    await user.type(screen.getByLabelText(/Chi tiết loại cơ quan/i), 'Cơ quan Thi hành án dân sự');
-    await user.type(screen.getByLabelText(/Tên cơ quan \/ đơn vị/i), 'Cục THADS TP. Hà Nội');
-    await user.type(screen.getByLabelText(/Số văn bản yêu cầu/i), '45/QĐ-THADS');
-    await user.type(screen.getByLabelText(/Ngày văn bản/i), '2026-11-16');
+    fireEvent.change(screen.getByLabelText(/Chi tiết loại cơ quan/i), { target: { value: 'Cơ quan Thi hành án dân sự' } });
+    fireEvent.change(screen.getByLabelText(/Tên cơ quan \/ đơn vị/i), { target: { value: 'Cục THADS TP. Hà Nội' } });
+    fireEvent.change(screen.getByLabelText(/Số văn bản yêu cầu/i), { target: { value: '45/QĐ-THADS' } });
+    fireEvent.change(screen.getByLabelText(/Ngày văn bản/i), { target: { value: '2026-11-16' } });
 
     expect(downloadBtn).not.toBeDisabled();
     await user.click(downloadBtn);
