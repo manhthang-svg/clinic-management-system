@@ -76,6 +76,7 @@ public class RecordArchiveServiceImpl implements RecordArchiveService {
                             row.getPatientId(),
                             row.getPatientCode(),
                             row.getPatientName(),
+                            row.getPatientCccd(),
                             row.getDateOfBirth(),
                             age,
                             row.getGender(),

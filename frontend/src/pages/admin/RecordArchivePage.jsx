@@ -393,6 +393,8 @@ export function RecordArchivePage({ currentAdmin, onLogout, onChangePassword }) 
             recordId={selectedArchive.medicalRecordId}
             recordNumber={selectedArchive.soba}
             visitCode={selectedArchive.visitCode}
+            patientName={selectedArchive.patientName}
+            patientCccd={selectedArchive.patientCccd}
           />
         )}
       </div>

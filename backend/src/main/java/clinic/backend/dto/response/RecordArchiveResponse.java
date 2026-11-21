@@ -21,6 +21,7 @@ public record RecordArchiveResponse(
         UUID patientId,
         String patientCode,
         String patientName,
+        String patientCccd,
         LocalDate dateOfBirth,
         Integer age,
         Integer gender,
