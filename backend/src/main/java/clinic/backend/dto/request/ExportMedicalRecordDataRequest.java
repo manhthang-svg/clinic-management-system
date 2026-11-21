@@ -1,5 +1,6 @@
 package clinic.backend.dto.request;
 
+import java.time.LocalDate;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.ExportLogPurpose;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +19,19 @@ public record ExportMedicalRecordDataRequest(
         ExportLogPurpose purpose,
 
         @Size(max = 255, message = "Tên đơn vị tiếp nhận không được vượt quá 255 ký tự")
-        String recipient
+        String recipient,
+
+        String recipientType,
+        String recipientName,
+        String recipientCccd,
+        LocalDate documentDate,
+        String transferFacilityName,
+        String transferFacilityCode,
+        String authorityType,
+        String authorityTypeOther,
+        String authorityName,
+        String documentNumber,
+        String documentNotes
 ) {
 }
 

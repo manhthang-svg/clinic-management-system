@@ -31,6 +31,7 @@ public interface RecordArchiveRepository extends JpaRepository<RecordArchive, UU
         UUID getPatientId();
         String getPatientCode();
         String getPatientName();
+        String getPatientCccd();
         LocalDate getDateOfBirth();
         Integer getGender();
         RecordArchiveRetentionCategory getRetentionCategory();
@@ -53,6 +54,7 @@ public interface RecordArchiveRepository extends JpaRepository<RecordArchive, UU
             p.id AS patientId,
             p.mabenhnhan AS patientCode,
             p.hoten AS patientName,
+            p.cccdSo AS patientCccd,
             p.ngaysinh AS dateOfBirth,
             p.gioitinh AS gender,
             ra.retentionCategory AS retentionCategory,
