@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Download, FileCode2, FileText, RefreshCw, ShieldCheck, CheckCircle2, X, AlertCircle, Building2, User, UserCheck } from 'lucide-react';
+import { Download, FileCode2, FileText, RefreshCw, ShieldCheck, CheckCircle2, X, Building2, User, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { medicalRecordApi } from '../../apis/medicalRecordApi';
 
@@ -44,8 +44,6 @@ export function AdminMedicalRecordExportModal({
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccessInfo, setExportSuccessInfo] = useState(null);
-
-  if (!isOpen) return null;
 
   const markTouched = (field) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -311,6 +309,8 @@ export function AdminMedicalRecordExportModal({
       setIsExporting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 animate-in fade-in duration-150">
