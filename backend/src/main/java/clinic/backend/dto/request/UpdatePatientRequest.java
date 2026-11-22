@@ -17,7 +17,8 @@ public record UpdatePatientRequest(
         @Size(max = 100, message = "TOO_LONG") String nghenghiep,
         @Size(max = 5, message = "TOO_LONG") String nghenghiepMa,
         @NotBlank(message = "REQUIRED") @Size(max = 50, message = "TOO_LONG") String dantoc,
-        @NotBlank(message = "REQUIRED") @Size(max = 2, message = "TOO_LONG") String dantocMa,
+        // optional: derived from dantoc on the server; only used for a name outside the ethnicity list
+        @Size(max = 2, message = "TOO_LONG") String dantocMa,
         @Size(max = 255, message = "TOO_LONG") String ngoaikieu,
         @Size(max = 2, message = "TOO_LONG") String ngoaikieuMa,
         @NotBlank(message = "REQUIRED") @Size(max = 1024, message = "TOO_LONG") String diachi,

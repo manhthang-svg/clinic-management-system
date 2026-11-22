@@ -7,6 +7,8 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    ethnicityCode,
+    ethnicityOptions,
     isDirty,
     serverFieldErrors,
     toFormValues,
@@ -85,5 +87,29 @@ describe('patientForm helpers', () => {
     it('never shows the raw backend message', () => {
         expect(createErrorMessage(new ApiError('raw', { status: 500 }))).toBe(MSG.SYSTEM_ERROR);
         expect(createErrorMessage(new ApiError('raw', { status: 403 }))).toBe(MSG.FORBIDDEN);
+    });
+});
+
+describe('dan toc: chi chon ten, ma tu dien', () => {
+    it('maps each ethnicity name to its 2-digit code', () => {
+        expect(ethnicityCode('Kinh')).toBe('01');
+        expect(ethnicityCode('Khơ-me')).toBe('05');
+        expect(ethnicityCode('Khmer')).toBe('05');
+        expect(ethnicityCode('HMông')).toBe('08');
+        expect(ethnicityCode('Không rõ')).toBe('56');
+        expect(ethnicityCode('Mường')).toBe('06');
+        expect(ethnicityCode('Người nước ngoài')).toBe('55');
+        expect(ethnicityCode('Khác')).toBeNull();
+    });
+
+    it('keeps an old saved name that is not in the list as an option', () => {
+        expect(ethnicityOptions('Kinh')).toHaveLength(56);
+        expect(ethnicityOptions('Khmer')[0]).toEqual({ value: 'Khmer', label: 'Khmer' });
+        expect(ethnicityOptions('Khác')[0]).toEqual({ value: 'Khác', label: 'Khác' });
+    });
+
+    it('reports a missing code on the ethnicity field', () => {
+        expect(validatePatientForm(adult({ dantocMa: '' }), TODAY)).toEqual({ dantoc: FIELD_MSG.REQUIRED });
+        expect(serverFieldErrors({ dantocMa: 'REQUIRED' })).toEqual({ dantoc: FIELD_MSG.REQUIRED });
     });
 });

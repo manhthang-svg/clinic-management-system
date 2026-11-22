@@ -6,6 +6,35 @@ export const ADULT_AGE = 18;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
 
+// Danh muc cac dan toc Viet Nam cua Tong cuc Thong ke (nso.gov.vn), ma 2 chu so cho dantoc_ma (CV 365).
+// Le tan chon ten, o Ma dan toc tu dien theo ten.
+export const ETHNICITIES = [
+    ['01', 'Kinh'], ['02', 'Tày'], ['03', 'Thái'], ['04', 'Hoa'], ['05', 'Khơ-me'], ['06', 'Mường'],
+    ['07', 'Nùng'], ['08', 'HMông'], ['09', 'Dao'], ['10', 'Gia-rai'], ['11', 'Ngái'], ['12', 'Ê-đê'],
+    ['13', 'Ba na'], ['14', 'Xơ-Đăng'], ['15', 'Sán Chay'], ['16', 'Cơ-ho'], ['17', 'Chăm'], ['18', 'Sán Dìu'],
+    ['19', 'Hrê'], ['20', 'Mnông'], ['21', 'Ra-glai'], ['22', 'Xtiêng'], ['23', 'Bru-Vân Kiều'], ['24', 'Thổ'],
+    ['25', 'Giáy'], ['26', 'Cơ-tu'], ['27', 'Gié Triêng'], ['28', 'Mạ'], ['29', 'Khơ-mú'], ['30', 'Co'],
+    ['31', 'Tà-ôi'], ['32', 'Chơ-ro'], ['33', 'Kháng'], ['34', 'Xinh-mun'], ['35', 'Hà Nhì'], ['36', 'Chu ru'],
+    ['37', 'Lào'], ['38', 'La Chí'], ['39', 'La Ha'], ['40', 'Phù Lá'], ['41', 'La Hủ'], ['42', 'Lự'],
+    ['43', 'Lô Lô'], ['44', 'Chứt'], ['45', 'Mảng'], ['46', 'Pà Thẻn'], ['47', 'Co Lao'], ['48', 'Cống'],
+    ['49', 'Bố Y'], ['50', 'Si La'], ['51', 'Pu Péo'], ['52', 'Brâu'], ['53', 'Ơ Đu'], ['54', 'Rơ măm'],
+    ['55', 'Người nước ngoài'], ['56', 'Không rõ'],
+].map(([code, name]) => ({ code, name }));
+
+// ten cu da luu truoc khi dung ten chinh thuc
+const ETHNICITY_ALIASES = { Khmer: '05' };
+
+// ma dan toc theo ten, khong co trong danh muc thi tra null
+export function ethnicityCode(name) {
+    return ETHNICITIES.find((item) => item.name === name)?.code ?? ETHNICITY_ALIASES[name] ?? null;
+}
+
+// lua chon cho o Dan toc; ho so cu luu ten ngoai danh muc (vd "Khác") van hien de khong mat du lieu
+export function ethnicityOptions(current) {
+    const options = ETHNICITIES.map(({ name }) => ({ value: name, label: name }));
+    return current && !ETHNICITIES.some((item) => item.name === current) ? [{ value: current, label: current }, ...options] : options;
+}
+
 export const INITIAL_PATIENT_FORM = {
     hoten: '',
     ngaysinh: '',
@@ -75,7 +104,8 @@ export function validatePatientForm(form, today) {
     if (text('hoten').length > MAX_NAME_LENGTH) errors.hoten = FIELD_MSG.TOO_LONG;
     require('diachi');
     require('dantoc');
-    require('dantocMa');
+    // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
+    if (!errors.dantoc && !text('dantocMa')) errors.dantoc = FIELD_MSG.REQUIRED;
 
     const age = formAge(form, today);
     if (!form.ngaysinh) errors.ngaysinh = FIELD_MSG.REQUIRED;
@@ -119,7 +149,7 @@ export function toFormValues(patient) {
 export function serverFieldErrors(details) {
     return Object.fromEntries(Object.entries(details ?? {})
         .filter(([field]) => field in INITIAL_PATIENT_FORM)
-        .map(([field, code]) => [field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
+        .map(([field, code]) => [field === 'dantocMa' ? 'dantoc' : field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
 }
 
 // form da bi sua so voi ban dau chua

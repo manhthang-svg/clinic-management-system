@@ -38,7 +38,7 @@ public record CreatePatientRequest(
         @Size(max = 50, message = "TOO_LONG")
         String dantoc,
 
-        @NotBlank(message = "REQUIRED")
+        // optional: derived from dantoc on the server; only used for a name outside the ethnicity list
         @Size(max = 2, message = "TOO_LONG")
         String dantocMa,
 
