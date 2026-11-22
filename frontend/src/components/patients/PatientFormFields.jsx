@@ -1,9 +1,9 @@
-import { MAX_NAME_LENGTH } from './patientForm';
+import { MAX_NAME_LENGTH, ethnicityOptions } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
 
 // form dung chung cho UC-37 tao ho so va UC-38 sua ho so
 const inputClass =
-    'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100';
+    'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 read-only:bg-slate-100';
 
 const labelClass = 'block text-sm font-medium text-slate-700';
 
@@ -201,16 +201,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             errors={fieldErrors}
                             onChange={handleChange}
                             required
-                            options={[
-                                { value: 'Kinh', label: 'Kinh' },
-                                { value: 'Tày', label: 'Tày' },
-                                { value: 'Thái', label: 'Thái' },
-                                { value: 'Mường', label: 'Mường' },
-                                { value: 'Khmer', label: 'Khmer' },
-                                { value: 'Hoa', label: 'Hoa' },
-                                { value: 'Nùng', label: 'Nùng' },
-                                { value: 'Khác', label: 'Khác' },
-                            ]}
+                            options={ethnicityOptions(form.dantoc)}
                         />
 
                         <Field
@@ -218,10 +209,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             name="dantocMa"
                             form={form}
                             errors={fieldErrors}
-                            onChange={handleChange}
-                            required
-                            maxLength={2}
-                            placeholder="Ví dụ: 01"
+                            readOnly
+                            title="Tự điền theo dân tộc đã chọn"
+                            placeholder="Tự điền theo dân tộc"
                         />
 
                         <SelectField

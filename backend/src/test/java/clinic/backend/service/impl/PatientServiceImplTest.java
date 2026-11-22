@@ -252,6 +252,55 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void derivesEthnicityCodeFromTheNameIgnoringTheSentCode() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, ethnicityRequest(" Mường ", "99"));
+
+        assertThat(response.dantocMa()).isEqualTo("06");
+    }
+
+    @Test
+    void createsWithoutAnEthnicityCode() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, ethnicityRequest("Kinh", null)).dantocMa()).isEqualTo("01");
+    }
+
+    @Test
+    void rejectsAnUnlistedEthnicityWithoutACode() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, ethnicityRequest("Khác", null)))
+                .isInstanceOfSatisfying(AppException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID);
+                    assertThat(ex.getDetails()).containsEntry("dantoc", "INVALID_FORMAT");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void updateWithoutAnEthnicityCodeKeepsTheDerivedCodeAndSavesNothing() {
+        Patient patient = storedPatient();
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient));
+
+        service.updatePatient(ACCOUNT_ID, PATIENT_ID, new UpdatePatientRequest("Nguyen Van A",
+                LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, null, null, "Kinh", null, null, null,
+                "Ha Noi", null, null, null, null, null, "0901234567", "patient@example.com", null, null, null,
+                null, null, null, 0L));
+
+        verify(patientRepository, never()).save(any(Patient.class));
+        verifyNoInteractions(auditLogService);
+    }
+
+    private CreatePatientRequest ethnicityRequest(String dantoc, String dantocMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, null, null,
+                dantoc, dantocMa, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null, null,
+                null, null, null, null, null);
+    }
+
+    @Test
     void rejectsDuplicateCitizenIdBeforeCreatingPatient() {
         when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient()));
 

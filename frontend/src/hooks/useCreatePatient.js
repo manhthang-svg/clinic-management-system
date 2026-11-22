@@ -11,6 +11,7 @@ import {
     msg19,
     serverFieldErrors,
     validatePatientForm,
+    ethnicityCode,
 } from '../components/patients/patientForm';
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
@@ -32,7 +33,9 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
 
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
-        setForm((previous) => ({ ...previous, [name]: value }));
+        setForm((previous) => (name === 'dantoc'
+            ? { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa }
+            : { ...previous, [name]: value }));
         setFieldErrors((previous) => {
             if (!previous[name]) return previous;
             const next = { ...previous };

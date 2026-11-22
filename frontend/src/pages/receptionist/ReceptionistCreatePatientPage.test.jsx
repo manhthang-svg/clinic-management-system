@@ -64,6 +64,26 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         expect(patientApi.create.mock.calls[0][0]).toMatchObject({ hoten: 'Nguyễn Văn An', cccdSo: null });
     });
 
+    it('fills the read-only ethnicity code from the chosen ethnicity', async () => {
+        const user = userEvent.setup();
+        const patientApi = {
+            possibleDuplicates: vi.fn().mockResolvedValue([]),
+            create: vi.fn().mockResolvedValue({ id: 'p-10' }),
+        };
+        renderPage(patientApi);
+
+        const code = screen.getByLabelText('Mã dân tộc');
+        expect(code).toHaveAttribute('readonly');
+        expect(code).toHaveValue('01');
+        await fillAdult(user);
+        await user.selectOptions(screen.getByLabelText(/^Dân tộc/), 'Mường');
+        expect(code).toHaveValue('06');
+        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+
+        await screen.findByText('Hồ sơ p-10');
+        expect(patientApi.create.mock.calls[0][0]).toMatchObject({ dantoc: 'Mường', dantocMa: '06' });
+    });
+
     it('warns about possible duplicates and opens the chosen profile (AF-02)', async () => {
         const user = userEvent.setup();
         const patientApi = {

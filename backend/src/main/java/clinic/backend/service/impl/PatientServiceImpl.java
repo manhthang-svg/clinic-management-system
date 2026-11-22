@@ -21,6 +21,7 @@ import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PatientService;
+import clinic.backend.utils.EthnicityCatalog;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -114,7 +116,7 @@ public class PatientServiceImpl implements PatientService {
                 normalize(request.nghenghiep()),
                 normalize(request.nghenghiepMa()),
                 request.dantoc(),
-                request.dantocMa(),
+                ethnicityCode(request.dantoc(), request.dantocMa(), null),
                 normalize(request.ngoaikieu()),
                 normalize(request.ngoaikieuMa()),
                 request.diachi(),
@@ -225,7 +227,7 @@ public class PatientServiceImpl implements PatientService {
 
         // so sanh truoc khi sua: khong doi gi thi khong luu, khong ghi audit
         Map<String, Object> changes = changedFields(administrativeValues(patient),
-                requestedValues(request, cccdSo, hochieuSo));
+                requestedValues(request, cccdSo, hochieuSo, patient.getDantocMa()));
         if (changes.isEmpty()) {
             return toResponse(patient);
         }
@@ -239,7 +241,7 @@ public class PatientServiceImpl implements PatientService {
                 normalize(request.nghenghiep()),
                 normalize(request.nghenghiepMa()),
                 request.dantoc().trim(),
-                request.dantocMa().trim(),
+                ethnicityCode(request.dantoc(), request.dantocMa(), patient.getDantocMa()),
                 normalize(request.ngoaikieu()),
                 normalize(request.ngoaikieuMa()),
                 request.diachi().trim(),
@@ -263,6 +265,15 @@ public class PatientServiceImpl implements PatientService {
         auditLogService.recordBusinessChange(actorAccountId, AuditLogAction.UPDATE, PATIENT_AUDIT_ENTITY, id, null,
                 Map.of("mabenhnhan", patient.getMabenhnhan(), "changes", changes), now);
         return toResponse(saved);
+    }
+
+    // ma dan toc lay theo ten dan toc; ten ngoai danh muc (vd "Khac" cua ho so cu) thi dung ma gui len hoac ma dang luu
+    private String ethnicityCode(String dantoc, String requestedCode, String currentCode) {
+        return EthnicityCatalog.codeOf(dantoc)
+                .or(() -> Optional.ofNullable(normalize(requestedCode)))
+                .or(() -> Optional.ofNullable(normalize(currentCode)))
+                .orElseThrow(() -> new AppException(ErrorCode.REQUEST_PARAMETER_INVALID,
+                        Map.of("dantoc", "INVALID_FORMAT")));
     }
 
     // cac truong le tan duoc sua (khong gom tien su, di ung - BR-23)
@@ -297,7 +308,8 @@ public class PatientServiceImpl implements PatientService {
     }
 
     // cung cac truong tren nhung lay tu request, chuan hoa nhu khi luu
-    private Map<String, Object> requestedValues(UpdatePatientRequest request, String cccdSo, String hochieuSo) {
+    private Map<String, Object> requestedValues(
+            UpdatePatientRequest request, String cccdSo, String hochieuSo, String currentDantocMa) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("hoten", request.hoten().trim());
         values.put("ngaysinh", request.ngaysinh());
@@ -315,7 +327,7 @@ public class PatientServiceImpl implements PatientService {
         values.put("nghenghiepMa", normalize(request.nghenghiepMa()));
         values.put("noilamviec", normalize(request.noilamviec()));
         values.put("dantoc", request.dantoc().trim());
-        values.put("dantocMa", request.dantocMa().trim());
+        values.put("dantocMa", ethnicityCode(request.dantoc(), request.dantocMa(), currentDantocMa));
         values.put("ngoaikieu", normalize(request.ngoaikieu()));
         values.put("ngoaikieuMa", normalize(request.ngoaikieuMa()));
         values.put("yeutorh", normalize(request.yeutorh()));
