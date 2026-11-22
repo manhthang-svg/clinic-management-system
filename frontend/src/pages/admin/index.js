@@ -13,4 +13,5 @@ export { HospitalInformationPage } from './HospitalInformationPage';
 export { LabParameterManagementPage } from './LabParameterManagementPage';
 export { MedicineManagementPage } from './MedicineManagementPage';
 export { RecordArchivePage } from './RecordArchivePage';
+export { AuditLogPage } from './AuditLogPage';
 export { AdminMedicalRecordExportModal } from './AdminMedicalRecordExportModal';

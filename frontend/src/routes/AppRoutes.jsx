@@ -18,6 +18,7 @@ import {
   LabParameterManagementPage,
   MedicineManagementPage,
   RecordArchivePage,
+  AuditLogPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -251,6 +252,17 @@ export function AppRoutes({
             path="record-archive"
             element={
               <RecordArchivePage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="audit"
+            element={
+              <AuditLogPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

@@ -56,6 +56,7 @@ export function AdminSidebar({ activeKey = 'accounts', onNavigate }) {
     schedules: '/admin/schedules',
     'hospital-information': '/admin/hospital-information',
     'record-archive': '/admin/record-archive',
+    audit: '/admin/audit',
   };
 
   const handleNavigate = (id) => {
