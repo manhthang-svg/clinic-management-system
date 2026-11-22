@@ -35,6 +35,45 @@ export function ethnicityOptions(current) {
     return current && !ETHNICITIES.some((item) => item.name === current) ? [{ value: current, label: current }, ...options] : options;
 }
 
+// Ma nghe nghiep theo thanh phan xa hoi (QD 4069/2001/QD-BYT, Phu luc 6), ma cho nghenghiep_ma (CV 365).
+export const OCCUPATIONS = [
+    ['01', 'Trẻ dưới 6 tuổi đi học, dưới 15 tuổi không đi học'],
+    ['02', 'Sinh viên, học sinh'],
+    ['03', 'Hưu và trên 60 tuổi'],
+    ['04', 'Công nhân'],
+    ['05', 'Nông dân'],
+    ['06', 'Lực lượng vũ trang'],
+    ['07', 'Trí thức'],
+    ['08', 'Hành chính, sự nghiệp'],
+    ['09', 'Y tế'],
+    ['10', 'Dịch vụ'],
+    ['11', 'Việt kiều'],
+    ['12', 'Ngoại kiều'],
+    ['99', 'Khác'],
+].map(([code, name]) => ({ code, name }));
+
+// ma nghe nghiep theo ten, khong co trong danh muc thi tra null
+export function occupationCode(name) {
+    return OCCUPATIONS.find((item) => item.name === name)?.code ?? null;
+}
+
+// lua chon cho o Nghe nghiep (khong bat buoc); nghe nghiep cu go tu do van hien de khong mat du lieu
+export function occupationOptions(current) {
+    const options = [{ value: '', label: 'Chưa chọn' },
+        ...OCCUPATIONS.map(({ name }) => ({ value: name, label: name }))];
+    return current && !occupationCode(current) ? [options[0], { value: current, label: current }, ...options.slice(1)]
+        : options;
+}
+
+// khi doi ten dan toc / nghe nghiep thi tu dien ma tuong ung
+export function withDerivedCodes(previous, name, value) {
+    if (name === 'dantoc') return { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa };
+    if (name === 'nghenghiep') {
+        return { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+    }
+    return { ...previous, [name]: value };
+}
+
 export const INITIAL_PATIENT_FORM = {
     hoten: '',
     ngaysinh: '',
@@ -145,11 +184,14 @@ export function toFormValues(patient) {
     }));
 }
 
+// o ma chi doc: loi cua ma hien o o ten tuong ung
+const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep' };
+
 // doi ma loi backend thanh loi tung truong
 export function serverFieldErrors(details) {
     return Object.fromEntries(Object.entries(details ?? {})
         .filter(([field]) => field in INITIAL_PATIENT_FORM)
-        .map(([field, code]) => [field === 'dantocMa' ? 'dantoc' : field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
+        .map(([field, code]) => [CODE_FIELD_OWNER[field] ?? field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
 }
 
 // form da bi sua so voi ban dau chua

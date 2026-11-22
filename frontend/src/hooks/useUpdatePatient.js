@@ -11,7 +11,7 @@ import {
     serverFieldErrors,
     toFormValues,
     validatePatientForm,
-    ethnicityCode,
+    withDerivedCodes,
 } from '../components/patients/patientForm';
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
@@ -52,9 +52,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
 
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
-        setForm((previous) => (name === 'dantoc'
-            ? { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa }
-            : { ...previous, [name]: value }));
+        setForm((previous) => withDerivedCodes(previous, name, value));
         setFieldErrors((previous) => {
             if (!previous[name]) return previous;
             const next = { ...previous };

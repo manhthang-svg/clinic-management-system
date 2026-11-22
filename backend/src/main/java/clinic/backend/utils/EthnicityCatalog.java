@@ -1,8 +1,5 @@
 package clinic.backend.utils;
 
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -13,10 +10,7 @@ import java.util.Optional;
  */
 public final class EthnicityCatalog {
 
-    private static final Map<String, String> CODES_BY_NAME = new LinkedHashMap<>();
-
-    static {
-        String[][] entries = {
+    private static final CodeCatalog CATALOG = new CodeCatalog(new String[][] {
             {"01", "Kinh"}, {"02", "Tày"}, {"03", "Thái"}, {"04", "Hoa"}, {"05", "Khơ-me"}, {"06", "Mường"},
             {"07", "Nùng"}, {"08", "HMông"}, {"09", "Dao"}, {"10", "Gia-rai"}, {"11", "Ngái"}, {"12", "Ê-đê"},
             {"13", "Ba na"}, {"14", "Xơ-Đăng"}, {"15", "Sán Chay"}, {"16", "Cơ-ho"}, {"17", "Chăm"}, {"18", "Sán Dìu"},
@@ -27,23 +21,15 @@ public final class EthnicityCatalog {
             {"43", "Lô Lô"}, {"44", "Chứt"}, {"45", "Mảng"}, {"46", "Pà Thẻn"}, {"47", "Co Lao"}, {"48", "Cống"},
             {"49", "Bố Y"}, {"50", "Si La"}, {"51", "Pu Péo"}, {"52", "Brâu"}, {"53", "Ơ Đu"}, {"54", "Rơ măm"},
             {"55", "Người nước ngoài"}, {"56", "Không rõ"},
-        };
-        for (String[] entry : entries) {
-            CODES_BY_NAME.put(key(entry[1]), entry[0]);
-        }
-        // name saved before the official spelling was used
-        CODES_BY_NAME.put(key("Khmer"), "05");
-    }
+    })
+            // name saved before the official spelling was used
+            .alias("Khmer", "05");
 
     private EthnicityCatalog() {
     }
 
     /** The code for a listed name, ignoring case and extra spaces; empty for a name outside the list. */
     public static Optional<String> codeOf(String name) {
-        return name == null ? Optional.empty() : Optional.ofNullable(CODES_BY_NAME.get(key(name)));
-    }
-
-    private static String key(String name) {
-        return String.join(" ", name.strip().split("\\s+")).toLowerCase(Locale.ROOT);
+        return CATALOG.codeOf(name);
     }
 }
