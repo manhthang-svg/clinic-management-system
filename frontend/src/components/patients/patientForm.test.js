@@ -9,6 +9,9 @@ import {
     createErrorMessage,
     ethnicityCode,
     ethnicityOptions,
+    occupationCode,
+    occupationOptions,
+    withDerivedCodes,
     isDirty,
     serverFieldErrors,
     toFormValues,
@@ -111,5 +114,33 @@ describe('dan toc: chi chon ten, ma tu dien', () => {
     it('reports a missing code on the ethnicity field', () => {
         expect(validatePatientForm(adult({ dantocMa: '' }), TODAY)).toEqual({ dantoc: FIELD_MSG.REQUIRED });
         expect(serverFieldErrors({ dantocMa: 'REQUIRED' })).toEqual({ dantoc: FIELD_MSG.REQUIRED });
+    });
+});
+
+describe('nghe nghiep: chi chon ten, ma tu dien', () => {
+    it('maps each occupation to its code', () => {
+        expect(occupationCode('Công nhân')).toBe('04');
+        expect(occupationCode('Hưu và trên 60 tuổi')).toBe('03');
+        expect(occupationCode('Khác')).toBe('99');
+        expect(occupationCode('Kỹ sư')).toBeNull();
+    });
+
+    it('starts with an empty choice and keeps an old free-text occupation', () => {
+        expect(occupationOptions('')[0]).toEqual({ value: '', label: 'Chưa chọn' });
+        expect(occupationOptions('')).toHaveLength(14);
+        expect(occupationOptions('Kỹ sư')[1]).toEqual({ value: 'Kỹ sư', label: 'Kỹ sư' });
+    });
+
+    it('fills and clears the code when the occupation changes', () => {
+        const form = { nghenghiep: '', nghenghiepMa: '', dantoc: 'Kinh', dantocMa: '01' };
+        const chosen = withDerivedCodes(form, 'nghenghiep', 'Y tế');
+        expect(chosen).toMatchObject({ nghenghiep: 'Y tế', nghenghiepMa: '09' });
+        expect(withDerivedCodes(chosen, 'nghenghiep', '')).toMatchObject({ nghenghiep: '', nghenghiepMa: '' });
+        expect(withDerivedCodes(form, 'dantoc', 'Tày')).toMatchObject({ dantoc: 'Tày', dantocMa: '02' });
+        expect(withDerivedCodes(form, 'hoten', 'A')).toMatchObject({ hoten: 'A', nghenghiepMa: '' });
+    });
+
+    it('reports a backend error on the occupation code under the occupation field', () => {
+        expect(serverFieldErrors({ nghenghiepMa: 'TOO_LONG' })).toEqual({ nghenghiep: FIELD_MSG.TOO_LONG });
     });
 });

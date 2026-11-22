@@ -22,6 +22,7 @@ import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PatientService;
 import clinic.backend.utils.EthnicityCatalog;
+import clinic.backend.utils.OccupationCatalog;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -114,7 +115,7 @@ public class PatientServiceImpl implements PatientService {
                 request.ngaysinh(),
                 request.gioitinh(),
                 normalize(request.nghenghiep()),
-                normalize(request.nghenghiepMa()),
+                occupationCode(request.nghenghiep(), request.nghenghiepMa(), null),
                 request.dantoc(),
                 ethnicityCode(request.dantoc(), request.dantocMa(), null),
                 normalize(request.ngoaikieu()),
@@ -227,7 +228,7 @@ public class PatientServiceImpl implements PatientService {
 
         // so sanh truoc khi sua: khong doi gi thi khong luu, khong ghi audit
         Map<String, Object> changes = changedFields(administrativeValues(patient),
-                requestedValues(request, cccdSo, hochieuSo, patient.getDantocMa()));
+                requestedValues(request, cccdSo, hochieuSo, patient.getDantocMa(), patient.getNghenghiepMa()));
         if (changes.isEmpty()) {
             return toResponse(patient);
         }
@@ -239,7 +240,7 @@ public class PatientServiceImpl implements PatientService {
                 request.ngaysinh(),
                 request.gioitinh(),
                 normalize(request.nghenghiep()),
-                normalize(request.nghenghiepMa()),
+                occupationCode(request.nghenghiep(), request.nghenghiepMa(), patient.getNghenghiepMa()),
                 request.dantoc().trim(),
                 ethnicityCode(request.dantoc(), request.dantocMa(), patient.getDantocMa()),
                 normalize(request.ngoaikieu()),
@@ -276,6 +277,15 @@ public class PatientServiceImpl implements PatientService {
                         Map.of("dantoc", "INVALID_FORMAT")));
     }
 
+    // ma nghe nghiep lay theo ten (khong bat buoc): khong co ten thi khong co ma; ten tu do cu thi giu ma gui len / dang luu
+    private String occupationCode(String nghenghiep, String requestedCode, String currentCode) {
+        if (normalize(nghenghiep) == null) {
+            return null;
+        }
+        return OccupationCatalog.codeOf(nghenghiep)
+                .orElseGet(() -> Optional.ofNullable(normalize(requestedCode)).orElse(normalize(currentCode)));
+    }
+
     // cac truong le tan duoc sua (khong gom tien su, di ung - BR-23)
     private static Map<String, Object> administrativeValues(Patient patient) {
         Map<String, Object> values = new LinkedHashMap<>();
@@ -309,7 +319,8 @@ public class PatientServiceImpl implements PatientService {
 
     // cung cac truong tren nhung lay tu request, chuan hoa nhu khi luu
     private Map<String, Object> requestedValues(
-            UpdatePatientRequest request, String cccdSo, String hochieuSo, String currentDantocMa) {
+            UpdatePatientRequest request, String cccdSo, String hochieuSo, String currentDantocMa,
+            String currentNghenghiepMa) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("hoten", request.hoten().trim());
         values.put("ngaysinh", request.ngaysinh());
@@ -324,7 +335,7 @@ public class PatientServiceImpl implements PatientService {
         values.put("tinhthanh", normalize(request.tinhthanh()));
         values.put("tinhthanhMa", normalize(request.tinhthanhMa()));
         values.put("nghenghiep", normalize(request.nghenghiep()));
-        values.put("nghenghiepMa", normalize(request.nghenghiepMa()));
+        values.put("nghenghiepMa", occupationCode(request.nghenghiep(), request.nghenghiepMa(), currentNghenghiepMa));
         values.put("noilamviec", normalize(request.noilamviec()));
         values.put("dantoc", request.dantoc().trim());
         values.put("dantocMa", ethnicityCode(request.dantoc(), request.dantocMa(), currentDantocMa));

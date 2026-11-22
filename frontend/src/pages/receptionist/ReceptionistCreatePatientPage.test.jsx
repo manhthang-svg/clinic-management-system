@@ -78,10 +78,16 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         await fillAdult(user);
         await user.selectOptions(screen.getByLabelText(/^Dân tộc/), 'Mường');
         expect(code).toHaveValue('06');
+        const occupationCodeField = screen.getByLabelText('Mã nghề nghiệp');
+        expect(occupationCodeField).toHaveAttribute('readonly');
+        await user.selectOptions(screen.getByLabelText('Nghề nghiệp'), 'Công nhân');
+        expect(occupationCodeField).toHaveValue('04');
         await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
 
         await screen.findByText('Hồ sơ p-10');
-        expect(patientApi.create.mock.calls[0][0]).toMatchObject({ dantoc: 'Mường', dantocMa: '06' });
+        expect(patientApi.create.mock.calls[0][0]).toMatchObject({
+            dantoc: 'Mường', dantocMa: '06', nghenghiep: 'Công nhân', nghenghiepMa: '04',
+        });
     });
 
     it('warns about possible duplicates and opens the chosen profile (AF-02)', async () => {

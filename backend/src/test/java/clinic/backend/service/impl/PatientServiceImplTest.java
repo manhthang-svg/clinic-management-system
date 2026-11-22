@@ -294,6 +294,38 @@ class PatientServiceImplTest {
         verifyNoInteractions(auditLogService);
     }
 
+    @Test
+    void derivesOccupationCodeFromTheName() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, occupationRequest("Công nhân", "77"));
+
+        assertThat(response.nghenghiepMa()).isEqualTo("04");
+    }
+
+    @Test
+    void leavesOccupationCodeEmptyWithoutAnOccupation() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, occupationRequest(null, "04")).nghenghiepMa()).isNull();
+    }
+
+    @Test
+    void keepsTheSentCodeForAnOldFreeTextOccupation() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, occupationRequest("Kỹ sư", "07")).nghenghiepMa()).isEqualTo("07");
+    }
+
+    private CreatePatientRequest occupationRequest(String nghenghiep, String nghenghiepMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
+                nghenghiepMa, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null,
+                null, null, null, null, null, null);
+    }
+
     private CreatePatientRequest ethnicityRequest(String dantoc, String dantocMa) {
         return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, null, null,
                 dantoc, dantocMa, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null, null,

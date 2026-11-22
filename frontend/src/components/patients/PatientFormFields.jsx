@@ -1,4 +1,4 @@
-import { MAX_NAME_LENGTH, ethnicityOptions } from './patientForm';
+import { MAX_NAME_LENGTH, ethnicityOptions, occupationOptions } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
 
 // form dung chung cho UC-37 tao ho so va UC-38 sua ho so
@@ -253,14 +253,13 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                     </div>
 
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        <Field
+                        <SelectField
                             label="Nghề nghiệp"
                             name="nghenghiep"
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
-                            maxLength={100}
-                            placeholder="Nhập nghề nghiệp"
+                            options={occupationOptions(form.nghenghiep)}
                         />
 
                         <Field
@@ -268,9 +267,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             name="nghenghiepMa"
                             form={form}
                             errors={fieldErrors}
-                            onChange={handleChange}
-                            maxLength={5}
-                            placeholder="Mã nghề nghiệp"
+                            readOnly
+                            title="Tự điền theo nghề nghiệp đã chọn"
+                            placeholder="Tự điền theo nghề nghiệp"
                         />
 
                         <Field
