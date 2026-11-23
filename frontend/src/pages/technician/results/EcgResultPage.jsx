@@ -17,7 +17,7 @@ export function EcgResultPage({ order, api }) {
               <SignerField order={order} form={form} set={set} readOnly={readOnly} label="Bác sĩ ký phiếu" />
             </div>
           </ConclusionSection>
-          <FilesSection form={form} set={set} readOnly={readOnly} title="Bản ghi điện tim" description="Ảnh hoặc PDF bản ghi điện tim (nếu có). Không in lên phiếu." />
+          <FilesSection form={form} set={set} readOnly={readOnly} required error={errors.files} title="Bản ghi điện tim" description="Ảnh chụp bản ghi điện tim. Không in lên phiếu." />
         </>
       )}
     </ResultEditor>

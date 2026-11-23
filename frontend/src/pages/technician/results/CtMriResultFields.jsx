@@ -30,7 +30,7 @@ export function CtMriResultFields({ order, form, set, errors, readOnly, template
       </ResultSection>
       <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} />
+          <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} required />
           <SignerField order={order} form={form} set={set} readOnly={readOnly} />
         </div>
       </ConclusionSection>

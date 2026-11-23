@@ -26,6 +26,8 @@ export function UltrasoundResultPage({ order, api }) {
             form={form}
             set={set}
             readOnly={readOnly}
+            required
+            error={errors.files}
             description="Hai ảnh đầu tiên được in bên phải phần kết quả."
           />
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
