@@ -8,7 +8,9 @@ import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.ConclusionClosureResponse;
 import clinic.backend.dto.response.ConclusionConfirmationResponse;
 import clinic.backend.dto.response.ConclusionResponse;
+import clinic.backend.dto.response.ConclusionSlipResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.ConclusionPrintService;
 import clinic.backend.service.ConclusionService;
 import clinic.backend.service.MedicalRecordClosureService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,11 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/conclusions")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
-@Tag(name = "Kết luận khám", description = "UC-56 Kết luận khám bệnh, UC-58 Đóng hồ sơ bệnh án")
+@Tag(name = "Kết luận khám", description = "UC-56 Kết luận khám bệnh, UC-57 In kết luận, UC-58 Đóng hồ sơ bệnh án")
 public class ConclusionController {
 
     private final ConclusionService conclusionService;
     private final MedicalRecordClosureService closureService;
+    private final ConclusionPrintService printService;
 
     @GetMapping("/visits/{visitId}")
     @Operation(summary = "Tải biểu mẫu kết luận của lượt khám, kèm dữ liệu đã lưu")
@@ -63,5 +66,19 @@ public class ConclusionController {
             @PathVariable UUID visitId,
             @RequestBody ConfirmConclusionRequest request) {
         return ApiResponse.success(closureService.confirm(StaffPrincipal.from(jwt), visitId, request));
+    }
+
+    @GetMapping("/visits/{visitId}/print")
+    @Operation(summary = "UC-57: xem trước phiếu kết luận của hồ sơ đã đóng; không ghi nhận gì")
+    public ApiResponse<ConclusionSlipResponse> printPreview(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID visitId) {
+        return ApiResponse.success(printService.printPreview(StaffPrincipal.from(jwt), visitId));
+    }
+
+    @PostMapping("/visits/{visitId}/commands/prepare-print")
+    @Operation(summary = "UC-57: ghi nhận lần in (nhật ký PRINT) và trả về phiếu kết luận")
+    public ApiResponse<ConclusionSlipResponse> preparePrint(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID visitId) {
+        return ApiResponse.success(printService.preparePrint(StaffPrincipal.from(jwt), visitId));
     }
 }

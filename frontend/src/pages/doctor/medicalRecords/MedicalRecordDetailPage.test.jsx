@@ -165,11 +165,11 @@ const mockRecordDetail = {
   ],
 };
 
-function renderDetail(path = '/doctor/medical-records/mr-123') {
+function renderDetail(path = '/doctor/medical-records/mr-123', props = {}) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/doctor/medical-records/:id" element={<MedicalRecordDetailPage />} />
+        <Route path="/doctor/medical-records/:id" element={<MedicalRecordDetailPage {...props} />} />
         <Route path="/doctor/medical-records/visits/:visitId" element={<MedicalRecordDetailPage isVisitRoute />} />
       </Routes>
     </MemoryRouter>
@@ -336,13 +336,41 @@ describe('MedicalRecordDetailPage (UC-52)', () => {
     expect(medicalRecordApi.getMedicalRecordByVisitId).toHaveBeenCalledWith('v-9', expect.any(AbortSignal));
   });
 
-  it('has no reprint action until reprinting is specified (BR-52-07)', async () => {
+  it('lets the Doctor of the visit print the slips of a closed record (UC-57, UC-60, UC-62 AF-01)', async () => {
+    const user = userEvent.setup();
     medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
+    const printApi = {
+      getConclusionPrint: vi.fn().mockReturnValue(new Promise(() => {})),
+      prepareConclusionPrint: vi.fn(),
+      getPrescriptionPrint: vi.fn(),
+      preparePrescriptionPrint: vi.fn(),
+      getFollowUpPrint: vi.fn(),
+      prepareFollowUpPrint: vi.fn(),
+    };
 
-    renderDetail();
+    renderDetail(undefined, { currentAccountId: 'doc-1', printApi });
 
     await screen.findByText('Nguyễn Văn A');
-    expect(screen.queryByRole('button', { name: /In phiếu|Bản sao/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'In đơn thuốc' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'In giấy hẹn' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'In kết luận' }));
+    expect(printApi.getConclusionPrint).toHaveBeenCalledWith('v-1', expect.any(AbortSignal));
+  });
+
+  it('shows no print action to another Doctor or for an open record', async () => {
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue(mockRecordDetail);
+    const { unmount } = renderDetail(undefined, { currentAccountId: 'doc-2' });
+
+    await screen.findByText('Nguyễn Văn A');
+    expect(screen.queryByRole('button', { name: 'In kết luận' })).not.toBeInTheDocument();
+    unmount();
+
+    medicalRecordApi.getMedicalRecordDetail.mockResolvedValue({ ...mockRecordDetail, status: 'OPEN' });
+    renderDetail(undefined, { currentAccountId: 'doc-1' });
+
+    await screen.findByText('Nguyễn Văn A');
+    expect(screen.queryByRole('button', { name: 'In kết luận' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'In đơn thuốc' })).not.toBeInTheDocument();
   });
 
   it('notes a record that was unlocked again (BR-52-02)', async () => {

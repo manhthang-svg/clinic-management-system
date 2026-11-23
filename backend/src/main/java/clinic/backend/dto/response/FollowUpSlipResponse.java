@@ -8,6 +8,7 @@ import java.util.UUID;
 /**
  * UC-62: the Phiếu hẹn khám lại of TT 01/2025/TT-BYT Phụ lục V (BR-61-06).
  *
+ * @param copy       the slip was printed before, so this print carries "Bản sao" (PO 23/11/2026)
  * @param printedAt  the time of this print; null in the preview
  * @param printedBy  who printed it; null in the preview
  * @param insurance  the insurance card of an insurance visit; null for a self-paid visit
@@ -19,6 +20,7 @@ import java.util.UUID;
 public record FollowUpSlipResponse(
         UUID appointmentId,
         String slipNumber,
+        boolean copy,
         Instant printedAt,
         String printedBy,
         Facility facility,

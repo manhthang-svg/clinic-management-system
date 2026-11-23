@@ -8,13 +8,13 @@ import {
     ADVICE_MAX, EMPTY_FOLLOW_UP, FOLLOW_UP_MSG, FOLLOW_UP_STATUS, followUpError, formFromResponse, sameFollowUp,
     shortDate, toPayload, validateFollowUp,
 } from './followUpForm';
-import { PrintFollowUpButton } from './PrintFollowUpButton';
 
 const inputClass = 'w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
 
 /**
  * UC-61 Create Follow-up Appointment (docs/uc-61-follow-up-appointment.md): the visit's single appointment — date and
- * advice — made after the conclusion and changed while it is scheduled and the record is open. UC-62 prints it.
+ * advice — made after the conclusion and changed while it is scheduled and the record is open. UC-62 prints it once
+ * the record is closed (PO 23/11/2026).
  */
 export function FollowUpPanel({ visitId, api = defaultVisitApi }) {
     const dateId = useId();
@@ -149,7 +149,6 @@ export function FollowUpPanel({ visitId, api = defaultVisitApi }) {
                         {editable && (
                             <button type="button" onClick={() => setConfirmDiscard(true)} disabled={!dirty || saving} className={BUTTON.neutral}>Hủy</button>
                         )}
-                        <PrintFollowUpButton appointmentId={appointment?.id} disabled={dirty || !scheduled} api={api} />
                     </div>
                 </div>
 

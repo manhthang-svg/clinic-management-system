@@ -227,6 +227,18 @@ export const visitApi = {
         });
     },
 
+    // UC-57 step 2: the conclusion slip of a closed record, for the preview (nothing is recorded).
+    getConclusionPrint(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/print`, { signal });
+    },
+
+    // UC-57 step 3: the server records the print (PRINT audit row) and returns the slip.
+    prepareConclusionPrint(visitId) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/commands/prepare-print`, {
+            method: 'POST',
+        });
+    },
+
     // UC-62 step 2: the Phiếu hẹn khám lại for the preview (nothing is recorded).
     getFollowUpPrint(appointmentId, signal) {
         return apiClient.request(`/follow-up-appointments/${encodeURIComponent(appointmentId)}/print`, { signal });

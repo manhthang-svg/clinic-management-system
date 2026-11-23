@@ -17,6 +17,7 @@ import clinic.backend.dto.request.ConfirmConclusionRequest;
 import clinic.backend.entity.Conclusion;
 import clinic.backend.entity.DutySchedule;
 import clinic.backend.entity.ExportLog;
+import clinic.backend.entity.FollowUpAppointment;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.ParaclinicalOrder;
 import clinic.backend.entity.ParaclinicalOrderDetail;
@@ -158,6 +159,9 @@ class MedicalRecordClosureServiceImplTest {
         assertThat(response.retentionCategory()).isEqualTo("STANDARD");
         assertThat(response.retentionYears()).isEqualTo((short) 10);
         assertThat(response.expiresOn()).isEqualTo(LocalDate.of(2036, 12, 31));
+        // Nothing else to print than the conclusion (UC-57).
+        assertThat(response.prescriptionId()).isNull();
+        assertThat(response.followUpAppointmentId()).isNull();
 
         Path file = archiveRoot.resolve("2026/LT-DK0001.json");
         assertThat(Files.readAllBytes(file)).isEqualTo(PACKAGE);
@@ -278,11 +282,21 @@ class MedicalRecordClosureServiceImplTest {
         stubSaves();
         Prescription prescription = mock(Prescription.class);
         when(prescription.getLienthongStatus()).thenReturn(PrescriptionLienthongStatus.ACCEPTED);
+        UUID prescriptionId = UUID.randomUUID();
+        when(prescription.getId()).thenReturn(prescriptionId);
         when(prescriptionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(prescription));
+        FollowUpAppointment appointment = mock(FollowUpAppointment.class);
+        UUID appointmentId = UUID.randomUUID();
+        when(appointment.isScheduled()).thenReturn(true);
+        when(appointment.getId()).thenReturn(appointmentId);
+        when(followUpRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(appointment));
 
-        service.confirm(principal(), VISIT_ID, new ConfirmConclusionRequest(3L, null));
+        var response = service.confirm(principal(), VISIT_ID, new ConfirmConclusionRequest(3L, null));
 
         assertThat(visit.getStatus()).isEqualTo(VisitStatus.COMPLETED);
+        // UC-60, UC-62 are printed once the record is closed.
+        assertThat(response.prescriptionId()).isEqualTo(prescriptionId);
+        assertThat(response.followUpAppointmentId()).isEqualTo(appointmentId);
     }
 
     @Test

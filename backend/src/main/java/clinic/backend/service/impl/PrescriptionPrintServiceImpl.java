@@ -33,8 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UC-60 Print Prescription: the form of TT 26/2025 Phụ lục I (BR-59-13) for an accepted prescription, printed by the
- * Doctor of the open visit. Reprinting from a closed record (UC-52, "Bản sao") is not implemented yet, so
- * {@code copy} is always false.
+ * Doctor of the visit once the record is closed (PO 23/11/2026), right after closing or later from the record (UC-52).
+ * The first print is the original; every later one carries "Bản sao".
  */
 @Service
 @RequiredArgsConstructor
@@ -42,7 +42,7 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
 
     private static final String AUDIT_ENTITY = "prescriptions";
 
-    private final ConcludingVisitGuard guard;
+    private final ClosedRecordPrintGuard guard;
     private final PrescriptionServiceImpl prescriptions;
     private final PrescriptionRepository prescriptionRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
@@ -56,7 +56,7 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
         Prescription prescription = printablePrescription(prescriptionId);
         Context context = guard.require(principal, prescriptions.visitId(prescription));
         requireAccepted(prescription);
-        return form(context, prescription, null, null);
+        return form(context, prescription, prescription.getPrintedAt() != null, null, null);
     }
 
     @Override
@@ -78,7 +78,7 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
         auditLogService.recordBusinessChange(
                 principal.accountId(), AuditLogAction.PRINT, AUDIT_ENTITY, prescription.getId(),
                 context.visit().getSovaovien(), audit, now);
-        return form(context, prescription, now, displayName(context.doctor()));
+        return form(context, prescription, reprint, now, displayName(context.doctor()));
     }
 
     private Prescription printablePrescription(UUID prescriptionId) {
@@ -100,11 +100,11 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
      * its last send is the accepted one.
      */
     private PrescriptionPrintResponse form(
-            Context context, Prescription prescription, Instant printedAt, String printedBy) {
+            Context context, Prescription prescription, boolean copy, Instant printedAt, String printedBy) {
         return new PrescriptionPrintResponse(
                 prescription.getId(),
                 prescription.getMadonthuoc(),
-                false,
+                copy,
                 printedAt,
                 printedBy,
                 facility(),

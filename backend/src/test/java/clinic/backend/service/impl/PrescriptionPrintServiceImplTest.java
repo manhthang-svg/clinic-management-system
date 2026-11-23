@@ -61,7 +61,7 @@ class PrescriptionPrintServiceImplTest {
     private static final UUID DOCTOR_ID = UUID.randomUUID();
     private static final UUID VISIT_ID = UUID.randomUUID();
 
-    @Mock private ConcludingVisitGuard guard;
+    @Mock private ClosedRecordPrintGuard guard;
     @Mock private PrescriptionServiceImpl prescriptions;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private ClinicFacilityRepository clinicFacilityRepository;
@@ -88,7 +88,7 @@ class PrescriptionPrintServiceImplTest {
                 LocalDate.ofInstant(NOW, ZONE), 1, VisitStatus.WAITING_CONCLUSION,
                 VisitInsuranceVerifyStatus.NOT_APPLICABLE);
         MedicalRecord record = new MedicalRecord(
-                UUID.randomUUID(), NOW, VISIT_ID, "BA-DK0001", "NGOAITRU", MedicalRecordStatus.OPEN, NOW, DOCTOR_ID);
+                UUID.randomUUID(), NOW, VISIT_ID, "BA-DK0001", "NGOAITRU", MedicalRecordStatus.LOCKED, NOW, DOCTOR_ID);
         StaffAccount doctor = StaffAccount.create(
                 DOCTOR_ID, "doctor01", "hash", "Bác sĩ An", null, null, null, null, null, null, Role.DOCTOR, null, NOW);
         context = new ConcludingVisitGuard.Context(visit, patient, record, doctor);
@@ -104,7 +104,7 @@ class PrescriptionPrintServiceImplTest {
 
         when(prescriptionRepository.findById(prescription.getId())).thenReturn(Optional.of(prescription));
         when(prescriptions.visitId(prescription)).thenReturn(VISIT_ID);
-        when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
+        lenient().when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
         ClinicFacility facility = mock(ClinicFacility.class);
         lenient().when(facility.getTenCskcb()).thenReturn("Phòng khám METPH");
         lenient().when(clinicFacilityRepository.findCurrent()).thenReturn(Optional.of(facility));
@@ -119,6 +119,7 @@ class PrescriptionPrintServiceImplTest {
         var form = service.preparePrint(principal(), prescription.getId());
 
         assertThat(form.prescriptionCode()).isEqualTo("79001abc1234-c");
+        assertThat(form.copy()).isFalse();
         assertThat(form.facility().name()).isEqualTo("Phòng khám METPH");
         assertThat(form.patient().fullName()).isEqualTo("Nguyễn Văn An");
         assertThat(form.patient().gender()).isEqualTo("Nam");
@@ -145,8 +146,9 @@ class PrescriptionPrintServiceImplTest {
         accept();
         prescription.markPrinted(EARLIER);
 
-        service.preparePrint(principal(), prescription.getId());
+        var form = service.preparePrint(principal(), prescription.getId());
 
+        assertThat(form.copy()).isTrue();
         assertThat(prescription.getPrintedAt()).isEqualTo(EARLIER);
         verify(prescriptionRepository, never()).save(any());
         verify(auditLogService).recordBusinessChange(
@@ -162,6 +164,27 @@ class PrescriptionPrintServiceImplTest {
 
         assertThat(form.printedAt()).isNull();
         assertThat(form.printedBy()).isNull();
+        assertThat(form.copy()).isFalse();
+        assertThat(prescription.getPrintedAt()).isNull();
+        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
+    }
+
+    @Test
+    void previewsACopyOnceThePrescriptionWasPrinted() {
+        accept();
+        prescription.markPrinted(EARLIER);
+
+        assertThat(service.printPreview(principal(), prescription.getId()).copy()).isTrue();
+    }
+
+    @Test
+    void printsOnlyOnceTheRecordIsClosed() {
+        accept();
+        when(guard.require(any(), eq(VISIT_ID))).thenThrow(new AppException(ErrorCode.PRINT_RECORD_NOT_CLOSED));
+
+        assertThatThrownBy(() -> service.preparePrint(principal(), prescription.getId()))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRINT_RECORD_NOT_CLOSED));
         assertThat(prescription.getPrintedAt()).isNull();
         verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
     }

@@ -65,6 +65,7 @@ class FollowUpScheduleServiceImplTest {
     private static final UUID VISIT_ID = UUID.randomUUID();
 
     @Mock private ConcludingVisitGuard guard;
+    @Mock private ClosedRecordPrintGuard printGuard;
     @Mock private FollowUpAppointmentRepository appointmentRepository;
     @Mock private ConclusionRepository conclusionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
@@ -79,7 +80,7 @@ class FollowUpScheduleServiceImplTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZONE);
-        service = new FollowUpScheduleServiceImpl(guard, appointmentRepository, conclusionRepository,
+        service = new FollowUpScheduleServiceImpl(guard, printGuard, appointmentRepository, conclusionRepository,
                 prescriptionRepository, medicalRecordRepository, clinicFacilityRepository, staffAccountRepository,
                 auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
         Patient patient = new Patient(
@@ -101,6 +102,7 @@ class FollowUpScheduleServiceImplTest {
                 (short) 2, null, null, null, NOW);
 
         lenient().when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
+        lenient().when(printGuard.require(any(), eq(VISIT_ID))).thenReturn(context);
         lenient().when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(conclusion));
         lenient().when(prescriptionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
         lenient().when(appointmentRepository.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -222,6 +224,7 @@ class FollowUpScheduleServiceImplTest {
         var slip = service.preparePrint(principal(), appointment.getId());
 
         assertThat(slip.slipNumber()).isEqualTo("GH-DK0000000123");
+        assertThat(slip.copy()).isFalse();
         assertThat(slip.facility().name()).isEqualTo("Phòng khám METPH");
         assertThat(slip.patient().gender()).isEqualTo("Nam");
         assertThat(slip.patient().address()).isEqualTo("12 Lê Lợi, Hà Nội");
@@ -243,8 +246,9 @@ class FollowUpScheduleServiceImplTest {
         Instant earlier = NOW.minusSeconds(600);
         appointment.markPrinted(earlier);
 
-        service.preparePrint(principal(), appointment.getId());
+        var slip = service.preparePrint(principal(), appointment.getId());
 
+        assertThat(slip.copy()).isTrue();
         assertThat(appointment.getPrintedAt()).isEqualTo(earlier);
         verify(auditLogService).recordBusinessChange(
                 any(), eq(AuditLogAction.PRINT), any(), any(), any(),
@@ -258,6 +262,27 @@ class FollowUpScheduleServiceImplTest {
         var slip = service.printPreview(principal(), appointment.getId());
 
         assertThat(slip.printedAt()).isNull();
+        assertThat(slip.copy()).isFalse();
+        assertThat(appointment.getPrintedAt()).isNull();
+        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
+    }
+
+    @Test
+    void previewsACopyOnceTheSlipWasPrinted() {
+        FollowUpAppointment appointment = existingById();
+        appointment.markPrinted(NOW.minusSeconds(600));
+
+        assertThat(service.printPreview(principal(), appointment.getId()).copy()).isTrue();
+    }
+
+    @Test
+    void printsOnlyOnceTheRecordIsClosed() {
+        FollowUpAppointment appointment = existingById();
+        when(printGuard.require(any(), eq(VISIT_ID))).thenThrow(new AppException(ErrorCode.PRINT_RECORD_NOT_CLOSED));
+
+        assertThatThrownBy(() -> service.preparePrint(principal(), appointment.getId()))
+                .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getErrorCode())
+                        .isEqualTo(ErrorCode.PRINT_RECORD_NOT_CLOSED));
         assertThat(appointment.getPrintedAt()).isNull();
         verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
     }
@@ -271,7 +296,7 @@ class FollowUpScheduleServiceImplTest {
         when(insured.getDenngaybhyt()).thenReturn(LocalDate.of(2026, 12, 31));
         when(insured.getThoigianvaovien()).thenReturn(NOW);
         context = new ConcludingVisitGuard.Context(insured, context.patient(), context.record(), context.doctor());
-        when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
+        when(printGuard.require(any(), eq(VISIT_ID))).thenReturn(context);
         FollowUpAppointment appointment = existingById();
 
         var slip = service.printPreview(principal(), appointment.getId());

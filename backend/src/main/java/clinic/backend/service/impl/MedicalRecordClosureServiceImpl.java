@@ -180,8 +180,14 @@ public class MedicalRecordClosureServiceImpl implements MedicalRecordClosureServ
         auditLogService.recordBusinessChange(principal.accountId(), AuditLogAction.EXPORT, ARCHIVE_AUDIT_ENTITY,
                 archive.getId(), visit.getSovaovien(), exportValues, now);
 
+        // UC-57, UC-60, UC-62 are printed once the record is closed (PO 23/11/2026): what there is to print.
+        UUID followUpAppointmentId = followUpRepository.findByMedicalRecordId(closed.getId())
+                .filter(FollowUpAppointment::isScheduled)
+                .map(FollowUpAppointment::getId)
+                .orElse(null);
         return new ConclusionConfirmationResponse(visit.getId(), visit.getSovaovien(), visit.getStatus().name(),
-                now, soluutru, category.name(), category.retentionYears(), expiresOn);
+                now, soluutru, category.name(), category.retentionYears(), expiresOn,
+                prescription == null ? null : prescription.getId(), followUpAppointmentId);
     }
 
     /** BR-30 as counted in I1-D44: services neither cancelled nor completed. */

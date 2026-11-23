@@ -847,7 +847,9 @@ p[role='alert']:not(.banner) {
   .prescription-print,
   .prescription-print *,
   .follow-up-print,
-  .follow-up-print * {
+  .follow-up-print *,
+  .conclusion-print,
+  .conclusion-print * {
     visibility: visible !important;
   }
 
@@ -861,6 +863,22 @@ p[role='alert']:not(.banner) {
   }
 
   .follow-up-print .follow-up-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* UC-57: the conclusion slip across the printable width, like the follow-up slip. */
+  .conclusion-print {
+    position: absolute;
+    inset: 0 0 auto 0;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .conclusion-print .conclusion-sheet {
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;

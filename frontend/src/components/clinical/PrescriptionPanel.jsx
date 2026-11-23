@@ -10,7 +10,6 @@ import {
     LIMITS, MSG, formFromResponse, newLine, prescriptionError, samePrescription, suggestedQuantity, toPayload,
     validatePrescription,
 } from './prescriptionForm';
-import { PrintPrescriptionButton } from './PrintPrescriptionButton';
 import { PrescriptionSigningDialog } from './PrescriptionSigningDialog';
 import { PrescriptionSubmissionHistory, SignatureStatus } from './PrescriptionSubmissionHistory';
 import { SIGNING_MSG } from './prescriptionSigning';
@@ -561,9 +560,6 @@ export function PrescriptionPanel({ visitId, api = defaultVisitApi, onSaved }) {
                             >
                                 <History aria-hidden="true" className="h-4 w-4" />Kết quả gửi
                             </button>
-                        )}
-                        {data?.prescriptionId && (
-                            <PrintPrescriptionButton prescriptionId={data.prescriptionId} accepted={accepted} api={api} />
                         )}
                         {canDelete && (
                             <button

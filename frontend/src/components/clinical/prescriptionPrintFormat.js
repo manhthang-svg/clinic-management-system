@@ -5,6 +5,8 @@ const ZONE = 'Asia/Ho_Chi_Minh';
 
 export const PRINT_MSG = {
     NOT_PRINTABLE: 'Gửi đơn thành công trước khi in.', // MSG112 (ASSUMPTION wording)
+    // PO 23/11/2026: the conclusion, prescription and appointment are printed once the record is closed.
+    RECORD_NOT_CLOSED: 'Vui lòng xác nhận kết luận trước khi in.', // MSG61
     // Luật GDĐT Điều 12 khoản 2: the mark of a paper copy converted from the data message (ASSUMPTION wording, TBD).
     MARK: (code, facility) => `Bản in từ đơn thuốc điện tử ${code} lưu tại ${facility}`,
     PRINTED_BY: (name, time) => `; người in ${name}, ${time}`,
@@ -55,5 +57,6 @@ export function dateTime(value) {
 /** The Vietnamese message of a failed UC-60 call. */
 export function printError(error) {
     if (error?.errorResponse?.code === 'PRESCRIPTION_NOT_PRINTABLE') return PRINT_MSG.NOT_PRINTABLE;
+    if (error?.errorResponse?.code === 'PRINT_RECORD_NOT_CLOSED') return PRINT_MSG.RECORD_NOT_CLOSED;
     return prescriptionError(error).message;
 }
