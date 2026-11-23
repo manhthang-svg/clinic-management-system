@@ -171,7 +171,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         String body = mockMvc.perform(post("/api/v1/patients")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(createBody("Hoàng Văn " + suffix(), "1990-05-20", citizenId, "09" + digits(8))))
+                        .content(createBody("Hoàng Văn An", "1990-05-20", citizenId, "09" + digits(8))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.cccdSo").value(citizenId))
                 .andReturn().getResponse().getContentAsString();

@@ -30,6 +30,7 @@ export function FollowUpSlip({ slip }) {
                     <div className="uppercase">Cơ quan chủ quản ……………</div>
                     <div className="font-bold uppercase">{facility.name}</div>
                     <div>Số: <strong className="font-mono">{slip.slipNumber}</strong></div>
+                    {slip.copy && <div className="font-extrabold">BẢN SAO</div>}
                 </div>
                 <div className="text-center">
                     <div className="font-bold uppercase">Cộng hòa xã hội chủ nghĩa Việt Nam</div>

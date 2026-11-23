@@ -1,4 +1,4 @@
-import { useEffect, useState, useId } from 'react';
+import { useContext, useEffect, useState, useId } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import {
   Activity,
@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { medicalRecordApi } from '../../../apis/medicalRecordApi';
+import defaultVisitApi from '../../../apis/visitApi';
+import { ClosedRecordPrintActions } from '../../../components/clinical/ClosedRecordPrint';
+import { AuthContext } from '../../../context/authContextInstance';
 import { ApiError } from '../../../apis/apiError';
 import { ROUTES } from '../../../routes/routes';
 import { ExportMedicalRecordDialog } from './ExportMedicalRecordDialog';
@@ -41,9 +44,11 @@ import {
 /**
  * Màn hình Xem chi tiết hồ sơ bệnh án (View Medical Record Detail)
  * Đáp ứng quy tắc chỉ đọc, ngoại lệ chỉnh sửa lượt khám dở dang, danh sách lượt khám để chuyển lượt (BR-52-08),
- * xem tệp kết quả CLS và xuất hồ sơ bệnh án.
+ * xem tệp kết quả CLS, xuất hồ sơ bệnh án và in kết luận, đơn thuốc, giấy hẹn của hồ sơ đã đóng (UC-57, UC-60, UC-62).
  */
-export function MedicalRecordDetailPage({ isVisitRoute = false }) {
+export function MedicalRecordDetailPage({ isVisitRoute = false, printApi = defaultVisitApi, currentAccountId }) {
+  const auth = useContext(AuthContext);
+  const accountId = currentAccountId ?? auth?.user?.id ?? null;
   const { id, visitId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -229,7 +234,16 @@ export function MedicalRecordDetailPage({ isVisitRoute = false }) {
             </button>
           )}
 
-          {/* BR-52-07: in lại bản sao chờ đặc tả riêng, nên không có nút in ở đây. */}
+          {/* UC-57, UC-60, UC-62 AF-01 (PO 23/11/2026): bác sĩ của lượt khám in lại khi hồ sơ đã đóng; lần in sau ghi "Bản sao". */}
+          {isExportable(recordDetail.status) && accountId && recordDetail.doctorAccountId === accountId && (
+            <ClosedRecordPrintActions
+              visitId={recordDetail.visitId}
+              prescriptionId={prescription?.status === 'ACCEPTED' ? prescription.prescriptionId : null}
+              appointmentId={followUpAppointment?.appointmentId ?? null}
+              appointmentScheduled={followUpAppointment?.status === 'SCHEDULED'}
+              api={printApi}
+            />
+          )}
 
           {/* Nút Xuất hồ sơ bệnh án (UC-53): chỉ hồ sơ đã đóng (BR-53-02, MSG131) */}
           <button

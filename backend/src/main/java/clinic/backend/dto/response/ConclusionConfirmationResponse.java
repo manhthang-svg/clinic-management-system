@@ -11,6 +11,8 @@ import java.util.UUID;
  * @param archiveNumber     số lưu trữ (BR-58-06)
  * @param retentionYears    from the retention category (TT 33/2025/TT-BYT Phụ lục)
  * @param expiresOn         31/12 of (closing year + retention years)
+ * @param prescriptionId    the accepted prescription to print (UC-60), or null
+ * @param followUpAppointmentId the scheduled appointment to print (UC-62), or null
  */
 public record ConclusionConfirmationResponse(
         UUID visitId,
@@ -20,6 +22,8 @@ public record ConclusionConfirmationResponse(
         String archiveNumber,
         String retentionCategory,
         short retentionYears,
-        LocalDate expiresOn
+        LocalDate expiresOn,
+        UUID prescriptionId,
+        UUID followUpAppointmentId
 ) {
 }

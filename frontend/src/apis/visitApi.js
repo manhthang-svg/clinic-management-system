@@ -190,11 +190,6 @@ export const visitApi = {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, { signal });
     },
 
-    // BF-04 "In phiếu kết luận": the saved conclusion ready to print; records nothing.
-    getConclusionPrint(visitId, signal) {
-        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/print`, { signal });
-    },
-
     saveConclusion(visitId, payload) {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, {
             method: 'PUT',
@@ -247,6 +242,18 @@ export const visitApi = {
         return apiClient.request(`/follow-up-appointments/visits/${encodeURIComponent(visitId)}`, {
             method: 'PUT',
             body: payload,
+        });
+    },
+
+    // UC-57 step 2: the conclusion slip of a closed record, for the preview (nothing is recorded).
+    getConclusionPrint(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/print`, { signal });
+    },
+
+    // UC-57 step 3: the server records the print (PRINT audit row) and returns the slip.
+    prepareConclusionPrint(visitId) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/commands/prepare-print`, {
+            method: 'POST',
         });
     },
 

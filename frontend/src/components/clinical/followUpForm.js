@@ -14,7 +14,8 @@ export const FOLLOW_UP_MSG = {
     PRESCRIPTION_SENT: (date) => `Đơn thuốc đã gửi với ngày tái khám ${date || 'không có'}. Lịch hẹn thay đổi sau khi gửi không làm thay đổi đơn đã gửi.`,
     CONCLUSION_REQUIRED: 'Vui lòng lưu kết luận trước khi hẹn tái khám.', // MSG127 (ASSUMPTION)
     NOT_SCHEDULED: 'Lịch hẹn tái khám đã được sử dụng hoặc đã hủy, không thể sửa hoặc in.', // MSG128 (ASSUMPTION)
-    SAVE_BEFORE_PRINT: 'Lưu lịch hẹn trước khi in.', // UC-62 AF-02 (ASSUMPTION)
+    // PO 23/11/2026: the slip is printed once the record is closed (MSG61).
+    PRINT_AFTER_CLOSE: 'Vui lòng xác nhận kết luận trước khi in.', // MSG61
     CHECK_FIELDS: 'Vui lòng kiểm tra lại các trường được đánh dấu.',
     RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.', // MSG68
     OUTSIDE_ROOM_OR_SHIFT: 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.', // MSG48
@@ -78,6 +79,8 @@ export function followUpError(error) {
             return { fields: {}, message: FOLLOW_UP_MSG.NOT_SCHEDULED };
         case 'MEDICAL_RECORD_CLOSED':
             return { fields: {}, message: FOLLOW_UP_MSG.RECORD_CLOSED };
+        case 'PRINT_RECORD_NOT_CLOSED':
+            return { fields: {}, message: FOLLOW_UP_MSG.PRINT_AFTER_CLOSE };
         case 'DOCTOR_OFF_DUTY':
         case 'ROOM_ASSIGNMENT_REQUIRED':
             return { fields: {}, message: FOLLOW_UP_MSG.OUTSIDE_ROOM_OR_SHIFT };

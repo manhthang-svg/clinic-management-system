@@ -7,9 +7,9 @@ import { FollowUpSlip } from './FollowUpSlip';
 import { FOLLOW_UP_MSG, followUpError } from './followUpForm';
 
 /**
- * UC-62: "In giấy hẹn" opens the preview of the saved appointment (step 2); "In" records the print on the server
+ * UC-62: "In giấy hẹn" opens the preview of the appointment (step 2); "In" records the print on the server
  * (PRINT audit row, first printed_at) and opens the browser print dialog (step 3; printer integration TBD).
- * Without a saved appointment, or with unsaved changes, the button is disabled (AF-02).
+ * Shown once the record is closed (PO 23/11/2026); an appointment that is no longer scheduled is not printed (MSG128).
  */
 export function PrintFollowUpButton({ appointmentId, disabled, api }) {
     const titleId = useId();
@@ -76,7 +76,7 @@ export function PrintFollowUpButton({ appointmentId, disabled, api }) {
             >
                 <Printer aria-hidden="true" className="h-4 w-4" />In giấy hẹn
             </button>
-            {blocked && <span id={hintId} className="sr-only">{FOLLOW_UP_MSG.SAVE_BEFORE_PRINT}</span>}
+            {blocked && <span id={hintId} className="sr-only">{FOLLOW_UP_MSG.NOT_SCHEDULED}</span>}
             {open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
                     <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-2xl">

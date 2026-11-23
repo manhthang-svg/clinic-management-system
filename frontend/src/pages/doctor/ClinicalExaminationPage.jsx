@@ -13,6 +13,7 @@ import ConclusionPanel from '../../components/clinical/ConclusionPanel';
 import FollowUpPanel from '../../components/clinical/FollowUpPanel';
 import PrescriptionPanel from '../../components/clinical/PrescriptionPanel';
 import { TransferRoomPanel } from '../../components/clinical/TransferRoomPanel';
+import { ClosedRecordPrintDialog } from '../../components/clinical/ClosedRecordPrint';
 import { ConfirmModal } from '../../components/ui/confirm-modal';
 import { REFERRAL_SOURCE_LABELS, VISIT_STATUS_LABELS } from '../../constants/visitData';
 import { EXAMINATION_SECTIONS, ROUTES, clinicalExaminationPath } from '../../routes/routes';
@@ -160,6 +161,8 @@ export default function ClinicalExaminationPage() {
     const [fieldErrors, setFieldErrors] = useState({});
     const [validationMode, setValidationMode] = useState(null);
     const [pendingLeave, setPendingLeave] = useState(null);
+    // UC-58 → UC-57, UC-60, UC-62: the slips are printed once the record is closed (PO 23/11/2026).
+    const [closure, setClosure] = useState(null);
     const [icdOptions, setIcdOptions] = useState([]);
     const [icdQuery, setIcdQuery] = useState('');
     // The paraclinical service list starts loading with the page, so the order tab usually opens with it ready.
@@ -500,7 +503,7 @@ export default function ClinicalExaminationPage() {
             ) : shownSection === 'follow-up' ? (
                 <FollowUpPanel visitId={visit.id} />
             ) : shownSection === 'conclusion' ? (
-                <ConclusionPanel visitId={visit.id} onClosed={goToWaitingList} onOpenPrescription={() => setActiveSection('prescription')} />
+                <ConclusionPanel visitId={visit.id} onClosed={setClosure} onOpenPrescription={() => setActiveSection('prescription')} />
             ) : shownSection === 'transfer' ? (
                 <TransferRoomPanel visit={visit} currentRoomName={queueInfo?.roomName} onCancel={() => setActiveSection('clinical')} onDone={goToWaitingList} onVisitChanged={() => setReloadKey((key) => key + 1)} />
             ) : shownSection === 'orders' ? (
@@ -575,6 +578,7 @@ export default function ClinicalExaminationPage() {
                 onConfirm={() => { const leave = pendingLeave; setPendingLeave(null); leave?.(); }}
                 onClose={() => setPendingLeave(null)}
             />
+            {closure && <ClosedRecordPrintDialog closure={closure} api={visitApi} onDone={goToWaitingList} />}
         </main>
     );
 }

@@ -32,7 +32,7 @@
 
 Ngoài phạm vi:
 
-- in lại bản sao kết luận, đơn thuốc, giấy hẹn từ hồ sơ đã đóng (AF-01 của UC-57, UC-60, UC-62): **TBD**, cần đặc tả riêng (quyết định 10);
+- in kết luận, đơn thuốc, giấy hẹn từ hồ sơ đã đóng (AF-01 của UC-57, UC-60, UC-62): đặc tả riêng ở [`uc-57-print-conclusion.md`](uc-57-print-conclusion.md) (quyết định 10, cập nhật 23/11/2026);
 - xuất PDF (UC-53), xuất XML/JSON (BR-43, UC-80);
 - chỉnh sửa hồ sơ (UC-47, UC-56). UC-52 chỉ dẫn sang màn hình đó;
 - màn hình xem audit log cho Admin (BR-42 "Admin xem được"): `security.md` hiện chỉ cho đọc audit qua UC-06, nên đây là **TBD**.
@@ -201,7 +201,7 @@ Ngoài phạm vi:
 **BR-52-07 Đơn thuốc và in lại.**
 
 - Hiện đơn thuốc (mã đơn, trạng thái liên thông, thuốc, cách dùng, lời dặn, ngày tái khám).
-- Các nút in lại bản sao (kết luận, đơn thuốc, giấy hẹn) **bị ẩn** cho đến khi có đặc tả riêng (quyết định 10). UC-52 không dùng `window.print()` (BR-53-09).
+- Các nút "In kết luận", "In đơn thuốc", "In giấy hẹn" chỉ hiện khi hồ sơ đã đóng và người xem là bác sĩ của lượt khám (PO 23/11/2026, [`uc-57-print-conclusion.md`](uc-57-print-conclusion.md)). Lần in sau lần đầu ghi "Bản sao". Các phiếu này in bằng hộp thoại in của trình duyệt; bản thân trang UC-52 vẫn không in bằng `window.print()` (BR-53-09).
 - Nút "Xuất hồ sơ bệnh án (PDF)" theo UC-53 (BR-53-02).
 
 **BR-52-08 Timeline lượt khám (bước 3).**
@@ -338,7 +338,7 @@ Chốt theo đề xuất ngày 18/11/2026; **cần nhóm xác nhận**.
 | 7 | Chỉ hiện bệnh nhân có lượt khám; sắp theo ngày khám gần nhất; trang 20, tối đa 100 |
 | 8 | Chỉ hiện kết quả CLS đã gửi |
 | 9 | Tải tệp kết quả qua backend, không trả địa chỉ tệp gốc |
-| 10 | In lại bản sao tách sang đặc tả riêng; UC-52 ẩn các nút in |
+| 10 | In lại tách sang đặc tả riêng; từ 23/11/2026 UC-52 hiện nút in cho bác sĩ của lượt khám khi hồ sơ đã đóng ([`uc-57-print-conclusion.md`](uc-57-print-conclusion.md)) |
 | 11 | Hồ sơ đã mở khóa lại: hiện dòng thông báo kèm thời điểm (**ASSUMPTION**) |
 | 12 | Ghi audit cho 4 thao tác: tìm kiếm, xem danh sách lượt, xem chi tiết, tải tệp |
 | 13 | Audit chỉ chứa ID, số lượng, tên bộ lọc; không chứa giá trị định danh |

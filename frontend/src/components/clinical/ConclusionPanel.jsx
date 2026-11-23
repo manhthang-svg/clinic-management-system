@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import defaultVisitApi from '../../apis/visitApi';
 import { ConfirmModal } from '../ui/confirm-modal';
 import { ConfirmConclusionSection } from './ConfirmConclusionSection';
-import { PrintConclusionButton } from './ConclusionSlip';
 import {
     EMPTY_CONCLUSION, MSG, TREATMENT_RESULTS, conclusionError, formFromResponse, sameConclusion, toPayload,
     validateConclusion,
@@ -345,10 +344,6 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
                 onClose={() => setDiscouragedCode(null)}
             />
         </form>
-        {/* BF-04: print the saved conclusion before closing the record, like the follow-up slip. */}
-        <div className="flex justify-end">
-            <PrintConclusionButton visitId={visitId} api={api} disabled={!data?.conclusionId || dirty} />
-        </div>
         <ConfirmConclusionSection
             visitId={visitId}
             saved={Boolean(data?.conclusionId)}

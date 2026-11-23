@@ -5,9 +5,12 @@ import java.util.UUID;
 import clinic.backend.dto.response.ConclusionSlipResponse;
 import clinic.backend.security.user.StaffPrincipal;
 
-/** BF-04 "In phiếu kết luận": the saved conclusion of the Doctor's visit, ready to print. */
+/** UC-57 Print Conclusion, by the Doctor of the visit once its record is closed. */
 public interface ConclusionPrintService {
 
-    /** The slip of the saved conclusion; nothing is changed and the print is not logged. */
-    ConclusionSlipResponse print(StaffPrincipal principal, UUID visitId);
+    /** UC-57 step 2: the conclusion slip for the preview; nothing is recorded. */
+    ConclusionSlipResponse printPreview(StaffPrincipal principal, UUID visitId);
+
+    /** UC-57 step 3: records the print ({@code PRINT} audit row) and returns the slip. */
+    ConclusionSlipResponse preparePrint(StaffPrincipal principal, UUID visitId);
 }

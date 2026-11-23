@@ -10,7 +10,7 @@ import java.util.UUID;
  * UC-60: the printed form of an accepted prescription (TT 26/2025 Phụ lục I, BR-59-13). The diagnoses and the
  * follow-up date are the ones sent with the prescription (BR-59-08).
  *
- * @param copy      the print is made from a closed record and carries "Bản sao" (Report 3 UC-60 AF-01)
+ * @param copy      the prescription was printed before, so this print carries "Bản sao" (PO 23/11/2026)
  * @param printedAt the time of this print; null in the preview
  * @param printedBy who printed it (Luật GDĐT Điều 12 khoản 2); null in the preview
  * @param signature BR-59-10 step 7: the digital signature of the accepted send, verified again (BR-59-16)

@@ -3,42 +3,45 @@ package clinic.backend.dto.response;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-
-import clinic.backend.enums.VisitDoituongbnLoai;
+import java.util.UUID;
 
 /**
- * The printed examination conclusion of a visit (BF-04, "In phiếu kết luận"). **ASSUMPTION:** no form of TT 32/2023
- * is required for an outpatient conclusion; the slip shows the conclusion as the Doctor saved it.
+ * UC-57: the conclusion slip of a closed record (Report 3 UC-57 step 2; docs/uc-57-print-conclusion.md).
  *
- * @param printedAt          the time of this print, shown on the edge of the sheet
- * @param insuranceCardNumber the card of an insurance visit; null for a self-paid visit
- * @param mainDiagnosis      "Bệnh chính" (ICD-10)
- * @param secondaryDiagnoses "Bệnh kèm theo" (ICD-10)
- * @param treatmentResult    1 Khỏi, 2 Đỡ, … as in the conclusion form
- * @param doctorName         the concluding Doctor's academic title and name
+ * @param copy               the conclusion was printed before, so this print carries "Bản sao" (PO 23/11/2026)
+ * @param printedAt          the time of this print; null in the preview
+ * @param printedBy          who printed it; null in the preview
+ * @param diagnosis          "Chẩn đoán": the main diagnosis with its ICD-10 code
+ * @param secondaryDiagnoses "Bệnh kèm theo"
+ * @param diagnosisText      the Doctor's own wording of the diagnosis (CV 365 III.13)
+ * @param treatmentResult    "Kết quả điều trị" as its label (CV 365 III.31.1)
+ * @param doctorName         the Doctor's academic title and name
  */
 public record ConclusionSlipResponse(
+        UUID visitId,
+        String visitCode,
+        boolean copy,
         Instant printedAt,
+        String printedBy,
         Facility facility,
         PatientInfo patient,
-        String visitCode,
-        VisitDoituongbnLoai visitType,
-        String insuranceCardNumber,
-        Instant registeredAt,
-        String diagnosis,
-        Icd10OptionResponse mainDiagnosis,
+        LocalDate visitDate,
+        String roomName,
+        Icd10OptionResponse diagnosis,
         List<Icd10OptionResponse> secondaryDiagnoses,
+        String diagnosisText,
         String treatmentPlan,
-        Short treatmentResult,
+        String treatmentResult,
         String advice,
-        String doctorName,
-        Instant concludedAt
+        Instant concludedAt,
+        String doctorName
 ) {
+
+    /** Facility header (UC-77). */
     public record Facility(String name, String address, String phone) {
     }
 
-    /** {@code gender} is "Nam", "Nữ" or "Khác". */
-    public record PatientInfo(
-            String fullName, String patientCode, String gender, LocalDate birthDate, String address) {
+    /** {@code gender} is "Nam", "Nữ" or null. */
+    public record PatientInfo(String patientCode, String fullName, LocalDate birthDate, String gender, String address) {
     }
 }

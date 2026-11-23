@@ -885,6 +885,22 @@ p[role='alert']:not(.banner) {
     padding: 0 !important;
   }
 
+  /* UC-57: the conclusion slip across the printable width, like the follow-up slip. */
+  .conclusion-print {
+    position: absolute;
+    inset: 0 0 auto 0;
+    color: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .conclusion-print .conclusion-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
   /* UC-60: the prescription of TT 26/2025 Phụ lục I across the printable width, like the paraclinical order. */
   .prescription-print {
     position: absolute;

@@ -1,6 +1,6 @@
 # UC-61, UC-62 — Follow-up appointment
 
-**Status:** Proposed and implemented 15/11/2026 (the product owner accepted the proposals of [Decisions needed](#decisions-needed); they still need the team's decision record). Printing from a closed record (UC-52) and the lock at UC-58 are not implemented. Written from the project's business rules, schema and code and from TT 01/2025/TT-BYT; the draft UC-61 and UC-62 of Report 3 are **not** followed (product owner, 15/11/2026). Choices that differ from a business rule are listed under [Deviations from the sources](#deviations-from-the-sources) and need the team's decision record.
+**Status:** Proposed and implemented 15/11/2026 (the product owner accepted the proposals of [Decisions needed](#decisions-needed); they still need the team's decision record). The lock at UC-58 is not implemented. Since 23/11/2026 the slip is printed only once the record is closed, by the Doctor of the visit; the first print is the original and later prints carry "Bản sao" (PO, [`uc-57-print-conclusion.md`](uc-57-print-conclusion.md)). Written from the project's business rules, schema and code and from TT 01/2025/TT-BYT; the draft UC-61 and UC-62 of Report 3 are **not** followed (product owner, 15/11/2026). Choices that differ from a business rule are listed under [Deviations from the sources](#deviations-from-the-sources) and need the team's decision record.
 
 **Sources:** TT 01/2025/TT-BYT Điều 11, Điều 15 khoản 5, Phụ lục V ([`reference/TT-01-2025-TT-BYT.md`](reference/TT-01-2025-TT-BYT.md)); TT 26/2025/TT-BYT Phụ lục I chú thích 7 ([`reference/TT-26-2025-TT-BYT.md`](reference/TT-26-2025-TT-BYT.md)); CV 365/TTYQG-GPQLCL Phụ lục III.31.2 `loidanbacsi` ([`reference/CV-365-2025-TTYQG.md`](reference/CV-365-2025-TTYQG.md)); `Business_Rules_v7.xlsx` (BR-32, BR-34, BR-42, BR-47, BR-53, BR-108, BR-124); `usecases.xlsx` (UC-61, UC-62); `schema.yaml` table 31 `follow_up_appointments` (V7); [`uc-59-e-prescription.md`](uc-59-e-prescription.md) BR-59-08.
 
@@ -9,7 +9,7 @@
 | UC-61 | Create Follow-up Appointment | The Doctor sets the follow-up date and advice of the visit, and changes them while the record is open. |
 | UC-62 | Print Follow-up Appointment | The Doctor prints the Phiếu hẹn khám lại of TT 01/2025 Phụ lục V. |
 
-Out of scope: the reception side of BR-34 (recognising the follow-up visit, "Đã đến khám", "Lỡ hẹn"), the electronic slip (digital signature, VNeID, XML14 of QĐ 4750/QĐ-BYT as amended by QĐ 3176/QĐ-BYT), and printing from a closed record (UC-52), which depends on UC-58.
+Out of scope: the reception side of BR-34 (recognising the follow-up visit, "Đã đến khám", "Lỡ hẹn"), the electronic slip (digital signature, VNeID, XML14 of QĐ 4750/QĐ-BYT as amended by QĐ 3176/QĐ-BYT).
 
 ## Description
 
@@ -58,15 +58,15 @@ When the patient needs further monitoring or a re-check of this visit's results 
 
 ## Normal flow — UC-62 Print Follow-up Appointment
 
-1. The Doctor clicks "In giấy hẹn" on a saved `SCHEDULED` appointment.
-2. The system builds the slip (BR-61-06) and shows the preview.
+1. Once the record is closed, the Doctor of the visit clicks "In giấy hẹn" on the `SCHEDULED` appointment, in the dialog shown after closing or in the closed record (UC-52). An open record: MSG61.
+2. The system builds the slip (BR-61-06) and shows the preview; a slip printed before carries "Bản sao".
 3. The Doctor clicks "In". The system writes the `PRINT` audit row, sets `printed_at` on the first print and opens the browser print dialog (printer integration TBD, HW-01).
 4. The Doctor stamps and signs the paper slip (Điều 11 khoản 2) and hands it to the patient.
 
 ## Alternative flows — UC-62
 
 - **AF-01 (step 2): Close the preview.** Nothing is printed or recorded.
-- **AF-02 (step 1): No saved appointment, or unsaved changes.** "In giấy hẹn" is disabled with the hint "Lưu lịch hẹn trước khi in." (**ASSUMPTION** wording).
+- **AF-02 (step 1): The appointment is no longer scheduled.** "In giấy hẹn" is disabled with MSG128. The "Hẹn tái khám" tab has no print button (PO 23/11/2026).
 
 ## Exception flows
 
@@ -92,7 +92,7 @@ When the patient needs further monitoring or a re-check of this visit's results 
 | --- | --- | --- |
 | `GET` | `/api/v1/follow-up-appointments/visits/{visitId}` | The form: `visitDate`, `minDate`, `maxDate`, `conclusionSaved`, `diagnoses`, the appointment (`id`, `version`, `slipNumber`, `followUpDate`, `advice`, `status`, `printedAt`) or null, and `prescriptionFollowUpDate` + `prescriptionAccepted`. |
 | `PUT` | `/api/v1/follow-up-appointments/visits/{visitId}` | Body `{ followUpDate, advice, version }` (`version` null for the first save). Creates or updates; returns the form. |
-| `GET` | `/api/v1/follow-up-appointments/{appointmentId}/print` | The slip of BR-61-06 for the preview; records nothing. |
+| `GET` | `/api/v1/follow-up-appointments/{appointmentId}/print` | The slip of BR-61-06 for the preview, with `copy`; records nothing. Record closed, Doctor of the visit (`ClosedRecordPrintGuard`). |
 | `POST` | `/api/v1/follow-up-appointments/{appointmentId}/commands/prepare-print` | Writes the `PRINT` audit row, sets `printed_at` on the first print, returns the slip with the print time. |
 
 All four require role Doctor without a pending password change; the existing `POST /{id}/cancel` of reception is unchanged.

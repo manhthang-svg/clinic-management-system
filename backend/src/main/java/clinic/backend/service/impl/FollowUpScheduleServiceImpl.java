@@ -47,7 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * UC-61, UC-62 (docs/uc-61-follow-up-appointment.md): one follow-up appointment per visit record, made and changed by
  * the Doctor of the open visit after the conclusion is saved, and printed as the Phiếu hẹn khám lại of TT 01/2025
- * Phụ lục V. The reception side of BR-34 (arrival, missed, cancellation) is not changed here.
+ * Phụ lục V by the Doctor of the visit once the record is closed (PO 23/11/2026). The reception side of BR-34 (arrival, missed, cancellation) is not changed here.
  */
 @Service
 @RequiredArgsConstructor
@@ -58,6 +58,7 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
     static final String SLIP_PREFIX = "GH-";
 
     private final ConcludingVisitGuard guard;
+    private final ClosedRecordPrintGuard printGuard;
     private final FollowUpAppointmentRepository appointmentRepository;
     private final ConclusionRepository conclusionRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -137,15 +138,15 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
     @Transactional(readOnly = true)
     public FollowUpSlipResponse printPreview(StaffPrincipal principal, UUID appointmentId) {
         FollowUpAppointment appointment = scheduledAppointment(appointmentId);
-        Context context = guard.require(principal, visitId(appointment));
-        return slip(context, appointment, null, null);
+        Context context = printGuard.require(principal, visitId(appointment));
+        return slip(context, appointment, appointment.getPrintedAt() != null, null, null);
     }
 
     @Override
     @Transactional
     public FollowUpSlipResponse preparePrint(StaffPrincipal principal, UUID appointmentId) {
         FollowUpAppointment appointment = scheduledAppointment(appointmentId);
-        Context context = guard.require(principal, visitId(appointment));
+        Context context = printGuard.require(principal, visitId(appointment));
         Instant now = clock.instant();
         boolean reprint = appointment.getPrintedAt() != null;
         if (!reprint) {
@@ -158,7 +159,7 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
         auditLogService.recordBusinessChange(
                 principal.accountId(), AuditLogAction.PRINT, AUDIT_ENTITY, appointment.getId(),
                 context.visit().getSovaovien(), audit, now);
-        return slip(context, appointment, now, displayName(context.doctor()));
+        return slip(context, appointment, reprint, now, displayName(context.doctor()));
     }
 
     /** UC-62 EF: only a scheduled appointment is printed (MSG128). */
@@ -201,7 +202,7 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
 
     /** BR-61-06: the slip of TT 01/2025 Phụ lục V with the conclusion's current diagnoses (BR-61-05). */
     private FollowUpSlipResponse slip(
-            Context context, FollowUpAppointment appointment, Instant printedAt, String printedBy) {
+            Context context, FollowUpAppointment appointment, boolean copy, Instant printedAt, String printedBy) {
         ClinicFacility facility = clinicFacilityRepository.findCurrent()
                 .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
         Patient patient = context.patient();
@@ -213,6 +214,7 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
         return new FollowUpSlipResponse(
                 appointment.getId(),
                 appointment.getSoGiayHen(),
+                copy,
                 printedAt,
                 printedBy,
                 new FollowUpSlipResponse.Facility(

@@ -18,7 +18,7 @@
 
 Out of scope:
 
-- printing after closure: UC-57 (conclusion), UC-60 copy and UC-62 from a closed record (UC-52);
+- printing after closure: UC-57 (conclusion), UC-60 and UC-62, specified in [`uc-57-print-conclusion.md`](uc-57-print-conclusion.md) (PO 23/11/2026: printed only once the record is closed; `confirm` returns the prescription and appointment IDs to print);
 - unlocking a closed record (the `unlocked_*` columns of V7 have no BR in v7);
 - the Admin's XML/JSON export of BR-43;
 - record disposal after the retention period (`PENDING_DISPOSAL`, `DISPOSED`).

@@ -67,7 +67,7 @@ export function ConfirmConclusionSection({ visitId, saved, dirty, api = defaultV
                     <h2 className="text-sm font-bold">Xác nhận kết luận và đóng hồ sơ</h2>
                     <p className="mt-1 text-xs text-slate-500">
                         {dirty ? CLOSE_MSG.SAVE_FIRST : !saved ? CLOSE_MSG.CONCLUSION_REQUIRED
-                            : 'Sau khi xác nhận, hồ sơ bệnh án được khóa và lưu trữ.'}
+                            : 'Sau khi xác nhận, hồ sơ bệnh án được khóa và lưu trữ; khi đó mới in được kết luận, đơn thuốc và giấy hẹn.'}
                     </p>
                 </div>
                 <button

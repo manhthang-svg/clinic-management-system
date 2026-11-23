@@ -9,6 +9,7 @@ import { PRINT_MSG, printError } from './prescriptionPrintFormat';
 /**
  * UC-60: "In đơn thuốc" opens the preview of an accepted prescription (step 2); "In" records the print on the server
  * (PRINT audit row, first printed_at) and opens the browser print dialog (step 3; printer integration TBD, HW-02).
+ * Shown once the record is closed (PO 23/11/2026); a reprint carries "Bản sao".
  * Not accepted: the button is disabled with MSG112 (AF-01). The printed copy is rendered into `document.body` and
  * shown only when printing, as for the paraclinical order slip.
  */
