@@ -1,4 +1,4 @@
-package clinic.backend.service;
+package clinic.backend.service.impl;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -31,7 +31,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.ParaclinicalOrderRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.RoomRepository;
-import clinic.backend.service.impl.ParaclinicalRoomDuty;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.repository.VisitRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentCompletionServiceTest {
+class PaymentCompletionServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-10-28T01:00:00Z");
     private static final UUID VISIT_ID = UUID.randomUUID();
@@ -65,11 +65,11 @@ class PaymentCompletionServiceTest {
     @Mock private AuditLogService auditLogService;
     @Mock private ParaclinicalRoomDuty paraclinicalRoomDuty;
 
-    private PaymentCompletionService service;
+    private PaymentCompletionServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PaymentCompletionService(
+        service = new PaymentCompletionServiceImpl(
                 visitRepository, paraclinicalOrderRepository, paraclinicalOrderDetailRepository,
                 medicalServiceRepository, roomRepository, queueCounterRepository, auditLogService,
                 paraclinicalRoomDuty, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));

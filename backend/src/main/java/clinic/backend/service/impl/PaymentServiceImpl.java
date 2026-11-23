@@ -64,6 +64,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final String PAYMENT_AUDIT_ENTITY = "payments";
     private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final int MAX_KEYWORD_LENGTH = 100;
+    static final int MAX_PAGE_SIZE = 100;
+    static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of("createdAt", "paidAt", "patientTotalAmount", "id");
     private static final Instant ALL_TIME_START = Instant.parse("2000-01-01T00:00:00Z");
     private static final Instant ALL_TIME_END = Instant.parse("9999-01-01T00:00:00Z");
 
@@ -89,14 +92,42 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate to,
             Pageable pageable
     ) {
-        // tu khoa it nhat 2 ky tu (MSG05)
+        // tu khoa 2-100 ky tu (MSG05), tu ngay khong sau den ngay, trang hop le
+        String keyword = keyword(search);
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
+        }
+        checkPage(pageable);
+        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
+        return toResponses(paymentRepository.search(
+                statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, newestFirst(pageable)));
+    }
+
+    // tu khoa tim phieu thu: bo trong -> khong loc; 2-100 ky tu
+    private static String keyword(String search) {
         String keyword = search == null || search.isBlank() ? null : search.trim();
         if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
         }
-        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
-        return toResponses(paymentRepository.search(
-                statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, newestFirst(pageable)));
+        if (keyword != null && keyword.length() > MAX_KEYWORD_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_LONG"));
+        }
+        return keyword;
+    }
+
+    // trang toi da 100 dong; chi sap xep theo cot cho phep (cot la -> 400 thay vi loi 500)
+    static void checkPage(Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return;
+        }
+        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("size", "TOO_LONG"));
+        }
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SORTABLE_FIELDS.contains(order.getProperty())) {
+                throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("sort", "NOT_ALLOWED"));
+            }
+        }
     }
 
     // khong chon cach sap xep thi phieu moi tao len dau (phieu vua dang ky khong bi day xuong trang cuoi)
@@ -128,11 +159,9 @@ public class PaymentServiceImpl implements PaymentService {
         if (fromDate.isAfter(toDate)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
         }
-        // tu khoa giong UC-70: it nhat 2 ky tu
-        String keyword = search == null || search.isBlank() ? null : search.trim();
-        if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
-            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
-        }
+        // tu khoa giong UC-70: 2-100 ky tu
+        String keyword = keyword(search);
+        checkPage(pageable);
         // lich su chi gom phieu da thu va da huy
         if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("status", "INVALID_FORMAT"));

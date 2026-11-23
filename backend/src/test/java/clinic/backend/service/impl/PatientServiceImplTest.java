@@ -163,6 +163,13 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void rejectsADuplicateCheckWithANameLongerThan100Characters() {
+        assertThatThrownBy(() -> service.findPossibleDuplicates("a".repeat(101), LocalDate.of(1990, 1, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        ex -> assertThat(ex.getDetails()).containsEntry("hoten", "TOO_LONG"));
+    }
+
+    @Test
     void overviewShowsHistoryActiveVisitAllergiesAndRecordsTheView() {
         when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient()));
         UUID activeId = UUID.randomUUID();

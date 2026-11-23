@@ -1,5 +1,8 @@
 package clinic.backend.service.impl;
 
+import java.util.Map;
+import clinic.backend.enums.ErrorCode;
+import clinic.backend.exceptions.AppException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Function;
@@ -34,6 +37,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class StatisticsListServiceImpl implements StatisticsListService {
+
+    static final int MAX_SEARCH_LENGTH = 100;
 
     // so dong tren bieu do (bac si, phong, benh)
     static final int CHART_SIZE = 10;
@@ -160,6 +165,10 @@ public class StatisticsListServiceImpl implements StatisticsListService {
 
     // dong co 1 trong cac truong chua tu khoa (bo dau); khong co tu khoa thi giu het
     private static <T> List<T> matching(List<T> rows, String search, List<Function<T, String>> fields) {
+        if (search != null && search.strip().length() > MAX_SEARCH_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID,
+                    Map.of("search", "The search must not exceed " + MAX_SEARCH_LENGTH + " characters."));
+        }
         String keyword = VietnameseText.fold(search);
         if (keyword == null || keyword.isEmpty()) {
             return rows;
