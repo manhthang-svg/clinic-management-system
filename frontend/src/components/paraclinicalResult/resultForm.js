@@ -139,7 +139,8 @@ export function validateResult(order, form) {
       const value = form.values[parameter.code];
       const key = `value:${parameter.code}`;
       if (!String(value ?? '').trim()) {
-        errors[key] = 'Bắt buộc';
+        // chi so khong bat buoc (Admin cau hinh) thi duoc de trong, giong backend
+        if (parameter.required !== false) errors[key] = 'Bắt buộc';
       } else if (parameter.valueType === 'NUMERIC' && parseNumber(value) === null) {
         errors[key] = 'Phải là số';
       }

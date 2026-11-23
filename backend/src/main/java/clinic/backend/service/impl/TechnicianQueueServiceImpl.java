@@ -83,6 +83,25 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
+    // bo loc danh sach KTV (UC-66): trang thai chi nhan cac gia tri FE dung, tu khoa toi da 100 ky tu
+    static final Set<String> QUEUE_STATUSES = Set.of("ALL", "WAITING", "SKIPPED", "IN_PROGRESS", "CANCELLED");
+    static final Set<String> PENDING_RESULT_STATUSES = Set.of("ALL", "PENDING", "DRAFT");
+    static final int MAX_SEARCH_LENGTH = 100;
+
+    static void validateFilters(String search, String status, Set<String> allowedStatuses) {
+        Map<String, String> errors = new java.util.LinkedHashMap<>();
+        if (search != null && search.strip().length() > MAX_SEARCH_LENGTH) {
+            errors.put("search", "TOO_LONG");
+        }
+        if (status != null && !status.isBlank() && !allowedStatuses.contains(status.strip().toUpperCase(Locale.ROOT))) {
+            errors.put("status", "INVALID_FORMAT");
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID, errors);
+        }
+    }
+
+
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm").withZone(CLINIC_ZONE);
     private static final String AUDIT_ENTITY = "paraclinical_order_details";
@@ -233,6 +252,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     @Override
     @Transactional(readOnly = true)
     public TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
+        validateFilters(search, status, QUEUE_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
             List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
@@ -414,6 +434,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     @Transactional(readOnly = true)
     public TechnicianPendingResultResponse getPendingResults(
             UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
+        validateFilters(search, status, PENDING_RESULT_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
             List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(

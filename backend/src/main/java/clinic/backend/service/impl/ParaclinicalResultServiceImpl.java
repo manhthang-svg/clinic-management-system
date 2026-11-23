@@ -92,6 +92,12 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String EMERGENCY = "cấp cứu";
     // anh ket qua: toi da 10 anh, moi anh 10 MB, chi JPG / PNG (quyet dinh 16/11/2026)
+    // cac muc mo ta bat buoc cua phieu co nhieu muc (khop voi frontend resultSections.js)
+    static final Map<ResultForm, List<String>> REQUIRED_SECTIONS = Map.of(
+            ResultForm.ENDOSCOPY, List.of("thucQuan", "tamVi", "phinhVi", "thanVi", "haiBoCong", "hangVi", "monVi",
+                    "hanhTaTrang", "taTrang"),
+            ResultForm.ECG, List.of("huyetAp", "chuyenDao", "nhip", "truc", "p", "pq", "qrs", "st", "t", "qt",
+                    "truocTim"));
     static final int MAX_IMAGES = 10;
     static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
 
@@ -468,9 +474,16 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 }
             }
         } else {
-            boolean hasSections = request.sections() != null
-                    && request.sections().values().stream().anyMatch(text -> trim(text) != null);
-            if (trim(request.description()) == null && !hasSections) {
+            List<String> requiredSections = REQUIRED_SECTIONS.get(context.form());
+            if (requiredSections != null) {
+                // noi soi / dien tim: moi muc mo ta deu bat buoc (giong FE)
+                Map<String, String> sections = Objects.requireNonNullElse(request.sections(), Map.of());
+                for (String key : requiredSections) {
+                    if (trim(sections.get(key)) == null) {
+                        errors.put("section:" + key, "Bắt buộc");
+                    }
+                }
+            } else if (trim(request.description()) == null) {
                 errors.put("description", "Vui lòng nhập mô tả kết quả");
             }
             if (List.of(ResultForm.CT, ResultForm.MRI).contains(context.form()) && trim(request.technique()) == null) {
@@ -508,6 +521,11 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private void record(Context context, UUID technicianAccountId, SaveParaclinicalResultRequest request,
                         boolean submit, Instant now) {
         ParaclinicalOrderDetail detail = context.detail();
+        // gio nhan mau xet nghiem khong duoc o tuong lai (luu nhap va gui deu kiem tra)
+        if (context.isLab() && request.receivedAt() != null && request.receivedAt().isAfter(now)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    Map.of("receivedAt", "Giờ nhận mẫu không được sau thời điểm hiện tại"));
+        }
         // kiem tra may KTV chon: phai thuoc phong + dung loai, sai -> INSTRUMENT_UNAVAILABLE (buoc 41-43)
         Optional<ParaclinicalInstrument> instrument = instrumentFor(context, request.instrumentId());
         UUID instrumentId = instrument.map(ParaclinicalInstrument::getId).orElse(null);

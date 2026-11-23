@@ -126,3 +126,15 @@ describe('anh ket qua: xet nghiem khong co anh, chan doan hinh anh bat buoc co a
       .not.toHaveProperty('imageLink');
   });
 });
+
+describe('chi so xet nghiem khong bat buoc', () => {
+  it('lets an optional parameter stay empty, like the backend', () => {
+    const lab = order('cls-002');
+    const optional = { ...lab, parameters: lab.parameters.map((parameter, index) => ({ ...parameter, required: index !== 0 })) };
+    const values = Object.fromEntries(optional.parameters.slice(1).map((parameter) => [parameter.code, '5']));
+    const errors = validateResult(optional, { ...resultToForm(optional), values, conclusion: 'Bình thường' });
+    expect(errors).not.toHaveProperty(`value:${optional.parameters[0].code}`);
+    expect(validateResult(lab, { ...resultToForm(lab), values: {}, conclusion: 'x' }))
+      .toHaveProperty(`value:${lab.parameters[0].code}`, 'Bắt buộc');
+  });
+});

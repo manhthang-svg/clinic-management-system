@@ -152,6 +152,9 @@ public class PatientServiceImpl implements PatientService {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
                     Map.of(birthDate == null ? "ngaysinh" : "hoten", "REQUIRED"));
         }
+        if (fullName.strip().length() > 100) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("hoten", "TOO_LONG"));
+        }
         return patientRepository.findPossibleDuplicates(fullName.trim(), birthDate).stream()
                 .limit(MAX_DUPLICATES).map(this::toResponse).toList();
     }

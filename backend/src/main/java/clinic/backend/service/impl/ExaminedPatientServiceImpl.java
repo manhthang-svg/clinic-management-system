@@ -28,6 +28,7 @@ public class ExaminedPatientServiceImpl implements ExaminedPatientService {
     static final long MAX_PERIOD_DAYS = 366;
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
+    static final int MAX_KEYWORD_LENGTH = 100;
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final VisitRepository visitRepository;
@@ -56,6 +57,9 @@ public class ExaminedPatientServiceImpl implements ExaminedPatientService {
             throw invalid("size", "The size must be between 1 and " + MAX_PAGE_SIZE + ".");
         }
         String search = keyword == null ? "" : keyword.strip();
+        if (search.length() > MAX_KEYWORD_LENGTH) {
+            throw invalid("keyword", "The keyword must not exceed " + MAX_KEYWORD_LENGTH + " characters.");
+        }
 
         VisitRepository.ExaminedTotals totals = visitRepository.countExamined(doctor.accountId(), start, end);
         Page<VisitRepository.ExaminedVisitRow> rows = visitRepository.findExaminedVisits(

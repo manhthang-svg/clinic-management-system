@@ -1,4 +1,4 @@
-package clinic.backend.service;
+package clinic.backend.service.impl;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
+import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.dto.request.ConfirmPayOSResultRequest;
 import clinic.backend.entity.Payment;
 import clinic.backend.entity.Visit;
@@ -36,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PayOSPaymentServiceTest {
+class PayOSPaymentServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-11-03T03:00:00Z");
     private static final long ORDER_CODE = 1793704131724L;
@@ -53,12 +54,12 @@ class PayOSPaymentServiceTest {
     @Mock
     private VisitRepository visitRepository;
 
-    private PayOSPaymentService service;
+    private PayOSPaymentServiceImpl service;
     private Payment payment;
 
     @BeforeEach
     void setUp() {
-        service = new PayOSPaymentService(payOS, paymentRepository, visitRepository, paymentCompletionService, "http://r", "http://c");
+        service = new PayOSPaymentServiceImpl(payOS, paymentRepository, visitRepository, paymentCompletionService, "http://r", "http://c");
         payment = Payment.createExaminationFee(UUID.randomUUID(), NOW, "HD1", UUID.randomUUID(),
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
     }

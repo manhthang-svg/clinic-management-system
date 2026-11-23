@@ -318,4 +318,39 @@ class PaymentServiceImplTest {
                 UUID.randomUUID(), NOW, code, VISIT_ID,
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
     }
+
+    @Test
+    void rejectsAKeywordLongerThan100Characters() {
+        assertThatThrownBy(() -> service.getPayments(null, null, "a".repeat(101), null, null, PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("search", "TOO_LONG"));
+    }
+
+    @Test
+    void rejectsAStartDateAfterTheEndDate() {
+        assertThatThrownBy(() -> service.getPayments(null, null, null,
+                java.time.LocalDate.of(2026, 11, 20), java.time.LocalDate.of(2026, 11, 1), PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("dateRange", "INVALID_FORMAT"));
+    }
+
+    @Test
+    void rejectsAnUnknownSortFieldAndAPageAbove100() {
+        assertThatThrownBy(() -> service.getPayments(null, null, null, null, null,
+                PageRequest.of(0, 10, Sort.by("password"))))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("sort", "NOT_ALLOWED"));
+        assertThatThrownBy(() -> service.getHistory(UUID.randomUUID(), null, null, null, null, null, null,
+                PageRequest.of(0, 500)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("size", "TOO_LONG"));
+    }
+
+    @Test
+    void acceptsEverySortTheHistoryScreenOffers() {
+        for (String field : new String[] {"paidAt", "patientTotalAmount"}) {
+            PaymentServiceImpl.checkPage(PageRequest.of(0, 20, Sort.by(Sort.Order.desc(field))));
+            PaymentServiceImpl.checkPage(PageRequest.of(0, 20, Sort.by(Sort.Order.asc(field))));
+        }
+    }
 }

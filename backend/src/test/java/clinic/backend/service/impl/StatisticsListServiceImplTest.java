@@ -137,4 +137,15 @@ class StatisticsListServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED));
     }
+
+    @Test
+    void rejectsASearchLongerThan100Characters() {
+        doctors(List.of());
+
+        assertThatThrownBy(() -> service.getDoctorRows(FROM, TO, "a".repeat(101), 0, 20))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID);
+                    assertThat(e.getDetails()).containsKey("search");
+                });
+    }
 }
