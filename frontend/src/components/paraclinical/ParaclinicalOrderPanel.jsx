@@ -10,6 +10,7 @@ import {
     filterServices,
     formatAmount,
     groupOptions,
+    hasOnDutyRoom,
     orderErrorMessage,
     orderItems,
     roomOptionLabel,
@@ -168,9 +169,13 @@ export function ParaclinicalOrderPanel({
     } : null), [insured, visit.insuranceCoverageRate, visit.insuranceScopeTotal, visit.coPaymentExemptionThreshold]);
     const cost = useMemo(() => estimate(services, selectedIds, coverage), [services, selectedIds, coverage]);
 
-    const toggle = (id) => setSelectedIds((current) => (
-        current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    ));
+    const toggle = (id) => {
+        const target = services.find((s) => s.id === id);
+        if (target && !hasOnDutyRoom(target)) return;
+        setSelectedIds((current) => (
+            current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+        ));
+    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -268,20 +273,45 @@ export function ParaclinicalOrderPanel({
                                 )}
                                 {!loading && pageRows.map((service) => {
                                     const checked = selectedIds.includes(service.id);
+                                    const available = hasOnDutyRoom(service);
                                     return (
-                                        <tr key={service.id} className={checked ? 'bg-teal-50/60' : 'hover:bg-slate-50'}>
+                                        <tr
+                                            key={service.id}
+                                            className={
+                                                !available
+                                                    ? 'bg-slate-50/70 text-slate-400 opacity-60'
+                                                    : checked
+                                                        ? 'bg-teal-50/60'
+                                                        : 'hover:bg-slate-50'
+                                            }
+                                            title={!available ? 'Phòng thực hiện hiện chưa có ca trực' : undefined}
+                                        >
                                             <td className={`${tdClass} text-center`}>
                                                 <input
                                                     type="checkbox"
                                                     checked={checked}
+                                                    disabled={!available}
                                                     onChange={() => toggle(service.id)}
                                                     aria-label={`Chọn ${service.name}`}
-                                                    className="h-4 w-4 cursor-pointer accent-teal-700"
+                                                    title={!available ? 'Phòng thực hiện hiện chưa có ca trực' : undefined}
+                                                    className="h-4 w-4 cursor-pointer accent-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                                                 />
                                             </td>
-                                            <td className={`${tdClass} whitespace-nowrap font-mono text-[11px] text-slate-600`}>{service.code}</td>
-                                            <td className={`${tdClass} font-medium text-slate-800`}>{service.name}</td>
-                                            <td className={`${tdClass} text-slate-600`}>{service.serviceGroupName || '—'}</td>
+                                            <td className={`${tdClass} whitespace-nowrap font-mono text-[11px] ${available ? 'text-slate-600' : 'text-slate-400'}`}>{service.code}</td>
+                                            <td className={`${tdClass} font-medium ${available ? 'text-slate-800' : 'text-slate-500'}`}>
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span>{service.name}</span>
+                                                    {!available && (
+                                                        <span
+                                                            className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                                                            title="Phòng thực hiện hiện chưa có ca trực"
+                                                        >
+                                                            Chưa có ca trực
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className={`${tdClass} ${available ? 'text-slate-600' : 'text-slate-400'}`}>{service.serviceGroupName || '—'}</td>
                                             <td className={moneyTdClass}>{formatAmount(service.clinicPrice)}</td>
                                             <td className={moneyTdClass}>
                                                 {service.insurancePrice == null
