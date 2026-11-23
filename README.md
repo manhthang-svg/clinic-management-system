@@ -169,6 +169,24 @@ files stay in `clinic_backend_data`. `docker compose logs -f backend` shows the 
 stops everything (`--volumes` also deletes the data). Running only the database for IDE development still works with
 `docker compose up -d postgres`.
 
+## Deploy to AWS Elastic Beanstalk
+
+`.github/workflows/deploy-beanstalk.yml` deploys on every push to `main` that touches `backend/`, `frontend/` or
+`deploy/beanstalk/` (and from the Actions tab with "Run workflow"). It runs the same checks as the CI workflows, builds
+the backend jar and the frontend, packages them with `deploy/beanstalk` (a `Procfile` and an nginx config that serves
+the React app and forwards `/api` to Spring Boot on port 5000) and deploys the zip to the Java SE environment.
+
+One-time setup:
+
+1. In IAM, create a user for GitHub with the managed policy `AdministratorAccess-AWSElasticBeanstalk` and an access key.
+2. In GitHub, **Settings → Secrets and variables → Actions**, add the secrets `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY`. Variables `AWS_REGION`, `EB_APPLICATION` and `EB_ENVIRONMENT` are optional (defaults
+   `ap-northeast-3`, `clinic-management-system`, `clinic-management-system-env`).
+3. In the Beanstalk environment properties set `SERVER_PORT=5000`, the database, JWT, PayOS and Cloudinary values, and
+   `APP_FRONTEND_ORIGIN` to the environment URL.
+
+Without the secrets the workflow is skipped, so forks and branches without AWS access are unaffected.
+
 ## Testing
 
 - Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).

@@ -1,0 +1,159 @@
+name: Deploy to Elastic Beanstalk
+
+# Push to main (or run by hand from the Actions tab): test, build the backend jar and the frontend,
+# package them with deploy/beanstalk (Procfile + nginx config) and deploy the zip to Elastic Beanstalk.
+# Needs repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY; without them the job is skipped.
+# Optional repository variables override the target: AWS_REGION, EB_APPLICATION, EB_ENVIRONMENT.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'deploy/beanstalk/**'
+      - '.github/workflows/deploy-beanstalk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time; a newer push waits for the running one.
+concurrency:
+  group: deploy-beanstalk
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-3' }}
+  EB_APPLICATION: ${{ vars.EB_APPLICATION || 'clinic-management-system' }}
+  EB_ENVIRONMENT: ${{ vars.EB_ENVIRONMENT || 'clinic-management-system-env' }}
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check AWS credentials are configured
+        id: guard
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "::notice::AWS secrets are not set; skipping the Elastic Beanstalk deployment."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out repository
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            backend/pom.xml
+            backend/.mvn/wrapper/maven-wrapper.properties
+
+      - name: Set up Node.js
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.15.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Same checks as Backend CI, so a failing build is never deployed.
+      - name: Test and package backend
+        if: steps.guard.outputs.enabled == 'true'
+        working-directory: backend
+        env:
+          PAYOS_CLIENT_ID: ci-placeholder-client-id
+          PAYOS_API_KEY: ci-placeholder-api-key
+          PAYOS_CHECKSUM_KEY: ci-placeholder-checksum-key
+        run: ./mvnw -B verify
+
+      # Same checks as Frontend CI (lint, test, build); the API is on the same origin under /api/v1.
+      - name: Test and build frontend
+        if: steps.guard.outputs.enabled == 'true'
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: /api/v1
+        run: |
+          npm ci
+          npm run verify
+
+      - name: Package the Beanstalk bundle
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          mkdir -p bundle/public
+          jar=$(find backend/target -maxdepth 1 -name '*.jar' ! -name '*.original' | head -n 1)
+          cp "$jar" bundle/application.jar
+          cp -r frontend/dist/. bundle/public/
+          cp -r deploy/beanstalk/. bundle/
+          (cd bundle && zip -qr ../bundle.zip .)
+          unzip -l bundle.zip
+
+      - name: Configure AWS credentials
+        if: steps.guard.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Elastic Beanstalk
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          version="${GITHUB_SHA::7}-run${GITHUB_RUN_NUMBER}"
+          bucket=$(aws elasticbeanstalk create-storage-location --query S3Bucket --output text)
+          key="$EB_APPLICATION/$version.zip"
+
+          aws s3 cp bundle.zip "s3://$bucket/$key"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION" \
+            --version-label "$version" \
+            --description "commit $GITHUB_SHA" \
+            --source-bundle "S3Bucket=$bucket,S3Key=$key" \
+            --process
+          # Beanstalk checks the bundle first; deploy only once it is PROCESSED.
+          for _ in $(seq 1 30); do
+            state=$(aws elasticbeanstalk describe-application-versions \
+              --application-name "$EB_APPLICATION" --version-labels "$version" \
+              --query 'ApplicationVersions[0].Status' --output text)
+            echo "Application version $version: $state"
+            [ "$state" = "PROCESSED" ] && break
+            if [ "$state" = "FAILED" ]; then
+              echo "::error::Elastic Beanstalk rejected the bundle."
+              exit 1
+            fi
+            sleep 10
+          done
+          if [ "$state" != "PROCESSED" ]; then
+            echo "::error::Timed out waiting for the application version to be processed."
+            exit 1
+          fi
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENVIRONMENT" --version-label "$version"
+          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENVIRONMENT"
+
+          read -r status health running <<< "$(aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].[Status,Health,VersionLabel]' --output text)"
+          echo "Status=$status Health=$health Version=$running"
+          if [ "$running" != "$version" ]; then
+            echo "::error::Elastic Beanstalk is running $running instead of $version (deployment rolled back?)."
+            exit 1
+          fi
+          if [ "$health" = "Red" ]; then
+            echo "::warning::The new version is running but environment health is Red; check the Beanstalk logs."
+          fi
