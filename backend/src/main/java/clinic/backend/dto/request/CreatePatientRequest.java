@@ -11,6 +11,7 @@ public record CreatePatientRequest(
 
         @NotBlank(message = "REQUIRED")
         @Size(max = 100, message = "TOO_LONG")
+        @Pattern(regexp = "^(?=.*\\p{L})[\\p{L}\\s'-]+$", message = "INVALID_FORMAT")
         String hoten,
 
         @NotNull(message = "REQUIRED")
@@ -83,6 +84,7 @@ public record CreatePatientRequest(
 
         /** Guardian name, required under 18 years old (checked by the service). */
         @Size(max = 255, message = "TOO_LONG")
+        @Pattern(regexp = "^$|^(?=.*\\p{L})[\\p{L}\\s'-]+$", message = "INVALID_FORMAT")
         String hotennguoithan,
 
         /** Guardian relationship, required under 18 years old (checked by the service). */

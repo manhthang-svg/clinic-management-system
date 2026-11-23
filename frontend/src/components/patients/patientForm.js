@@ -5,6 +5,18 @@ import { ageOn } from './patientOverview';
 export const ADULT_AGE = 18;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
+// Ho va ten chi gom chu cai (Unicode), khoang trang, dau gach noi va dau nhay don (cho ten dong bao dan toc)
+export const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'-]+$/u;
+
+// Chuan hoa viet hoa chu cai dau (Title Case) cho Ho va ten, thu gon khoang trang thua
+export function formatFullName(name) {
+    if (!name || typeof name !== 'string') return '';
+    return name
+        .trim()
+        .toLowerCase()
+        .replace(/(?:^|[\s'-])\p{L}/gu, (match) => match.toUpperCase())
+        .replace(/\s+/g, ' ');
+}
 
 // Danh muc cac dan toc Viet Nam cua Tong cuc Thong ke (nso.gov.vn), ma 2 chu so cho dantoc_ma (CV 365).
 // Le tan chon ten, o Ma dan toc tu dien theo ten.
@@ -141,6 +153,7 @@ export function validatePatientForm(form, today) {
 
     require('hoten');
     if (text('hoten').length > MAX_NAME_LENGTH) errors.hoten = FIELD_MSG.TOO_LONG;
+    else if (text('hoten') && !NAME_REGEX.test(text('hoten'))) errors.hoten = FIELD_MSG.INVALID_FORMAT;
     require('diachi');
     require('dantoc');
     // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
@@ -161,15 +174,23 @@ export function validatePatientForm(form, today) {
     if (age !== null && age < ADULT_AGE) {
         require('hotennguoithan');
         require('nguoithanQuanhe');
+        require('sodienthoainguoithan');
+    }
+    if (text('hotennguoithan')) {
+        if (text('hotennguoithan').length > 255) errors.hotennguoithan = FIELD_MSG.TOO_LONG;
+        else if (!NAME_REGEX.test(text('hotennguoithan'))) errors.hotennguoithan = FIELD_MSG.INVALID_FORMAT;
     }
     return errors;
 }
 
-// tao body gui len: bo khoang trang, truong rong thanh null
+// tao body gui len: bo khoang trang, truong rong thanh null, chuan hoa Title Case ho ten
 export function buildPatientPayload(form) {
     const payload = {};
     Object.keys(INITIAL_PATIENT_FORM).forEach((field) => {
-        const value = (form[field] ?? '').trim();
+        let value = (form[field] ?? '').trim();
+        if ((field === 'hoten' || field === 'hotennguoithan') && value) {
+            value = formatFullName(value);
+        }
         payload[field] = value || null;
     });
     payload.gioitinh = Number(form.gioitinh);

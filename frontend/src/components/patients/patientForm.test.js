@@ -7,6 +7,7 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
     ethnicityCode,
     ethnicityOptions,
     occupationCode,
@@ -38,9 +39,13 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
             .toEqual({ sodienthoai: FIELD_MSG.REQUIRED });
     });
 
-    it('requires guardian name and relationship under 18 but not the phone', () => {
+    it('requires guardian name, relationship and relative phone under 18 but not the patient phone', () => {
         const errors = validatePatientForm(adult({ ngaysinh: '2008-11-04', sodienthoai: '' }), TODAY);
-        expect(errors).toEqual({ hotennguoithan: FIELD_MSG.REQUIRED, nguoithanQuanhe: FIELD_MSG.REQUIRED });
+        expect(errors).toEqual({
+            hotennguoithan: FIELD_MSG.REQUIRED,
+            nguoithanQuanhe: FIELD_MSG.REQUIRED,
+            sodienthoainguoithan: FIELD_MSG.REQUIRED,
+        });
     });
 
     it('checks formats and lengths', () => {
@@ -54,6 +59,28 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
             sodienthoai: FIELD_MSG.INVALID_FORMAT,
             ngaysinh: FIELD_MSG.INVALID_FORMAT,
         });
+    });
+
+    it('rejects names with numbers or special characters', () => {
+        expect(validatePatientForm(adult({ hoten: 'Nguyễn Văn A 123' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hoten: 'Trần Thị B @#!' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hoten: '---' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+    });
+
+    it('accepts valid Vietnamese names with accents, apostrophes and hyphens', () => {
+        expect(validatePatientForm(adult({ hoten: 'Nguyễn Văn An' }), TODAY).hoten).toBeUndefined();
+        expect(validatePatientForm(adult({ hoten: "H'Hen Niê" }), TODAY).hoten).toBeUndefined();
+        expect(validatePatientForm(adult({ hoten: 'A-Trô' }), TODAY).hoten).toBeUndefined();
+    });
+
+    it('rejects guardian names with numbers or special characters', () => {
+        expect(validatePatientForm(adult({ hotennguoithan: 'Người thân 123' }), TODAY).hotennguoithan)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hotennguoithan: 'Nguyễn Văn B' }), TODAY).hotennguoithan)
+            .toBeUndefined();
     });
 
     it('rejects a birth date in the future', () => {
@@ -90,6 +117,15 @@ describe('patientForm helpers', () => {
     it('never shows the raw backend message', () => {
         expect(createErrorMessage(new ApiError('raw', { status: 500 }))).toBe(MSG.SYSTEM_ERROR);
         expect(createErrorMessage(new ApiError('raw', { status: 403 }))).toBe(MSG.FORBIDDEN);
+    });
+
+    it('formats full names to Title Case and cleans whitespace', () => {
+        expect(formatFullName('nguyễn văn an')).toBe('Nguyễn Văn An');
+        expect(formatFullName('NGUYỄN VĂN AN')).toBe('Nguyễn Văn An');
+        expect(formatFullName('  nguyễn   văn   an  ')).toBe('Nguyễn Văn An');
+        expect(formatFullName("h'hen niê")).toBe("H'Hen Niê");
+        expect(formatFullName('a-trô')).toBe('A-Trô');
+        expect(formatFullName('')).toBe('');
     });
 });
 

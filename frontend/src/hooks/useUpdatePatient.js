@@ -6,6 +6,7 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
     isDirty,
     msg19,
     serverFieldErrors,
@@ -63,19 +64,59 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
     }, []);
 
+    const handleBlur = useCallback((event) => {
+        const { name } = event.target;
+        if (!name || !form) return;
+
+        let nextForm = form;
+        if ((name === 'hoten' || name === 'hotennguoithan') && form[name]) {
+            const formatted = formatFullName(form[name]);
+            if (formatted !== form[name]) {
+                nextForm = { ...form, [name]: formatted };
+                setForm(nextForm);
+            }
+        }
+
+        const errors = validatePatientForm(nextForm, clinicToday());
+        const fieldError = errors[name];
+        setFieldErrors((previous) => {
+            if (fieldError) {
+                return { ...previous, [name]: fieldError };
+            }
+            if (previous[name]) {
+                const next = { ...previous };
+                delete next[name];
+                return next;
+            }
+            return previous;
+        });
+    }, [form]);
+
     const handleSubmit = useCallback(async (event) => {
         event.preventDefault();
         if (submitting || !form) return;
         setError('');
         setConflict(null);
 
+        let currentForm = form;
+        const formattedHoten = formatFullName(form.hoten);
+        const formattedNguoithan = formatFullName(form.hotennguoithan);
+        if (formattedHoten !== form.hoten || formattedNguoithan !== form.hotennguoithan) {
+            currentForm = {
+                ...form,
+                hoten: formattedHoten,
+                hotennguoithan: formattedNguoithan,
+            };
+            setForm(currentForm);
+        }
+
         // khong sua gi thi quay ve, khong luu
-        if (!isDirty(form, initialForm)) {
+        if (!isDirty(currentForm, initialForm)) {
             navigate(profilePath(patientId));
             return;
         }
         // kiem tra giong luc tao ho so
-        const errors = validatePatientForm(form, clinicToday());
+        const errors = validatePatientForm(currentForm, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
             setError(MSG.FIX_FIELDS);
@@ -84,7 +125,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
 
         setSubmitting(true);
         try {
-            await patientApi.update(patientId, { ...buildPatientPayload(form), version: patient.version });
+            await patientApi.update(patientId, { ...buildPatientPayload(currentForm), version: patient.version });
             // luu xong: MSG03 va quay ve ho so
             toast.success(MSG.UPDATED);
             navigate(profilePath(patientId), { replace: true });
@@ -126,6 +167,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile: (id) => navigate(profilePath(id)),

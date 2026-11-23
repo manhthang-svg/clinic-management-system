@@ -107,7 +107,7 @@ class PatientServiceImplTest {
         assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("Nguyễn Bé", LocalDate.of(2008, 11, 4), null, null, null, null, null)))
                 .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getDetails())
-                        .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe"));
+                        .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe", "sodienthoainguoithan"));
     }
 
     @Test
