@@ -1,3 +1,7 @@
+# Whole system:          docker compose up -d --build   -> http://localhost:8081
+# Only the database:     docker compose up -d postgres  (backend/frontend run from the IDE / npm run dev)
+# Values come from .env in this folder (copy .env.example). Stop: docker compose down (add --volumes to wipe data).
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -5,6 +9,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-clinic}
       POSTGRES_USER: ${POSTGRES_USER:-clinic}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinic}
+      TZ: Asia/Ho_Chi_Minh
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -16,5 +21,54 @@ services:
       retries: 10
       start_period: 5s
 
+  backend:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic}
+      DB_USERNAME: ${POSTGRES_USER:-clinic}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-clinic}
+      # Required: base64 key of at least 256 bits (openssl rand -base64 32); the backend stops without it.
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
+      # The browser opens the app through the frontend container, over plain HTTP locally.
+      APP_FRONTEND_ORIGIN: ${APP_FRONTEND_ORIGIN:-http://localhost:8081}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BOOTSTRAP_ADMIN_FULL_NAME: ${BOOTSTRAP_ADMIN_FULL_NAME:-Administrator}
+      # PayOS (UC-71) keys from the PayOS dashboard.
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
+      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
+      PAYOS_RETURN_URL: ${PAYOS_RETURN_URL:-http://localhost:8081/payment/result}
+      PAYOS_CANCEL_URL: ${PAYOS_CANCEL_URL:-http://localhost:8081/payment/cancel}
+      # UC-67 result images; without it uploads answer FILE_STORAGE_NOT_CONFIGURED.
+      CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+      INSURANCE_SIMULATOR_RESPONSE_DELAY: ${INSURANCE_SIMULATOR_RESPONSE_DELAY:-0ms}
+      SIGNING_SIMULATOR_KEYSTORE_PASSWORD: ${SIGNING_SIMULATOR_KEYSTORE_PASSWORD:-}
+      # Files that must survive a container restart live in the clinic_backend_data volume.
+      CLINIC_ARCHIVE_ROOT: /app/data/archive
+      SIGNING_SIMULATOR_KEYSTORE: /app/data/signing-simulator/simulator.p12
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - clinic_backend_data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    restart: unless-stopped
+
 volumes:
   clinic_postgres_data:
+  clinic_backend_data:

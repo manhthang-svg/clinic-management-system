@@ -148,6 +148,27 @@ The columns are `ma_thuoc,so_dang_ky,ma_thuoc_bhyt,ten_thuoc,hoat_chat,ham_luong
 
 The CSV is extracted from the official appendix PDF with the scripts in `backend/tools/icd10/` (header `ma,ten,ma_cha,ghi_chu`; `ghi_chu` holds the column 18 and 24–29 rules as `|`-separated flags).
 
+## Run the whole system with Docker
+
+`compose.yml` builds the backend (`backend/Dockerfile`) and the frontend (`frontend/Dockerfile`, served by nginx, which
+forwards `/api` to the backend) next to PostgreSQL.
+
+1. Copy `.env.example` to `.env` and fill at least `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY`, the three `PAYOS_*` keys
+   and, for the first start, `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`. Add `CLOUDINARY_URL` to upload
+   result images (UC-67).
+2. Build and start:
+
+   ```powershell
+   docker compose up -d --build
+   ```
+
+3. Open `http://localhost:8081` (`FRONTEND_PORT`). The API is also on `http://localhost:8080` (`BACKEND_PORT`).
+
+The database stays in the `clinic_postgres_data` volume; archived medical-record packages and the signing simulator
+files stay in `clinic_backend_data`. `docker compose logs -f backend` shows the backend log; `docker compose down`
+stops everything (`--volumes` also deletes the data). Running only the database for IDE development still works with
+`docker compose up -d postgres`.
+
 ## Testing
 
 - Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).

@@ -1,0 +1,10 @@
+# Keep secrets, build output and local data out of the image build context.
+.env
+.env.*
+target/
+data/
+.clinic-archive/
+.signing-simulator/
+.idea/
+*.iml
+tools/
