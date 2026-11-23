@@ -374,11 +374,13 @@ export default function ClinicalExaminationPage() {
     // UC-56: nothing waits for paraclinical services (BR-30, BR-41).
     const concludable = visit.status === 'IN_EXAMINATION' || waitingConclusion;
     const transferable = clinicalData?.version === 0 && !loadError && !readOnly;
+    // UC-49 AF-04: more services can be ordered while the visit waits for the conclusion (BF-04).
+    const orderable = visit.status === 'IN_EXAMINATION' || waitingConclusion;
     // The transfer tab is open only while the visit can still be transferred (e.g. after a reload of its link).
-    // Outside the examination no new order is made, so the order tab shows the ordered list.
+    // When no new order can be made, the order tab shows the ordered list.
     let shownSection = activeSection;
     if (activeSection === 'transfer' && !transferable) shownSection = 'clinical';
-    if (activeSection === 'paraclinical' && readOnly) shownSection = 'orders';
+    if (activeSection === 'paraclinical' && !orderable) shownSection = 'orders';
     if ((activeSection === 'conclusion' || activeSection === 'prescription' || activeSection === 'follow-up') && !concludable) shownSection = 'clinical';
     const openConclusion = () => {
         if (shownSection === 'conclusion') return;
@@ -395,9 +397,17 @@ export default function ClinicalExaminationPage() {
         save('CONTINUE', 'CONCLUSION');
     };
     const openParaclinical = () => {
-        if (shownSection === 'paraclinical' || shownSection === 'orders' && readOnly) return;
-        if (readOnly) {
+        if (shownSection === 'paraclinical' || shownSection === 'orders' && !orderable) return;
+        if (!orderable) {
             setActiveSection('orders');
+            return;
+        }
+        if (readOnly) {
+            // Waiting for the conclusion: the examination is no longer edited, so there is nothing to save first.
+            if (!servicesRequest || Date.now() - servicesRequest.at > SERVICES_MAX_AGE_MS) {
+                setServicesRequest(startServicesRequest());
+            }
+            setActiveSection('paraclinical');
             return;
         }
         // AF-04: the examination must be valid (diagnosis required); otherwise the errors show and the tab stays.

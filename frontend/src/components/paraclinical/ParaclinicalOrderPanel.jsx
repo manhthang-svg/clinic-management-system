@@ -56,11 +56,16 @@ function Pagination({ page, pageCount, total, onChange }) {
     );
 }
 
+/** Shown for a self-pay visit: its rooms are assigned when the Cashier confirms the payment (BR-50-02). */
+const ROOM_AFTER_PAYMENT = 'Phân phòng sau khi thanh toán';
+
 /**
  * The performing room the system assigns to a selected service (staffed room, fewest waiting, lower room code).
- * The Doctor does not choose it; the backend confirms the room when the order is created.
+ * The Doctor does not choose it; the backend confirms the room when the order is created. A self-pay visit has no
+ * room until the payment (BR-50-01).
  */
-function AssignedRoom({ line }) {
+function AssignedRoom({ line, insured }) {
+    if (!insured) return <span className="text-slate-500">{ROOM_AFTER_PAYMENT}</span>;
     const rooms = line.rooms ?? [];
     if (rooms.length === 0) return <span className="text-slate-400">Chưa có phòng hoạt động</span>;
     const room = rooms.find((option) => option.roomId === defaultRoomId(line)) ?? rooms[0];
@@ -325,7 +330,7 @@ export function ParaclinicalOrderPanel({
                                         <td className={`${tdClass} whitespace-nowrap font-mono text-[11px] text-slate-600`}>{line.code}</td>
                                         <td className={`${tdClass} font-medium text-slate-800`}>{line.name}</td>
                                         <td className={tdClass}>
-                                            <AssignedRoom line={line} />
+                                            <AssignedRoom line={line} insured={insured} />
                                         </td>
                                         <td className={moneyTdClass}>{formatAmount(line.clinicPrice)}</td>
                                         <td className={moneyTdClass}>

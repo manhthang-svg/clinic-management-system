@@ -177,9 +177,16 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 .map(CreateParaclinicalOrderRequest.Item::serviceId)
                 .toList());
         // lay danh sach phong co dch vu
+        // BR-50-01: only an insurance visit gets its rooms now. A self-pay visit gets them when the receipt is paid
+        // (BR-50-02, PaymentCompletionService), or at once from the least busy room when the receipt is 0 VND.
+        boolean roomsAtOrder = visit.getDoituongbnLoai() == VisitDoituongbnLoai.BHYT;
         Map<UUID, List<ParaclinicalServiceOptionResponse.RoomOption>> roomsByGroup = null;
         List<UUID> roomIds = new ArrayList<>();
         for (int i = 0; i < services.size(); i++) {
+            if (!roomsAtOrder) {
+                roomIds.add(null);
+                continue;
+            }
             UUID requestedRoom = request.items().get(i).roomId();
             if (requestedRoom == null && roomsByGroup == null) {
                 roomsByGroup = activeRoomOptions();

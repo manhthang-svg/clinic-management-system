@@ -8,7 +8,9 @@ import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.ConclusionClosureResponse;
 import clinic.backend.dto.response.ConclusionConfirmationResponse;
 import clinic.backend.dto.response.ConclusionResponse;
+import clinic.backend.dto.response.ConclusionSlipResponse;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.ConclusionPrintService;
 import clinic.backend.service.ConclusionService;
 import clinic.backend.service.MedicalRecordClosureService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +36,13 @@ public class ConclusionController {
 
     private final ConclusionService conclusionService;
     private final MedicalRecordClosureService closureService;
+    private final ConclusionPrintService conclusionPrintService;
+
+    @GetMapping("/visits/{visitId}/print")
+    @Operation(summary = "BF-04: nội dung phiếu kết luận khám để in (không ghi log)")
+    public ApiResponse<ConclusionSlipResponse> print(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID visitId) {
+        return ApiResponse.success(conclusionPrintService.print(StaffPrincipal.from(jwt), visitId));
+    }
 
     @GetMapping("/visits/{visitId}")
     @Operation(summary = "Tải biểu mẫu kết luận của lượt khám, kèm dữ liệu đã lưu")
