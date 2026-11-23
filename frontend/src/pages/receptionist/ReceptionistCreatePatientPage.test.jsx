@@ -34,6 +34,36 @@ async function fillAdult(user, { phone = '0901234567' } = {}) {
 }
 
 describe('ReceptionistCreatePatientPage (UC-37)', () => {
+    it('automatically formats full name to Title Case on blur', async () => {
+        const user = userEvent.setup();
+        const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };
+        renderPage(patientApi);
+
+        const nameInput = screen.getByLabelText(/Họ và tên/);
+        await user.type(nameInput, 'nguyễn   văn   an');
+        await user.tab();
+
+        expect(nameInput).toHaveValue('Nguyễn Văn An');
+    });
+
+    it('validates a field immediately on blur and marks it with error message', async () => {
+        const user = userEvent.setup();
+        const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };
+        renderPage(patientApi);
+
+        const nameInput = screen.getByLabelText(/Họ và tên/);
+        await user.type(nameInput, 'Nguyễn Văn A 123');
+        await user.tab();
+
+        expect(nameInput).toHaveAccessibleDescription(FIELD_MSG.INVALID_FORMAT);
+        expect(screen.getByText(FIELD_MSG.INVALID_FORMAT)).toBeInTheDocument();
+
+        await user.clear(nameInput);
+        await user.type(nameInput, 'Nguyễn Văn A');
+        await user.tab();
+        expect(nameInput).not.toHaveAccessibleDescription(FIELD_MSG.INVALID_FORMAT);
+    });
+
     it('shows each wrong field under the field and does not call the API', async () => {
         const user = userEvent.setup();
         const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };

@@ -16,6 +16,7 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile,
@@ -63,7 +64,14 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
             </header>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
-                <PatientFormSections form={form} fieldErrors={fieldErrors} handleChange={handleChange} adult={adult} minor={minor} />
+                <PatientFormSections
+                    form={form}
+                    fieldErrors={fieldErrors}
+                    handleChange={handleChange}
+                    handleBlur={handleBlur}
+                    adult={adult}
+                    minor={minor}
+                />
 
                 {conflict && (
                     <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -157,11 +157,11 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private void checkAgeRules(CreatePatientRequest request) {
-        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
+        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
     }
 
-    // kiem tra theo tuoi: tu 18 tuoi bat buoc SDT, duoi 18 bat buoc nguoi than
-    private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation) {
+    // kiem tra theo tuoi: tu 18 tuoi bat buoc SDT, duoi 18 bat buoc nguoi than va SDT nguoi than
+    private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation, String guardianPhone) {
         LocalDate today = LocalDate.now(clock);
         int age = Period.between(birthDate, today).getYears();
         Map<String, String> errors = new LinkedHashMap<>();
@@ -176,6 +176,9 @@ public class PatientServiceImpl implements PatientService {
         }
         if (age < ADULT_AGE && normalize(guardianRelation) == null) {
             errors.put("nguoithanQuanhe", "REQUIRED");
+        }
+        if (age < ADULT_AGE && normalize(guardianPhone) == null) {
+            errors.put("sodienthoainguoithan", "REQUIRED");
         }
         if (!errors.isEmpty()) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, errors);
@@ -212,7 +215,7 @@ public class PatientServiceImpl implements PatientService {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         // kiem tra tuoi giong luc tao ho so
-        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe());
+        checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
 
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());

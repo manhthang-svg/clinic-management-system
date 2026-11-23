@@ -7,6 +7,7 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
     isDirty,
     msg19,
     serverFieldErrors,
@@ -44,16 +45,44 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
     }, []);
 
+    const handleBlur = useCallback((event) => {
+        const { name } = event.target;
+        if (!name) return;
+
+        let nextForm = form;
+        if ((name === 'hoten' || name === 'hotennguoithan') && form[name]) {
+            const formatted = formatFullName(form[name]);
+            if (formatted !== form[name]) {
+                nextForm = { ...form, [name]: formatted };
+                setForm(nextForm);
+            }
+        }
+
+        const errors = validatePatientForm(nextForm, clinicToday());
+        const fieldError = errors[name];
+        setFieldErrors((previous) => {
+            if (fieldError) {
+                return { ...previous, [name]: fieldError };
+            }
+            if (previous[name]) {
+                const next = { ...previous };
+                delete next[name];
+                return next;
+            }
+            return previous;
+        });
+    }, [form]);
+
     const openProfile = useCallback((patientId) => {
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patientId }));
     }, [navigate]);
 
     // luu ho so, xong thi mo trang ho so (MSG04)
-    const save = useCallback(async () => {
+    const save = useCallback(async (formToSave = form) => {
         setDuplicates(null);
         setSubmitting(true);
         try {
-            const res = await patientApi.create(buildPatientPayload(form));
+            const res = await patientApi.create(buildPatientPayload(formToSave));
             const created = res?.data || res;
             toast.success(MSG.CREATED);
             navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: created.id }), { replace: true });
@@ -81,7 +110,19 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         setError('');
         setConflict(null);
 
-        const errors = validatePatientForm(form, clinicToday());
+        let currentForm = form;
+        const formattedHoten = formatFullName(form.hoten);
+        const formattedNguoithan = formatFullName(form.hotennguoithan);
+        if (formattedHoten !== form.hoten || formattedNguoithan !== form.hotennguoithan) {
+            currentForm = {
+                ...form,
+                hoten: formattedHoten,
+                hotennguoithan: formattedNguoithan,
+            };
+            setForm(currentForm);
+        }
+
+        const errors = validatePatientForm(currentForm, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
             setError(MSG.FIX_FIELDS);
@@ -91,7 +132,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         // canh bao ho so trung ho ten + ngay sinh truoc khi luu
         setSubmitting(true);
         try {
-            const res = await patientApi.possibleDuplicates(form.hoten.trim(), form.ngaysinh);
+            const res = await patientApi.possibleDuplicates(currentForm.hoten.trim(), currentForm.ngaysinh);
             const list = res?.data ?? res ?? [];
             if (list.length > 0) {
                 setDuplicates(list);
@@ -101,7 +142,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         } catch {
             // chi canh bao, van cho tao tiep
         }
-        await save();
+        await save(currentForm);
     }, [form, patientApi, save, submitting]);
 
     // huy khi da nhap du lieu thi hoi xac nhan (MSG40)
@@ -120,6 +161,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile,
