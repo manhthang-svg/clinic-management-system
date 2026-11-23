@@ -8,8 +8,9 @@ import { Barcode } from '../paraclinicalResult/Barcode';
 import { ageText } from '../visits/visitFormat';
 import { printErrorMessage } from './paraclinicalOrder';
 
-function roomLabel(sheet) {
-    if (!sheet.room) return `${sheet.serviceGroupName || 'Cận lâm sàng'} – phòng sẽ được chỉ định sau khi thanh toán`;
+/** A self-pay visit's services have no room until the payment (BR-50-01, BR-50-02). */
+function roomLabel(sheet, insured) {
+    if (!sheet.room) return insured ? 'Chưa có phòng thực hiện' : 'Phân phòng sau khi thanh toán';
     return `${sheet.room.roomName}${sheet.room.location ? ` – ${sheet.room.location}` : ''}`;
 }
 
@@ -151,7 +152,7 @@ export function ParaclinicalOrderSlip({ slip }) {
                                 <td className="border border-black px-2 text-center tabular-nums">{Number(service.soluong ?? 1).toLocaleString('vi-VN')}</td>
                                 {firstOfRoom && (
                                     <td rowSpan={sheet.services.length} className="border border-black px-2.5 font-semibold" data-testid="slip-room">
-                                        {roomLabel(sheet)}
+                                        {roomLabel(sheet, patient.visitType === 'BHYT')}
                                     </td>
                                 )}
                             </tr>

@@ -351,11 +351,27 @@ class ParaclinicalOrderServiceImplTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.MEDICAL_RECORD_CLOSED));
     }
 
-    // ---- I1-D47, BR-50-01: the Doctor chooses the performing room ----
+    // ---- I1-D47, BR-50-01: an insurance visit gets its performing rooms when ordered ----
+
+    @Test
+    void leavesTheRoomOfASelfPaidVisitToThePayment() {
+        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
+        Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
+        stubOrder(visit, List.of(ultrasound));
+
+        var response = service.createOrder(DOCTOR_ID, requestWithRoom(ultrasound.getId(), room.getId()));
+
+        // BR-50-02: the room is assigned when the Cashier confirms the payment, so none is stored now.
+        assertThat(response.details()).singleElement()
+                .satisfies(detail -> assertThat(detail.roomId()).isNull());
+        verify(paymentCompletionService, never()).releaseOrder(any());
+        verify(roomDuty, never()).staffedRooms(any());
+    }
 
     @Test
     void storesTheRoomTheDoctorChoseOnTheOrderLine() {
-        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        Visit visit = insuredVisit((short) 80);
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
         stubOrder(visit, List.of(ultrasound));
@@ -366,13 +382,13 @@ class ParaclinicalOrderServiceImplTest {
 
         assertThat(response.details()).singleElement()
                 .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(room.getId()));
-        // A self-paid order still waits for the cashier; the queue number is taken at release (BR-50-02).
-        verify(paymentCompletionService, never()).releaseOrder(any());
+        // BR-26: an insurance order is released to its rooms at once; the queue number is taken at check-in.
+        verify(paymentCompletionService).releaseOrder(any());
     }
 
     @Test
     void assignsTheRoomItselfWhenNoneIsSentPreferringAStaffedRoom() {
-        Visit visit = visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID);
+        Visit visit = insuredVisit((short) 80);
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         Room emptyFree = new Room(UUID.randomUUID(), NOW, UUID.randomUUID(), ultrasound.getServiceGroupId(), "SA1",
                 "Phòng siêu âm 1", "Tầng 2", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
@@ -395,7 +411,7 @@ class ParaclinicalOrderServiceImplTest {
 
     @Test
     void refusesARoomOfAnotherServiceGroup() {
-        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID)));
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(insuredVisit((short) 80)));
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         when(medicalServiceRepository.findAllById(List.of(ultrasound.getId()))).thenReturn(List.of(ultrasound));
         Room labRoom = paraclinicalRoom(UUID.randomUUID(), ActivationStatus.ACTIVE);
@@ -411,7 +427,7 @@ class ParaclinicalOrderServiceImplTest {
 
     @Test
     void refusesAnInactiveRoom() {
-        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID)));
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(insuredVisit((short) 80)));
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         when(medicalServiceRepository.findAllById(List.of(ultrasound.getId()))).thenReturn(List.of(ultrasound));
         Room closed = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.INACTIVE);

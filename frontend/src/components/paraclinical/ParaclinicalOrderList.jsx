@@ -198,7 +198,7 @@ function OrderCard({ order, api, results, onCancel }) {
                                 <td className={tdClass}>{detail.machidinh}</td>
                                 <td className={tdClass}>{detail.tenchidinh}</td>
                                 <td className={tdClass}>
-                                    {detail.roomName ?? 'Chưa xếp phòng'}
+                                    {detail.roomName ?? (detail.status === 'PENDING_PAYMENT' ? 'Phân phòng sau khi thanh toán' : 'Chưa xếp phòng')}
                                     {detail.roomLocation && (
                                         <span className="block text-[11px] text-slate-500">{detail.roomLocation}</span>
                                     )}

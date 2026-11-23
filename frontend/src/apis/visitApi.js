@@ -190,6 +190,11 @@ export const visitApi = {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, { signal });
     },
 
+    // BF-04 "In phiếu kết luận": the saved conclusion ready to print; records nothing.
+    getConclusionPrint(visitId, signal) {
+        return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/print`, { signal });
+    },
+
     saveConclusion(visitId, payload) {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}`, {
             method: 'PUT',

@@ -55,7 +55,18 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(onCreated).toHaveBeenCalledWith(order);
     });
 
-    it('shows the room the system assigns and lets the backend assign it (no choice for the Doctor)', async () => {
+    it('assigns no room to a self-paid visit until the payment (BR-50-02)', async () => {
+        const user = userEvent.setup();
+        const api = { getParaclinicalServices: vi.fn().mockResolvedValue(services), orderParaclinical: vi.fn() };
+        renderPanel(api);
+
+        await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
+
+        expect(screen.getByText('Phân phòng sau khi thanh toán')).toBeInTheDocument();
+        expect(screen.queryByTestId('assigned-room-s1')).not.toBeInTheDocument();
+    });
+
+    it('shows the room the system assigns to an insurance visit and lets the backend assign it', async () => {
         const user = userEvent.setup();
         const withRooms = [{
             ...services[0],
@@ -69,7 +80,7 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
             getParaclinicalServices: vi.fn().mockResolvedValue(withRooms),
             orderParaclinical: vi.fn().mockResolvedValue({ id: 'o1', sophieu: 'CD1' }),
         };
-        renderPanel(api);
+        renderPanel(api, { forVisit: { ...visit, doituongbnLoai: 'BHYT' } });
 
         await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
         expect(screen.getByTestId('assigned-room-s1')).toHaveTextContent('Phòng siêu âm 2 – Tầng 3 (đang chờ: 1)');
