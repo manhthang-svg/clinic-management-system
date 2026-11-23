@@ -99,3 +99,30 @@ describe('resultForm', () => {
     expect(() => validateResult(xray, form)).not.toThrow();
   });
 });
+
+describe('anh ket qua: xet nghiem khong co anh, chan doan hinh anh bat buoc co anh', () => {
+  const filled = (id, extra) => ({ ...resultToForm(order(id)), description: 'Mô tả', conclusion: 'Bình thường', ...extra });
+  const image = { id: 'img-1', name: 'a.png', type: 'image/png', size: 10, url: 'https://x/a.png', caption: '' };
+
+  it('never asks a lab result for an image', () => {
+    const lab = order('cls-002');
+    const errors = validateResult(lab, { ...resultToForm(lab), values: { GLU: '5' }, conclusion: 'Bình thường' });
+    expect(errors).not.toHaveProperty('files');
+    expect(errors).not.toHaveProperty('imageLink');
+  });
+
+  it('requires at least one image for ultrasound, X-ray and ECG', () => {
+    expect(validateResult(order('cls-004'), filled('cls-004', { files: [] })))
+      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả.');
+    expect(validateResult(order('cls-008'), filled('cls-008', { files: [] }))).toHaveProperty('files');
+    expect(validateResult(order('cls-007'), filled('cls-007', { files: [] }))).toHaveProperty('files');
+    expect(validateResult(order('cls-004'), filled('cls-004', { files: [image] }))).not.toHaveProperty('files');
+  });
+
+  it('asks CT and MRI for the image link instead of an upload', () => {
+    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'Có tiêm', imageLink: '' })))
+      .toHaveProperty('imageLink', 'Vui lòng nhập link xem ảnh.');
+    expect(validateResult(order('cls-009'), filled('cls-009', { imageLink: 'https://pacs/1' })))
+      .not.toHaveProperty('imageLink');
+  });
+});

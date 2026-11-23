@@ -217,11 +217,25 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INSTRUMENT_UNAVAILABLE"));
 
+        String ultrasound = "{\"description\":\"Gan: bình thường\",\"sections\":{\"gan\":\"Bình thường\"},"
+                + "\"conclusion\":\"Siêu âm ổ bụng bình thường\",\"readingDoctor\":\"BS Lan\","
+                + "\"instrumentId\":\"" + fixture.imagingInstrument() + "\"}";
+
+        // An imaging result needs at least one image.
         mockMvc.perform(withToken(post(path(fixture) + "/commands/submit"), token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"Gan: bình thường\",\"sections\":{\"gan\":\"Bình thường\"},"
-                                + "\"conclusion\":\"Siêu âm ổ bụng bình thường\",\"readingDoctor\":\"BS Lan\","
-                                + "\"instrumentId\":\"" + fixture.imagingInstrument() + "\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content(ultrasound))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.images").exists());
+
+        when(imageStorage.isConfigured()).thenReturn(true);
+        when(imageStorage.folder()).thenReturn("test");
+        when(imageStorage.upload(any(), any(), eq("image/png"))).thenReturn(IMAGE_URL);
+        mockMvc.perform(withToken(multipart(path(fixture) + "/images")
+                        .file(new MockMultipartFile("file", "sieu-am.png", "image/png", PNG)), token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(withToken(post(path(fixture) + "/commands/submit"), token)
+                        .contentType(MediaType.APPLICATION_JSON).content(ultrasound))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.result.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.data.result.sections.gan").value("Bình thường"))

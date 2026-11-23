@@ -445,6 +445,13 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 : imagingResultRepository.findByOrderDetailId(detailId).map(ImagingResult::isSubmitted).orElse(false);
     }
 
+    // ket qua hinh anh cua dich vu nay da co anh tai len chua
+    private boolean hasImages(Context context) {
+        return imagingResultRepository.findByOrderDetailId(context.detail().getId())
+                .map(result -> !imageRepository.findByImagingResultIdOrderByDisplayOrderAsc(result.getId()).isEmpty())
+                .orElse(false);
+    }
+
     // KIEM TRA DU LIEU KHI GUI (buoc 38-40): chi so bat buoc, so hop le, mo ta, ky thuat (CT/MRI), ket luan
     private void validateForSubmit(Context context, SaveParaclinicalResultRequest request) {
         Map<String, String> errors = new LinkedHashMap<>();
@@ -468,6 +475,11 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
             }
             if (List.of(ResultForm.CT, ResultForm.MRI).contains(context.form()) && trim(request.technique()) == null) {
                 errors.put("technique", "Vui lòng nhập kỹ thuật");
+            }
+            // chan doan hinh anh / tham do chuc nang phai co anh: it nhat 1 anh tai len hoac link xem anh (PACS, CT/MRI)
+            // xet nghiem thi chi nhap chi so, khong co anh
+            if (trim(request.imageLink()) == null && !hasImages(context)) {
+                errors.put("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem ảnh");
             }
         }
         if (trim(request.conclusion()) == null) {
