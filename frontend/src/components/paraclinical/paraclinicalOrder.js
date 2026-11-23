@@ -159,6 +159,19 @@ export function defaultRoomId(service) {
 }
 
 /**
+ * Checks whether a paraclinical service currently has an active room with staff on duty.
+ * Services without an on-duty room in the current shift cannot be ordered.
+ */
+export function hasOnDutyRoom(service) {
+    if (!service) return false;
+    if (Array.isArray(service.rooms)) {
+        if (service.rooms.length === 0) return false;
+        return service.rooms.some((room) => room.onDuty !== false);
+    }
+    return true;
+}
+
+/**
  * Room choice label: name, location and waiting count, so the Doctor can tell the patient where to go; a room with
  * nobody on duty in the current shift says so (it stays selectable).
  */
