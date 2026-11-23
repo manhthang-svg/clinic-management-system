@@ -106,16 +106,17 @@ export function createdMessage(order) {
 }
 
 export const PRINT_MSG = {
-    NOT_PRINTABLE: 'Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.',
-    NOT_FOUND: 'Không tìm thấy phiếu chỉ định.',
-    FACILITY_MISSING: 'Chưa có thông tin cơ sở khám bệnh, chữa bệnh. Vui lòng liên hệ quản trị viên.',
-    PRINTER: 'Không thể in. Vui lòng kiểm tra máy in và thử lại.',
+    NOT_FOUND: 'Không tìm thấy phiếu chỉ định.', // MSG39
+    FACILITY_MISSING: 'Chưa có thông tin cơ sở khám bệnh, chữa bệnh. Vui lòng liên hệ quản trị viên.', // EF-04
 };
 
-/** UC-50 EF-01 to EF-06: MSG97, MSG39, MSG13, MSG12, MSG80; never the raw backend message. */
+/**
+ * UC-50 EF-01, EF-02, EF-04, EF-05: MSG13, MSG39, the facility message, MSG12, MSG80; never the raw backend
+ * message. An order with nothing to print has no print button (EF-03); if it was cancelled meanwhile, the backend
+ * still refuses and this is MSG80.
+ */
 export function printErrorMessage(error) {
     const code = error?.errorResponse?.code;
-    if (code === 'PARACLINICAL_ORDER_NOT_PRINTABLE') return PRINT_MSG.NOT_PRINTABLE;
     if (code === 'PARACLINICAL_ORDER_NOT_FOUND') return PRINT_MSG.NOT_FOUND;
     if (code === 'CLINIC_FACILITY_NOT_CONFIGURED') return PRINT_MSG.FACILITY_MISSING;
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
@@ -155,6 +156,19 @@ export function defaultRoomId(service) {
     if (!service) return null;
     if (service.suggestedRoomId) return service.suggestedRoomId;
     return service.rooms?.[0]?.roomId ?? null;
+}
+
+/**
+ * Checks whether a paraclinical service currently has an active room with staff on duty.
+ * Services without an on-duty room in the current shift cannot be ordered.
+ */
+export function hasOnDutyRoom(service) {
+    if (!service) return false;
+    if (Array.isArray(service.rooms)) {
+        if (service.rooms.length === 0) return false;
+        return service.rooms.some((room) => room.onDuty !== false);
+    }
+    return true;
 }
 
 /**

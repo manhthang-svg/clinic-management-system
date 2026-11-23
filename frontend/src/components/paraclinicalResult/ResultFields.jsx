@@ -1,5 +1,5 @@
-// Field blocks shared by the per-service result pages.
-import { Field, INPUT_CLASS } from '../shared/FormFields';
+// cac khoi truong dung chung cho trang ket qua tung loai dich vu
+import { Field, FieldError, INPUT_CLASS } from '../shared/FormFields';
 import { useContext } from 'react';
 import { ResultFiles } from './ResultFiles';
 import { ResultApiContext } from './resultContext';
@@ -26,7 +26,7 @@ export function TextAreaField({ id, label, value, onChange, readOnly, error, req
   );
 }
 
-/** One input per organ / site / ECG item, in the order printed on the slip. */
+// moi co quan / vi tri / muc dien tim 1 o nhap, theo thu tu in tren phieu
 export function SectionFields({ order, form, set, errors, readOnly, columns = 1 }) {
   const sections = sectionsFor(order) ?? [];
   const update = (key, value) => set('sections', { ...form.sections, [key]: value });
@@ -93,10 +93,7 @@ export function RecommendationField({ form, set, readOnly }) {
   );
 }
 
-/**
- * UC-68: the slip is signed by the account that performed the service. Only that account records and prints the
- * result (BR-29), so it is the signed-in technician; the name cannot be typed in.
- */
+// nguoi ky phieu = KTV thuc hien (dang dang nhap), khong cho nhap tay
 export function SignerField({ order, label = 'Người ký phiếu' }) {
   return (
     <Field id="result-signer" label={label} hint="Cố định là tài khoản thực hiện dịch vụ (đang đăng nhập).">
@@ -105,9 +102,9 @@ export function SignerField({ order, label = 'Người ký phiếu' }) {
   );
 }
 
-export function ImageLinkField({ form, set, errors, readOnly }) {
+export function ImageLinkField({ form, set, errors, readOnly, required = false }) {
   return (
-    <Field id="result-imageLink" label="Link xem ảnh (PACS)" error={errors.imageLink} hint="In thành mã QR trên phiếu.">
+    <Field id="result-imageLink" label="Link xem ảnh (PACS)" required={required} error={errors.imageLink} hint="In thành mã QR trên phiếu.">
       <input
         id="result-imageLink"
         value={form.imageLink ?? ''}
@@ -121,15 +118,20 @@ export function ImageLinkField({ form, set, errors, readOnly }) {
   );
 }
 
-export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description }) {
+// chan doan hinh anh: bat buoc it nhat 1 anh (required); loi hien duoi khoi anh
+export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description, required = false, error }) {
   const { supportsFiles } = useContext(ResultApiContext);
   return (
-    <ResultSection title={title} description={description}>
+    <ResultSection
+      title={required ? <>{title}<span className="text-rose-500 ml-0.5">*</span></> : title}
+      description={description}
+    >
       {supportsFiles ? (
         <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
       ) : (
         <p className="text-sm text-slate-500">Chức năng tải ảnh kết quả chưa được hỗ trợ.</p>
       )}
+      {error && !readOnly && <FieldError id="result-files-error">{error}</FieldError>}
     </ResultSection>
   );
 }

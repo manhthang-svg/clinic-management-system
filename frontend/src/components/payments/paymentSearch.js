@@ -1,4 +1,4 @@
-/** UC-70 Search Payment and UC-73 View Payment History: request parameters and messages. */
+// UC-70, UC-73: tham so tim kiem phieu thu va thong bao
 
 export const SEARCH_MSG = {
     TOO_SHORT: 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự.',
@@ -8,10 +8,10 @@ export const SEARCH_MSG = {
 
 const MIN_KEYWORD = 2;
 
-/** Receipts per page of the payment list (UC-70); the backend caps a page itself. */
+// so phieu moi trang
 export const PAYMENT_PAGE_SIZE = 20;
 
-/** Builds the query for GET /payments; returns an error instead when the keyword or the range is invalid. */
+// tao tham so tim phieu thu; tu khoa / khoang ngay sai thi tra loi
 export function searchParams({ search = '', status = 'ALL', type = 'ALL', from = '', to = '', page = 0 }) {
     const keyword = search.trim();
     if (keyword && keyword.length < MIN_KEYWORD) return { error: SEARCH_MSG.TOO_SHORT };
@@ -29,7 +29,7 @@ export function searchParams({ search = '', status = 'ALL', type = 'ALL', from =
     };
 }
 
-/** UC-73: history query; status ALL means Paid and Cancelled. The keyword works like UC-70 (at least 2 characters). */
+// UC-73: tham so lich su (Tat ca = da thu + da huy), tu khoa it nhat 2 ky tu
 export function historyParams({
     from, to, status = 'ALL', type = 'ALL', method = 'ALL', mine = true, sort, search = '', page = 0,
 }) {

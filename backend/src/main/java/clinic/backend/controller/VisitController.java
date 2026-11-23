@@ -8,6 +8,8 @@ import java.util.UUID;
 import clinic.backend.dto.request.CreateVisitRequest;
 import clinic.backend.dto.request.TransferVisitRequest;
 import clinic.backend.dto.response.ApiResponse;
+import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.response.RoomQueueStatusPageResponse;
 import clinic.backend.dto.response.RoomQueueStatusResponse;
 import clinic.backend.dto.response.TransferRoomOptionResponse;
 import clinic.backend.dto.response.VisitTransferResponse;
@@ -19,6 +21,7 @@ import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.DoctorQueueTab;
 import clinic.backend.enums.VisitStatus;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.RoomQueueListService;
 import clinic.backend.service.VisitService;
 import clinic.backend.service.VisitTransferService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +54,7 @@ public class VisitController {
 
     private final VisitService visitService;
     private final VisitTransferService visitTransferService;
+    private final RoomQueueListService roomQueueListService;
 
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @PostMapping
@@ -156,6 +160,7 @@ public class VisitController {
         return ApiResponse.success(visitTransferService.transfer(StaffPrincipal.from(jwt), visitId, request));
     }
 
+    // UC-42: tinh trang hang doi theo phong kham
     @PreAuthorize("hasRole('RECEPTIONIST')")
     @GetMapping("/queue-status")
     @Operation(summary = "UC-42 Xem tình trạng hàng đợi theo phòng khám")
@@ -163,6 +168,32 @@ public class VisitController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return ApiResponse.success(visitService.getRoomQueueStatus(date));
+    }
+
+    // UC-42: tinh trang hang doi, 1 trang phong (mac dinh 20) + so phong tiep nhan duoc
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/queue-status/page")
+    @Operation(summary = "UC-42 Tình trạng hàng đợi theo phòng khám, phân trang")
+    public ApiResponse<RoomQueueStatusPageResponse> getRoomQueueStatusPage(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) UUID roomId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(roomQueueListService.getRoomQueueStatusPage(date, roomId, page, size));
+    }
+
+    // UC-42: danh sach cho cua 1 phong, phan trang
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @GetMapping("/queue/page")
+    @Operation(summary = "UC-42 Danh sách chờ của một phòng khám, phân trang")
+    public ApiResponse<PageResponse<VisitResponse>> getRoomQueuePage(
+            @RequestParam UUID roomId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return ApiResponse.success(roomQueueListService.getRoomQueuePage(roomId, date, page, size));
     }
 
     // I1-D48: the Cashier prints the ticket with the queue number once the examination fee is paid.

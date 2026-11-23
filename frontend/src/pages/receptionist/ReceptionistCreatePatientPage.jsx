@@ -4,9 +4,9 @@ import { ADULT_AGE, MSG, formAge, msg57 } from '../../components/patients/patien
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
 import { clinicToday } from '../../components/visits/visitForm';
 
-/** UC-37 Create New Patient Profile. */
+// UC-37: trang tao ho so benh nhan
 export default function ReceptionistCreatePatientPage({ patientApi }) {
-    // Hook quản lý form, validation, trạng thái lưu và gọi API.
+    // hook quan ly form, kiem tra, luu
     const {
         form,
         fieldErrors,
@@ -16,6 +16,7 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile,
@@ -25,7 +26,7 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         discard,
     } = useCreatePatient(patientApi);
 
-    // Step 4: required fields depend on the age (phone from 18; guardian under 18).
+    // truong bat buoc theo tuoi: tu 18 tuoi can SDT, duoi 18 can nguoi than
     const age = formAge(form, clinicToday());
     const adult = age !== null && age >= ADULT_AGE;
     const minor = age !== null && age < ADULT_AGE;
@@ -63,7 +64,14 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
             </header>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
-                <PatientFormSections form={form} fieldErrors={fieldErrors} handleChange={handleChange} adult={adult} minor={minor} />
+                <PatientFormSections
+                    form={form}
+                    fieldErrors={fieldErrors}
+                    handleChange={handleChange}
+                    handleBlur={handleBlur}
+                    adult={adult}
+                    minor={minor}
+                />
 
                 {conflict && (
                     <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

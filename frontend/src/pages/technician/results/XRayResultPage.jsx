@@ -3,7 +3,7 @@ import {
   ConclusionSection, FilesSection, RecommendationField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu chiếu/chụp X-quang (MS 09/BV2): description, images like the ultrasound slip, conclusion. */
+// UC-67: phieu X-quang (mo ta, anh, ket luan)
 export function XRayResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>
@@ -26,6 +26,8 @@ export function XRayResultPage({ order, api }) {
             form={form}
             set={set}
             readOnly={readOnly}
+            required
+            error={errors.files}
             description="Ảnh phim X-quang. Hai ảnh đầu tiên được in bên phải phần mô tả."
           />
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>

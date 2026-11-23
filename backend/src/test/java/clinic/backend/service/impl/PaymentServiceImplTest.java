@@ -9,6 +9,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
@@ -36,8 +37,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +55,7 @@ class PaymentServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-10-28T01:00:00Z");
     private static final UUID VISIT_ID = UUID.randomUUID();
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     @Mock
     private PaymentRepository paymentRepository;
@@ -102,7 +106,6 @@ class PaymentServiceImplTest {
         Payment payment = examinationFee("P-001");
         when(paymentRepository.search(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(payment)));
-        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.empty());
 
         var response = service.getPayments(null, null, "  P-001  ",
                 LocalDate.of(2026, 10, 28), LocalDate.of(2026, 10, 28), PageRequest.of(0, 10));
@@ -112,7 +115,20 @@ class PaymentServiceImplTest {
         verify(paymentRepository).search(
                 EnumSet.allOf(PaymentStatus.class), null,
                 Instant.parse("2026-10-27T17:00:00Z"), Instant.parse("2026-10-28T17:00:00Z"),
-                "P-001", PageRequest.of(0, 10));
+                "P-001", PageRequest.of(0, 10, NEWEST_FIRST));
+        // ca trang chi tai luot kham 1 lan, khong goi rieng tung phieu
+        verify(visitRepository).findAllById(Set.of(VISIT_ID));
+        verify(visitRepository, never()).findById(any());
+    }
+
+    @Test
+    void keepsTheSortTheCallerChose() {
+        PageRequest byPaidAt = PageRequest.of(0, 6, Sort.by(Sort.Order.desc("paidAt")));
+        when(paymentRepository.search(any(), any(), any(), any(), any(), any())).thenReturn(Page.empty());
+
+        service.getPayments(PaymentStatus.PAID, null, null, null, null, byPaidAt);
+
+        verify(paymentRepository).search(any(), any(), any(), any(), any(), eq(byPaidAt));
     }
 
     @Test
@@ -301,5 +317,40 @@ class PaymentServiceImplTest {
         return Payment.createExaminationFee(
                 UUID.randomUUID(), NOW, code, VISIT_ID,
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000));
+    }
+
+    @Test
+    void rejectsAKeywordLongerThan100Characters() {
+        assertThatThrownBy(() -> service.getPayments(null, null, "a".repeat(101), null, null, PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("search", "TOO_LONG"));
+    }
+
+    @Test
+    void rejectsAStartDateAfterTheEndDate() {
+        assertThatThrownBy(() -> service.getPayments(null, null, null,
+                java.time.LocalDate.of(2026, 11, 20), java.time.LocalDate.of(2026, 11, 1), PageRequest.of(0, 10)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("dateRange", "INVALID_FORMAT"));
+    }
+
+    @Test
+    void rejectsAnUnknownSortFieldAndAPageAbove100() {
+        assertThatThrownBy(() -> service.getPayments(null, null, null, null, null,
+                PageRequest.of(0, 10, Sort.by("password"))))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("sort", "NOT_ALLOWED"));
+        assertThatThrownBy(() -> service.getHistory(UUID.randomUUID(), null, null, null, null, null, null,
+                PageRequest.of(0, 500)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getDetails()).containsEntry("size", "TOO_LONG"));
+    }
+
+    @Test
+    void acceptsEverySortTheHistoryScreenOffers() {
+        for (String field : new String[] {"paidAt", "patientTotalAmount"}) {
+            PaymentServiceImpl.checkPage(PageRequest.of(0, 20, Sort.by(Sort.Order.desc(field))));
+            PaymentServiceImpl.checkPage(PageRequest.of(0, 20, Sort.by(Sort.Order.asc(field))));
+        }
     }
 }

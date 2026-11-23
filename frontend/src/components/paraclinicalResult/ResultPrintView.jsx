@@ -4,15 +4,15 @@ import {
   formatLongDate, formatReference, formatTime, interpret, qualitativeLabel,
 } from './resultForm';
 
-// One A4 page per slip, laid out like the clinic's printed forms (UC-68, PF-03).
-// Layouts: LAB, ULTRASOUND, ENDOSCOPY, XRAY, CT_MRI, ECG.
+// UC-68: ban in phieu ket qua, moi phieu 1 trang A4 theo mau phong kham
+// cac mau: xet nghiem, sieu am, noi soi, X-quang, CT/MRI, dien tim
 
 function images(form) {
   return (form.files ?? []).filter((file) => file.type.startsWith('image/') && file.url);
 }
 
 function Header({ order, form: printForm, copy }) {
-  // Demo orders have no clinic field and print the sample header; real orders print clinic_facility (UC-77).
+  // phieu that in thong tin co so (UC-77), phieu demo in tieu de mau
   const clinic = order.clinic === undefined ? MOCK_CLINIC : order.clinic;
   return (
     <header className="flex items-start justify-between gap-4">
@@ -65,7 +65,7 @@ function Item({ label, children, className = '' }) {
   );
 }
 
-/** Patient lines in the order and wording of each printed form (PRINT_FORMS[...].fields). */
+// cac dong thong tin benh nhan theo tung mau phieu
 function PatientBlock({ order, printForm }) {
   const { patient } = order;
   const fields = printForm.fields ?? [];
@@ -110,7 +110,7 @@ function PatientBlock({ order, printForm }) {
   );
 }
 
-/** Date and signature block; the empty space is for the handwritten signature. */
+// ngay + cho ky tay
 function Signature({ date, time, title, name, className = '' }) {
   return (
     <div className={`text-center w-64 ${className}`}>
@@ -122,7 +122,7 @@ function Signature({ date, time, title, name, className = '' }) {
   );
 }
 
-/** UC-68 step 2: who performed the service, on which instrument and when. */
+// ai thuc hien, may nao, luc nao
 function PerformedBy({ order }) {
   const instrument = order.result?.instrumentName;
   if (!instrument && !order.performedAt) return null;
@@ -242,7 +242,7 @@ function LabSlip({ order, form, printForm }) {
 function DescriptiveSlip({ order, form, printForm }) {
   const pictures = images(form);
   const done = order.result?.submittedAt;
-  // UC-68: always the performer, who is the signed-in technician when printing.
+  // nguoi ky la KTV thuc hien
   const signerName = order.performer?.name;
   const { layout } = printForm;
 
@@ -282,7 +282,7 @@ function DescriptiveSlip({ order, form, printForm }) {
               <tr><td className="border border-black px-2 whitespace-pre-line font-semibold">{form.conclusion}</td></tr>
             </tbody>
           </table>
-          {/* Like the ultrasound slip: the first two film images beside the description. */}
+          {/* 2 anh dau ben canh mo ta */}
           {pictures.length > 0 && (
             <div className="w-56 space-y-2">
               {pictures.slice(0, 2).map((file) => (
@@ -344,7 +344,7 @@ function DescriptiveSlip({ order, form, printForm }) {
         <div className="w-56 text-[12px]">
           {layout === 'CT_MRI' && (
             <div className="text-center">
-              {/* TBD: real QR code needs a QR library (not approved yet); the link is printed instead. */}
+              {/* TBD: chua co thu vien QR nen in link */}
               <div className="w-24 h-24 mx-auto border border-black flex items-center justify-center text-[10px]">QR</div>
               <div className="italic">Quét mã QR truy cập hình ảnh</div>
               {form.imageLink && <div className="break-all text-[10px]">{form.imageLink}</div>}
@@ -366,7 +366,7 @@ function DescriptiveSlip({ order, form, printForm }) {
   );
 }
 
-/** UC-68 / PF-03 printed paraclinical result, one A4 page. */
+// UC-68: chon mau phieu va in (ban in lai co chu Ban sao)
 export function ResultPrintView({ order, form }) {
   const printForm = PRINT_FORMS[order.printForm] ?? PRINT_FORMS.LAB;
   const copy = (order.printCount ?? 0) > 0;

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apis/apiError';
 import { createStatisticsApi } from '../../apis/statisticsApi';
+import { fakeStatisticsServer } from '../../test/fakeStatisticsServer';
 import { VisitStatisticsPage } from './VisitStatisticsPage';
 
 const admin = { id: 'admin-1', username: 'admin', fullName: 'Quản trị hệ thống', role: 'ADMIN' };
@@ -58,7 +59,7 @@ function renderPage(api) {
 
 describe('VisitStatisticsPage (UC-27)', () => {
   it('loads the current month by day and shows the summary', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ visits: byDay });
     renderPage(api);
 
     expect(await screen.findByRole('heading', { name: 'Lượt khám theo ngày' })).toBeInTheDocument();
@@ -71,7 +72,7 @@ describe('VisitStatisticsPage (UC-27)', () => {
   });
 
   it('lists only the days that have visits in the detail table', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ visits: byDay });
     renderPage(api);
 
     const table = await screen.findByRole('table');
@@ -81,10 +82,12 @@ describe('VisitStatisticsPage (UC-27)', () => {
     expect(within(rows[1]).getAllByRole('cell').map((c) => c.textContent))
       .toEqual(['12', '9', '2', '1', '0', '7', '5', '3', '2']);
     expect(within(table).queryByText('01/11/2026')).not.toBeInTheDocument();
+    // bang lay tu server, 20 dong / trang
+    expect(api.getVisitRows).toHaveBeenCalledWith(expect.objectContaining({ page: 0, size: 20 }), expect.any(AbortSignal));
   });
 
   it('switches to monthly buckets', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValueOnce(byDay).mockResolvedValueOnce(byMonth) };
+    const api = fakeStatisticsServer({ visits: (params) => (params.groupBy === 'MONTH' ? byMonth : byDay) });
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('heading', { name: 'Lượt khám theo ngày' });
@@ -99,7 +102,7 @@ describe('VisitStatisticsPage (UC-27)', () => {
   });
 
   it('shows the visit kinds: insurance, self-pay, new and follow-up', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ visits: byDay });
     renderPage(api);
 
     const types = await screen.findByRole('region', { name: 'Đối tượng bệnh nhân' });
@@ -111,7 +114,7 @@ describe('VisitStatisticsPage (UC-27)', () => {
   });
 
   it('shows the empty state when the period has no visits', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValue(empty) };
+    const api = fakeStatisticsServer({ visits: empty });
     renderPage(api);
 
     await screen.findByRole('heading', { name: 'Lượt khám theo ngày' });
@@ -120,11 +123,12 @@ describe('VisitStatisticsPage (UC-27)', () => {
   });
 
   it('does not call the API for an invalid period', async () => {
-    const api = { getVisits: vi.fn().mockResolvedValue(byDay) };
+    const api = fakeStatisticsServer({ visits: byDay });
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('table');
     api.getVisits.mockClear();
+    api.getVisitRows.mockClear();
 
     const to = screen.getByLabelText('Đến ngày');
     await user.clear(to);
@@ -132,14 +136,12 @@ describe('VisitStatisticsPage (UC-27)', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Ngày bắt đầu không được sau ngày kết thúc.');
     expect(api.getVisits).not.toHaveBeenCalled();
+    expect(api.getVisitRows).not.toHaveBeenCalled();
   });
 
   it('shows a Vietnamese error and retries', async () => {
-    const api = {
-      getVisits: vi.fn()
-        .mockRejectedValueOnce(new ApiError('Network', {}))
-        .mockResolvedValueOnce(byDay),
-    };
+    const api = fakeStatisticsServer({ visits: byDay });
+    api.getVisits.mockRejectedValueOnce(new ApiError('Network', {}));
     const user = userEvent.setup();
     renderPage(api);
 

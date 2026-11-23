@@ -1,10 +1,10 @@
-// UC-36 View Patient Information: labels and formatting. Pure functions, no React.
+// UC-36: nhan hien thi va dinh dang cho trang ho so benh nhan
 
 import { CLOSED_VISIT_STATUSES } from '../../constants/visitData';
 
 export const GENDER_LABELS = { 1: 'Nam', 2: 'Nữ', 3: 'Chưa xác định' };
 
-// PaymentStatus (BR-37, I1-D41).
+// nhan trang thai phieu thu
 export const PAYMENT_STATUS_LABELS = {
     PENDING: 'Chờ thanh toán',
     PAID: 'Đã thanh toán',
@@ -12,7 +12,7 @@ export const PAYMENT_STATUS_LABELS = {
     CANCELLED: 'Đã hủy',
 };
 
-// Report 3 System Messages (Vietnamese).
+// thong bao theo bang System Messages
 export const MSG = {
     NOT_FOUND: 'Không tìm thấy hồ sơ bệnh nhân được yêu cầu.',
     NO_HISTORY: 'Chưa có lịch sử khám.',
@@ -21,7 +21,7 @@ export const MSG = {
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
 };
 
-/** Maps an API failure to a Vietnamese message (MSG41, MSG13, MSG12, MSG99). */
+// doi loi API thanh thong bao tieng Viet
 export function overviewErrorMessage(error) {
     if (error?.status === 404) return MSG.NOT_FOUND;
     if (error?.status === 403) return MSG.FORBIDDEN;
@@ -29,7 +29,7 @@ export function overviewErrorMessage(error) {
     return MSG.SYSTEM_ERROR;
 }
 
-/** Whole years from a YYYY-MM-DD birth date to today (YYYY-MM-DD). */
+// tinh tuoi (so nam tron) den ngay hom nay
 export function ageOn(birthDate, today) {
     if (!birthDate) return null;
     const [by, bm, bd] = birthDate.split('-').map(Number);
@@ -47,12 +47,12 @@ export function formatDateTime(value) {
         : '—';
 }
 
-/** Address with ward and province when present. */
+// dia chi day du kem xa phuong, tinh thanh
 export function fullAddress(patient) {
     return [patient.diachi, patient.xaphuong, patient.tinhthanh].filter(Boolean).join(', ') || '—';
 }
 
-/** BR-17: Register Examination is disabled while a visit is active. */
+// dang co luot kham chua xong thi khong cho dang ky kham moi (BR-17)
 export function canRegisterVisit(activeVisit) {
     return !activeVisit || CLOSED_VISIT_STATUSES.includes(activeVisit.status);
 }

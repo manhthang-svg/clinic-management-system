@@ -7,6 +7,12 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
+    ethnicityCode,
+    ethnicityOptions,
+    occupationCode,
+    occupationOptions,
+    withDerivedCodes,
     isDirty,
     serverFieldErrors,
     toFormValues,
@@ -33,9 +39,13 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
             .toEqual({ sodienthoai: FIELD_MSG.REQUIRED });
     });
 
-    it('requires guardian name and relationship under 18 but not the phone', () => {
+    it('requires guardian name, relationship and relative phone under 18 but not the patient phone', () => {
         const errors = validatePatientForm(adult({ ngaysinh: '2008-11-04', sodienthoai: '' }), TODAY);
-        expect(errors).toEqual({ hotennguoithan: FIELD_MSG.REQUIRED, nguoithanQuanhe: FIELD_MSG.REQUIRED });
+        expect(errors).toEqual({
+            hotennguoithan: FIELD_MSG.REQUIRED,
+            nguoithanQuanhe: FIELD_MSG.REQUIRED,
+            sodienthoainguoithan: FIELD_MSG.REQUIRED,
+        });
     });
 
     it('checks formats and lengths', () => {
@@ -49,6 +59,28 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
             sodienthoai: FIELD_MSG.INVALID_FORMAT,
             ngaysinh: FIELD_MSG.INVALID_FORMAT,
         });
+    });
+
+    it('rejects names with numbers or special characters', () => {
+        expect(validatePatientForm(adult({ hoten: 'Nguyễn Văn A 123' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hoten: 'Trần Thị B @#!' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hoten: '---' }), TODAY).hoten)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+    });
+
+    it('accepts valid Vietnamese names with accents, apostrophes and hyphens', () => {
+        expect(validatePatientForm(adult({ hoten: 'Nguyễn Văn An' }), TODAY).hoten).toBeUndefined();
+        expect(validatePatientForm(adult({ hoten: "H'Hen Niê" }), TODAY).hoten).toBeUndefined();
+        expect(validatePatientForm(adult({ hoten: 'A-Trô' }), TODAY).hoten).toBeUndefined();
+    });
+
+    it('rejects guardian names with numbers or special characters', () => {
+        expect(validatePatientForm(adult({ hotennguoithan: 'Người thân 123' }), TODAY).hotennguoithan)
+            .toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ hotennguoithan: 'Nguyễn Văn B' }), TODAY).hotennguoithan)
+            .toBeUndefined();
     });
 
     it('rejects a birth date in the future', () => {
@@ -85,5 +117,66 @@ describe('patientForm helpers', () => {
     it('never shows the raw backend message', () => {
         expect(createErrorMessage(new ApiError('raw', { status: 500 }))).toBe(MSG.SYSTEM_ERROR);
         expect(createErrorMessage(new ApiError('raw', { status: 403 }))).toBe(MSG.FORBIDDEN);
+    });
+
+    it('formats full names to Title Case and cleans whitespace', () => {
+        expect(formatFullName('nguyễn văn an')).toBe('Nguyễn Văn An');
+        expect(formatFullName('NGUYỄN VĂN AN')).toBe('Nguyễn Văn An');
+        expect(formatFullName('  nguyễn   văn   an  ')).toBe('Nguyễn Văn An');
+        expect(formatFullName("h'hen niê")).toBe("H'Hen Niê");
+        expect(formatFullName('a-trô')).toBe('A-Trô');
+        expect(formatFullName('')).toBe('');
+    });
+});
+
+describe('dan toc: chi chon ten, ma tu dien', () => {
+    it('maps each ethnicity name to its 2-digit code', () => {
+        expect(ethnicityCode('Kinh')).toBe('01');
+        expect(ethnicityCode('Khơ-me')).toBe('05');
+        expect(ethnicityCode('Khmer')).toBe('05');
+        expect(ethnicityCode('HMông')).toBe('08');
+        expect(ethnicityCode('Không rõ')).toBe('56');
+        expect(ethnicityCode('Mường')).toBe('06');
+        expect(ethnicityCode('Người nước ngoài')).toBe('55');
+        expect(ethnicityCode('Khác')).toBeNull();
+    });
+
+    it('keeps an old saved name that is not in the list as an option', () => {
+        expect(ethnicityOptions('Kinh')).toHaveLength(56);
+        expect(ethnicityOptions('Khmer')[0]).toEqual({ value: 'Khmer', label: 'Khmer' });
+        expect(ethnicityOptions('Khác')[0]).toEqual({ value: 'Khác', label: 'Khác' });
+    });
+
+    it('reports a missing code on the ethnicity field', () => {
+        expect(validatePatientForm(adult({ dantocMa: '' }), TODAY)).toEqual({ dantoc: FIELD_MSG.REQUIRED });
+        expect(serverFieldErrors({ dantocMa: 'REQUIRED' })).toEqual({ dantoc: FIELD_MSG.REQUIRED });
+    });
+});
+
+describe('nghe nghiep: chi chon ten, ma tu dien', () => {
+    it('maps each occupation to its code', () => {
+        expect(occupationCode('Công nhân')).toBe('04');
+        expect(occupationCode('Hưu và trên 60 tuổi')).toBe('03');
+        expect(occupationCode('Khác')).toBe('99');
+        expect(occupationCode('Kỹ sư')).toBeNull();
+    });
+
+    it('starts with an empty choice and keeps an old free-text occupation', () => {
+        expect(occupationOptions('')[0]).toEqual({ value: '', label: 'Chưa chọn' });
+        expect(occupationOptions('')).toHaveLength(14);
+        expect(occupationOptions('Kỹ sư')[1]).toEqual({ value: 'Kỹ sư', label: 'Kỹ sư' });
+    });
+
+    it('fills and clears the code when the occupation changes', () => {
+        const form = { nghenghiep: '', nghenghiepMa: '', dantoc: 'Kinh', dantocMa: '01' };
+        const chosen = withDerivedCodes(form, 'nghenghiep', 'Y tế');
+        expect(chosen).toMatchObject({ nghenghiep: 'Y tế', nghenghiepMa: '09' });
+        expect(withDerivedCodes(chosen, 'nghenghiep', '')).toMatchObject({ nghenghiep: '', nghenghiepMa: '' });
+        expect(withDerivedCodes(form, 'dantoc', 'Tày')).toMatchObject({ dantoc: 'Tày', dantocMa: '02' });
+        expect(withDerivedCodes(form, 'hoten', 'A')).toMatchObject({ hoten: 'A', nghenghiepMa: '' });
+    });
+
+    it('reports a backend error on the occupation code under the occupation field', () => {
+        expect(serverFieldErrors({ nghenghiepMa: 'TOO_LONG' })).toEqual({ nghenghiep: FIELD_MSG.TOO_LONG });
     });
 });

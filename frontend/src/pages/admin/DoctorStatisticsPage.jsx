@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Bar,
@@ -15,7 +15,7 @@ import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
-import { formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
+import { dashboardError, formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
 import {
   ChartCard,
   EmptyChart,
@@ -28,10 +28,12 @@ import {
 import { COLORS } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
-/** Outcome columns of a doctor row, in the order of the stacked bars. */
+// cac cot ket qua cua 1 bac si (theo thu tu cot chong)
 const DOCTOR_OUTCOMES = [
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'inProgress', label: 'Đang xử lý' },
@@ -40,18 +42,16 @@ const DOCTOR_OUTCOMES = [
 ];
 
 const CHART_LIMIT = 10;
+// cho go xong moi gui tu khoa len server
+const SEARCH_DELAY_MS = 300;
 
+// trung binh 1 so le
 function average(total, count) {
   if (!count) return '0';
   return (Math.round((total / count) * 10) / 10).toLocaleString('vi-VN');
 }
 
-/** Folds Vietnamese accents so "tran van an" finds "Trần Văn An". */
-function fold(text) {
-  return (text ?? '').normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-}
-
-/** UC-28 View Doctor Statistics. */
+// UC-28: trang thong ke theo bac si
 export function DoctorStatisticsPage({
   currentAdmin,
   onLogout,
@@ -62,8 +62,21 @@ export function DoctorStatisticsPage({
   const navigate = useNavigate();
   const { period, presetId, periodError, choosePreset, changeDate } = usePeriod(today);
   const params = useMemo(() => ({ from: period.from, to: period.to }), [period.from, period.to]);
-  const { data, error, loading, reload } = useStatisticsQuery(api.getDoctors, params, !periodError);
+  // the + bieu do: chi so lieu tong va 10 bac si kham nhieu nhat
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getDoctorOverview, params, !periodError);
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(query.trim()), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  // bang bac si: tim + phan trang o server, chi nhan 20 dong dang xem
+  const tableFilters = useMemo(() => ({ ...params, search }), [params, search]);
+  const table = useServerPage(api.getDoctorRows, tableFilters, { enabled: !periodError, toMessage: dashboardError });
+  const reload = () => {
+    reloadSummary();
+    table.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -73,12 +86,8 @@ export function DoctorStatisticsPage({
     activeKey: 'reports',
   };
 
-  const doctors = data?.doctors ?? [];
-  const working = doctors.filter((doctor) => doctor.visits > 0);
-  const chartRows = working.slice(0, CHART_LIMIT);
-  const shownRows = query.trim()
-    ? doctors.filter((doctor) => fold(doctor.doctorName).includes(fold(query.trim())))
-    : doctors;
+  const workingCount = data?.workingDoctors ?? 0;
+  const chartRows = data?.topDoctors ?? [];
 
   return (
     <AdminLayout {...layoutProps}>
@@ -123,14 +132,14 @@ export function DoctorStatisticsPage({
               <KpiCard
                 icon={UserRound}
                 label="Bác sĩ có lượt khám"
-                value={formatNumber(working.length)}
-                hint={`Trên ${formatNumber(doctors.length)} bác sĩ`}
+                value={formatNumber(workingCount)}
+                hint={`Trên ${formatNumber(data.doctorCount)} bác sĩ`}
               />
               <KpiCard icon={Stethoscope} label="Lượt đã khám" value={formatNumber(data.examinedVisits)} />
               <KpiCard
                 icon={Users}
                 label="Trung bình mỗi bác sĩ"
-                value={average(data.examinedVisits, working.length)}
+                value={average(data.examinedVisits, workingCount)}
                 hint="Lượt khám / bác sĩ có lượt khám"
               />
               <KpiCard
@@ -143,7 +152,7 @@ export function DoctorStatisticsPage({
 
             <ChartCard
               title="Lượt khám theo bác sĩ"
-              description={working.length > CHART_LIMIT
+              description={workingCount > CHART_LIMIT
                 ? `${CHART_LIMIT} bác sĩ có nhiều lượt khám nhất, chia theo kết quả.`
                 : 'Mỗi cột chia theo kết quả lượt khám.'}
             >
@@ -191,7 +200,7 @@ export function DoctorStatisticsPage({
                 </div>
               )}
             >
-              {shownRows.length > 0 ? (
+              {table.total > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -205,7 +214,7 @@ export function DoctorStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {shownRows.map((doctor) => (
+                      {table.rows.map((doctor) => (
                         <tr key={doctor.doctorId} className="border-b border-slate-50 last:border-0">
                           <th scope="row" className="py-2.5 pr-4 text-left font-medium text-slate-700">
                             {doctor.doctorName}
@@ -224,10 +233,11 @@ export function DoctorStatisticsPage({
                       ))}
                     </tbody>
                   </table>
+                  <ListPagination paged={table} label="Phân trang danh sách bác sĩ" />
                 </div>
               ) : (
                 <p className="py-8 text-center text-sm text-slate-400">
-                  {doctors.length === 0 ? 'Chưa có bác sĩ nào.' : 'Không tìm thấy bác sĩ phù hợp.'}
+                  {!table.loaded ? 'Đang tải danh sách bác sĩ…' : !search ? 'Chưa có bác sĩ nào.' : 'Không tìm thấy bác sĩ phù hợp.'}
                 </p>
               )}
             </ChartCard>

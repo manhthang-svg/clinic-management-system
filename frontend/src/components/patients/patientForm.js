@@ -1,11 +1,90 @@
-// UC-37 Create New Patient Profile: form values, field rules and messages. Pure functions, no React.
-// Client checks mirror the backend for feedback only; the backend repeats every check.
+// UC-37, UC-38: gia tri form, kiem tra truong va thong bao (backend kiem tra lai)
 
 import { ageOn } from './patientOverview';
 
 export const ADULT_AGE = 18;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
+// Ho va ten chi gom chu cai (Unicode), khoang trang, dau gach noi va dau nhay don (cho ten dong bao dan toc)
+export const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'-]+$/u;
+
+// Chuan hoa viet hoa chu cai dau (Title Case) cho Ho va ten, thu gon khoang trang thua
+export function formatFullName(name) {
+    if (!name || typeof name !== 'string') return '';
+    return name
+        .trim()
+        .toLowerCase()
+        .replace(/(?:^|[\s'-])\p{L}/gu, (match) => match.toUpperCase())
+        .replace(/\s+/g, ' ');
+}
+
+// Danh muc cac dan toc Viet Nam cua Tong cuc Thong ke (nso.gov.vn), ma 2 chu so cho dantoc_ma (CV 365).
+// Le tan chon ten, o Ma dan toc tu dien theo ten.
+export const ETHNICITIES = [
+    ['01', 'Kinh'], ['02', 'Tày'], ['03', 'Thái'], ['04', 'Hoa'], ['05', 'Khơ-me'], ['06', 'Mường'],
+    ['07', 'Nùng'], ['08', 'HMông'], ['09', 'Dao'], ['10', 'Gia-rai'], ['11', 'Ngái'], ['12', 'Ê-đê'],
+    ['13', 'Ba na'], ['14', 'Xơ-Đăng'], ['15', 'Sán Chay'], ['16', 'Cơ-ho'], ['17', 'Chăm'], ['18', 'Sán Dìu'],
+    ['19', 'Hrê'], ['20', 'Mnông'], ['21', 'Ra-glai'], ['22', 'Xtiêng'], ['23', 'Bru-Vân Kiều'], ['24', 'Thổ'],
+    ['25', 'Giáy'], ['26', 'Cơ-tu'], ['27', 'Gié Triêng'], ['28', 'Mạ'], ['29', 'Khơ-mú'], ['30', 'Co'],
+    ['31', 'Tà-ôi'], ['32', 'Chơ-ro'], ['33', 'Kháng'], ['34', 'Xinh-mun'], ['35', 'Hà Nhì'], ['36', 'Chu ru'],
+    ['37', 'Lào'], ['38', 'La Chí'], ['39', 'La Ha'], ['40', 'Phù Lá'], ['41', 'La Hủ'], ['42', 'Lự'],
+    ['43', 'Lô Lô'], ['44', 'Chứt'], ['45', 'Mảng'], ['46', 'Pà Thẻn'], ['47', 'Co Lao'], ['48', 'Cống'],
+    ['49', 'Bố Y'], ['50', 'Si La'], ['51', 'Pu Péo'], ['52', 'Brâu'], ['53', 'Ơ Đu'], ['54', 'Rơ măm'],
+    ['55', 'Người nước ngoài'], ['56', 'Không rõ'],
+].map(([code, name]) => ({ code, name }));
+
+// ten cu da luu truoc khi dung ten chinh thuc
+const ETHNICITY_ALIASES = { Khmer: '05' };
+
+// ma dan toc theo ten, khong co trong danh muc thi tra null
+export function ethnicityCode(name) {
+    return ETHNICITIES.find((item) => item.name === name)?.code ?? ETHNICITY_ALIASES[name] ?? null;
+}
+
+// lua chon cho o Dan toc; ho so cu luu ten ngoai danh muc (vd "Khác") van hien de khong mat du lieu
+export function ethnicityOptions(current) {
+    const options = ETHNICITIES.map(({ name }) => ({ value: name, label: name }));
+    return current && !ETHNICITIES.some((item) => item.name === current) ? [{ value: current, label: current }, ...options] : options;
+}
+
+// Ma nghe nghiep theo thanh phan xa hoi (QD 4069/2001/QD-BYT, Phu luc 6), ma cho nghenghiep_ma (CV 365).
+export const OCCUPATIONS = [
+    ['01', 'Trẻ dưới 6 tuổi đi học, dưới 15 tuổi không đi học'],
+    ['02', 'Sinh viên, học sinh'],
+    ['03', 'Hưu và trên 60 tuổi'],
+    ['04', 'Công nhân'],
+    ['05', 'Nông dân'],
+    ['06', 'Lực lượng vũ trang'],
+    ['07', 'Trí thức'],
+    ['08', 'Hành chính, sự nghiệp'],
+    ['09', 'Y tế'],
+    ['10', 'Dịch vụ'],
+    ['11', 'Việt kiều'],
+    ['12', 'Ngoại kiều'],
+    ['99', 'Khác'],
+].map(([code, name]) => ({ code, name }));
+
+// ma nghe nghiep theo ten, khong co trong danh muc thi tra null
+export function occupationCode(name) {
+    return OCCUPATIONS.find((item) => item.name === name)?.code ?? null;
+}
+
+// lua chon cho o Nghe nghiep (khong bat buoc); nghe nghiep cu go tu do van hien de khong mat du lieu
+export function occupationOptions(current) {
+    const options = [{ value: '', label: 'Chưa chọn' },
+        ...OCCUPATIONS.map(({ name }) => ({ value: name, label: name }))];
+    return current && !occupationCode(current) ? [options[0], { value: current, label: current }, ...options.slice(1)]
+        : options;
+}
+
+// khi doi ten dan toc / nghe nghiep thi tu dien ma tuong ung
+export function withDerivedCodes(previous, name, value) {
+    if (name === 'dantoc') return { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa };
+    if (name === 'nghenghiep') {
+        return { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+    }
+    return { ...previous, [name]: value };
+}
 
 export const INITIAL_PATIENT_FORM = {
     hoten: '',
@@ -34,7 +113,7 @@ export const INITIAL_PATIENT_FORM = {
     sodienthoainguoithan: '',
 };
 
-// Report 3 System Messages (Vietnamese).
+// thong bao theo bang System Messages
 export const FIELD_MSG = {
     REQUIRED: 'Trường này là bắt buộc.',
     INVALID_FORMAT: 'Định dạng không hợp lệ.',
@@ -43,7 +122,7 @@ export const FIELD_MSG = {
 export const MSG = {
     CREATED: 'Tạo hồ sơ bệnh nhân thành công.',
     UPDATED: 'Cập nhật hồ sơ bệnh nhân thành công.',
-    // TBD: Report 3 has no message for a profile changed by someone else meanwhile.
+    // TBD: chua co MSG cho ho so bi nguoi khac sua
     STALE: 'Hồ sơ vừa được người khác cập nhật. Vui lòng tải lại trang để xem dữ liệu mới.',
     NOT_FOUND: 'Không tìm thấy hồ sơ bệnh nhân được yêu cầu.',
     FIX_FIELDS: 'Vui lòng kiểm tra lại các trường được đánh dấu.',
@@ -53,20 +132,20 @@ export const MSG = {
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
 };
 
-/** MSG57: possible duplicates (same full name and date of birth). */
+// MSG57: canh bao ho so co the trung
 export const msg57 = (count) =>
     `Đã tồn tại ${count} bệnh nhân có cùng họ tên và ngày sinh. Vui lòng chọn một hồ sơ hoặc tạo hồ sơ mới.`;
 
-/** MSG19: the citizen ID or passport belongs to another profile. */
+// MSG19: CCCD / ho chieu da thuoc ho so khac
 export const msg19 = (field, code, name) =>
     `Bệnh nhân có số ${field === 'hochieuSo' ? 'hộ chiếu' : 'CCCD'} này đã tồn tại (${code} – ${name}).`;
 
-/** Whole-year age of the form's date of birth, or null without a valid date. */
+// tinh tuoi tu ngay sinh tren form, sai ngay thi tra null
 export function formAge(form, today) {
     return /^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) ? ageOn(form.ngaysinh, today) : null;
 }
 
-/** UC-37 steps 4–5: returns { field: message } for every wrong field (empty when valid). */
+// kiem tra form, tra ve { truong: loi } (rong la hop le)
 export function validatePatientForm(form, today) {
     const errors = {};
     const text = (field) => (form[field] ?? '').trim();
@@ -74,9 +153,11 @@ export function validatePatientForm(form, today) {
 
     require('hoten');
     if (text('hoten').length > MAX_NAME_LENGTH) errors.hoten = FIELD_MSG.TOO_LONG;
+    else if (text('hoten') && !NAME_REGEX.test(text('hoten'))) errors.hoten = FIELD_MSG.INVALID_FORMAT;
     require('diachi');
     require('dantoc');
-    require('dantocMa');
+    // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
+    if (!errors.dantoc && !text('dantocMa')) errors.dantoc = FIELD_MSG.REQUIRED;
 
     const age = formAge(form, today);
     if (!form.ngaysinh) errors.ngaysinh = FIELD_MSG.REQUIRED;
@@ -93,22 +174,30 @@ export function validatePatientForm(form, today) {
     if (age !== null && age < ADULT_AGE) {
         require('hotennguoithan');
         require('nguoithanQuanhe');
+        require('sodienthoainguoithan');
+    }
+    if (text('hotennguoithan')) {
+        if (text('hotennguoithan').length > 255) errors.hotennguoithan = FIELD_MSG.TOO_LONG;
+        else if (!NAME_REGEX.test(text('hotennguoithan'))) errors.hotennguoithan = FIELD_MSG.INVALID_FORMAT;
     }
     return errors;
 }
 
-/** Request body of POST /patients: trimmed values, empty optional fields as null. */
+// tao body gui len: bo khoang trang, truong rong thanh null, chuan hoa Title Case ho ten
 export function buildPatientPayload(form) {
     const payload = {};
     Object.keys(INITIAL_PATIENT_FORM).forEach((field) => {
-        const value = (form[field] ?? '').trim();
+        let value = (form[field] ?? '').trim();
+        if ((field === 'hoten' || field === 'hotennguoithan') && value) {
+            value = formatFullName(value);
+        }
         payload[field] = value || null;
     });
     payload.gioitinh = Number(form.gioitinh);
     return payload;
 }
 
-/** UC-38 step 2: form values from a stored profile (null becomes ''). */
+// UC-38: doi ho so da luu thanh gia tri form
 export function toFormValues(patient) {
     return Object.fromEntries(Object.keys(INITIAL_PATIENT_FORM).map((field) => {
         const value = patient?.[field];
@@ -116,18 +205,22 @@ export function toFormValues(patient) {
     }));
 }
 
-/** Maps backend validation codes (details) to field messages. */
+// o ma chi doc: loi cua ma hien o o ten tuong ung
+const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep' };
+
+// doi ma loi backend thanh loi tung truong
 export function serverFieldErrors(details) {
     return Object.fromEntries(Object.entries(details ?? {})
         .filter(([field]) => field in INITIAL_PATIENT_FORM)
-        .map(([field, code]) => [field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
+        .map(([field, code]) => [CODE_FIELD_OWNER[field] ?? field, FIELD_MSG[code] ?? FIELD_MSG.INVALID_FORMAT]));
 }
 
+// form da bi sua so voi ban dau chua
 export function isDirty(form, initial) {
     return Object.keys(INITIAL_PATIENT_FORM).some((field) => (form[field] ?? '') !== (initial[field] ?? ''));
 }
 
-/** General message of a failure that is not tied to a field. */
+// thong bao loi chung (khong thuoc truong nao)
 export function createErrorMessage(error) {
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
     if (error?.status === 403) return MSG.FORBIDDEN;

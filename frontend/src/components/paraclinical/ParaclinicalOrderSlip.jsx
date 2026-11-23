@@ -8,11 +8,9 @@ import { Barcode } from '../paraclinicalResult/Barcode';
 import { ageText } from '../visits/visitFormat';
 import { printErrorMessage } from './paraclinicalOrder';
 
-/** Printed clinic name; address and phone still come from the facility settings (UC-77). */
-export const SLIP_CLINIC_NAME = 'PHÒNG KHÁM ĐA KHOA METPH';
-
-function roomLabel(sheet) {
-    if (!sheet.room) return `${sheet.serviceGroupName || 'Cận lâm sàng'} – phòng sẽ được chỉ định sau khi thanh toán`;
+/** A self-pay visit's services have no room until the payment (BR-50-01, BR-50-02). */
+function roomLabel(sheet, insured) {
+    if (!sheet.room) return insured ? 'Chưa có phòng thực hiện' : 'Phân phòng sau khi thanh toán';
     return `${sheet.room.roomName}${sheet.room.location ? ` – ${sheet.room.location}` : ''}`;
 }
 
@@ -30,13 +28,22 @@ function printTime(iso) {
     }).format(iso ? new Date(iso) : new Date()).replace(',', '');
 }
 
-function longDate(iso) {
-    if (!iso) return 'Ngày …… tháng …… năm ……';
+/** Order time as dd/MM/yyyy HH:mm (clinic time). */
+function orderTime(iso) {
+    if (!iso) return '—';
     const parts = new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(new Date(iso));
     const part = (type) => parts.find((item) => item.type === type)?.value;
-    return `Ngày ${part('day')} tháng ${part('month')} năm ${part('year')}`;
+    return `${part('day')}/${part('month')}/${part('year')} ${part('hour')}:${part('minute')}`;
+}
+
+/** Year of birth and age, e.g. "1950 (76 tuổi 8 tháng)". */
+function birthYearAndAge(patient, orderedAt) {
+    const age = ageOf(patient, orderedAt);
+    if (patient.birthYear == null) return age;
+    return age === patient.birthYear ? String(patient.birthYear) : `${patient.birthYear} (${age})`;
 }
 
 function Field({ label, children, className = '' }) {
@@ -48,9 +55,9 @@ function Field({ label, children, className = '' }) {
 }
 
 /**
- * UC-50 Print Paraclinical Order: every service of the order on one sheet, each with its performing room and
+ * UC-50 Print Paraclinical Order: the whole order on one sheet, each service with its performing room and
  * location (BR-50-04), laid out like the clinic's printed paraclinical forms (header with barcode, priority boxes,
- * patient lines, bordered request table, treating Doctor's signature). No amounts (BR-50-06) and no queue number
+ * patient lines, bordered request table, ordering Doctor's signature). No amounts (BR-50-06) and no queue number
  * (BR-50-02). TBD: printer integration (HW-01); it uses the browser print dialog.
  */
 export function ParaclinicalOrderSlip({ slip }) {
@@ -76,9 +83,8 @@ export function ParaclinicalOrderSlip({ slip }) {
                 <div className="-mt-[8mm] mb-1 text-[10px] leading-none text-slate-600">In lúc: {printTime(slip.printedAt)}</div>
                 <header className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center border-2 border-black text-[11px] font-bold">METPH</div>
                         <div className="leading-6">
-                            <div className="text-[16px] font-extrabold">{SLIP_CLINIC_NAME}</div>
+                            <div className="text-[16px] font-extrabold uppercase">{facility.tenCskcb}</div>
                             {facility.diachi && <div className="text-[13px]">Địa chỉ: {facility.diachi}</div>}
                             {facility.sodienthoai && <div className="text-[13px]">SĐT: {facility.sodienthoai}</div>}
                         </div>
@@ -104,14 +110,17 @@ export function ParaclinicalOrderSlip({ slip }) {
                     <div className="flex flex-wrap gap-x-6">
                         <Field label="Họ và tên:" className="flex-1"><span className="font-bold uppercase">{patient.fullName}</span></Field>
                         <Field label="Giới tính:">{patient.gender || '—'}</Field>
-                        <Field label="Tuổi:">{ageOf(patient, slip.orderedAt)}</Field>
+                        <Field label="Năm sinh:">{birthYearAndAge(patient, slip.orderedAt)}</Field>
+                    </div>
+                    <div className="flex flex-wrap gap-x-6">
+                        <Field label="Mã BN:">{patient.patientCode}</Field>
+                        <Field label="Mã lượt khám:">{patient.visitCode || '—'}</Field>
                     </div>
                     <div className="flex flex-wrap gap-x-6">
                         <Field label="Đối tượng:">{visitType}</Field>
                         {patient.insuranceCardNumber && (
                             <Field label="Số thẻ BHYT:" className="flex-1">{patient.insuranceCardNumber}</Field>
                         )}
-                        <Field label="Mã BN:">{patient.patientCode}</Field>
                     </div>
                     <div><Field label="Địa chỉ:">{patient.address || '—'}</Field></div>
                     <div className="flex flex-wrap gap-x-6">
@@ -124,24 +133,26 @@ export function ParaclinicalOrderSlip({ slip }) {
                 <table className="mt-2 w-full border-collapse border border-black">
                     <thead>
                         <tr>
-                            <th scope="col" colSpan={4} className="border border-black px-2.5 py-1.5 text-left font-bold">Yêu cầu chỉ định</th>
+                            <th scope="col" colSpan={5} className="border border-black px-2.5 py-1.5 text-left font-bold">Yêu cầu chỉ định</th>
                         </tr>
                         <tr>
-                            <th scope="col" className="w-14 border border-black px-2 py-1.5">STT</th>
-                            <th scope="col" className="border border-black px-2.5 py-1.5 text-left">Tên chỉ định</th>
-                            <th scope="col" className="w-14 border border-black px-2 py-1.5">SL</th>
-                            <th scope="col" className="w-[42%] border border-black px-2.5 py-1.5 text-left">Nơi thực hiện</th>
+                            <th scope="col" className="w-12 border border-black px-2 py-1.5">STT</th>
+                            <th scope="col" className="w-[17%] border border-black px-2 py-1.5 text-left">Mã dòng chỉ định</th>
+                            <th scope="col" className="border border-black px-2.5 py-1.5 text-left">Tên dịch vụ</th>
+                            <th scope="col" className="w-16 border border-black px-2 py-1.5">Số lượng</th>
+                            <th scope="col" className="w-[32%] border border-black px-2.5 py-1.5 text-left">Nơi thực hiện</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rows.map(({ service, sheet, firstOfRoom }, index) => (
                             <tr key={service.machidinh} className="h-8 align-middle">
                                 <td className="border border-black px-2 text-center">{index + 1}</td>
+                                <td className="border border-black px-2 font-mono text-[12px]">{service.machidinh}</td>
                                 <td className="border border-black px-2.5">{service.tenchidinh}</td>
                                 <td className="border border-black px-2 text-center tabular-nums">{Number(service.soluong ?? 1).toLocaleString('vi-VN')}</td>
                                 {firstOfRoom && (
                                     <td rowSpan={sheet.services.length} className="border border-black px-2.5 font-semibold" data-testid="slip-room">
-                                        {roomLabel(sheet)}
+                                        {roomLabel(sheet, patient.visitType === 'BHYT')}
                                     </td>
                                 )}
                             </tr>
@@ -152,8 +163,8 @@ export function ParaclinicalOrderSlip({ slip }) {
                 {/* The signature sits lower on the page instead of right under a short table. */}
                 <div className="mt-4 flex justify-end">
                     <div className="w-72 text-center">
-                        <div className="italic">{longDate(slip.orderedAt)}</div>
-                        <div className="font-bold">Bác sĩ điều trị</div>
+                        <div className="italic">Thời gian chỉ định: {orderTime(slip.orderedAt)}</div>
+                        <div className="font-bold">Bác sĩ chỉ định</div>
                         <div className="italic text-[13px]">(Ký, ghi rõ họ tên)</div>
                         <div className="h-16" />
                         <div className="font-bold">{slip.doctorName}</div>
@@ -170,7 +181,7 @@ export function ParaclinicalOrderSlip({ slip }) {
  * The slip is rendered straight into `document.body`: inside the page it would sit in the scrolling `main` of the
  * layout, which the print view clips. It is hidden on screen and shown only when printing.
  */
-export function PrintOrderButton({ orderId, api = visitApi, className = '', disabled = false }) {
+export function PrintOrderButton({ orderId, api = visitApi, className = '' }) {
     const [job, setJob] = useState(null);
     const [printing, setPrinting] = useState(false);
     const [error, setError] = useState('');
@@ -202,8 +213,7 @@ export function PrintOrderButton({ orderId, api = visitApi, className = '', disa
             <button
                 type="button"
                 onClick={handlePrint}
-                disabled={printing || disabled}
-                title={disabled ? 'Không còn dịch vụ nào để in' : undefined}
+                disabled={printing}
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-700 px-4 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             >
                 {printing

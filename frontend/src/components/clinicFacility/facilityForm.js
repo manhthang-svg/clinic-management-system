@@ -1,7 +1,7 @@
-// UC-77 form rules. They mirror UpdateClinicFacilityRequest for feedback only; the backend decides.
+// UC-77: quy tac form thong tin co so (giong backend, backend kiem tra lai)
 import { ApiError } from '../../apis/apiError';
 
-/** FacilityOrganizationForm values and labels (Điều 39 NĐ 96/2023/NĐ-CP). */
+// cac hinh thuc to chuc (Dieu 39 ND 96/2023/ND-CP)
 export const ORGANIZATION_FORMS = [
   { value: 'BENH_VIEN_DA_KHOA', label: 'Bệnh viện đa khoa' },
   { value: 'BENH_VIEN_CHUYEN_KHOA', label: 'Bệnh viện chuyên khoa' },
@@ -36,6 +36,7 @@ const MAX_LENGTH = { tenCskcb: 255, diachi: 1024, soGiayPhepHoatDong: 100 };
 const CODE_PATTERN = /^[0-9]{5}$/;
 const PHONE_PATTERN = /^(?:0[35789][0-9]{8}|02[0-9]{9}|1[89]00[0-9]{4}(?:[0-9]{2})?)$/;
 
+// doi du lieu co so thanh gia tri form
 export function facilityToForm(facility) {
   const form = {};
   FIELDS.forEach((field) => {
@@ -44,12 +45,12 @@ export function facilityToForm(facility) {
   return form;
 }
 
-/** Removes the spaces, dots and dashes people type in phone numbers. */
+// bo dau cach, dau cham, gach ngang trong SDT
 export function normalizePhone(value) {
   return value.replace(/[\s.-]/g, '');
 }
 
-/** Request body; version is null for the first declaration. */
+// tao body gui len; khai bao lan dau thi version = null
 export function formToRequest(form, facility) {
   return {
     maCskcb: form.maCskcb.trim(),
@@ -62,6 +63,7 @@ export function formToRequest(form, facility) {
   };
 }
 
+// kiem tra form: bat buoc, do dai, ma co so 5 so, SDT dung dinh dang
 export function validateFacilityForm(form) {
   const errors = {};
   FIELDS.forEach((field) => {
@@ -85,7 +87,7 @@ export function validateFacilityForm(form) {
   return errors;
 }
 
-/** Fields whose saved value would change. Phone is compared after normalization. */
+// cac truong bi doi so voi ban da luu
 export function changedFields(form, initialForm) {
   return FIELDS.filter((field) => {
     const normalize = field === 'sodienthoai' ? normalizePhone : (value) => value.trim();
@@ -93,7 +95,7 @@ export function changedFields(form, initialForm) {
   });
 }
 
-/** BR-77-03: address or organization-form changes usually need a new operating licence. */
+// doi dia chi / hinh thuc to chuc thi nhac kiem tra giay phep
 export function needsLicenceReminder(changed) {
   return changed.includes('diachi') || changed.includes('hinhThucToChuc');
 }
@@ -108,10 +110,7 @@ const MSG_INVALID = 'Một số thông tin chưa hợp lệ. Vui lòng kiểm tr
 const MSG_NETWORK = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
 const MSG_FALLBACK = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 
-/**
- * Classifies a failed load or save. reload is true when the page must fetch the facility again
- * (EF-02 code locked, EF-03 stale version).
- */
+// doi loi tai / luu thanh thong bao; reload = true khi can tai lai (ma bi khoa, nguoi khac vua sua)
 export function facilityError(error) {
   if (!(error instanceof ApiError)) return { message: MSG_FALLBACK };
   const code = error.errorResponse?.code;

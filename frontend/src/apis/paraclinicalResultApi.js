@@ -1,10 +1,9 @@
-// UC-67 / UC-68 adapter for /api/v1/paraclinical-results. Same method names as resultMockApi, so the result
-// pages work with either. Images go to the backend, which stores them on Cloudinary.
+// UC-67, UC-68: goi API ket qua CLS (cung ten ham voi resultMockApi); anh gui len backend luu Cloudinary
 import { apiClient as defaultClient } from '../services/session';
 
 const pad = (n) => String(n).padStart(2, '0');
 
-/** ISO instant → value of an <input type="datetime-local"> in the browser's time zone. */
+// doi thoi gian ISO sang gia tri o nhap ngay gio
 export function toLocalInput(iso) {
   if (!iso) return '';
   const date = new Date(iso);
@@ -12,14 +11,14 @@ export function toLocalInput(iso) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** <input type="datetime-local"> value → ISO instant, or null when empty. */
+// doi gia tri o nhap ngay gio sang ISO, rong thi null
 export function fromLocalInput(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** Backend codes → the codes the result pages already map to Vietnamese messages. */
+// doi ma loi backend sang ma loi trang ket qua dang dung
 function normalizeError(error) {
   const code = error?.errorResponse?.code;
   if (error?.status === 403) error.code = 'NOT_PERFORMER';
@@ -28,11 +27,13 @@ function normalizeError(error) {
   return error;
 }
 
+// doi du lieu backend sang dang trang ket qua dung
 function toOrder(view) {
   if (!view?.result) return view;
   return { ...view, result: { ...view.result, receivedAt: toLocalInput(view.result.receivedAt) } };
 }
 
+// doi form thanh body gui len
 function toRequest(form) {
   return {
     receivedAt: fromLocalInput(form.receivedAt),
@@ -65,7 +66,7 @@ export function createResultApi(client = defaultClient) {
   return {
     supportsFiles: true,
     get: (id) => call(base(id)),
-    // The Doctor reads the submitted result of a service of the visit (read-only).
+    // bac si xem ket qua da gui (chi xem)
     viewForDoctor: (id) => call(`${base(id)}/view`),
     // tai 1 anh len, tra ve phieu moi (co danh sach anh)
     uploadImage: (id, file, caption) => {
@@ -85,11 +86,7 @@ export const resultApi = createResultApi();
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Real orders (UUID ids, opened from the technician queue) use the API. ASSUMPTION / temporary: rows of the
- * pending result list (UC-64) are still demo data with demo ids, so they keep the demo API until UC-64 reads
- * the backend.
- */
+// id that (UUID) thi goi API that; id demo thi dung API demo
 export function resultApiFor(orderId, demoApi) {
   return UUID_PATTERN.test(orderId ?? '') ? resultApi : demoApi;
 }

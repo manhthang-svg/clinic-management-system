@@ -6,16 +6,18 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
     isDirty,
     msg19,
     serverFieldErrors,
     toFormValues,
     validatePatientForm,
+    withDerivedCodes,
 } from '../components/patients/patientForm';
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
 
-/** UC-38 Update Patient Information: load, check, save changed fields, back to UC-36. */
+// UC-38: tai ho so, kiem tra, luu cac truong da sua, quay ve ho so
 export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const navigate = useNavigate();
     const [patient, setPatient] = useState(null);
@@ -31,7 +33,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const profilePath = useCallback(
         (id) => generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id }), []);
 
-    // Step 2: the form of UC-37 with the current data.
+    // tai ho so hien tai vao form
     useEffect(() => {
         const controller = new AbortController();
         patientApi.detail(patientId, controller.signal)
@@ -51,7 +53,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
 
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
-        setForm((previous) => ({ ...previous, [name]: value }));
+        setForm((previous) => withDerivedCodes(previous, name, value));
         setFieldErrors((previous) => {
             if (!previous[name]) return previous;
             const next = { ...previous };
@@ -62,19 +64,59 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
     }, []);
 
+    const handleBlur = useCallback((event) => {
+        const { name } = event.target;
+        if (!name || !form) return;
+
+        let nextForm = form;
+        if ((name === 'hoten' || name === 'hotennguoithan') && form[name]) {
+            const formatted = formatFullName(form[name]);
+            if (formatted !== form[name]) {
+                nextForm = { ...form, [name]: formatted };
+                setForm(nextForm);
+            }
+        }
+
+        const errors = validatePatientForm(nextForm, clinicToday());
+        const fieldError = errors[name];
+        setFieldErrors((previous) => {
+            if (fieldError) {
+                return { ...previous, [name]: fieldError };
+            }
+            if (previous[name]) {
+                const next = { ...previous };
+                delete next[name];
+                return next;
+            }
+            return previous;
+        });
+    }, [form]);
+
     const handleSubmit = useCallback(async (event) => {
         event.preventDefault();
         if (submitting || !form) return;
         setError('');
         setConflict(null);
 
-        // AF-02: nothing changed, so go back to UC-36 without saving.
-        if (!isDirty(form, initialForm)) {
+        let currentForm = form;
+        const formattedHoten = formatFullName(form.hoten);
+        const formattedNguoithan = formatFullName(form.hotennguoithan);
+        if (formattedHoten !== form.hoten || formattedNguoithan !== form.hotennguoithan) {
+            currentForm = {
+                ...form,
+                hoten: formattedHoten,
+                hotennguoithan: formattedNguoithan,
+            };
+            setForm(currentForm);
+        }
+
+        // khong sua gi thi quay ve, khong luu
+        if (!isDirty(currentForm, initialForm)) {
             navigate(profilePath(patientId));
             return;
         }
-        // Step 4: the checks of UC-37 steps 4–5.
-        const errors = validatePatientForm(form, clinicToday());
+        // kiem tra giong luc tao ho so
+        const errors = validatePatientForm(currentForm, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
             setError(MSG.FIX_FIELDS);
@@ -83,15 +125,15 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
 
         setSubmitting(true);
         try {
-            await patientApi.update(patientId, { ...buildPatientPayload(form), version: patient.version });
-            // Step 7: MSG03 and back to UC-36 with the new data.
+            await patientApi.update(patientId, { ...buildPatientPayload(currentForm), version: patient.version });
+            // luu xong: MSG03 va quay ve ho so
             toast.success(MSG.UPDATED);
             navigate(profilePath(patientId), { replace: true });
         } catch (err) {
             const code = err?.errorResponse?.code;
             const details = err?.errorResponse?.details;
             if (code === 'PATIENT_IDENTIFICATION_EXISTS' && details) {
-                // EF-02: MSG19 with Open profile; nothing is saved.
+                // trung CCCD / ho chieu: hien MSG19, khong luu
                 setConflict(details);
                 setFieldErrors((previous) => ({
                     ...previous,
@@ -108,7 +150,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         }
     }, [form, initialForm, navigate, patient, patientApi, patientId, profilePath, submitting]);
 
-    // AF-01: Cancel asks for confirmation (MSG40) when something was changed.
+    // huy khi da sua thi hoi xac nhan (MSG40)
     const goBack = useCallback(() => {
         if (submitting) return;
         if (form && isDirty(form, initialForm)) setConfirmCancel(true);
@@ -125,6 +167,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile: (id) => navigate(profilePath(id)),

@@ -72,6 +72,47 @@ export const medicalRecordApi = {
   },
 
   /**
+   * Kết xuất dữ liệu hồ sơ bệnh án (XML / JSON) theo chuẩn Công văn 365
+   */
+  async exportMedicalRecordData(id, {
+    format = 'XML',
+    purpose = 'LIEN_THONG',
+    recipient,
+    recipientType,
+    recipientName,
+    recipientCccd,
+    documentDate,
+    transferFacilityName,
+    transferFacilityCode,
+    authorityType,
+    authorityTypeOther,
+    authorityName,
+    documentNumber,
+    documentNotes,
+  } = {}, signal) {
+    return apiClient.download(`/medical-records/${encodeURIComponent(id)}/export-data`, {
+      method: 'POST',
+      body: {
+        format,
+        purpose,
+        recipient: recipient?.trim() || null,
+        recipientType: recipientType || null,
+        recipientName: recipientName?.trim() || null,
+        recipientCccd: recipientCccd?.trim() || null,
+        documentDate: documentDate || null,
+        transferFacilityName: transferFacilityName?.trim() || null,
+        transferFacilityCode: transferFacilityCode?.trim() || null,
+        authorityType: authorityType?.trim() || null,
+        authorityTypeOther: authorityTypeOther?.trim() || null,
+        authorityName: authorityName?.trim() || null,
+        documentNumber: documentNumber?.trim() || null,
+        documentNotes: documentNotes?.trim() || null,
+      },
+      signal,
+    });
+  },
+
+  /**
    * UC-52 bước 4 (BR-52-06): tải một tệp kết quả CLS của hồ sơ. Backend kiểm tra quyền và ghi audit mỗi lần tải.
    * Trả về { blob, fileName }.
    */

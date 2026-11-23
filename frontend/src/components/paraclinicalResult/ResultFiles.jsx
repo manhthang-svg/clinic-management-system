@@ -5,6 +5,7 @@ import { ResultApiContext } from './resultContext';
 
 let nextId = 0;
 
+// link xem truoc anh
 function previewUrl(file) {
   try {
     return URL.createObjectURL(file);
@@ -19,10 +20,7 @@ function withLocalCaptions(serverFiles, localFiles) {
   return serverFiles.map((file) => ({ ...file, caption: typed.get(file.id) ?? file.caption ?? '' }));
 }
 
-/**
- * UC-67 attached images: JPG or PNG, at most 10 of 10 MB each. With the real API each image is uploaded at once
- * (backend → Cloudinary) and deleted on the server; the demo API keeps a local preview link.
- */
+// UC-67: anh dinh kem (JPG / PNG, toi da 10 anh, moi anh 10 MB); chon la tai len server ngay
 export function ResultFiles({ files, readOnly, onChange }) {
   const inputRef = useRef(null);
   const [errors, setErrors] = useState([]);
@@ -47,6 +45,7 @@ export function ResultFiles({ files, readOnly, onChange }) {
     setBusy(false);
   };
 
+  // chon anh: kiem tra roi tai len
   const add = (event) => {
     const { accepted, errors: rejected } = checkFiles(event.target.files ?? [], files.length);
     setErrors(rejected);

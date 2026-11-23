@@ -34,6 +34,36 @@ async function fillAdult(user, { phone = '0901234567' } = {}) {
 }
 
 describe('ReceptionistCreatePatientPage (UC-37)', () => {
+    it('automatically formats full name to Title Case on blur', async () => {
+        const user = userEvent.setup();
+        const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };
+        renderPage(patientApi);
+
+        const nameInput = screen.getByLabelText(/Họ và tên/);
+        await user.type(nameInput, 'nguyễn   văn   an');
+        await user.tab();
+
+        expect(nameInput).toHaveValue('Nguyễn Văn An');
+    });
+
+    it('validates a field immediately on blur and marks it with error message', async () => {
+        const user = userEvent.setup();
+        const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };
+        renderPage(patientApi);
+
+        const nameInput = screen.getByLabelText(/Họ và tên/);
+        await user.type(nameInput, 'Nguyễn Văn A 123');
+        await user.tab();
+
+        expect(nameInput).toHaveAccessibleDescription(FIELD_MSG.INVALID_FORMAT);
+        expect(screen.getByText(FIELD_MSG.INVALID_FORMAT)).toBeInTheDocument();
+
+        await user.clear(nameInput);
+        await user.type(nameInput, 'Nguyễn Văn A');
+        await user.tab();
+        expect(nameInput).not.toHaveAccessibleDescription(FIELD_MSG.INVALID_FORMAT);
+    });
+
     it('shows each wrong field under the field and does not call the API', async () => {
         const user = userEvent.setup();
         const patientApi = { possibleDuplicates: vi.fn(), create: vi.fn() };
@@ -62,6 +92,32 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         expect(await screen.findByText('Hồ sơ p-9')).toBeInTheDocument();
         expect(patientApi.possibleDuplicates).toHaveBeenCalledWith('Nguyễn Văn An', '1990-01-01');
         expect(patientApi.create.mock.calls[0][0]).toMatchObject({ hoten: 'Nguyễn Văn An', cccdSo: null });
+    });
+
+    it('fills the read-only ethnicity code from the chosen ethnicity', async () => {
+        const user = userEvent.setup();
+        const patientApi = {
+            possibleDuplicates: vi.fn().mockResolvedValue([]),
+            create: vi.fn().mockResolvedValue({ id: 'p-10' }),
+        };
+        renderPage(patientApi);
+
+        const code = screen.getByLabelText('Mã dân tộc');
+        expect(code).toHaveAttribute('readonly');
+        expect(code).toHaveValue('01');
+        await fillAdult(user);
+        await user.selectOptions(screen.getByLabelText(/^Dân tộc/), 'Mường');
+        expect(code).toHaveValue('06');
+        const occupationCodeField = screen.getByLabelText('Mã nghề nghiệp');
+        expect(occupationCodeField).toHaveAttribute('readonly');
+        await user.selectOptions(screen.getByLabelText('Nghề nghiệp'), 'Công nhân');
+        expect(occupationCodeField).toHaveValue('04');
+        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+
+        await screen.findByText('Hồ sơ p-10');
+        expect(patientApi.create.mock.calls[0][0]).toMatchObject({
+            dantoc: 'Mường', dantocMa: '06', nghenghiep: 'Công nhân', nghenghiepMa: '04',
+        });
     });
 
     it('warns about possible duplicates and opens the chosen profile (AF-02)', async () => {

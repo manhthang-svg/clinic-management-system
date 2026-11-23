@@ -14,7 +14,7 @@ import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
-import { formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
+import { dashboardError, formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
 import {
   ChartCard,
   EmptyChart,
@@ -28,6 +28,8 @@ import {
 import { TEAL } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
@@ -42,24 +44,32 @@ function percent(part, total) {
   return `${(Math.round((part / total) * 1000) / 10).toLocaleString('vi-VN')}%`;
 }
 
-/** A small ranked list: code, name and number of cases. */
-function RankedList({ rows, codeKey, nameKey }) {
-  if (rows.length === 0) return <EmptyChart />;
+// so thu tu tren toan danh sach (trang 2 bat dau tu 21)
+function rankOf(table, index) {
+  return (table.page - 1) * table.pageSize + index + 1;
+}
+
+// danh sach xep hang nho: ma, ten, so ca (1 trang tu server)
+function RankedList({ table, codeKey, nameKey, label }) {
+  if (table.total === 0) return <EmptyChart />;
   return (
+    <>
     <ol className="space-y-2">
-      {rows.map((row, index) => (
+      {table.rows.map((row, index) => (
         <li key={row[codeKey]} className="flex items-center gap-3 text-sm">
-          <span className="w-6 text-right text-xs text-slate-400 tabular-nums">{index + 1}</span>
+          <span className="w-6 text-right text-xs text-slate-400 tabular-nums">{rankOf(table, index)}</span>
           <span className="font-mono text-xs font-semibold text-[#127e7a] w-14 shrink-0">{row[codeKey]}</span>
           <span className="flex-1 min-w-0 truncate text-slate-700" title={row[nameKey] ?? ''}>{row[nameKey] ?? '—'}</span>
           <span className="font-semibold text-slate-800 tabular-nums">{formatNumber(row.cases)}</span>
         </li>
       ))}
     </ol>
+    <ListPagination paged={table} label={label} />
+    </>
   );
 }
 
-/** UC-32 View Diagnosis Statistics (ICD-10, BR-31). */
+// UC-32: trang benh thuong gap (ICD-10)
 export function DiagnosisStatisticsPage({
   currentAdmin,
   onLogout,
@@ -74,7 +84,22 @@ export function DiagnosisStatisticsPage({
     () => ({ from: period.from, to: period.to, limit }),
     [period.from, period.to, limit],
   );
-  const { data, error, loading, reload } = useStatisticsQuery(api.getDiagnoses, params, !periodError);
+  // the + bieu do: chi so lieu tong va 10 benh chinh gap nhieu nhat
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getDiagnosisOverview, params, !periodError);
+  // 3 bang: phan trang o server, chi nhan 20 dong dang xem
+  const tableOptions = { enabled: !periodError, toMessage: dashboardError };
+  const mainParams = useMemo(() => ({ ...params, list: 'main' }), [params]);
+  const categoryParams = useMemo(() => ({ ...params, list: 'categories' }), [params]);
+  const secondaryParams = useMemo(() => ({ ...params, list: 'secondary' }), [params]);
+  const mainTable = useServerPage(api.getDiagnosisRows, mainParams, tableOptions);
+  const categoryTable = useServerPage(api.getDiagnosisRows, categoryParams, tableOptions);
+  const secondaryTable = useServerPage(api.getDiagnosisRows, secondaryParams, tableOptions);
+  const reload = () => {
+    reloadSummary();
+    mainTable.reload();
+    categoryTable.reload();
+    secondaryTable.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -84,9 +109,9 @@ export function DiagnosisStatisticsPage({
     activeKey: 'reports',
   };
 
-  const main = data?.mainDiagnoses ?? [];
-  const topDiagnosis = main[0];
-  const chartRows = main.slice(0, 10).map((row) => ({ code: row.icdCode, name: row.icdName, cases: row.cases }));
+  const top = data?.topDiagnoses ?? [];
+  const topDiagnosis = top[0];
+  const chartRows = top.map((row) => ({ code: row.icdCode, name: row.icdName, cases: row.cases }));
 
   return (
     <AdminLayout {...layoutProps}>
@@ -168,7 +193,7 @@ export function DiagnosisStatisticsPage({
             </ChartCard>
 
             <ChartCard title="Chi tiết bệnh chính" description={`Top ${formatNumber(data.limit)} mã ICD-10; tỉ lệ tính trên số kết luận có mã.`}>
-              {main.length > 0 ? (
+              {mainTable.total > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -182,9 +207,9 @@ export function DiagnosisStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {main.map((row, index) => (
+                      {mainTable.rows.map((row, index) => (
                         <tr key={row.icdCode} className="border-b border-slate-50 last:border-0">
-                          <td className="py-2.5 pr-2 text-right text-xs text-slate-400">{index + 1}</td>
+                          <td className="py-2.5 pr-2 text-right text-xs text-slate-400">{rankOf(mainTable, index)}</td>
                           <th scope="row" className="py-2.5 px-2 text-left font-mono text-slate-700">{row.icdCode}</th>
                           <td className="py-2.5 px-2 text-slate-700">{row.icdName ?? '—'}</td>
                           <td className="py-2.5 px-2 text-right font-semibold text-slate-800">{formatNumber(row.cases)}</td>
@@ -194,16 +219,17 @@ export function DiagnosisStatisticsPage({
                       ))}
                     </tbody>
                   </table>
+                  <ListPagination paged={mainTable} label="Phân trang bệnh chính" />
                 </div>
               ) : <EmptyChart />}
             </ChartCard>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <ChartCard title="Theo nhóm bệnh" description="Gộp theo 3 ký tự đầu của mã (J06.9, J06.0 → J06).">
-                <RankedList rows={data.categories ?? []} codeKey="categoryCode" nameKey="categoryName" />
+                <RankedList table={categoryTable} codeKey="categoryCode" nameKey="categoryName" label="Phân trang nhóm bệnh" />
               </ChartCard>
               <ChartCard title="Bệnh kèm theo thường gặp">
-                <RankedList rows={data.secondaryDiagnoses ?? []} codeKey="icdCode" nameKey="icdName" />
+                <RankedList table={secondaryTable} codeKey="icdCode" nameKey="icdName" label="Phân trang bệnh kèm theo" />
               </ChartCard>
             </div>
           </div>

@@ -30,7 +30,7 @@ import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
-import clinic.backend.service.AuditLogService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +67,7 @@ class VisitTransferIT extends PostgresIntegrationTest {
     @Autowired ClinicalExaminationRepository examinationRepository;
     @Autowired RoomQueueCounterRepository queueCounterRepository;
     @Autowired ExaminationRoomDuty examinationRoomDuty;
-    @Autowired AuditLogService auditLogService;
+    @Autowired DutyShiftConfigService dutyShiftConfigService;
     @Autowired UuidV7Generator ids;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbc;
@@ -111,8 +111,6 @@ class VisitTransferIT extends PostgresIntegrationTest {
         assertThat(transfer.get("old_queue_number")).isEqualTo(2);
         assertThat(transfer.get("new_queue_number")).isEqualTo(2);
         assertThat(transfer.get("transferred_by_account_id")).isEqualTo(DOCTOR_AN);
-        assertThat(jdbc.queryForObject("select count(*) from audit_logs where entity_id = ? and"
-                + " new_value ->> 'action' = 'TRANSFER'", Long.class, visit)).isEqualTo(1);
     }
 
     @Test
@@ -190,7 +188,8 @@ class VisitTransferIT extends PostgresIntegrationTest {
         return new VisitTransferServiceImpl(
                 visitRepository, visitTransferRepository, roomRepository, departmentRepository,
                 staffAccountRepository, assignmentRepository, dutyScheduleRepository, medicalRecordRepository,
-                examinationRepository, queueCounterRepository, examinationRoomDuty, auditLogService, ids, clock);
+                examinationRepository, queueCounterRepository, examinationRoomDuty, dutyShiftConfigService,
+                ids, clock);
     }
 
     private Clock at(int hour, int minute) {

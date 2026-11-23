@@ -20,7 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** UC-34 View Examined Patient List. The Doctor is always the logged-in account (BR-39), never a parameter. */
+// UC-34: danh sach benh nhan da kham cua bac si dang dang nhap (BR-39)
 @Service
 @RequiredArgsConstructor
 public class ExaminedPatientServiceImpl implements ExaminedPatientService {
@@ -28,11 +28,13 @@ public class ExaminedPatientServiceImpl implements ExaminedPatientService {
     static final long MAX_PERIOD_DAYS = 366;
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
+    static final int MAX_KEYWORD_LENGTH = 100;
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final VisitRepository visitRepository;
     private final Clock clock;
 
+    // kiem tra khoang ngay + trang, tra ve tong so va 1 trang luot kham (moi nhat truoc)
     @Override
     @Transactional(readOnly = true)
     public ExaminedPatientListResponse getExaminedPatients(
@@ -55,6 +57,9 @@ public class ExaminedPatientServiceImpl implements ExaminedPatientService {
             throw invalid("size", "The size must be between 1 and " + MAX_PAGE_SIZE + ".");
         }
         String search = keyword == null ? "" : keyword.strip();
+        if (search.length() > MAX_KEYWORD_LENGTH) {
+            throw invalid("keyword", "The keyword must not exceed " + MAX_KEYWORD_LENGTH + " characters.");
+        }
 
         VisitRepository.ExaminedTotals totals = visitRepository.countExamined(doctor.accountId(), start, end);
         Page<VisitRepository.ExaminedVisitRow> rows = visitRepository.findExaminedVisits(

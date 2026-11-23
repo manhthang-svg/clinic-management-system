@@ -133,20 +133,23 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(api.prepareParaclinicalOrderPrint).toHaveBeenCalledWith('o1');
         const sheet = await screen.findByRole('article', { name: 'Phiếu chỉ định cận lâm sàng' });
         expect(screen.getAllByRole('article', { name: 'Phiếu chỉ định cận lâm sàng' })).toHaveLength(1);
-        expect(within(sheet).getByText('PHÒNG KHÁM ĐA KHOA METPH')).toBeInTheDocument();
+        expect(within(sheet).getByText('Phòng khám Đa khoa A')).toBeInTheDocument();
         expect(within(sheet).getByRole('img', { name: 'Mã vạch CD1' })).toBeInTheDocument();
         const rows = within(sheet).getAllByRole('row').slice(2);
         expect(rows[0]).toHaveTextContent('Siêu âm ổ bụng');
+        expect(within(sheet).getByRole('columnheader', { name: 'Mã dòng chỉ định' })).toBeInTheDocument();
+        expect(within(sheet).getByText('Bác sĩ chỉ định')).toBeInTheDocument();
+        expect(within(sheet).getByText('DK0000000001')).toBeInTheDocument();
         expect(rows[0]).toHaveTextContent('Phòng siêu âm 1 – Tầng 2, khu B');
         expect(rows[1]).toHaveTextContent('Tổng phân tích máu');
         expect(rows[1]).toHaveTextContent('Phòng xét nghiệm – Tầng 1');
-        expect(within(sheet).getByText('Ngày 08 tháng 11 năm 2026')).toBeInTheDocument();
+        expect(within(sheet).getByText('Thời gian chỉ định: 08/11/2026 10:00')).toBeInTheDocument();
         expect(within(sheet).queryByText(/₫/)).not.toBeInTheDocument();
         await vi.waitFor(() => expect(print).toHaveBeenCalled());
         print.mockRestore();
     });
 
-    it('keeps one "In phiếu chỉ định" button for every print and explains an order that can no longer be printed', async () => {
+    it('keeps one "In phiếu chỉ định" button for every print and shows MSG80 when the order was cancelled meanwhile', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const api = {
@@ -168,17 +171,17 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(screen.queryByText(/Đã mở hộp thoại in/)).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'In phiếu chỉ định' }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Phiếu chỉ định đã bị hủy hoặc không còn dịch vụ nào nên không thể in.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
         expect(screen.queryByText('raw')).not.toBeInTheDocument();
         print.mockRestore();
     });
 
-    it('disables the print button of an order whose services were all cancelled (BR-50-05)', async () => {
+    it('hides the print button of an order whose services were all cancelled (EF-03)', async () => {
         const cancelled = { ...ultrasound, status: 'CANCELLED', cancellable: false, cancelReason: 'Bệnh nhân từ chối' };
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue(order([cancelled])) }} />);
 
         expect(await screen.findByText('Phiếu chỉ định CD1')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'In phiếu chỉ định' })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: 'In phiếu chỉ định' })).not.toBeInTheDocument();
     });
 });
 

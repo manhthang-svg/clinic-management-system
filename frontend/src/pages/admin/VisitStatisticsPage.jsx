@@ -15,7 +15,7 @@ import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
-import { formatDayLong, formatDayShort, formatNumber } from '../../components/statistics/dashboardPeriod';
+import { dashboardError, formatDayLong, formatDayShort, formatNumber } from '../../components/statistics/dashboardPeriod';
 import {
   ChartCard,
   DonutWithLegend,
@@ -30,6 +30,8 @@ import {
 import { COLORS, OUTCOMES } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
@@ -38,18 +40,19 @@ const GROUP_OPTIONS = [
   { value: 'MONTH', label: 'Theo tháng' },
 ];
 
-/** MM/yyyy from the first day of a month (YYYY-MM-01). */
+// hien thang dang MM/yyyy
 function formatMonth(iso) {
   const [y, m] = iso.split('-');
   return `${m}/${y}`;
 }
 
+// ti le phan tram (1 so le)
 function percent(part, total) {
   if (!total) return '0%';
   return `${Math.round((part / total) * 1000) / 10}%`.replace('.', ',');
 }
 
-/** UC-27 View Patient Visit Statistics. */
+// UC-27: trang thong ke luot kham
 export function VisitStatisticsPage({
   currentAdmin,
   onLogout,
@@ -64,7 +67,13 @@ export function VisitStatisticsPage({
     () => ({ from: period.from, to: period.to, groupBy }),
     [period.from, period.to, groupBy],
   );
-  const { data, error, loading, reload } = useStatisticsQuery(api.getVisits, params, !periodError);
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getVisits, params, !periodError);
+  // bang chi tiet: loc + phan trang o server, chi nhan 20 dong dang xem
+  const table = useServerPage(api.getVisitRows, params, { enabled: !periodError, toMessage: dashboardError });
+  const reload = () => {
+    reloadSummary();
+    table.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -80,7 +89,7 @@ export function VisitStatisticsPage({
   const formatAxis = byMonth ? formatMonth : formatDayShort;
 
   const series = (data?.series ?? []).map((item) => ({ period: item.period, ...item.counts }));
-  const activeRows = series.filter((row) => row.total > 0);
+  const tableRows = table.rows.map((item) => ({ period: item.period, ...item.counts }));
 
   const patientTypeItems = summary ? [
     { name: 'BHYT', value: summary.insurance, color: COLORS.insurance },
@@ -198,7 +207,7 @@ export function VisitStatisticsPage({
               title="Chi tiết"
               description={byMonth ? 'Các tháng có lượt khám.' : 'Các ngày có lượt khám.'}
             >
-              {activeRows.length > 0 ? (
+              {table.total > 0 ? (
                 <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white">
@@ -215,7 +224,7 @@ export function VisitStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {activeRows.map((row) => (
+                      {tableRows.map((row) => (
                         <tr key={row.period} className="border-b border-slate-50 last:border-0">
                           <th scope="row" className="py-2.5 pr-4 text-left font-medium text-slate-700">
                             <span className="inline-flex items-center gap-1.5">
@@ -235,6 +244,7 @@ export function VisitStatisticsPage({
                       ))}
                     </tbody>
                   </table>
+                  <ListPagination paged={table} />
                 </div>
               ) : <EmptyChart />}
             </ChartCard>

@@ -4,15 +4,28 @@ import { toast } from 'sonner';
 import { ConfirmModal } from '../ui/confirm-modal';
 import { VisitTicket } from '../visits';
 import visitApi from '../../apis/visitApi';
+import { GENDER_LABELS } from '../../constants/accountData';
+import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import { NOTES_MAX, REASON_MAX, TRANSFER_MESSAGES, transferError, validateTransfer } from './transferRoom';
 
 const inputClass = 'mt-1 w-full rounded-lg border bg-white px-3 text-xs font-normal outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
+function formatDob(value) {
+    if (!value) return '';
+    const [year, month, day] = String(value).slice(0, 10).split('-');
+    return day && month && year ? `${day}/${month}/${year}` : String(value);
+}
+
+function visitTypeText(visit) {
+    if (visit.doituongbnLoai !== 'BHYT') return 'Khám dịch vụ';
+    return visit.mabhyt ? `Khám BHYT (${visit.mabhyt})` : 'Khám BHYT';
+}
+
 /**
  * UC-48 Transfer Patient to Another Room, from the examination of a called-in patient whose examination has not
- * been saved yet (OQ-05, Q-33). After the transfer the Doctor can reprint the ticket (AF-02).
+ * been saved yet (OQ-05, Q-33). After the transfer the Doctor can print the ticket of the new room (AF-02).
  */
-export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, api = visitApi }) {
+export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, onVisitChanged, api = visitApi }) {
     const roomFieldId = useId();
     const reasonId = useId();
     const notesId = useId();
@@ -86,6 +99,11 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
             if (failure.field) setErrors({ [failure.field]: failure.message });
             else setPageError(failure.message);
             if (failure.ends) setEnded(true);
+            if (failure.reloadVisit) {
+                // EF-04 (MSG75): the page reloads the visit; the toast stays if the transfer tab closes.
+                toast.error(failure.message);
+                onVisitChanged?.();
+            }
             if (failure.reloadRooms) {
                 setToRoomId('');
                 reloadRooms();
@@ -111,15 +129,15 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
             setTicket({ data: printed, loading: false, error: null });
             window.setTimeout(() => window.print(), 0);
         } catch {
-            // EF-07 (MSG49): the transfer stays; the Doctor can retry.
-            setTicket((current) => ({ ...current, loading: false, error: 'Không thể in. Vui lòng kiểm tra máy in và thử lại.' }));
+            // The transfer stays; the Doctor can retry (MSG80).
+            setTicket((current) => ({ ...current, loading: false, error: TRANSFER_MESSAGES.systemError }));
         }
     };
 
     if (result && (ticket.data || ticket.loading || ticket.error)) {
         return (
             <VisitTicket
-                title="In lại phiếu khám"
+                title="In phiếu khám"
                 visit={{ id: visit.id, sovaovien: visit.sovaovien, status: 'WAITING' }}
                 ticket={ticket.data}
                 loading={ticket.loading}
@@ -143,7 +161,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
                 </dl>
                 <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
                     <button type="button" onClick={onDone} className="min-h-11 rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-semibold text-slate-600">Về danh sách chờ</button>
-                    <button type="button" onClick={openTicket} className="min-h-11 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800">In lại phiếu khám</button>
+                    <button type="button" onClick={openTicket} className="min-h-11 rounded-lg bg-teal-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-teal-800">In phiếu khám</button>
                 </div>
             </section>
         );
@@ -161,7 +179,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <label htmlFor={roomFieldId} className="text-xs font-semibold text-slate-700">
-                        Phòng khám chuyển đến <span className="text-rose-500">*</span>
+                        Phòng chuyển đến <span className="text-rose-500">*</span>
                         <select
                             id={roomFieldId}
                             value={toRoomId}
@@ -219,7 +237,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
                 <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs leading-6 text-sky-900">
                     <p className="flex items-center gap-2 font-bold"><InfoIcon aria-hidden="true" className="h-4 w-4 text-sky-600" />Sau khi xác nhận chuyển phòng</p>
                     <ul className="ml-6 list-disc">
-                        <li>Lượt khám trở về “Chờ khám” ở phòng mới với số thứ tự mới, xếp theo thời gian đăng ký.</li>
+                        <li>Lượt khám trở về “Chờ khám” ở phòng mới với số thứ tự mới, xếp sau bệnh nhân ưu tiên và trước bệnh nhân thường.</li>
                         <li>Không thu thêm phí khám; hóa đơn phí khám giữ nguyên.</li>
                         <li>Hồ sơ khám chưa có nội dung, bác sĩ phòng mới khám tiếp trên cùng lượt khám.</li>
                     </ul>
@@ -229,7 +247,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
                     <button type="button" onClick={cancel} disabled={submitting} className="min-h-11 rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Hủy</button>
                     <button type="submit" disabled={!canSubmit} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">
                         {submitting ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Send aria-hidden="true" className="h-4 w-4" />}
-                        {submitting ? 'Đang chuyển phòng…' : 'Xác nhận chuyển phòng'}
+                        {submitting ? 'Đang chuyển…' : 'Xác nhận chuyển'}
                     </button>
                 </div>
             </section>
@@ -237,7 +255,18 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, ap
             <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="text-sm font-bold">Lượt khám hiện tại</h2>
                 <dl className="mt-3 space-y-2 text-xs">
-                    {[['Mã lượt khám', visit.sovaovien], ['Phòng hiện tại', currentRoomName], ['Số thứ tự hiện tại', visit.queueNumber], ['Lý do khám', visit.lydovaovien]].map(([label, value]) => (
+                    {[
+                        ['Bệnh nhân', visit.patientName],
+                        ['Mã bệnh nhân', visit.patientCode],
+                        ['Ngày sinh', formatDob(visit.patientDob)],
+                        ['Giới tính', GENDER_LABELS[visit.patientGender] ?? visit.patientGender],
+                        ['Mã lượt khám', visit.sovaovien],
+                        ['Loại khám', visitTypeText(visit)],
+                        ['Phòng hiện tại', currentRoomName],
+                        ['Số thứ tự hiện tại', visit.queueNumber],
+                        ['Lý do khám', visit.lydovaovien],
+                        ['Trạng thái', VISIT_STATUS_LABELS[visit.status] ?? visit.status],
+                    ].map(([label, value]) => (
                         <div key={label} className="flex justify-between gap-3"><dt className="text-slate-400">{label}</dt><dd className="text-right font-semibold">{value || '—'}</dd></div>
                     ))}
                 </dl>

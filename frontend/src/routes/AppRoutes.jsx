@@ -17,6 +17,8 @@ import {
   HospitalInformationPage,
   LabParameterManagementPage,
   MedicineManagementPage,
+  RecordArchivePage,
+  AuditLogPage,
 } from "../pages/admin/index.js";
 
 import DashboardLayout from "../layouts/DashboardlLayout.jsx";
@@ -239,6 +241,28 @@ export function AppRoutes({
             path="hospital-information"
             element={
               <HospitalInformationPage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="record-archive"
+            element={
+              <RecordArchivePage
+                currentAdmin={session.account}
+                onLogout={onLogout}
+                onChangePassword={onChangePassword}
+              />
+            }
+          />
+
+          <Route
+            path="audit"
+            element={
+              <AuditLogPage
                 currentAdmin={session.account}
                 onLogout={onLogout}
                 onChangePassword={onChangePassword}

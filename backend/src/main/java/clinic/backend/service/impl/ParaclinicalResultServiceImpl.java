@@ -81,11 +81,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/**
- * UC-67 Record Paraclinical Result and the print counter of UC-68. Results are typed by hand (SW-04); the
- * instrument only records which machine ran them (V54). Only the technician who performed the service edits its
- * result, and a submitted result is locked (BR-29). Images are not handled yet (TBD: file storage).
- */
+// UC-67 nhap ket qua CLS + UC-68 ghi nhan in phieu
+// KTV nhap tay, chi KTV thuc hien duoc sua, gui roi thi khoa (BR-29)
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -95,6 +92,12 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String EMERGENCY = "cấp cứu";
     // anh ket qua: toi da 10 anh, moi anh 10 MB, chi JPG / PNG (quyet dinh 16/11/2026)
+    // cac muc mo ta bat buoc cua phieu co nhieu muc (khop voi frontend resultSections.js)
+    static final Map<ResultForm, List<String>> REQUIRED_SECTIONS = Map.of(
+            ResultForm.ENDOSCOPY, List.of("thucQuan", "tamVi", "phinhVi", "thanVi", "haiBoCong", "hangVi", "monVi",
+                    "hanhTaTrang", "taTrang"),
+            ResultForm.ECG, List.of("huyetAp", "chuyenDao", "nhip", "truc", "p", "pq", "qrs", "st", "t", "qt",
+                    "truocTim"));
     static final int MAX_IMAGES = 10;
     static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
 
@@ -131,6 +134,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     @Override
     @Transactional(readOnly = true)
+    // bac si xem ket qua da gui (chi xem)
     public ParaclinicalResultResponse viewForDoctor(UUID doctorAccountId, UUID orderDetailId) {
         Context context = load(orderDetailId);
         boolean ownOrder = doctorAccountId.equals(context.order().getDoctorAccountId());
@@ -141,7 +145,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         if (context.detail().getStatus() != ParaclinicalOrderDetailStatus.COMPLETED) {
             throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
         }
-        // The Doctor is never the performer, so the response is read-only.
         return toResponse(context, doctorAccountId, false);
     }
 
@@ -172,7 +175,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         // (may khong thuoc phong / sai loai -> INSTRUMENT_UNAVAILABLE, buoc 41-43)
         record(context, technicianAccountId, request, true, now);
 
-        // Step 9: the service is Completed; step 10: the visit waits for conclusion once every service is done.
         // dich vu -> HOAN THANH (buoc 45)
         ParaclinicalOrderDetail detail = context.detail();
         detail.completeWithResult(technicianAccountId, now);
@@ -188,8 +190,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     public ParaclinicalResultResponse recordPrint(UUID technicianAccountId, UUID orderDetailId) {
         Context context = load(orderDetailId);
         Instant now = clock.instant();
-        // EF-01: drafts cannot be printed; only the performer prints (permission matrix, BR-29); PF-03 needs the
-        // clinic header.
+        // chi in ket qua da gui, chi KTV thuc hien duoc in, phai co thong tin co so de in tieu de
         if (!isSubmitted(context)) {
             throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
         }
@@ -304,6 +305,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         throw new AppException(ErrorCode.RESULT_IMAGE_INVALID, Map.of("file", "TYPE"));
     }
 
+    // lay ten file (bo duong dan), toi da 255 ky tu
     private static String safeFileName(String fileName) {
         String name = fileName == null ? "" : fileName.replace('\\', '/');
         name = name.substring(name.lastIndexOf('/') + 1).strip();
@@ -315,6 +317,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
+    // ma bam noi dung anh
     private static String sha256(byte[] content) {
         try {
             return java.util.HexFormat.of().formatHex(
@@ -332,6 +335,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return dot > 0 ? path.substring(0, dot) : path;
     }
 
+    // chay sau khi transaction commit thanh cong
     private static void afterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             action.run();
@@ -345,6 +349,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         });
     }
 
+    // chay khi transaction bi rollback (vd xoa anh vua up)
     private void afterRollback(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
@@ -363,7 +368,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         });
     }
 
-    // ---- loading -----------------------------------------------------------------------------------------------
+    // ---- tai du lieu -------------------------------------------------------------------------------------------
 
     // goi du lieu dung chung cho 1 phieu: chi tiet chi dinh, phieu, dich vu, mau phieu, luot kham, benh nhan
     private record Context(ParaclinicalOrderDetail detail, ParaclinicalOrder order, MedicalService service,
@@ -391,10 +396,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return new Context(detail, order, service, resultFormOf(service), visit, patient);
     }
 
-    /**
-     * ASSUMPTION / TBD: the service catalog has no "result form" field yet, so the slip follows the service type
-     * and keywords of the service name; an unknown imaging or functional service uses the plain descriptive slip.
-     */
+    // TBD: danh muc dich vu chua co truong mau phieu nen chon theo loai + ten dich vu
     // chon MAU PHIEU theo loai dich vu: xet nghiem / sieu am / noi soi / dien tim / MRI / CT / X-quang (theo ten)
     static ResultForm resultFormOf(MedicalService service) {
         if (service.getType() == MedicalServiceType.LAB) {
@@ -419,15 +421,14 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return ResultForm.XRAY;
     }
 
-    // chuyen chu thuong + bo dau tieng Viet de so tu khoa trong ten dich vu ("Siêu âm" -> "sieu am")
+    // chuyen chu thuong + bo dau tieng Viet de so tu khoa trong ten dich vu ("Sieu am" -> "sieu am")
     private static String fold(String text) {
         String lower = text == null ? "" : text.toLowerCase(Locale.ROOT).replace('đ', 'd');
         return Normalizer.normalize(lower, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     }
 
-    // ---- rules -------------------------------------------------------------------------------------------------
+    // ---- quy tac -----------------------------------------------------------------------------------------------
 
-    /** EF-03 / EF-04: only the performer edits, only before submission, only once the service was accepted. */
     // KIEM TRA QUYEN SUA (buoc 29-37): chua gui (BR-29), dung KTV thuc hien, dich vu dang cho ket qua
     private void requireEditableBy(Context context, UUID technicianAccountId) {
         if (isSubmitted(context)) {
@@ -450,7 +451,13 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 : imagingResultRepository.findByOrderDetailId(detailId).map(ImagingResult::isSubmitted).orElse(false);
     }
 
-    /** Step 6: every required lab value is present and numeric values are numbers; descriptive results need text. */
+    // ket qua hinh anh cua dich vu nay da co anh tai len chua
+    private boolean hasImages(Context context) {
+        return imagingResultRepository.findByOrderDetailId(context.detail().getId())
+                .map(result -> !imageRepository.findByImagingResultIdOrderByDisplayOrderAsc(result.getId()).isEmpty())
+                .orElse(false);
+    }
+
     // KIEM TRA DU LIEU KHI GUI (buoc 38-40): chi so bat buoc, so hop le, mo ta, ky thuat (CT/MRI), ket luan
     private void validateForSubmit(Context context, SaveParaclinicalResultRequest request) {
         Map<String, String> errors = new LinkedHashMap<>();
@@ -467,13 +474,25 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 }
             }
         } else {
-            boolean hasSections = request.sections() != null
-                    && request.sections().values().stream().anyMatch(text -> trim(text) != null);
-            if (trim(request.description()) == null && !hasSections) {
+            List<String> requiredSections = REQUIRED_SECTIONS.get(context.form());
+            if (requiredSections != null) {
+                // noi soi / dien tim: moi muc mo ta deu bat buoc (giong FE)
+                Map<String, String> sections = Objects.requireNonNullElse(request.sections(), Map.of());
+                for (String key : requiredSections) {
+                    if (trim(sections.get(key)) == null) {
+                        errors.put("section:" + key, "Bắt buộc");
+                    }
+                }
+            } else if (trim(request.description()) == null) {
                 errors.put("description", "Vui lòng nhập mô tả kết quả");
             }
             if (List.of(ResultForm.CT, ResultForm.MRI).contains(context.form()) && trim(request.technique()) == null) {
                 errors.put("technique", "Vui lòng nhập kỹ thuật");
+            }
+            // chan doan hinh anh / tham do chuc nang phai co anh: it nhat 1 anh tai len hoac link xem anh (PACS, CT/MRI)
+            // xet nghiem thi chi nhap chi so, khong co anh
+            if (trim(request.imageLink()) == null && !hasImages(context)) {
+                errors.put("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem ảnh");
             }
         }
         if (trim(request.conclusion()) == null) {
@@ -496,12 +515,17 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return Optional.of(instrument);
     }
 
-    // ---- writing -----------------------------------------------------------------------------------------------
+    // ---- ghi du lieu -------------------------------------------------------------------------------------------
 
     // [UC-67 buoc 44] LUU KET QUA: dung chung nhap (submit=false) va gui (submit=true); chua co thi tao, co roi thi sua
     private void record(Context context, UUID technicianAccountId, SaveParaclinicalResultRequest request,
                         boolean submit, Instant now) {
         ParaclinicalOrderDetail detail = context.detail();
+        // gio nhan mau xet nghiem khong duoc o tuong lai (luu nhap va gui deu kiem tra)
+        if (context.isLab() && request.receivedAt() != null && request.receivedAt().isAfter(now)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    Map.of("receivedAt", "Giờ nhận mẫu không được sau thời điểm hiện tại"));
+        }
         // kiem tra may KTV chon: phai thuoc phong + dung loai, sai -> INSTRUMENT_UNAVAILABLE (buoc 41-43)
         Optional<ParaclinicalInstrument> instrument = instrumentFor(context, request.instrumentId());
         UUID instrumentId = instrument.map(ParaclinicalInstrument::getId).orElse(null);
@@ -602,7 +626,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 detail.getMachidinh(), values, now);
     }
 
-    // ---- lab parameters and reference ranges -------------------------------------------------------------------
+    // ---- chi so xet nghiem va khoang tham chieu ----------------------------------------------------------------
 
     // 1 dong chi so xet nghiem: lien ket dich vu-chi so, chi so, khoang tham chieu ap dung
     private record LabRow(ServiceLabParameter link, LabParameter parameter, LabReferenceRange range) {
@@ -629,7 +653,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .toList();
     }
 
-    /** The active range in force on the order date that fits the patient's sex and age; the most specific wins. */
     // chon KHOANG THAM CHIEU dung: con hieu luc ngay chi dinh, dung gioi tinh + tuoi; cu the nhat duoc chon
     private static LabReferenceRange rangeFor(List<LabReferenceRange> ranges, LocalDate onDate, Optional<Patient> patient) {
         Short sex = patient.map(found -> (short) found.getGioitinh()).orElse(null);
@@ -648,7 +671,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .orElse(null);
     }
 
-    /** NORMAL, LOW, HIGH or ABNORMAL, as the result form shows it; null when there is nothing to compare. */
     // DANH GIA KET QUA: NORMAL / LOW (thap) / HIGH (cao) / ABNORMAL (dinh tinh bat thuong) so voi khoang tham chieu
     static String interpret(LabParameter parameter, LabReferenceRange range, String text) {
         if (range == null || text == null) {
@@ -676,7 +698,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return "NORMAL";
     }
 
-    /** Accepts both "6,2" and "6.2". */
     // doi chuoi thanh so, nhan ca dau phay va dau cham ("6,2" hoac "6.2"); khong phai so -> null
     static BigDecimal parseNumber(String text) {
         if (text == null) {
@@ -686,7 +707,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return normalized.matches("-?\\d+(\\.\\d+)?") ? new BigDecimal(normalized) : null;
     }
 
-    // chuyen khoang tham chieu thanh chu de in: "4 - 10", "< 5", "> 1", "Âm tinh"...
+    // chuyen khoang tham chieu thanh chu de in: "4 - 10", "< 5", "> 1", "Am tinh"...
     private static String referenceText(LabReferenceRange range) {
         if (range == null) {
             return null;
@@ -705,17 +726,14 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return value.stripTrailingZeros().toPlainString();
     }
 
-    // ---- response ----------------------------------------------------------------------------------------------
+    // ---- du lieu tra ve ----------------------------------------------------------------------------------------
 
     // DUNG KET QUA TRA VE FE: thong tin phieu, benh nhan, chi so, ket qua da luu, may, cac tab cung dot, isPerformer
     private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId) {
         return toResponse(context, technicianAccountId, true);
     }
 
-    /**
-     * {@code forEditing} false is the Doctor's read-only print view: it skips the room's instruments and the other
-     * services of the order, which only the technician's result screen uses (two fewer queries per view).
-     */
+    // forEditing = false: bac si chi xem, bo qua danh sach may va cac tab (bot 2 query)
     private ParaclinicalResultResponse toResponse(Context context, UUID technicianAccountId, boolean forEditing) {
         ParaclinicalOrderDetail detail = context.detail();
         ParaclinicalOrder order = context.order();
@@ -850,11 +868,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         return new ParaclinicalResultResponse.Screening(implant, detail.getPriorResults());
     }
 
-    /**
-     * The services of the same order in the same room: the tabs of the result form. Built with one query per kind of
-     * data (services, lab drafts, imaging drafts) whatever the number of services, because every tab switch loads
-     * the form again.
-     */
     // [UC-67 buoc 14-15] CAC TAB CUNG DOT: dich vu cung phieu, cung phong + trang thai tung tab (Ban nhap / Da gui)
     private List<ParaclinicalResultResponse.SiblingService> siblingServices(
             ParaclinicalOrderDetail detail, ParaclinicalOrder order, boolean currentIsDraft) {
@@ -865,7 +878,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .findAllById(siblings.stream().map(ParaclinicalOrderDetail::getServiceId).collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(MedicalService::getId, Function.identity()));
-        // The open service's own result is already loaded; only the other tabs are looked up.
+        // ket qua cua tab dang mo da co, chi tra cac tab khac
         Set<UUID> drafts = draftDetailIds(
                 siblings.stream().filter(sibling -> !sibling.getId().equals(detail.getId())).toList(), services);
         if (currentIsDraft) {
@@ -887,10 +900,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .toList();
     }
 
-    /**
-     * Performed services whose result is saved but not submitted: their tab shows "Bản nháp" instead of "Chờ nhập".
-     * One query for the lab services and one for the others, only when there are such services.
-     */
     // tim cac dich vu da co BAN NHAP (luu nhung chua gui) de tab hien "Ban nhap"
     private Set<UUID> draftDetailIds(List<ParaclinicalOrderDetail> siblings, Map<UUID, MedicalService> services) {
         Map<Boolean, List<UUID>> pendingByLab = siblings.stream()
@@ -941,7 +950,6 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
                 .toList();
     }
 
-    /** Display names of the ordering doctor and the performer, in one query. */
     // lay ten bac si chi dinh + KTV thuc hien trong 1 truy van
     private Map<UUID, String> staffNames(UUID... accountIds) {
         Set<UUID> ids = Arrays.stream(accountIds).filter(Objects::nonNull).collect(Collectors.toSet());

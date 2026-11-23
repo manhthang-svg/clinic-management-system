@@ -102,8 +102,8 @@ export class ApiClient {
     }
 
     /**
-     * Downloads a file (e.g. UC-33 Excel export): same authentication and error handling as {@link request}, but
-     * returns the body as a Blob with the file name taken from Content-Disposition. An optional {@code body} is sent
+     * Downloads a file (e.g. UC-33 Excel export, UC-53 PDF / XML / JSON export): same authentication and error handling as {@link request}, but
+     * returns the body as a Blob with the file name taken from Content-Disposition and SHA-256 header if present. An optional {@code body} is sent
      * as JSON (UC-53 keeps the export purpose and recipient out of the URL).
      */
     async download(path, options = {}) {
@@ -111,9 +111,11 @@ export class ApiClient {
         const headers = new Headers(options.headers);
         headers.set('Accept', '*/*');
         let body;
-        if (options.body !== undefined) {
+        if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+            body = options.body;
+        } else if (options.body !== undefined) {
             headers.set('Content-Type', 'application/json');
-            body = JSON.stringify(options.body);
+            body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
         }
         const accessToken = await this.accessTokenProvider?.();
         if (accessToken && !headers.has('Authorization')) {
@@ -148,6 +150,7 @@ export class ApiClient {
         return {
             blob: await response.blob(),
             fileName: fileNameOf(response.headers.get('content-disposition')),
+            sha256: response.headers.get('x-file-sha256'),
         };
     }
 }

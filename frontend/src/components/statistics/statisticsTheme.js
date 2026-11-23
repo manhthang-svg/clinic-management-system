@@ -1,4 +1,4 @@
-/** Colours and labels shared by the Admin statistics pages (UC-26 → UC-32). */
+// mau va nhan dung chung cho trang thong ke
 
 export const TEAL = '#127e7a';
 
@@ -14,7 +14,7 @@ export const COLORS = {
   priority: '#e11d48',
 };
 
-/** Visit outcome labels; "Đang xử lý" groups every unfinished visit status. */
+// nhan ket qua luot kham; "Dang xu ly" gom cac trang thai chua xong
 export const OUTCOMES = [
   { key: 'completed', label: 'Hoàn thành' },
   { key: 'inProgress', label: 'Đang xử lý' },

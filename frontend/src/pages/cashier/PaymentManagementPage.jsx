@@ -23,6 +23,13 @@ import {
 import { PayosQrCountdown } from '../../components/payments/PayosQrCountdown';
 import { QueueTicketDialog } from '../../components/visits/QueueTicketDialog';
 import { PAYMENT_PAGE_SIZE, SEARCH_MSG, searchParams } from '../../components/payments/paymentSearch';
+import { clinicToday } from '../../components/visits/visitForm';
+
+// tong so phieu server dem (Page cua /payments hoac PageResponse cua /payments/history)
+function totalOf(res) {
+    const page = res?.data ?? res;
+    return page?.totalElements ?? page?.page?.totalElements ?? 0;
+}
 
 const PAGE_BUTTON_CLASS =
     'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300';
@@ -80,9 +87,10 @@ function TypeBadge({ type }) {
     );
 }
 
+// UC-70: trang quan ly / tim kiem phieu thu
 export default function PaymentManagementPage() {
     const [payments, setPayments] = useState([]);
-    // Phân trang: trang hiện tại (đếm từ 0) và tổng số phiếu khớp bộ lọc
+    // Phan trang: trang hien tai (dem tu 0) va tong so phieu khop bo loc
     const [pageNumber, setPageNumber] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -92,8 +100,10 @@ export default function PaymentManagementPage() {
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
     const [searchError, setSearchError] = useState('');
+    // 3 the thong ke: dem tren toan bo phieu (server dem), khong phu thuoc trang dang xem
+    const [stats, setStats] = useState({ all: 0, pending: 0, paidToday: 0 });
     const [notice, setNotice] = useState('');
-    // I1-D48: the visit whose queue-number ticket is offered after its examination fee is paid.
+    // luot kham can in phieu so thu tu sau khi thu phi kham
     const [queueTicketVisitId, setQueueTicketVisitId] = useState(null);
 
     // Modal state
@@ -107,8 +117,7 @@ export default function PaymentManagementPage() {
     const [loadingQr, setLoadingQr] = useState(false);
     const [checkingQr, setCheckingQr] = useState(false);
 
-    // UC-70: kiểm tra từ khóa (MSG05), tìm theo trạng thái/loại/khoảng ngày; luôn trả về danh sách, bấm vào phiếu mới mở chi tiết
-    // pageToLoad: trang cần tải; không truyền (bộ lọc đổi) thì về trang đầu
+    // tai 1 trang phieu thu theo bo loc; luon ra danh sach, bam phieu moi mo chi tiet
     const fetchPayments = useCallback(async (pageToLoad = 0) => {
         const { params, error } = searchParams({
             search, status: statusFilter, type: typeTab, from: fromDate, to: toDate, page: pageToLoad,
@@ -130,6 +139,32 @@ export default function PaymentManagementPage() {
         }
     }, [search, statusFilter, typeTab, fromDate, toDate]);
 
+    // dem tren toan bo phieu: chi lay size=1 de doc totalElements; da thu hom nay tinh theo gio thu tien
+    const fetchStats = useCallback(async () => {
+        const today = clinicToday();
+        try {
+            const [allRes, pendingRes, todayRes] = await Promise.all([
+                paymentApi.list({ page: 0, size: 1 }),
+                paymentApi.list({ status: 'PENDING', page: 0, size: 1 }),
+                paymentApi.history({ status: 'PAID', from: today, to: today, mine: 'false', page: 0, size: 1 }),
+            ]);
+            setStats({
+                all: totalOf(allRes),
+                pending: totalOf(pendingRes),
+                paidToday: totalOf((todayRes?.data ?? todayRes)?.receipts),
+            });
+        } catch {
+            // loi dem thi giu so cu, danh sach van dung duoc
+        }
+    }, []);
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            void fetchStats();
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [fetchStats]);
+
     useEffect(() => {
         const timer = window.setTimeout(() => {
             void fetchPayments();
@@ -141,13 +176,17 @@ export default function PaymentManagementPage() {
         return payments;
     }, [payments]);
 
-    // Sau khi thu tiền / làm mới thì tải lại đúng trang đang xem
-    const reloadCurrentPage = () => fetchPayments(pageNumber);
+    // sau khi thu tien / lam moi: dem lai + tai lai dung trang dang xem
+    const reloadAll = useCallback((page) => {
+        void fetchStats();
+        void fetchPayments(page);
+    }, [fetchStats, fetchPayments]);
+    const reloadCurrentPage = () => reloadAll(pageNumber);
     const totalPages = Math.max(1, Math.ceil(totalElements / PAYMENT_PAGE_SIZE));
     const firstRow = totalElements === 0 ? 0 : pageNumber * PAYMENT_PAGE_SIZE + 1;
     const lastRow = pageNumber * PAYMENT_PAGE_SIZE + payments.length;
 
-    // Xử lý xác nhận tiền mặt
+    // Xu ly xac nhan tien mat
     const handleConfirmCash = async () => {
         if (!cashModalPayment || submittingCash) return;
         setSubmittingCash(true);
@@ -161,17 +200,17 @@ export default function PaymentManagementPage() {
             setQueueTicketVisitId(ticketVisitOf(confirmed));
             setCashModalPayment(null);
             setCashNote('');
-            fetchPayments(pageNumber);
+            reloadAll(pageNumber);
         } catch (err) {
             alert(confirmErrorMessage(err));
             setCashModalPayment(null);
-            fetchPayments(pageNumber);
+            reloadAll(pageNumber);
         } finally {
             setSubmittingCash(false);
         }
     };
 
-    // Mở modal QR PayOS
+    // Mo modal QR PayOS
     const handleOpenPayosQr = async (payment) => {
         setQrModalPayment(payment);
         setLoadingQr(true);
@@ -190,7 +229,7 @@ export default function PaymentManagementPage() {
         }
     };
 
-    // Kiểm tra trạng thái PayOS
+    // Kiem tra trang thai PayOS
     const handleCheckPayosStatus = async () => {
         if (!qrModalPayment || checkingQr) return;
         setCheckingQr(true);
@@ -202,7 +241,7 @@ export default function PaymentManagementPage() {
                 setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                 setQrModalPayment(null);
                 setQrData(null);
-                fetchPayments(pageNumber);
+                reloadAll(pageNumber);
             } else {
                 setNotice('Chưa nhận được giao dịch chuyển khoản. Vui lòng thử lại sau khi chuyển tiền.');
             }
@@ -213,7 +252,7 @@ export default function PaymentManagementPage() {
         }
     };
 
-    // Polling tự động khi mở QR modal
+    // Polling tu dong khi mo QR modal
     useEffect(() => {
         if (!qrModalPayment || qrModalPayment.status === 'PAID') return;
         const timer = setInterval(async () => {
@@ -225,14 +264,14 @@ export default function PaymentManagementPage() {
                     setQueueTicketVisitId(ticketVisitOf(qrModalPayment));
                     setQrModalPayment(null);
                     setQrData(null);
-                    fetchPayments(pageNumber);
+                    reloadAll(pageNumber);
                 }
             } catch {
-                // Ignore background polling error
+                // loi khi hoi ngam thi bo qua
             }
         }, 3000);
         return () => clearInterval(timer);
-    }, [qrModalPayment, fetchPayments, pageNumber]);
+    }, [qrModalPayment, reloadAll, pageNumber]);
 
     return (
         <main className="min-h-screen bg-[#f4f8f7] p-4 text-[#142534] sm:p-6 lg:p-8">
@@ -266,29 +305,29 @@ export default function PaymentManagementPage() {
                     </div>
                 )}
 
-                {/* Thống kê nhanh */}
+                {/* Thong ke nhanh */}
                 <section className="grid gap-4 sm:grid-cols-3">
                     <div className="rounded-2xl border border-[#e3ece9] bg-white p-5 shadow-sm">
                         <p className="text-sm text-[#60737d]">Tổng số phiếu thu</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-800">{totalElements}</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-800">{stats.all}</p>
                     </div>
                     <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
                         <p className="text-sm font-medium text-amber-700">Chờ thanh toán (Cần thu)</p>
                         <p className="mt-2 text-3xl font-bold text-amber-800">
-                            {payments.filter((p) => p.status === 'PENDING').length}
+                            {stats.pending}
                         </p>
                     </div>
                     <div className="rounded-2xl border border-teal-200 bg-teal-50/50 p-5 shadow-sm">
                         <p className="text-sm font-medium text-teal-700">Đã thanh toán hôm nay</p>
                         <p className="mt-2 text-3xl font-bold text-teal-800">
-                            {payments.filter((p) => p.status === 'PAID').length}
+                            {stats.paidToday}
                         </p>
                     </div>
                 </section>
 
-                {/* Danh sách & Bộ lọc */}
+                {/* Danh sach & Bo loc */}
                 <section className="overflow-hidden rounded-2xl border border-[#e3ece9] bg-white shadow-sm">
-                    {/* Tab chuyển đổi Lần 1 / Lần 2 */}
+                    {/* Tab chuyen doi Lan 1 / Lan 2 */}
                     <div className="flex flex-wrap items-center gap-2 border-b border-[#edf2f0] bg-[#f8fbfa] p-4">
                         {[
                             { key: 'ALL', label: 'Tất cả phiếu' },
@@ -312,7 +351,7 @@ export default function PaymentManagementPage() {
                     <div className="flex flex-col gap-4 border-b border-[#edf2f0] p-5 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h2 className="text-lg font-semibold text-slate-800">Danh sách phiếu thanh toán viện phí</h2>
-                            <p className="mt-1 text-sm text-[#60737d]">Tìm thấy {filtered.length} phiếu phù hợp.</p>
+                            <p className="mt-1 text-sm text-[#60737d]">Tìm thấy {totalElements} phiếu phù hợp.</p>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <label className="block">
@@ -501,7 +540,7 @@ export default function PaymentManagementPage() {
                 </section>
             </div>
 
-            {/* MODAL XÁC NHẬN TIỀN MẶT */}
+            {/* MODAL XAC NHAN TIEN MAT */}
             {cashModalPayment && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
@@ -566,7 +605,7 @@ export default function PaymentManagementPage() {
                 </div>
             )}
 
-            {/* MODAL THANH TOÁN QR PAYOS */}
+            {/* MODAL THANH TOAN QR PAYOS */}
             {qrModalPayment && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
@@ -607,7 +646,7 @@ export default function PaymentManagementPage() {
                                                 alt="PayOS QR"
                                                 className="h-56 w-56 object-contain"
                                                 onError={(e) => {
-                                                    // Fallback QR render
+                                                    // anh QR du phong
                                                     e.currentTarget.src = `https://quickchart.io/qr?size=300&text=${encodeURIComponent(qrData.qrCode)}`;
                                                 }}
                                             />

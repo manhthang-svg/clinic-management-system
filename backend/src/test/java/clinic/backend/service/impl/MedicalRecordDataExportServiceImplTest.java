@@ -16,12 +16,14 @@ import clinic.backend.dto.request.ExportMedicalRecordDataRequest;
 import clinic.backend.dto.response.ExportMedicalRecordDataResponse;
 import clinic.backend.entity.ExportLog;
 import clinic.backend.entity.MedicalRecord;
+import clinic.backend.entity.RecordArchive;
 import clinic.backend.entity.Patient;
 import clinic.backend.entity.Visit;
 import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.ExportFormat;
 import clinic.backend.enums.ExportLogPurpose;
+import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.ExportLogRepository;
@@ -102,6 +104,10 @@ class MedicalRecordDataExportServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK2026-001");
         when(record.getClosedAt()).thenReturn(Instant.parse("2026-11-17T14:30:00Z"));
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive mockArchive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(mockArchive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK2026-001");
@@ -183,6 +189,10 @@ class MedicalRecordDataExportServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK2026-002");
         when(record.getClosedAt()).thenReturn(Instant.parse("2026-11-17T14:45:00Z"));
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive mockArchive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(mockArchive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK2026-002");
@@ -308,6 +318,10 @@ class MedicalRecordDataExportServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK000001");
         when(record.getClosedAt()).thenReturn(Instant.now());
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK000001");
@@ -363,6 +377,10 @@ class MedicalRecordDataExportServiceImplTest {
         when(record.getVisitId()).thenReturn(visitId);
         when(record.getSoluutru()).thenReturn("LT-DK000002");
         when(record.getClosedAt()).thenReturn(Instant.now());
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
 
         Visit visit = mock(Visit.class);
         when(visit.getSovaovien()).thenReturn("DK000002");
@@ -381,6 +399,7 @@ class MedicalRecordDataExportServiceImplTest {
         ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
                 .format(ExportFormat.XML)
                 .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .recipient("Tòa án nhân dân")
                 .build();
 
         ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
@@ -390,6 +409,136 @@ class MedicalRecordDataExportServiceImplTest {
         assertThat(res.content()).isEqualTo(fakeXml);
 
         verify(exportLogRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: lưu trữ đầy đủ thông tin cơ quan có thẩm quyền và kiểm toán")
+    void exportXml_coQuanCoThamQuyen_structuredFields() throws Exception {
+        UUID recordId = UUID.randomUUID();
+        UUID visitId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID doctorAccountId = UUID.randomUUID();
+        UUID exportLogId = UUID.randomUUID();
+
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getVisitId()).thenReturn(visitId);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+        when(record.getSoba()).thenReturn("BA0003");
+        when(record.getSoluutru()).thenReturn("LT0003");
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
+
+        Visit visit = mock(Visit.class);
+        when(visit.getSovaovien()).thenReturn("DK000003");
+        when(visit.getPatientId()).thenReturn(patientId);
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+
+        Patient patient = mock(Patient.class);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        byte[] fakeXml = "<HoSoBenhAn/>".getBytes(StandardCharsets.UTF_8);
+        when(archivePackageBuilder.buildXml(any())).thenReturn(fakeXml);
+        when(ids.next()).thenReturn(exportLogId);
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.XML)
+                .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .authorityType("CONG_AN")
+                .authorityName("Cơ quan CSĐT Công an Quận Cầu Giấy")
+                .documentNumber("123/CV-CSĐT")
+                .documentDate(LocalDate.of(2026, 11, 15))
+                .documentNotes("Phục vụ điều tra vụ án")
+                .build();
+
+        ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
+
+        assertThat(res.fileName()).isEqualTo("HoSoBenhAn_BA0003_DK000003.xml");
+        ArgumentCaptor<ExportLog> captor = ArgumentCaptor.forClass(ExportLog.class);
+        verify(exportLogRepository).save(captor.capture());
+        ExportLog savedLog = captor.getValue();
+        assertThat(savedLog.getPurpose()).isEqualTo(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN);
+        assertThat(savedLog.getRecipient()).isEqualTo("[Công an] Cơ quan CSĐT Công an Quận Cầu Giấy - Số: 123/CV-CSĐT - Ngày: 15/11/2026 (Phục vụ điều tra vụ án)");
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: hỗ trợ loại cơ quan khác và nhập tùy biến chi tiết")
+    void exportXml_coQuanCoThamQuyen_otherAuthorityType() throws Exception {
+        UUID recordId = UUID.randomUUID();
+        UUID visitId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID doctorAccountId = UUID.randomUUID();
+        UUID exportLogId = UUID.randomUUID();
+
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getVisitId()).thenReturn(visitId);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+        when(record.getSoba()).thenReturn("BA0004");
+        when(record.getSoluutru()).thenReturn("LT0004");
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
+
+        Visit visit = mock(Visit.class);
+        when(visit.getSovaovien()).thenReturn("DK000004");
+        when(visit.getPatientId()).thenReturn(patientId);
+        when(visitRepository.findById(visitId)).thenReturn(Optional.of(visit));
+
+        Patient patient = mock(Patient.class);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        byte[] fakeXml = "<HoSoBenhAn/>".getBytes(StandardCharsets.UTF_8);
+        when(archivePackageBuilder.buildXml(any())).thenReturn(fakeXml);
+        when(ids.next()).thenReturn(exportLogId);
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.XML)
+                .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .authorityType("KHAC")
+                .authorityTypeOther("Cơ quan Thi hành án dân sự")
+                .authorityName("Cục THADS TP. Hà Nội")
+                .documentNumber("45/QĐ-THADS")
+                .documentDate(LocalDate.of(2026, 11, 16))
+                .build();
+
+        ExportMedicalRecordDataResponse res = service.exportMedicalRecordData(recordId, req, doctorAccountId);
+
+        assertThat(res.fileName()).isEqualTo("HoSoBenhAn_BA0004_DK000004.xml");
+        ArgumentCaptor<ExportLog> captor = ArgumentCaptor.forClass(ExportLog.class);
+        verify(exportLogRepository).save(captor.capture());
+        ExportLog savedLog = captor.getValue();
+        assertThat(savedLog.getRecipient()).isEqualTo("[Cơ quan Thi hành án dân sự] Cục THADS TP. Hà Nội - Số: 45/QĐ-THADS - Ngày: 16/11/2026");
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi khi ngày văn bản cơ quan có thẩm quyền vượt quá ngày hiện tại")
+    void exportXml_coQuanCoThamQuyen_futureDate_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.XML)
+                .purpose(ExportLogPurpose.CO_QUAN_CO_THAM_QUYEN)
+                .authorityType("TOA_AN")
+                .authorityName("Tòa án nhân dân")
+                .documentNumber("99/TA")
+                .documentDate(LocalDate.of(2026, 11, 20)) // clock is 2026-11-17
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXPORT_INVALID);
     }
 
     @Test
@@ -407,5 +556,48 @@ class MedicalRecordDataExportServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi EXPORT_RECORD_NOT_CLOSED khi hồ sơ chưa đóng (BR-131)")
+    void exportMedicalRecordData_notClosed_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.OPEN);
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.LUU_TRU)
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXPORT_RECORD_NOT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("exportMedicalRecordData: ném lỗi EXPORT_INVALID khi thiếu recipient cho mục đích cấp người bệnh/cơ quan (BR-53-03)")
+    void exportMedicalRecordData_recipientRequired_throwsException() {
+        UUID recordId = UUID.randomUUID();
+        MedicalRecord record = mock(MedicalRecord.class);
+        when(record.getId()).thenReturn(recordId);
+        when(record.getStatus()).thenReturn(MedicalRecordStatus.LOCKED);
+        when(medicalRecordRepository.findById(recordId)).thenReturn(Optional.of(record));
+
+        RecordArchive archive = mock(RecordArchive.class);
+        when(recordArchiveRepository.findByMedicalRecordId(recordId)).thenReturn(Optional.of(archive));
+
+        ExportMedicalRecordDataRequest req = ExportMedicalRecordDataRequest.builder()
+                .format(ExportFormat.JSON)
+                .purpose(ExportLogPurpose.CUNG_CAP_NGUOI_BENH)
+                .recipient("   ")
+                .build();
+
+        assertThatThrownBy(() -> service.exportMedicalRecordData(recordId, req, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXPORT_INVALID);
     }
 }

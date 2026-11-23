@@ -1,9 +1,9 @@
-import { MAX_NAME_LENGTH } from './patientForm';
+import { MAX_NAME_LENGTH, ethnicityOptions, occupationOptions } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
 
-// Shared form of UC-37 Create New Patient Profile and UC-38 Update Patient Information.
+// form dung chung cho UC-37 tao ho so va UC-38 sua ho so
 const inputClass =
-    'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100';
+    'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 read-only:bg-slate-100';
 
 const labelClass = 'block text-sm font-medium text-slate-700';
 
@@ -22,7 +22,7 @@ const sections = [
     },
 ];
 
-// MSG02/MSG05/MSG08 in red under the field (UC-37 EF-01).
+// loi hien mau do duoi truong
 export function FieldError({ name, error }) {
     return error ? (
         <p id={`${name}-error`} className="mt-1 text-xs font-medium text-red-600">{error}</p>
@@ -35,6 +35,7 @@ export function Field({
     form,
     errors,
     onChange,
+    onBlur,
     required = false,
     ...props
 }) {
@@ -51,6 +52,7 @@ export function Field({
                 name={name}
                 value={form[name] ?? ''}
                 onChange={onChange}
+                onBlur={onBlur}
                 aria-invalid={error ? 'true' : undefined}
                 aria-describedby={error ? `${name}-error` : undefined}
                 className={`${inputClass} ${error ? 'border-red-400' : ''}`}
@@ -67,8 +69,10 @@ export function SelectField({
     form,
     errors,
     onChange,
+    onBlur,
     options,
     required = false,
+    ...props
 }) {
     const error = errors?.[name];
     return (
@@ -83,9 +87,11 @@ export function SelectField({
                 name={name}
                 value={form[name] ?? ''}
                 onChange={onChange}
+                onBlur={onBlur}
                 aria-invalid={error ? 'true' : undefined}
                 aria-describedby={error ? `${name}-error` : undefined}
                 className={`${inputClass} ${error ? 'border-red-400' : ''}`}
+                {...props}
             >
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -109,11 +115,11 @@ export function Dialog({ title, children }) {
     );
 }
 
-/** The three sections of the patient form; required marks of phone and guardian follow the age (UC-37 step 4). */
-export function PatientFormSections({ form, fieldErrors, handleChange, adult, minor }) {
+// 3 phan cua form; dau bat buoc SDT / nguoi than theo tuoi
+export function PatientFormSections({ form, fieldErrors, handleChange, handleBlur, adult, minor }) {
     return (
         <>
-                {/* 1. Thông tin cá nhân */}
+                {/* 1. Thong tin ca nhan */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">
@@ -131,6 +137,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             required
                             maxLength={MAX_NAME_LENGTH}
                             placeholder="Nhập họ và tên"
@@ -142,6 +149,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             type="date"
                             required
                             max={clinicToday()}
@@ -153,6 +161,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             required
                             options={[
                                 { value: '1', label: 'Nam' },
@@ -167,6 +176,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             inputMode="numeric"
                             maxLength={12}
                             placeholder="12 chữ số"
@@ -178,6 +188,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={15}
                             placeholder="Nếu có"
                         />
@@ -188,6 +199,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             type="tel"
                             required={adult}
                             maxLength={10}
@@ -200,17 +212,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             required
-                            options={[
-                                { value: 'Kinh', label: 'Kinh' },
-                                { value: 'Tày', label: 'Tày' },
-                                { value: 'Thái', label: 'Thái' },
-                                { value: 'Mường', label: 'Mường' },
-                                { value: 'Khmer', label: 'Khmer' },
-                                { value: 'Hoa', label: 'Hoa' },
-                                { value: 'Nùng', label: 'Nùng' },
-                                { value: 'Khác', label: 'Khác' },
-                            ]}
+                            options={ethnicityOptions(form.dantoc)}
                         />
 
                         <Field
@@ -218,10 +222,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             name="dantocMa"
                             form={form}
                             errors={fieldErrors}
-                            onChange={handleChange}
-                            required
-                            maxLength={2}
-                            placeholder="Ví dụ: 01"
+                            readOnly
+                            title="Tự điền theo dân tộc đã chọn"
+                            placeholder="Tự điền theo dân tộc"
                         />
 
                         <SelectField
@@ -230,6 +233,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             options={[
                                 { value: '', label: 'Chưa xác định' },
                                 { value: 'A', label: 'A' },
@@ -245,13 +249,14 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={5}
                             placeholder="Ví dụ: Rh+"
                         />
                     </div>
                 </section>
 
-                {/* 2. Thông tin hành chính */}
+                {/* 2. Thong tin hanh chinh */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">
@@ -263,14 +268,14 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                     </div>
 
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        <Field
+                        <SelectField
                             label="Nghề nghiệp"
                             name="nghenghiep"
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
-                            maxLength={100}
-                            placeholder="Nhập nghề nghiệp"
+                            onBlur={handleBlur}
+                            options={occupationOptions(form.nghenghiep)}
                         />
 
                         <Field
@@ -278,9 +283,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             name="nghenghiepMa"
                             form={form}
                             errors={fieldErrors}
-                            onChange={handleChange}
-                            maxLength={5}
-                            placeholder="Mã nghề nghiệp"
+                            readOnly
+                            title="Tự điền theo nghề nghiệp đã chọn"
+                            placeholder="Tự điền theo nghề nghiệp"
                         />
 
                         <Field
@@ -289,6 +294,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             placeholder="Tên cơ quan hoặc nơi làm việc"
                         />
 
@@ -298,6 +304,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={255}
                             placeholder="Nếu có"
                         />
@@ -308,6 +315,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={2}
                             placeholder="Nếu có"
                         />
@@ -318,6 +326,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             placeholder="Tên xã/phường"
                         />
 
@@ -327,6 +336,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={5}
                             placeholder="Mã xã/phường"
                         />
@@ -337,6 +347,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             placeholder="Tên tỉnh/thành phố"
                         />
 
@@ -346,6 +357,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             maxLength={3}
                             placeholder="Mã tỉnh/thành"
                         />
@@ -355,8 +367,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                                 label="Địa chỉ"
                                 name="diachi"
                                 form={form}
-                            errors={fieldErrors}
+                                errors={fieldErrors}
                                 onChange={handleChange}
+                                onBlur={handleBlur}
                                 required
                                 maxLength={1024}
                                 placeholder="Số nhà, đường, thôn/xóm..."
@@ -365,7 +378,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                     </div>
                 </section>
 
-                {/* 3. Thông tin người thân */}
+                {/* 3. Thong tin nguoi than */}
                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="font-bold text-slate-800">
@@ -383,6 +396,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             required={minor}
                             maxLength={255}
                             placeholder="Họ tên người liên hệ"
@@ -394,6 +408,7 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             required={minor}
                             options={[
                                 { value: '', label: 'Chọn quan hệ' },
@@ -413,9 +428,11 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             type="tel"
+                            required={minor}
                             maxLength={10}
-                            placeholder="Số điện thoại liên hệ"
+                            placeholder={minor ? '10 chữ số, bắt buộc dưới 18 tuổi' : 'Số điện thoại liên hệ'}
                         />
 
                         <div className="md:col-span-2 xl:col-span-3">
@@ -423,8 +440,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, adult, mi
                                 label="Địa chỉ người thân"
                                 name="diachinguoithan"
                                 form={form}
-                            errors={fieldErrors}
+                                errors={fieldErrors}
                                 onChange={handleChange}
+                                onBlur={handleBlur}
                                 maxLength={1024}
                                 placeholder="Địa chỉ người thân"
                             />

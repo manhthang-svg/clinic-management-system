@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apis/apiError';
 import { createStatisticsApi } from '../../apis/statisticsApi';
+import { fakeStatisticsServer } from '../../test/fakeStatisticsServer';
 import { ParaclinicalStatisticsPage } from './ParaclinicalStatisticsPage';
 
 const admin = { id: 'admin-1', username: 'admin', fullName: 'Quản trị hệ thống', role: 'ADMIN' };
@@ -57,11 +58,11 @@ function renderPage(api) {
 
 describe('ParaclinicalStatisticsPage (UC-30)', () => {
   it('loads the current month and shows the totals', async () => {
-    const api = { getParaclinical: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ paraclinical: stats });
     renderPage(api);
 
     expect(await screen.findByText('Số liệu từ 01/11/2026', { exact: false })).toBeInTheDocument();
-    expect(api.getParaclinical).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-12' }, expect.any(AbortSignal));
+    expect(api.getParaclinicalOverview).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-12' }, expect.any(AbortSignal));
     expect(screen.getByText('14')).toBeInTheDocument();
     expect(screen.getByText('85,7% số dịch vụ đã thực hiện')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument(); // awaiting result
@@ -69,7 +70,7 @@ describe('ParaclinicalStatisticsPage (UC-30)', () => {
   });
 
   it('shows the service types with Vietnamese labels and the service groups', async () => {
-    const api = { getParaclinical: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ paraclinical: stats });
     renderPage(api);
 
     const types = await screen.findByRole('region', { name: 'Theo loại dịch vụ' });
@@ -79,8 +80,9 @@ describe('ParaclinicalStatisticsPage (UC-30)', () => {
     expect(within(groups).getByText('Sinh hóa').closest('li')).toHaveTextContent('10 (8 có KQ)');
   });
 
+  // go tung ky tu + doi server: cho them thoi gian khi ca bo test chay song song
   it('lists every performed service and finds one by name or code without accents', async () => {
-    const api = { getParaclinical: vi.fn().mockResolvedValue(stats) };
+    const api = fakeStatisticsServer({ paraclinical: stats });
     const user = userEvent.setup();
     renderPage(api);
 
@@ -89,21 +91,24 @@ describe('ParaclinicalStatisticsPage (UC-30)', () => {
     expect(rows).toHaveLength(4);
     expect(rows[1]).toHaveTextContent('Bộ đường huyết (Glucose, HbA1c)XN-SH-901Xét nghiệmSinh hóa75');
 
+    // tim o server: cho ket qua tra ve
     await user.type(screen.getByLabelText('Tìm dịch vụ'), 'sieu am');
-    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));
     expect(table).toHaveTextContent('Siêu âm ổ bụng');
+    expect(api.getParaclinicalServices).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'sieu am', page: 0, size: 20 }), expect.any(AbortSignal));
 
     await user.clear(screen.getByLabelText('Tìm dịch vụ'));
     await user.type(screen.getByLabelText('Tìm dịch vụ'), 'xn-sh-004');
-    expect(table).toHaveTextContent('Đo hoạt độ AST, ALT');
+    await waitFor(() => expect(table).toHaveTextContent('Đo hoạt độ AST, ALT'));
 
     await user.clear(screen.getByLabelText('Tìm dịch vụ'));
     await user.type(screen.getByLabelText('Tìm dịch vụ'), 'không có');
-    expect(screen.getByText('Không tìm thấy dịch vụ phù hợp.')).toBeInTheDocument();
-  });
+    expect(await screen.findByText('Không tìm thấy dịch vụ phù hợp.')).toBeInTheDocument();
+  }, 15000);
 
   it('shows the empty state when nothing was performed in the period', async () => {
-    const api = { getParaclinical: vi.fn().mockResolvedValue(empty) };
+    const api = fakeStatisticsServer({ paraclinical: empty });
     renderPage(api);
 
     await screen.findByText('Số liệu từ 01/11/2026', { exact: false });
@@ -112,18 +117,14 @@ describe('ParaclinicalStatisticsPage (UC-30)', () => {
   });
 
   it('reloads with a quick period and shows a Vietnamese error with retry', async () => {
-    const api = {
-      getParaclinical: vi.fn()
-        .mockResolvedValueOnce(stats)
-        .mockRejectedValueOnce(new ApiError('Forbidden', { status: 403, errorResponse: { code: 'FORBIDDEN' } }))
-        .mockResolvedValue(stats),
-    };
+    const api = fakeStatisticsServer({ paraclinical: stats });
+    api.getParaclinicalOverview.mockImplementationOnce(api.getParaclinicalOverview.getMockImplementation()).mockRejectedValueOnce(new ApiError('Forbidden', { status: 403, errorResponse: { code: 'FORBIDDEN' } }));
     const user = userEvent.setup();
     renderPage(api);
     await screen.findByRole('table');
 
     await user.click(screen.getByRole('button', { name: 'Năm nay' }));
-    await waitFor(() => expect(api.getParaclinical).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(api.getParaclinicalOverview).toHaveBeenLastCalledWith(
       { from: '2026-01-01', to: '2026-11-12' }, expect.any(AbortSignal)));
     expect(await screen.findByText('Bạn không có quyền xem thống kê.')).toBeInTheDocument();
 

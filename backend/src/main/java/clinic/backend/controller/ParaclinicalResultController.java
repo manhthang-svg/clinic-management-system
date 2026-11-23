@@ -28,10 +28,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * UC-67 Record Paraclinical Result and the print counter of UC-68. The path id is the ordered service
- * (paraclinical order detail), which has at most one result.
- */
+// UC-67 nhap ket qua CLS, UC-68 in phieu; id tren duong dan la chi tiet chi dinh (1 dich vu co toi da 1 ket qua)
 @RestController
 @RequestMapping("/api/v1/paraclinical-results")
 @RequiredArgsConstructor
@@ -40,6 +37,7 @@ public class ParaclinicalResultController {
 
     private final ParaclinicalResultService paraclinicalResultService;
 
+    // KTV mo phieu ket qua de xem / nhap
     @GetMapping("/{orderDetailId}")
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Operation(summary = "UC-67 Xem phiếu nhập kết quả của một chỉ định")
@@ -48,6 +46,7 @@ public class ParaclinicalResultController {
         return ApiResponse.success(paraclinicalResultService.get(StaffPrincipal.from(jwt).accountId(), orderDetailId));
     }
 
+    // bac si xem ket qua da gui
     @GetMapping("/{orderDetailId}/view")
     @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     @Operation(summary = "Bác sĩ xem phiếu kết quả cận lâm sàng đã gửi của lượt khám mình (chỉ đọc)")
@@ -57,6 +56,7 @@ public class ParaclinicalResultController {
                 paraclinicalResultService.viewForDoctor(StaffPrincipal.from(jwt).accountId(), orderDetailId));
     }
 
+    // luu nhap ket qua
     @PutMapping("/{orderDetailId}/draft")
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Operation(summary = "UC-67 AF-01 Lưu nháp kết quả")
@@ -67,6 +67,7 @@ public class ParaclinicalResultController {
                 StaffPrincipal.from(jwt).accountId(), orderDetailId, request));
     }
 
+    // gui ket qua (khoa lai, khong sua duoc nua)
     @PostMapping("/{orderDetailId}/commands/submit")
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Operation(summary = "UC-67 Trả kết quả (khóa kết quả, BR-29)")
@@ -77,6 +78,7 @@ public class ParaclinicalResultController {
                 StaffPrincipal.from(jwt).accountId(), orderDetailId, request));
     }
 
+    // UC-68: ghi nhan in phieu (tang so lan in)
     @PostMapping("/{orderDetailId}/commands/record-print")
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Operation(summary = "UC-68 Ghi nhận một lần in phiếu kết quả")

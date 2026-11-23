@@ -12,7 +12,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import clinic.backend.dto.request.ConfirmPaymentRequest;
 import clinic.backend.dto.response.PageResponse;
@@ -46,7 +50,9 @@ import clinic.backend.service.PaymentCompletionService;
 import clinic.backend.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +64,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final String PAYMENT_AUDIT_ENTITY = "payments";
     private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final int MAX_KEYWORD_LENGTH = 100;
+    static final int MAX_PAGE_SIZE = 100;
+    static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of("createdAt", "paidAt", "patientTotalAmount", "id");
     private static final Instant ALL_TIME_START = Instant.parse("2000-01-01T00:00:00Z");
     private static final Instant ALL_TIME_END = Instant.parse("9999-01-01T00:00:00Z");
 
@@ -72,6 +81,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ClinicFacilityRepository clinicFacilityRepository;
     private final Clock clock;
 
+    // UC-69, UC-70: danh sach / tim kiem phieu thu (luon tra ve danh sach co phan trang)
     @Override
     @Transactional(readOnly = true)
     public Page<PaymentResponse> getPayments(
@@ -82,17 +92,54 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate to,
             Pageable pageable
     ) {
-        // UC-70 bước 2: từ khóa ít nhất 2 ký tự (EF-01, MSG05)
+        // tu khoa 2-100 ky tu (MSG05), tu ngay khong sau den ngay, trang hop le
+        String keyword = keyword(search);
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
+        }
+        checkPage(pageable);
+        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
+        return toResponses(paymentRepository.search(
+                statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, newestFirst(pageable)));
+    }
+
+    // tu khoa tim phieu thu: bo trong -> khong loc; 2-100 ky tu
+    private static String keyword(String search) {
         String keyword = search == null || search.isBlank() ? null : search.trim();
         if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
         }
-        Collection<PaymentStatus> statuses = status == null ? EnumSet.allOf(PaymentStatus.class) : EnumSet.of(status);
-        return paymentRepository.search(
-                        statuses, type, startOf(from, ALL_TIME_START), endOf(to, ALL_TIME_END), keyword, pageable)
-                .map(this::toResponse);
+        if (keyword != null && keyword.length() > MAX_KEYWORD_LENGTH) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_LONG"));
+        }
+        return keyword;
     }
 
+    // trang toi da 100 dong; chi sap xep theo cot cho phep (cot la -> 400 thay vi loi 500)
+    static void checkPage(Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return;
+        }
+        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("size", "TOO_LONG"));
+        }
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SORTABLE_FIELDS.contains(order.getProperty())) {
+                throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("sort", "NOT_ALLOWED"));
+            }
+        }
+    }
+
+    // khong chon cach sap xep thi phieu moi tao len dau (phieu vua dang ky khong bi day xuong trang cuoi)
+    private static Pageable newestFirst(Pageable pageable) {
+        if (pageable.isUnpaged() || pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+    }
+
+    // UC-73: lich su thanh toan + tong tien theo phuong thuc
     @Override
     @Transactional(readOnly = true)
     public PaymentHistoryResponse getHistory(
@@ -105,19 +152,17 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate to,
             Pageable pageable
     ) {
-        // UC-73 bước 2: mặc định hôm nay; khoảng ngày sai thì MSG53 (EF-01)
+        // mac dinh hom nay; tu ngay sau den ngay thi bao loi
         LocalDate today = LocalDate.now(clock);
         LocalDate fromDate = from != null ? from : today;
         LocalDate toDate = to != null ? to : today;
         if (fromDate.isAfter(toDate)) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("dateRange", "INVALID_FORMAT"));
         }
-        // Tìm kiếm như UC-70: từ khóa ít nhất 2 ký tự (MSG05)
-        String keyword = search == null || search.isBlank() ? null : search.trim();
-        if (keyword != null && keyword.length() < MIN_KEYWORD_LENGTH) {
-            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("search", "TOO_SHORT"));
-        }
-        // Lịch sử chỉ gồm phiếu Đã thu và Đã hủy
+        // tu khoa giong UC-70: 2-100 ky tu
+        String keyword = keyword(search);
+        checkPage(pageable);
+        // lich su chi gom phieu da thu va da huy
         if (status != null && status != PaymentStatus.PAID && status != PaymentStatus.CANCELLED) {
             throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("status", "INVALID_FORMAT"));
         }
@@ -127,9 +172,8 @@ public class PaymentServiceImpl implements PaymentService {
         Instant fromTime = startOf(fromDate, ALL_TIME_START);
         Instant toTime = endOf(toDate, ALL_TIME_END);
 
-        Page<PaymentResponse> page = paymentRepository
-                .history(statuses, type, method, cashierAccountId, fromTime, toTime, keyword, pageable)
-                .map(this::toResponse);
+        Page<PaymentResponse> page = toResponses(paymentRepository
+                .history(statuses, type, method, cashierAccountId, fromTime, toTime, keyword, pageable));
         List<PaymentHistoryResponse.MethodTotal> totals = status == PaymentStatus.CANCELLED
                 ? List.of()
                 : paymentRepository.historyTotals(type, method, cashierAccountId, fromTime, toTime, keyword).stream()
@@ -147,26 +191,30 @@ public class PaymentServiceImpl implements PaymentService {
                 grandTotal);
     }
 
+    // dau ngay (khong chon ngay thi lay gia tri mac dinh)
     private Instant startOf(LocalDate date, Instant fallback) {
         return date == null ? fallback : date.atStartOfDay(clock.getZone()).toInstant();
     }
 
+    // het ngay = dau ngay hom sau
     private Instant endOf(LocalDate date, Instant fallback) {
         return date == null ? fallback : date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
     }
 
+    // phieu phi kham dang cho thu
     @Override
     @Transactional(readOnly = true)
     public Page<PaymentResponse> getPendingExaminationPayments(
             Pageable pageable
     ) {
-        return paymentRepository.findByStatusAndType(
+        return toResponses(paymentRepository.findByStatusAndType(
                 PaymentStatus.PENDING,
                 PaymentType.EXAMINATION_FEE,
                 pageable
-        ).map(this::toResponse);
+        ));
     }
 
+    // chi tiet 1 phieu thu
     @Override
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId) {
@@ -176,7 +224,7 @@ public class PaymentServiceImpl implements PaymentService {
         return toResponse(payment);
     }
 
-    // in phieu thu (UC-72)
+    // UC-72: chuan bi du lieu in phieu thu
     @Override
     @Transactional
     public ReceiptPrintResponse prepareReceiptPrint(UUID cashierAccountId, UUID paymentId) {
@@ -184,13 +232,12 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // EF-01: chỉ in phiếu đã thu (hoặc miễn phí) – MSG62 (BR-37)
+        // chi in phieu da thu hoac mien phi (BR-37)
         if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.FEE_EXEMPT) {
             throw new AppException(ErrorCode.PAYMENT_NOT_PAID, Map.of("status", payment.getStatus().name()));
         }
 
-        // AF-01: từ lần in thứ hai là bản sao; mọi lần in đều ghi log
-        // da co log PRINT -> in lai -> ban sao
+                // da in roi thi lan nay la ban sao; lan nao cung ghi log
         boolean reprint = auditLogService.hasAction(AuditLogAction.PRINT, PAYMENT_AUDIT_ENTITY, paymentId);
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
         // ghi log in
@@ -222,6 +269,7 @@ public class PaymentServiceImpl implements PaymentService {
                 toResponse(payment));
     }
 
+    // UC-71: xac nhan thu tien (tien mat / chuyen khoan)
     @Override
     @Transactional
     public PaymentResponse confirmPayment(
@@ -229,11 +277,11 @@ public class PaymentServiceImpl implements PaymentService {
             UUID paymentId,
             ConfirmPaymentRequest request
     ) {
-        // 1. Khóa phiếu thu để hai thu ngân không xác nhận cùng lúc (UC-71 bước 4).
+        // khoa phieu de 2 thu ngan khong xac nhan cung luc
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-        // 2. Phiếu đã thu hoặc đã hủy thì báo MSG64 (EF-02).
+        // phieu da thu hoac da huy thi bao loi
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new AppException(ErrorCode.PAYMENT_NOT_PENDING, Map.of(
                     "receiptNumber", payment.getReceiptNumber() != null
@@ -242,7 +290,7 @@ public class PaymentServiceImpl implements PaymentService {
                     "status", payment.getStatus().name()));
         }
 
-        // Lượt BHYT chỉ thanh toán sau khi bác sĩ xác nhận kết luận, khi mức hưởng đã chốt (BR-15, BR-26, BR-27)
+        // luot BHYT chi thu sau khi bac si ket luan (muc huong da chot - BR-15, BR-26, BR-27)
         visitRepository.findById(payment.getVisitId())
                 .filter(Visit::awaitsConclusionBeforePayment)
                 .ifPresent(visit -> {
@@ -250,7 +298,7 @@ public class PaymentServiceImpl implements PaymentService {
                             Map.of("paymentCode", payment.getPaymentCode()));
                 });
 
-        // 3. Ghi nhận đã thu với phương thức, thu ngân và số phiếu (bước 7).
+        // ghi nhan da thu: phuong thuc, thu ngan, so bien lai
         String receiptNumber = "PT"
                 + LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE)
                 + "-"
@@ -262,40 +310,85 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentRepository.save(payment);
 
-        // 4. Bước 8 và audit: dùng chung với PayOS (lượt khám vào hàng chờ, hoặc chia phòng CLS – BR-28).
+        // xu ly sau khi thu (dung chung voi PayOS): phi kham -> vao hang cho; phi CLS -> chia phong (BR-28)
         paymentCompletionService.completePaidReceipt(payment, cashierAccountId);
 
         return toResponse(payment);
     }
 
+    // du lieu di kem phieu thu: luot kham, benh nhan, phong, chi dinh CLS (theo id)
+    private record Lookups(
+            Map<UUID, Visit> visits,
+            Map<UUID, Patient> patients,
+            Map<UUID, Room> rooms,
+            Map<UUID, ParaclinicalOrderDetail> details
+    ) {
+    }
+
+    // danh sach phieu: tai du lieu di kem cho ca trang trong vai cau truy van, khong goi DB rieng cho tung phieu
+    private Page<PaymentResponse> toResponses(Page<Payment> payments) {
+        List<Payment> content = payments.getContent();
+        Map<UUID, Visit> visits = byId(visitRepository.findAllById(
+                idsOf(content.stream().map(Payment::getVisitId))), Visit::getId);
+        Map<UUID, Patient> patients = byId(patientRepository.findAllById(
+                idsOf(visits.values().stream().map(Visit::getPatientId))), Patient::getId);
+        Map<UUID, ParaclinicalOrderDetail> details = byId(paraclinicalOrderDetailRepository.findAllById(
+                idsOf(content.stream().flatMap(payment -> orderDetailIdsOf(payment).stream()))),
+                ParaclinicalOrderDetail::getId);
+        Map<UUID, Room> rooms = byId(roomRepository.findAllById(idsOf(Stream.concat(
+                visits.values().stream().map(Visit::getRoomId),
+                details.values().stream().map(ParaclinicalOrderDetail::getRoomId)))), Room::getId);
+        Lookups lookups = new Lookups(visits, patients, rooms, details);
+        return payments.map(payment -> toResponse(payment, lookups));
+    }
+
+    // doi 1 phieu thu sang dang tra ve (kem thong tin luot kham, benh nhan, cac dong thu)
     private PaymentResponse toResponse(Payment payment) {
+        Map<UUID, Visit> visits = new HashMap<>();
+        Map<UUID, Patient> patients = new HashMap<>();
+        Map<UUID, Room> rooms = new HashMap<>();
         Visit visit = visitRepository.findById(payment.getVisitId()).orElse(null);
-        Patient patient = null;
-        Room room = null;
-
         if (visit != null) {
-            patient = patientRepository.findById(visit.getPatientId()).orElse(null);
-            room = roomRepository.findById(visit.getRoomId()).orElse(null);
+            visits.put(visit.getId(), visit);
+            patientRepository.findById(visit.getPatientId()).ifPresent(patient -> patients.put(patient.getId(), patient));
+            roomRepository.findById(visit.getRoomId()).ifPresent(room -> rooms.put(room.getId(), room));
         }
+        Map<UUID, ParaclinicalOrderDetail> details = byId(
+                paraclinicalOrderDetailRepository.findAllById(orderDetailIdsOf(payment)), ParaclinicalOrderDetail::getId);
+        rooms.putAll(byId(roomRepository.findAllById(idsOf(
+                details.values().stream().map(ParaclinicalOrderDetail::getRoomId))), Room::getId));
+        return toResponse(payment, new Lookups(visits, patients, rooms, details));
+    }
 
-        Map<UUID, ParaclinicalOrderDetail> details = new HashMap<>();
-        Map<UUID, Room> performingRooms = new HashMap<>();
-        if (payment.getType() == PaymentType.PARACLINICAL_FEE && payment.getItems() != null) {
-            List<UUID> detailIds = payment.getItems().stream()
-                    .map(PaymentItem::getOrderDetailId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            for (ParaclinicalOrderDetail detail : paraclinicalOrderDetailRepository.findAllById(detailIds)) {
-                details.put(detail.getId(), detail);
-            }
-            List<UUID> roomIds = details.values().stream()
-                    .map(ParaclinicalOrderDetail::getRoomId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            for (Room performingRoom : roomRepository.findAllById(roomIds)) {
-                performingRooms.put(performingRoom.getId(), performingRoom);
-            }
+    // chi dinh CLS cua cac dong thu (chi phieu thu phi CLS)
+    private static List<UUID> orderDetailIdsOf(Payment payment) {
+        if (payment.getType() != PaymentType.PARACLINICAL_FEE || payment.getItems() == null) {
+            return List.of();
         }
+        return payment.getItems().stream()
+                .map(PaymentItem::getOrderDetailId)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private static Set<UUID> idsOf(Stream<UUID> ids) {
+        return ids.filter(Objects::nonNull).collect(Collectors.toSet());
+    }
+
+    private static <T> Map<UUID, T> byId(Iterable<T> items, Function<T, UUID> idOf) {
+        Map<UUID, T> result = new HashMap<>();
+        for (T item : items) {
+            result.put(idOf.apply(item), item);
+        }
+        return result;
+    }
+
+    private PaymentResponse toResponse(Payment payment, Lookups lookups) {
+        Visit visit = lookups.visits().get(payment.getVisitId());
+        Patient patient = visit != null ? lookups.patients().get(visit.getPatientId()) : null;
+        Room room = visit != null && visit.getRoomId() != null ? lookups.rooms().get(visit.getRoomId()) : null;
+        Map<UUID, ParaclinicalOrderDetail> details = lookups.details();
+        Map<UUID, Room> performingRooms = lookups.rooms();
 
         List<PaymentItemResponse> itemResponses = new ArrayList<>();
         if (payment.getItems() != null) {

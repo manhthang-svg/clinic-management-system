@@ -171,7 +171,7 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         String body = mockMvc.perform(post("/api/v1/patients")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(receptionist))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(createBody("Hoàng Văn " + suffix(), "1990-05-20", citizenId, "09" + digits(8))))
+                        .content(createBody("Hoàng Văn An", "1990-05-20", citizenId, "09" + digits(8))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.cccdSo").value(citizenId))
                 .andReturn().getResponse().getContentAsString();
@@ -305,12 +305,13 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void returnsAtMostFiftyResults() throws Exception {
+    void returnsTwentyPatientsPerPage() throws Exception {
         mockMvc.perform(get("/api/v1/patients")
                         .param("size", "500")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account(Role.RECEPTIONIST))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.size", lessThanOrEqualTo(50)));
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.content.length()", lessThanOrEqualTo(20)));
     }
 
     @Test
@@ -339,7 +340,6 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
             StaffAccount account, String keyword) throws Exception {
         return get("/api/v1/patients")
                 .param("keyword", keyword)
-                .param("size", "100")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(account));
     }
 

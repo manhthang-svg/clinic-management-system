@@ -145,6 +145,37 @@ class SecurityRouteIT extends PostgresIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void recordArchivesRouteReachesTheController() throws Exception {
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get("/api/v1/record-archives")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void auditLogsRouteReachesTheControllerForAdmin() throws Exception {
+        String token = accessToken(account(Role.ADMIN));
+
+        mockMvc.perform(get("/api/v1/audit-logs")
+                        .param("keyword", "admin")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/audit-logs/entity-types")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void auditLogsRouteIsForbiddenForOtherRoles() throws Exception {
+        String token = accessToken(account(Role.DOCTOR));
+
+        mockMvc.perform(get("/api/v1/audit-logs")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
     private StaffAccount account(Role role) {
         String username = role.name().toLowerCase() + "." + UUID.randomUUID().toString().substring(0, 8);
         Instant now = Instant.now();

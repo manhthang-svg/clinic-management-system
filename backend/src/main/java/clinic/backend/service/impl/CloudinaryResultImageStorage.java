@@ -27,11 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/**
- * Cloudinary Upload API with a signed request (no SDK, so no new dependency). The API secret stays on the server
- * and never reaches the browser. Images are stored with an unguessable public id (decision 16/11/2026: public
- * delivery URL, not authenticated delivery).
- */
+// luu anh ket qua len Cloudinary bang request co chu ky (khong dung SDK)
+// API secret chi o server; anh dung public id ngau nhien de khong doan duoc link
 @Slf4j
 @Component
 public class CloudinaryResultImageStorage implements ResultImageStorage {
@@ -54,6 +51,7 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
     }
 
     @Override
+    // da cau hinh Cloudinary chua
     public boolean isConfigured() {
         return properties.isConfigured();
     }
@@ -64,6 +62,7 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
     }
 
     @Override
+    // tai anh len, tra ve link anh
     public String upload(String publicId, byte[] content, String contentType) {
         requireConfigured();
         // gui file dang data URI base64, kem chu ky
@@ -79,6 +78,7 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
     }
 
     @Override
+    // xoa anh tren Cloudinary
     public void delete(String publicId) {
         requireConfigured();
         post("image/destroy", signed(Map.of("public_id", publicId, "invalidate", "true")));
@@ -155,6 +155,7 @@ public class CloudinaryResultImageStorage implements ResultImageStorage {
         return params;
     }
 
+    // goi API Cloudinary, loi thi bao FILE_STORAGE_UNAVAILABLE
     private JsonNode post(String action, Map<String, String> params) {
         String form = params.entrySet().stream()
                 .map(entry -> URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8) + "="

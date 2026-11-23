@@ -11,10 +11,25 @@ import clinic.backend.dto.response.DoctorStatisticsResponse;
 import clinic.backend.dto.response.ParaclinicalStatisticsResponse;
 import clinic.backend.dto.response.RevenueStatisticsResponse;
 import clinic.backend.dto.response.VisitStatisticsResponse;
+import clinic.backend.dto.response.DepartmentStatisticsOverviewResponse;
+import clinic.backend.dto.response.DepartmentStatisticsResponse.DepartmentRow;
+import clinic.backend.dto.response.DiagnosisStatisticsOverviewResponse;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse.CategoryRow;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse.DiagnosisRow;
+import clinic.backend.dto.response.DiagnosisStatisticsResponse.SecondaryRow;
+import clinic.backend.dto.response.DoctorStatisticsOverviewResponse;
+import clinic.backend.dto.response.DoctorStatisticsResponse.DoctorRow;
+import clinic.backend.dto.response.PageResponse;
+import clinic.backend.dto.response.ParaclinicalStatisticsOverviewResponse;
+import clinic.backend.dto.response.ParaclinicalStatisticsResponse.ServiceCount;
+import clinic.backend.dto.response.RevenueStatisticsResponse.PeriodAmounts;
+import clinic.backend.dto.response.VisitStatisticsResponse.VisitPeriod;
+import clinic.backend.enums.DepartmentType;
 import clinic.backend.enums.StatisticsGroupBy;
 import clinic.backend.enums.StatisticsReport;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.StatisticsExportService;
+import clinic.backend.service.StatisticsListService;
 import clinic.backend.service.StatisticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,7 +46,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Admin-only statistics (UC-26 → UC-32) and their export (UC-33). Route access is restricted in SecurityConfig. */
+// API thong ke cho admin (UC-26 den UC-32) va xuat bao cao (UC-33)
 @RestController
 @RequestMapping("/api/v1/statistics")
 @RequiredArgsConstructor
@@ -40,7 +55,9 @@ public class StatisticsController {
 
     private final StatisticsService statisticsService;
     private final StatisticsExportService statisticsExportService;
+    private final StatisticsListService statisticsListService;
 
+    // UC-26: tong quan
     @Operation(summary = "UC-26 Xem bảng thống kê tổng quan trong khoảng ngày (mặc định: đầu tháng đến hôm nay)")
     @GetMapping("/dashboard")
     public ApiResponse<DashboardStatisticsResponse> getDashboard(
@@ -49,6 +66,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDashboard(from, to));
     }
 
+    // UC-27: thong ke luot kham
     @Operation(summary = "UC-27 Thống kê lượt khám theo ngày hoặc tháng, kết quả, đối tượng, tái khám, ưu tiên")
     @GetMapping("/visits")
     public ApiResponse<VisitStatisticsResponse> getVisitStatistics(
@@ -58,6 +76,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getVisitStatistics(from, to, groupBy));
     }
 
+    // UC-28: thong ke theo bac si
     @Operation(summary = "UC-28 Thống kê số lượt khám và số bệnh nhân của từng bác sĩ trong khoảng ngày")
     @GetMapping("/doctors")
     public ApiResponse<DoctorStatisticsResponse> getDoctorStatistics(
@@ -66,6 +85,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDoctorStatistics(from, to));
     }
 
+    // UC-29: thong ke khoa / phong
     @Operation(summary = "UC-29 Thống kê khối lượng công việc của từng khoa và từng phòng trong khoảng ngày")
     @GetMapping("/departments")
     public ApiResponse<DepartmentStatisticsResponse> getDepartmentStatistics(
@@ -74,6 +94,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDepartmentStatistics(from, to));
     }
 
+    // UC-30: thong ke dich vu CLS
     @Operation(summary = "UC-30 Thống kê dịch vụ cận lâm sàng đã thực hiện theo loại dịch vụ và theo phòng")
     @GetMapping("/paraclinical")
     public ApiResponse<ParaclinicalStatisticsResponse> getParaclinicalStatistics(
@@ -82,6 +103,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getParaclinicalStatistics(from, to));
     }
 
+    // UC-31: thong ke doanh thu
     @Operation(summary = "UC-31 Thống kê doanh thu đã thu, tách phần BHYT chi trả và phần bệnh nhân trả")
     @GetMapping("/revenue")
     public ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
@@ -91,6 +113,7 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getRevenueStatistics(from, to, groupBy));
     }
 
+    // UC-32: benh thuong gap
     @Operation(summary = "UC-32 Thống kê các bệnh thường gặp theo mã ICD-10 trong khoảng ngày")
     @GetMapping("/diagnoses")
     public ApiResponse<DiagnosisStatisticsResponse> getDiagnosisStatistics(
@@ -100,6 +123,142 @@ public class StatisticsController {
         return ApiResponse.success(statisticsService.getDiagnosisStatistics(from, to, limit));
     }
 
+    // ---- Trang thong ke: the + bieu do, bang loc va phan trang o server (moi trang mac dinh 20 dong) ----
+
+    // UC-27: bang chi tiet luot kham (cac ngay / thang co luot kham)
+    @Operation(summary = "UC-27 Bảng chi tiết lượt khám, phân trang")
+    @GetMapping("/visits/rows")
+    public ApiResponse<PageResponse<VisitPeriod>> getVisitRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) StatisticsGroupBy groupBy,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getVisitRows(from, to, groupBy, page, size));
+    }
+
+    // UC-28: the + bieu do (khong tra ca danh sach bac si)
+    @Operation(summary = "UC-28 Số liệu tổng và biểu đồ 10 bác sĩ khám nhiều nhất")
+    @GetMapping("/doctors/overview")
+    public ApiResponse<DoctorStatisticsOverviewResponse> getDoctorOverview(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsListService.getDoctorOverview(from, to));
+    }
+
+    // UC-28: bang bac si, tim theo ten
+    @Operation(summary = "UC-28 Bảng bác sĩ, tìm theo tên, phân trang")
+    @GetMapping("/doctors/rows")
+    public ApiResponse<PageResponse<DoctorRow>> getDoctorRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getDoctorRows(from, to, search, page, size));
+    }
+
+    // UC-29: the + bieu do
+    @Operation(summary = "UC-29 Số liệu tổng và biểu đồ các khoa có công việc")
+    @GetMapping("/departments/overview")
+    public ApiResponse<DepartmentStatisticsOverviewResponse> getDepartmentOverview(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsListService.getDepartmentOverview(from, to));
+    }
+
+    // UC-29: bang khoa (kem phong), loc theo loai khoa
+    @Operation(summary = "UC-29 Bảng khoa và phòng, lọc theo loại khoa, phân trang")
+    @GetMapping("/departments/rows")
+    public ApiResponse<PageResponse<DepartmentRow>> getDepartmentRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) DepartmentType type,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getDepartmentRows(from, to, type, page, size));
+    }
+
+    // UC-30: the, loai, nhom, bieu do phong
+    @Operation(summary = "UC-30 Số liệu tổng, theo loại, nhóm và 10 phòng làm nhiều nhất")
+    @GetMapping("/paraclinical/overview")
+    public ApiResponse<ParaclinicalStatisticsOverviewResponse> getParaclinicalOverview(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(statisticsListService.getParaclinicalOverview(from, to));
+    }
+
+    // UC-30: bang dich vu, tim theo ten / ma
+    @Operation(summary = "UC-30 Bảng dịch vụ cận lâm sàng, tìm theo tên hoặc mã, phân trang")
+    @GetMapping("/paraclinical/services")
+    public ApiResponse<PageResponse<ServiceCount>> getParaclinicalServiceRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getParaclinicalServiceRows(from, to, search, page, size));
+    }
+
+    // UC-31: bang chi tiet doanh thu (cac ngay / thang co khoan thu)
+    @Operation(summary = "UC-31 Bảng chi tiết doanh thu, phân trang")
+    @GetMapping("/revenue/rows")
+    public ApiResponse<PageResponse<PeriodAmounts>> getRevenueRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) StatisticsGroupBy groupBy,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getRevenueRows(from, to, groupBy, page, size));
+    }
+
+    // UC-32: the + bieu do 10 benh chinh
+    @Operation(summary = "UC-32 Số liệu tổng và biểu đồ 10 bệnh chính thường gặp")
+    @GetMapping("/diagnoses/overview")
+    public ApiResponse<DiagnosisStatisticsOverviewResponse> getDiagnosisOverview(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResponse.success(statisticsListService.getDiagnosisOverview(from, to, limit));
+    }
+
+    // UC-32: bang benh chinh (top N)
+    @Operation(summary = "UC-32 Bảng bệnh chính (top N), phân trang")
+    @GetMapping("/diagnoses/main")
+    public ApiResponse<PageResponse<DiagnosisRow>> getMainDiagnosisRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getMainDiagnosisRows(from, to, limit, page, size));
+    }
+
+    // UC-32: nhom benh
+    @Operation(summary = "UC-32 Bảng nhóm bệnh (3 ký tự đầu mã ICD-10), phân trang")
+    @GetMapping("/diagnoses/categories")
+    public ApiResponse<PageResponse<CategoryRow>> getDiagnosisCategoryRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getDiagnosisCategoryRows(from, to, limit, page, size));
+    }
+
+    // UC-32: benh kem theo
+    @Operation(summary = "UC-32 Bảng bệnh kèm theo thường gặp, phân trang")
+    @GetMapping("/diagnoses/secondary")
+    public ApiResponse<PageResponse<SecondaryRow>> getSecondaryDiagnosisRows(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.success(statisticsListService.getSecondaryDiagnosisRows(from, to, limit, page, size));
+    }
+
+    // UC-33: xuat file Excel
     @Operation(summary = "UC-33 Xuất báo cáo thống kê ra tệp Excel (.xlsx); mặc định xuất mọi báo cáo")
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportStatistics(

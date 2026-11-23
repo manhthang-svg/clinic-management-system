@@ -1,15 +1,16 @@
-// UC-67 form rules: lab interpretation, validation and file checks. Pure functions, no React.
+// UC-67: quy tac form ket qua: danh gia chi so, kiem tra du lieu, kiem tra file
 import { QUALITATIVE_OPTIONS, RESULT_TEMPLATES } from './resultMockData';
 import { composeDescription, emptySections, normalSections, sectionsFor } from './resultSections';
 
-// UC-67 step 2: at most 10 images, JPG or PNG only, each at most 10 MB (decision 16/11/2026, Cloudinary limit).
+// anh: toi da 10 anh, chi JPG / PNG, moi anh toi da 10 MB
 export const MAX_FILES = 10;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const ACCEPTED_TYPES = ['image/jpeg', 'image/png'];
 
-// SRS messages (MSG02, MSG05, MSG06, MSG13, MSG29, MSG61), in Vietnamese.
+// thong bao theo bang System Messages
 export const MSG = {
   required: (field) => `Vui lòng nhập ${field}.`, // MSG02
+  imageRequired: 'Vui lòng tải lên ít nhất 1 ảnh kết quả.',
   format: (field) => `${field} không đúng định dạng.`, // MSG05
   confirmSubmit: 'Bạn có chắc muốn gửi kết quả? Sau khi gửi, kết quả bị khóa và không thể sửa.', // MSG06
   notPerformer: 'Bạn không có quyền thực hiện thao tác này. Chỉ người thực hiện dịch vụ mới được nhập kết quả.', // MSG13
@@ -17,7 +18,7 @@ export const MSG = {
   saved: 'Đã lưu kết quả và gửi cho bác sĩ chỉ định.', // MSG29
   draftSaved: 'Đã lưu nháp kết quả.', // MSG03
   fixFields: 'Vui lòng sửa các ô được đánh dấu.',
-  // UC-68 EF-02. ASSUMPTION: the SRS catalog text of MSG52 belongs to another use case, so this wording is ours.
+  // UC-68: thong bao loi in (tu dat, MSG52 trong SRS la cua UC khac)
   printFailed: 'Không thể in phiếu kết quả. Vui lòng kiểm tra máy in và thử lại.',
   clinicMissing: 'Chưa cấu hình thông tin phòng khám (UC-77) nên chưa in được phiếu kết quả.',
   printerOnly: 'Chỉ người thực hiện dịch vụ mới in phiếu kết quả.',
@@ -25,7 +26,7 @@ export const MSG = {
 
 export const KIND_LABEL = { LAB: 'Xét nghiệm', IMAGING: 'Chẩn đoán hình ảnh', FUNCTIONAL: 'Thăm dò chức năng' };
 
-/** Badge of lab_result_items.interpretation. */
+// nhan + mau cho danh gia chi so (binh thuong / thap / cao)
 export const INTERPRETATION = {
   NORMAL: { label: 'Bình thường', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   HIGH: { label: 'Cao ↑', className: 'bg-rose-50 text-rose-700 border-rose-200' },
@@ -37,13 +38,14 @@ export function isLab(order) {
   return order.kind === 'LAB';
 }
 
-/** Accepts both "6,2" and "6.2". Returns null when the text is not a number. */
+// doi chuoi thanh so, nhan ca "6,2" va "6.2"; khong phai so thi null
 export function parseNumber(text) {
   const normalized = String(text ?? '').trim().replace(',', '.');
   if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
   return Number(normalized);
 }
 
+// khoang tham chieu dang chu de hien thi
 export function formatReference(ref) {
   if (!ref) return '';
   switch (ref.type) {
@@ -59,10 +61,7 @@ export function qualitativeLabel(value) {
   return QUALITATIVE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
-/**
- * NORMAL, LOW, HIGH or ABNORMAL for an entered value; null while empty or not a number.
- * Mirrors lab_result_items.interpretation.
- */
+// danh gia gia tri vua nhap: NORMAL / LOW / HIGH / ABNORMAL (giong backend)
 export function interpret(parameter, value) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
   const { ref } = parameter;
@@ -79,6 +78,7 @@ export function interpret(parameter, value) {
   return 'NORMAL';
 }
 
+// form xet nghiem rong
 export function emptyLabResult(order) {
   return {
     receivedAt: '',
@@ -89,6 +89,7 @@ export function emptyLabResult(order) {
   };
 }
 
+// form mo ta (hinh anh, tham do) rong
 export function emptyDescriptiveResult() {
   return {
     technique: '', description: '', conclusion: '', recommendation: '', imageLink: '', readingDoctor: '', files: [],
@@ -96,15 +97,12 @@ export function emptyDescriptiveResult() {
   };
 }
 
-/**
- * The saved fields that hold a value. The API returns null for a field left blank in a draft (e.g. a draft saved
- * before the conclusion was typed); spreading that null over the empty form would break the inputs and `.trim()`.
- */
+// bo cac truong null cua ban nhap (de khong de null len form rong)
 function withoutBlanks(saved) {
   return Object.fromEntries(Object.entries(saved ?? {}).filter(([, value]) => value !== null && value !== undefined));
 }
 
-/** The form state of an order: its saved draft or an empty form. */
+// form cua 1 phieu: ban nhap da luu hoac form rong
 export function resultToForm(order) {
   const saved = order.result;
   if (isLab(order)) {
@@ -117,20 +115,23 @@ export function resultToForm(order) {
   return form;
 }
 
-/** The form as saved and printed: per-organ fields are joined into the description. */
+// form khi luu / in: gop cac muc tung co quan thanh mo ta
 export function formForSave(order, form) {
   if (isLab(order) || !form.sections) return form;
   return { ...form, description: composeDescription(order, form.sections) };
 }
 
-/** Normal-result template of a service: per-organ fields or a free-text description. */
+// mau ket qua binh thuong cua dich vu
 export function templateFor(order) {
   const template = RESULT_TEMPLATES[order.serviceCode] ?? {};
   if (sectionsFor(order)) return { sections: normalSections(order), conclusion: template.conclusion };
   return template.description ? template : null;
 }
 
-/** Field errors keyed by field name; lab values are keyed "value:<code>". */
+// kiem tra truoc khi gui, tra ve loi theo tung truong
+// phieu CT/MRI: anh nam tren PACS, nhap link thay cho tai anh len
+export const LINK_IMAGE_FORMS = ['CT', 'MRI'];
+
 export function validateResult(order, form) {
   const errors = {};
   if (isLab(order)) {
@@ -138,7 +139,8 @@ export function validateResult(order, form) {
       const value = form.values[parameter.code];
       const key = `value:${parameter.code}`;
       if (!String(value ?? '').trim()) {
-        errors[key] = 'Bắt buộc';
+        // chi so khong bat buoc (Admin cau hinh) thi duoc de trong, giong backend
+        if (parameter.required !== false) errors[key] = 'Bắt buộc';
       } else if (parameter.valueType === 'NUMERIC' && parseNumber(value) === null) {
         errors[key] = 'Phải là số';
       }
@@ -150,6 +152,11 @@ export function validateResult(order, form) {
   } else if (!form.description.trim()) {
     errors.description = MSG.required('mô tả kết quả');
   }
+  if (!isLab(order) && !(form.files ?? []).length && !form.imageLink?.trim()) {
+    // chan doan hinh anh / tham do chuc nang phai co anh; CT/MRI xem anh qua link PACS
+    if (LINK_IMAGE_FORMS.includes(order.printForm)) errors.imageLink = MSG.required('link xem ảnh');
+    else errors.files = MSG.imageRequired;
+  }
   if (!form.conclusion.trim()) errors.conclusion = MSG.required('kết luận');
   if (form.imageLink?.trim() && !/^https?:\/\/\S+$/i.test(form.imageLink.trim())) {
     errors.imageLink = MSG.format('Link xem ảnh');
@@ -157,7 +164,7 @@ export function validateResult(order, form) {
   return errors;
 }
 
-/** Splits picked files into accepted ones and Vietnamese error messages. */
+// tach file chon thanh file hop le va thong bao loi
 export function checkFiles(picked, existingCount) {
   const accepted = [];
   const errors = [];
@@ -180,7 +187,7 @@ export function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** "Ngày 05 tháng 10 năm 2026", as printed on the forms. */
+// ngay dang "Ngay 05 thang 10 nam 2026" de in phieu
 export function formatLongDate(iso) {
   if (!iso) return 'Ngày …… tháng …… năm ……';
   const date = new Date(iso);
@@ -217,7 +224,7 @@ const ERROR_MESSAGE = {
 };
 const FALLBACK = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.'; // MSG99
 
-/** Vietnamese message for a failed load, save or submit. */
+// doi loi tai / luu / gui thanh thong bao tieng Viet
 export function resultErrorMessage(error) {
   return ERROR_MESSAGE[error?.code] ?? FALLBACK;
 }

@@ -7,20 +7,22 @@ import {
     MSG,
     buildPatientPayload,
     createErrorMessage,
+    formatFullName,
     isDirty,
     msg19,
     serverFieldErrors,
     validatePatientForm,
+    withDerivedCodes,
 } from '../components/patients/patientForm';
 import { clinicToday } from '../components/visits/visitForm';
 import { ROUTES } from '../routes/routes';
 
-/** UC-37 Create New Patient Profile: form state, checks, duplicate warning and saving. */
+// UC-37: state form tao ho so, kiem tra, canh bao trung va luu
 export function useCreatePatient(patientApi = defaultPatientApi) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // UC-35 EF-02: the keyword of an unsuccessful search pre-fills the form.
+    // tu khoa tim khong ra duoc dien san vao form
     const [initialForm] = useState(() => ({ ...INITIAL_PATIENT_FORM, ...(location.state?.prefill ?? {}) }));
     const [form, setForm] = useState(initialForm);
     const [fieldErrors, setFieldErrors] = useState({});
@@ -32,7 +34,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
 
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
-        setForm((previous) => ({ ...previous, [name]: value }));
+        setForm((previous) => withDerivedCodes(previous, name, value));
         setFieldErrors((previous) => {
             if (!previous[name]) return previous;
             const next = { ...previous };
@@ -43,23 +45,51 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
     }, []);
 
+    const handleBlur = useCallback((event) => {
+        const { name } = event.target;
+        if (!name) return;
+
+        let nextForm = form;
+        if ((name === 'hoten' || name === 'hotennguoithan') && form[name]) {
+            const formatted = formatFullName(form[name]);
+            if (formatted !== form[name]) {
+                nextForm = { ...form, [name]: formatted };
+                setForm(nextForm);
+            }
+        }
+
+        const errors = validatePatientForm(nextForm, clinicToday());
+        const fieldError = errors[name];
+        setFieldErrors((previous) => {
+            if (fieldError) {
+                return { ...previous, [name]: fieldError };
+            }
+            if (previous[name]) {
+                const next = { ...previous };
+                delete next[name];
+                return next;
+            }
+            return previous;
+        });
+    }, [form]);
+
     const openProfile = useCallback((patientId) => {
         navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: patientId }));
     }, [navigate]);
 
-    // Step 8–9: create, record (backend) and open UC-36 with MSG04.
-    const save = useCallback(async () => {
+    // luu ho so, xong thi mo trang ho so (MSG04)
+    const save = useCallback(async (formToSave = form) => {
         setDuplicates(null);
         setSubmitting(true);
         try {
-            const res = await patientApi.create(buildPatientPayload(form));
+            const res = await patientApi.create(buildPatientPayload(formToSave));
             const created = res?.data || res;
             toast.success(MSG.CREATED);
             navigate(generatePath(ROUTES.RECEPTIONIST.PATIENT_DETAIL, { id: created.id }), { replace: true });
         } catch (err) {
             const details = err?.errorResponse?.details;
             if (err?.errorResponse?.code === 'PATIENT_IDENTIFICATION_EXISTS' && details) {
-                // EF-02: MSG19 with Open profile.
+                // trung CCCD / ho chieu: hien MSG19 + nut mo ho so
                 setConflict(details);
                 setFieldErrors((previous) => ({
                     ...previous,
@@ -80,17 +110,29 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         setError('');
         setConflict(null);
 
-        const errors = validatePatientForm(form, clinicToday());
+        let currentForm = form;
+        const formattedHoten = formatFullName(form.hoten);
+        const formattedNguoithan = formatFullName(form.hotennguoithan);
+        if (formattedHoten !== form.hoten || formattedNguoithan !== form.hotennguoithan) {
+            currentForm = {
+                ...form,
+                hoten: formattedHoten,
+                hotennguoithan: formattedNguoithan,
+            };
+            setForm(currentForm);
+        }
+
+        const errors = validatePatientForm(currentForm, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
             setError(MSG.FIX_FIELDS);
             return;
         }
 
-        // Step 7 / AF-02: warn about profiles with the same full name and date of birth.
+        // canh bao ho so trung ho ten + ngay sinh truoc khi luu
         setSubmitting(true);
         try {
-            const res = await patientApi.possibleDuplicates(form.hoten.trim(), form.ngaysinh);
+            const res = await patientApi.possibleDuplicates(currentForm.hoten.trim(), currentForm.ngaysinh);
             const list = res?.data ?? res ?? [];
             if (list.length > 0) {
                 setDuplicates(list);
@@ -98,12 +140,12 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
                 return;
             }
         } catch {
-            // The warning is advisory; creation still checks the identification numbers.
+            // chi canh bao, van cho tao tiep
         }
-        await save();
+        await save(currentForm);
     }, [form, patientApi, save, submitting]);
 
-    // AF-03: Cancel asks for confirmation (MSG40) when something was entered.
+    // huy khi da nhap du lieu thi hoi xac nhan (MSG40)
     const goBack = useCallback(() => {
         if (submitting) return;
         if (isDirty(form, initialForm)) setConfirmCancel(true);
@@ -119,6 +161,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile,

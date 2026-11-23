@@ -19,9 +19,9 @@ import defaultDutyScheduleApi from '../../apis/dutyScheduleApi';
 import { technicianApi as defaultTechnicianApi } from '../../apis/technicianApi';
 import { MetricCard } from '../../components/shared/MetricCard';
 
-/** Dashboard data is reloaded this often while the tab is visible (UI-04). */
+// tu tai lai moi 10 giay khi tab dang mo
 const REFRESH_MS = 10_000;
-/** Days shown in "Lịch trực cá nhân sắp tới", today included. */
+// so ngay hien o lich truc sap toi (tinh ca hom nay)
 const SCHEDULE_DAYS = 4;
 const SHIFT_NAMES = { MORNING: 'Ca sáng', AFTERNOON: 'Ca chiều' };
 const SHIFT_ORDER = ['MORNING', 'AFTERNOON'];
@@ -35,6 +35,7 @@ const MSG = {
   noRoom: 'Chưa có phòng cận lâm sàng nào đang hoạt động.',
 };
 
+// doi loi tai thanh thong bao
 function errorMessage(error) {
   if (error instanceof ApiError && error.status === 401) return MSG.session;
   if (error instanceof ApiError && error.status === 403) return MSG.forbidden;
@@ -54,7 +55,7 @@ function addDays(date, days) {
   return next;
 }
 
-/** "HH:mm" or "HH:mm:ss" → minutes since midnight. */
+// gio "HH:mm" -> so phut tu 0h
 function minutesOf(time) {
   if (!time) return null;
   const [h, m] = time.split(':').map(Number);
@@ -65,6 +66,7 @@ function hhmm(time) {
   return time ? time.slice(0, 5) : '';
 }
 
+// khung gio cua ca, vd "13:00 - 17:30"
 function shiftTime(shift, config) {
   if (!config) return '';
   const start = shift === 'MORNING' ? config.morningStartTime : config.afternoonStartTime;
@@ -72,7 +74,7 @@ function shiftTime(shift, config) {
   return start && end ? `${hhmm(start)} – ${hhmm(end)}` : '';
 }
 
-/** The shift running at `now` according to the configured times, or null. */
+// ca dang dien ra luc nay, khong co thi null
 function shiftAt(now, config) {
   if (!config) return null;
   const minutes = now.getHours() * 60 + now.getMinutes();
@@ -83,6 +85,7 @@ function shiftAt(now, config) {
   }) ?? null;
 }
 
+// nhan ngay: Hom nay, Ngay mai, Thu ...
 function dayLabel(date, index) {
   const dm = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
   if (index === 0) return `Hôm nay, ${dm}`;
@@ -90,7 +93,7 @@ function dayLabel(date, index) {
   return `${WEEKDAYS[date.getDay()]}, ${dm}`;
 }
 
-/** Builds one card per day from the schedule items of the current technician. */
+// tao the lich truc tung ngay cua KTV dang dang nhap
 function buildScheduleDays(schedule, accountId, now) {
   const items = (schedule?.items ?? []).filter((item) => item.staffAccountId === accountId);
   const current = shiftAt(now, schedule?.shiftConfig);
@@ -163,7 +166,7 @@ function DoctorLine({ item }) {
   );
 }
 
-/** Technician home: the room's figures of today, the next patients, the results to enter and the coming shifts. */
+// dashboard KTV: so lieu hom nay, benh nhan sap toi luot, ket qua cho nhap, lich truc
 export function TechnicianDashboardPage({
   currentUser,
   api = defaultTechnicianApi,
@@ -185,7 +188,7 @@ export function TechnicianDashboardPage({
       try {
         result = await api.getDashboard({ roomId: storedRoomId }, signal);
       } catch (failure) {
-        // The stored room was removed or deactivated: forget it and show the default room.
+        // phong da luu khong con thi bo, lay phong mac dinh
         if (!storedRoomId || failure?.errorResponse?.code !== 'ROOM_NOT_FOUND') throw failure;
         api.setActiveRoomId?.('');
         result = await api.getDashboard({}, signal);
@@ -203,7 +206,7 @@ export function TechnicianDashboardPage({
 
   useEffect(() => {
     const controller = new AbortController();
-    // First load on the next tick, like the other list pages, so the effect never sets state synchronously.
+    // tai lan dau o tick sau, roi tu tai lai moi 10 giay
     const first = setTimeout(() => {
       void load(controller.signal);
     }, 0);
@@ -242,7 +245,7 @@ export function TechnicianDashboardPage({
 
   const scheduleDays = useMemo(
     () => buildScheduleDays(schedule, currentUser?.id, today),
-    // `today` changes identity on every render; its calendar day and time are what matter here.
+    // chi tinh lai khi doi ngay
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [schedule, currentUser?.id, todayIso],
   );
@@ -251,9 +254,107 @@ export function TechnicianDashboardPage({
   const room = dashboard?.room;
   const stats = dashboard?.stats;
   const canManage = Boolean(dashboard?.canManage);
-  const nextQueue = dashboard?.nextQueue ?? [];
-  const pendingResults = dashboard?.pendingResults ?? [];
   const resultsToEnter = (stats?.pendingResult ?? 0) + (stats?.draft ?? 0);
+
+  // Gom nhom benh nhan sap toi luot: 1 benh nhan nhieu dich vu chi hien 1 dong duy nhat (tuong tu TechnicianQueuePage)
+  const groupedNextQueue = useMemo(() => {
+    const rawItems = dashboard?.nextQueue ?? [];
+    if (!rawItems.length) return [];
+    const groups = new Map();
+
+    for (const item of rawItems) {
+      const baseOrderCode = item.orderCode?.replace(/-\d+$/, '') || item.orderCode || '';
+      const groupKey = item.patientId ? `${item.patientId}_${baseOrderCode}` : (item.orderId || item.id);
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          ...item,
+          baseOrderCode,
+          roomServices: [item],
+        });
+      } else {
+        const existing = groups.get(groupKey);
+        existing.roomServices.push(item);
+        if (item.priority === 'PRIORITY') {
+          existing.priority = 'PRIORITY';
+          existing.priorityLabel = item.priorityLabel || existing.priorityLabel || 'Ưu tiên';
+        }
+        if (existing.queueNumber == null && item.queueNumber != null) {
+          existing.queueNumber = item.queueNumber;
+        } else if (item.queueNumber != null && existing.queueNumber != null) {
+          existing.queueNumber = Math.min(existing.queueNumber, item.queueNumber);
+        }
+        if (!existing.isCheckedIn && item.isCheckedIn) {
+          existing.isCheckedIn = true;
+        }
+      }
+    }
+
+    return Array.from(groups.values());
+  }, [dashboard?.nextQueue]);
+
+  // Gom nhom ket qua cho nhap / ban nhap: 1 benh nhan nhieu dich vu chi hien 1 dong duy nhat (tuong tu ParaclinicalResultListPage)
+  const groupedPendingResults = useMemo(() => {
+    const rawItems = dashboard?.pendingResults ?? [];
+    if (!rawItems.length) return [];
+    const groups = new Map();
+
+    for (const item of rawItems) {
+      const baseOrderCode = item.orderCode?.replace(/-\d+$/, '') || item.orderCode || '';
+      const groupKey = item.patientId ? `${item.patientId}_${baseOrderCode}` : (item.orderId || item.id);
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          ...item,
+          baseOrderCode,
+          services: [item],
+        });
+      } else {
+        const existing = groups.get(groupKey);
+        existing.services.push(item);
+        if (item.priority === 'PRIORITY') {
+          existing.priority = 'PRIORITY';
+          existing.priorityLabel = item.priorityLabel || existing.priorityLabel || 'Ưu tiên';
+        }
+        if (existing.queueNumber == null && item.queueNumber != null) {
+          existing.queueNumber = item.queueNumber;
+        } else if (item.queueNumber != null && existing.queueNumber != null) {
+          existing.queueNumber = Math.min(existing.queueNumber, item.queueNumber);
+        }
+      }
+    }
+
+    return Array.from(groups.values()).map((group) => {
+      const svcs = group.services;
+      const draftCount = svcs.filter((s) => s.status === 'DRAFT').length;
+      const totalCount = svcs.length;
+      const isAllDraft = draftCount === totalCount;
+      const hasDraft = draftCount > 0;
+      const anyOverdue = svcs.some((s) => (s.completedMinutesAgo ?? 0) >= 30);
+      const maxCompletedMinutesAgo = Math.max(...svcs.map((s) => s.completedMinutesAgo ?? 0));
+      const completedAtTime = group.completedAtTime || svcs[0]?.completedAtTime || '';
+
+      return {
+        ...group,
+        draftCount,
+        totalCount,
+        isAllDraft,
+        hasDraft,
+        anyOverdue,
+        completedMinutesAgo: maxCompletedMinutesAgo,
+        completedAtTime,
+      };
+    });
+  }, [dashboard?.pendingResults]);
+
+  // Thong ke dong bo theo so BENH NHAN (va tong so dich vu)
+  const waitingPatientCount = stats?.waiting === 0 ? 0 : (groupedNextQueue.length || stats?.waiting || 0);
+  const pendingPatientCount = resultsToEnter === 0 ? 0 : (groupedPendingResults.length || resultsToEnter);
+  const overduePatientCount = resultsToEnter === 0 ? 0 : (
+    groupedPendingResults.length > 0
+      ? groupedPendingResults.filter((p) => p.anyOverdue || (p.completedMinutesAgo >= 30)).length
+      : (stats?.overdue ?? 0)
+  );
 
   if (!dashboard && !error) {
     return <p className="text-sm text-slate-500">Đang tải dữ liệu tổng quan…</p>;
@@ -274,7 +375,7 @@ export function TechnicianDashboardPage({
 
       {room && (
         <>
-          {/* 1. Phòng làm việc và trạng thái ca trực (BR-05, BR-19, BR-55) */}
+          {/* 1. Phong lam viec va trang thai ca truc (BR-05, BR-19, BR-55) */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -348,16 +449,22 @@ export function TechnicianDashboardPage({
             </div>
           )}
 
-          {/* 2. Bốn thẻ chỉ số trong ngày; bấm vào thẻ để mở màn hình tương ứng */}
+          {/* 2. Bon the chi so trong ngay; bam vao the de mo man hinh tuong ung */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button type="button" onClick={() => navigate('/technician/queue')} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
                 title="Đang chờ thực hiện"
-                value={String(stats.waiting)}
+                value={String(waitingPatientCount)}
                 icon={Clock}
                 iconBg="bg-teal-50 text-[#0d9488]"
                 valueColor="text-teal-900"
-                subtitle="Đã thanh toán, chờ gọi vào phòng"
+                subtitle={
+                  stats.waiting === 0
+                    ? 'Đã thanh toán, chờ gọi vào phòng'
+                    : waitingPatientCount !== stats.waiting
+                      ? `Gồm ${stats.waiting} dịch vụ chờ gọi`
+                      : 'Đã thanh toán, chờ gọi vào phòng'
+                }
                 dotColor="bg-teal-500"
                 footerLabel="Mức ưu tiên"
                 footerValue={`${stats.priority} ca ưu tiên`}
@@ -383,15 +490,21 @@ export function TechnicianDashboardPage({
             <button type="button" onClick={() => navigate('/technician/results')} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
                 title="Chờ nhập kết quả"
-                value={String(resultsToEnter)}
+                value={String(pendingPatientCount)}
                 icon={Microscope}
                 iconBg="bg-sky-50 text-sky-700"
                 valueColor="text-sky-900"
-                subtitle={`Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft}`}
+                subtitle={
+                  resultsToEnter === 0
+                    ? 'Chưa có kết quả chờ nhập'
+                    : groupedPendingResults.length > 0 && resultsToEnter > groupedPendingResults.length
+                      ? `Gồm ${resultsToEnter} dịch vụ (Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft})`
+                      : `Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft}`
+                }
                 dotColor="bg-sky-500"
                 footerLabel="Cần xử lý sớm"
-                footerValue={`${stats.overdue} ca >30 phút`}
-                footerValueColor={stats.overdue > 0 ? 'text-rose-600 font-bold' : 'text-slate-700'}
+                footerValue={`${overduePatientCount} ca >30 phút`}
+                footerValueColor={overduePatientCount > 0 ? 'text-rose-600 font-bold' : 'text-slate-700'}
               />
             </button>
 
@@ -408,7 +521,7 @@ export function TechnicianDashboardPage({
             </button>
           </div>
 
-          {/* 3. Bệnh nhân sắp tới lượt và kết quả đang chờ nhập */}
+          {/* 3. Benh nhan sap toi luot va ket qua dang cho nhap */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <section aria-labelledby="next-queue-title" className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
@@ -423,56 +536,70 @@ export function TechnicianDashboardPage({
                     </div>
                   </div>
                   <button type="button" onClick={() => navigate('/technician/queue')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0d9488] hover:text-[#0f766e] transition-colors cursor-pointer group">
-                    <span>Xem tất cả ({stats.waiting})</span>
+                    <span>Xem tất cả ({waitingPatientCount})</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
 
-                {nextQueue.length === 0 ? (
+                {groupedNextQueue.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400">Không có bệnh nhân nào đang chờ.</p>
                 ) : (
                   <ul className="divide-y divide-slate-100">
-                    {nextQueue.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => navigate('/technician/queue')}
-                          className="w-full text-left py-3 px-2.5 rounded-xl hover:bg-slate-50/90 transition-all cursor-pointer group space-y-1.5"
-                          title="Mở màn hình hàng đợi"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                              <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-xs shrink-0 font-mono">
-                                #{queueNumberLabel(item.queueNumber)}
+                    {groupedNextQueue.slice(0, 5).map((item) => {
+                      const hasMultiple = item.roomServices && item.roomServices.length > 1;
+                      const mainService = item.roomServices?.[0] || item;
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/technician/queue')}
+                            className="w-full text-left py-3 px-2.5 rounded-xl hover:bg-slate-50/90 transition-all cursor-pointer group space-y-1.5"
+                            title="Mở màn hình hàng đợi"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-xs shrink-0 font-mono">
+                                  #{queueNumberLabel(item.queueNumber)}
+                                </span>
+                                <span className="text-xs font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors truncate">
+                                  {item.patientName}
+                                </span>
+                                <PatientMeta item={item} />
+                                {item.priority === 'PRIORITY' && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 shrink-0" title={item.priorityLabel}>
+                                    Ưu tiên
+                                  </span>
+                                )}
+                              </div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/80 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                                {item.isCheckedIn ? 'Đã có mặt' : 'Đang chờ gọi'}
                               </span>
-                              <span className="text-xs font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors truncate">
-                                {item.patientName}
-                              </span>
-                              <PatientMeta item={item} />
-                              {item.priority === 'PRIORITY' && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 shrink-0" title={item.priorityLabel}>
-                                  Ưu tiên
+                            </div>
+                            <div className="flex items-center justify-between text-xs gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                <span className="text-slate-800 font-medium truncate">{mainService.serviceName}</span>
+                                {hasMultiple && (
+                                  <span
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/90 whitespace-nowrap shadow-2xs cursor-help"
+                                    title={item.roomServices.slice(1).map((s) => s.serviceName).join(', ')}
+                                  >
+                                    +{item.roomServices.length - 1} dịch vụ khác
+                                  </span>
+                                )}
+                              </div>
+                              {item.orderTime && (
+                                <span className="text-[11px] text-slate-400 shrink-0 flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  {item.orderTime}
                                 </span>
                               )}
                             </div>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/80 shrink-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
-                              {item.isCheckedIn ? 'Đã có mặt' : 'Đang chờ gọi'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs gap-2">
-                            <span className="text-slate-800 font-medium truncate">{item.serviceName}</span>
-                            {item.orderTime && (
-                              <span className="text-[11px] text-slate-400 shrink-0 flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                {item.orderTime}
-                              </span>
-                            )}
-                          </div>
-                          <DoctorLine item={item} />
-                        </button>
-                      </li>
-                    ))}
+                            <DoctorLine item={item} />
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -494,53 +621,75 @@ export function TechnicianDashboardPage({
                     </div>
                   </div>
                   <button type="button" onClick={() => navigate('/technician/results')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0d9488] hover:text-[#0f766e] transition-colors cursor-pointer group">
-                    <span>Xem tất cả ({resultsToEnter})</span>
+                    <span>Xem tất cả ({pendingPatientCount})</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
 
-                {pendingResults.length === 0 ? (
+                {groupedPendingResults.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400">Không có kết quả nào đang chờ nhập.</p>
                 ) : (
                   <ul className="divide-y divide-slate-100">
-                    {pendingResults.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => navigate('/technician/results')}
-                          className="w-full text-left py-3 px-2.5 rounded-xl hover:bg-slate-50/90 transition-all cursor-pointer group space-y-1.5"
-                          title="Mở danh sách nhập kết quả"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                              <span className="text-xs font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors truncate">
-                                {item.patientName}
-                              </span>
-                              <PatientMeta item={item} />
-                              {item.status === 'DRAFT' ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 shrink-0">Bản nháp</span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">Chưa nhập</span>
-                              )}
-                              {item.completedMinutesAgo >= 30 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">&gt;30p</span>
-                              )}
+                    {groupedPendingResults.slice(0, 5).map((item) => {
+                      const hasMultiple = item.services && item.services.length > 1;
+                      const mainService = item.services?.[0] || item;
+                      const isOverdue = item.anyOverdue || (item.completedMinutesAgo >= 30);
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/technician/results')}
+                            className="w-full text-left py-3 px-2.5 rounded-xl hover:bg-slate-50/90 transition-all cursor-pointer group space-y-1.5"
+                            title="Mở danh sách nhập kết quả"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900 group-hover:text-[#0d9488] transition-colors truncate">
+                                  {item.patientName}
+                                </span>
+                                <PatientMeta item={item} />
+                                {item.isAllDraft ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 shrink-0">Bản nháp</span>
+                                ) : item.hasDraft ? (
+                                  <span
+                                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 shrink-0"
+                                    title={`${item.draftCount}/${item.totalCount} dịch vụ đã lưu nháp`}
+                                  >
+                                    {`Bản nháp (${item.draftCount}/${item.totalCount})`}
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">Chưa nhập</span>
+                                )}
+                                {isOverdue && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">&gt;30p</span>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                {item.completedAtTime && (
+                                  <span className="text-[11px] font-semibold text-slate-700">Xong lúc {item.completedAtTime}</span>
+                                )}
+                                <span className="text-[10px] text-slate-400 block">Chờ gửi {item.completedMinutesAgo}p</span>
+                              </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              {item.completedAtTime && (
-                                <span className="text-[11px] font-semibold text-slate-700">Xong lúc {item.completedAtTime}</span>
-                              )}
-                              <span className="text-[10px] text-slate-400 block">Chờ gửi {item.completedMinutesAgo}p</span>
+                            <div className="flex items-center justify-between text-xs gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                <span className="text-slate-800 font-medium truncate">{mainService.serviceName}</span>
+                                {hasMultiple && (
+                                  <span
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/90 whitespace-nowrap shadow-2xs cursor-help"
+                                    title={item.services.slice(1).map((s) => s.serviceName).join(', ')}
+                                  >
+                                    +{item.services.length - 1} dịch vụ khác
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-mono text-[11px] text-slate-400 shrink-0">{item.baseOrderCode || item.orderCode}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs gap-2">
-                            <span className="text-slate-800 font-medium truncate">{item.serviceName}</span>
-                            <span className="font-mono text-[11px] text-slate-400 shrink-0">{item.orderCode}</span>
-                          </div>
-                          <DoctorLine item={item} />
-                        </button>
-                      </li>
-                    ))}
+                            <DoctorLine item={item} />
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -552,7 +701,7 @@ export function TechnicianDashboardPage({
         </>
       )}
 
-      {/* 4. Lịch trực cá nhân sắp tới (BR-55) */}
+      {/* 4. Lich truc ca nhan sap toi (BR-55) */}
       <section aria-labelledby="my-shifts-title" className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">

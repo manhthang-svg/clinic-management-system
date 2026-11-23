@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, RefreshCw } from 'lucide-react';
 
@@ -7,6 +7,7 @@ import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import ROUTES, { roomQueuePath } from '../../routes/routes';
 import { MSG12, MSG13, MSG80, MSG92, msg39 } from '../../components/services/serviceMessages';
 import { MSG102, msg56 as msg53 } from '../../components/visits/visitErrors';
+import { ListPagination } from '../../components/shared/ListPagination';
 
 const REFRESH_MS = 10_000;
 const NO_DEPARTMENT = 'Chưa thuộc khoa';
@@ -20,17 +21,14 @@ const COUNT_COLUMNS = [
     ['skippedCount', 'Bỏ lượt', 'text-rose-700'],
 ];
 
-/**
- * EF-02 / EF-03: MSG12 when the session has expired, MSG13 without permission (BR-02), MSG80 for any other failure,
- * including a lost connection.
- */
+// doi loi tai trang thanh thong bao: het phien MSG12, khong quyen MSG13, con lai MSG80
 function loadErrorMessage(error) {
     if (error?.status === 401) return MSG12;
     if (error?.status === 403) return MSG13;
     return MSG80;
 }
 
-/** AF-03: a room's waiting list can no longer be viewed: MSG39 for an unknown room, MSG53 otherwise. */
+// loi mo hang doi 1 phong: phong khong ton tai MSG39, phong ngung / khong co bac si MSG53
 function roomQueueErrorMessage(error) {
     const code = error?.errorResponse?.code;
     if (code === 'ROOM_NOT_FOUND') return msg39('phòng khám');
@@ -50,17 +48,14 @@ function formatRegistrationTime(value) {
         : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-/**
- * "Bác sĩ còn phải khám", as on 'Đăng ký khám' (UC-40 step 8): today's visits of the room that have a queue number
- * and have not ended. Visits waiting for payment have no number yet and are not counted.
- */
+// "Bac si con phai kham": luot hom nay da co so thu tu va chua xong (chua thanh toan thi chua tinh)
 function roomTotal(room) {
     return COUNT_COLUMNS
         .filter(([key]) => key !== 'waitingPaymentCount')
         .reduce((sum, [key]) => sum + (room[key] ?? 0), 0);
 }
 
-/** Groups rooms by department in the order the backend returns them (UC-42 step 2). */
+// nhom phong theo khoa, giu thu tu backend tra ve
 function groupByDepartment(rooms) {
     const groups = [];
     const byName = new Map();
@@ -76,9 +71,9 @@ function groupByDepartment(rooms) {
     return groups;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
-/** Previous / page numbers / next under the waiting list (same look as the paraclinical service list). */
+// thanh phan trang duoi danh sach cho
 function Pagination({ page, pageCount, total, onChange }) {
     const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
     const to = Math.min(page * PAGE_SIZE, total);
@@ -110,17 +105,14 @@ function Pagination({ page, pageCount, total, onChange }) {
     );
 }
 
-/**
- * UC-42 AF-03: the room in the link is not on the overview. The backend tells why: MSG39 when the room does not
- * exist, MSG53 when it is inactive or has no doctor on duty.
- */
+// phong tren link khong co trong danh sach: hoi backend ly do (MSG39 / MSG53)
 function UnavailableRoom({ roomId, visitApi, onBack }) {
     const [message, setMessage] = useState('');
 
     useEffect(() => {
         const controller = new AbortController();
-        visitApi.getQueue({ roomId }, controller.signal)
-            // Listed again in the meantime: the overview refresh will open it; until then it is not receivable.
+        visitApi.getQueuePage({ roomId, size: 1 }, controller.signal)
+            // phong vua mo lai: lan lam moi sau se hien, tam thoi bao MSG53
             .then(() => setMessage(msg53()))
             .catch((failure) => {
                 if (failure?.name !== 'AbortError') setMessage(roomQueueErrorMessage(failure));
@@ -141,22 +133,23 @@ function UnavailableRoom({ roomId, visitApi, onBack }) {
     );
 }
 
-/** UC-42 step 5: examination waiting list of one room, 10 visits per page. */
+// danh sach cho kham cua 1 phong: phan trang o server, moi lan chi nhan 20 benh nhan dang xem
 function RoomDetail({ room, visitApi, refreshKey, onBack }) {
     const [visits, setVisits] = useState([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [page, setPage] = useState(1);
-    const pageCount = Math.max(1, Math.ceil(visits.length / PAGE_SIZE));
-    // The list refreshes every 10 seconds; stay on the last page when it gets shorter.
-    const currentPage = Math.min(page, pageCount);
-    const pageVisits = visits.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    // tu lam moi 10 giay; danh sach ngan lai ma dang o trang qua cuoi thi lui ve trang cuoi
+    if (!loading && page > pageCount) setPage(pageCount);
 
     useEffect(() => {
         const controller = new AbortController();
-        visitApi.getQueue({ roomId: room.roomId }, controller.signal)
-            .then((list) => {
-                setVisits(Array.isArray(list) ? list : []);
+        visitApi.getQueuePage({ roomId: room.roomId, page: page - 1, size: PAGE_SIZE }, controller.signal)
+            .then((result) => {
+                setVisits(Array.isArray(result?.content) ? result.content : []);
+                setTotal(result?.page?.totalElements ?? 0);
                 setError('');
             })
             .catch((failure) => {
@@ -164,7 +157,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
             })
             .finally(() => setLoading(false));
         return () => controller.abort();
-    }, [visitApi, room.roomId, refreshKey]);
+    }, [visitApi, room.roomId, refreshKey, page]);
 
     return (
         <section aria-label={`Hàng đợi ${room.roomName || room.roomCode}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -198,7 +191,7 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {pageVisits.map((visit) => (
+                        {visits.map((visit) => (
                             <tr key={visit.id} className="border-b border-slate-100">
                                 <td className="px-4 py-3 text-base font-bold tabular-nums">{visit.queueNumber}</td>
                                 <td className="px-4 py-3">
@@ -218,36 +211,47 @@ function RoomDetail({ room, visitApi, refreshKey, onBack }) {
                         ))}
                     </tbody>
                 </table>
-                {visits.length === 0 && (
+                {total === 0 && (
                     <p className="px-6 py-10 text-center text-sm text-slate-500">
                         {loading ? 'Đang tải danh sách chờ…' : MSG92 /* AF-02 */}
                     </p>
                 )}
             </div>
-            {visits.length > 0 && (
-                <Pagination page={currentPage} pageCount={pageCount} total={visits.length} onChange={setPage} />
+            {total > 0 && (
+                <Pagination page={page} pageCount={pageCount} total={total} onChange={setPage} />
             )}
         </section>
     );
 }
 
-/** UC-42 View Room Queue Status: queue counts per active examination room, grouped by department. */
+// UC-42: trang tinh trang hang doi cac phong kham, nhom theo khoa
 export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }) {
+    // 1 trang phong tu server (20 phong), tong so phong va so phong tiep nhan duoc
     const [rooms, setRooms] = useState([]);
+    const [roomCount, setRoomCount] = useState(0);
+    const [receivableRooms, setReceivableRooms] = useState(0);
+    const [roomPage, setRoomPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [lastUpdated, setLastUpdated] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
-    // UC-42 step 6: the selected room is part of the link, /receptionist/room-queue/{roomId}.
+    // phong dang chon nam tren link /receptionist/room-queue/{roomId}
     const { roomId: selectedRoomId } = useParams();
     const navigate = useNavigate();
     const backToOverview = () => navigate(ROUTES.RECEPTIONIST.ROOM_QUEUE);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // tai so lieu hang doi: 1 trang phong; mo phong tu link thi server chi tra phong do
     const fetchStatus = useCallback(async (signal) => {
         try {
-            const list = await visitApi.getQueueStatus(signal);
-            setRooms(Array.isArray(list) ? list : []);
+            const result = await visitApi.getQueueStatusPage({
+                roomId: selectedRoomId,
+                page: selectedRoomId ? 0 : roomPage - 1,
+                size: PAGE_SIZE,
+            }, signal);
+            setRooms(Array.isArray(result?.rooms?.content) ? result.rooms.content : []);
+            setRoomCount(result?.rooms?.page?.totalElements ?? 0);
+            setReceivableRooms(result?.receivableRooms ?? 0);
             setLoadError('');
             setLastUpdated(new Date());
         } catch (error) {
@@ -255,8 +259,9 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
         } finally {
             setLoading(false);
         }
-    }, [visitApi]);
+    }, [visitApi, selectedRoomId, roomPage]);
 
+    // bam Lam moi
     const refreshNow = async () => {
         if (refreshing) return;
         setRefreshing(true);
@@ -279,8 +284,13 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
         };
     }, [fetchStatus]);
 
-    const groups = useMemo(() => groupByDepartment(rooms), [rooms]);
-    const receivableRooms = rooms.filter((room) => room.hasDoctor).length;
+    // trang phong dang xem, nhom theo khoa (tieu de khoa giu lai cho cac phong tren trang)
+    const pageGroups = groupByDepartment(rooms);
+    const roomPageCount = Math.max(1, Math.ceil(roomCount / PAGE_SIZE));
+    if (!loading && !selectedRoomId && roomPage > roomPageCount) setRoomPage(roomPageCount);
+    const pagedRooms = {
+        page: roomPage, setPage: setRoomPage, pageCount: roomPageCount, pageSize: PAGE_SIZE, total: roomCount,
+    };
     const noRoomCanReceive = !loading && lastUpdated !== null && receivableRooms === 0;
     const selectedRoom = rooms.find((room) => room.roomId === selectedRoomId) ?? null;
 
@@ -312,7 +322,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                         Đang tải hàng đợi của phòng…
                     </div>
                 ) : (
-                    // AF-03: the room in the link is not (or no longer) listed.
+                    // phong tren link khong (con) trong danh sach
                     <UnavailableRoom roomId={selectedRoomId} visitApi={visitApi} onBack={backToOverview} />
                 )
             ) : (
@@ -334,7 +344,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                     <th scope="col" className="px-4 py-3 text-right font-bold text-slate-800">Bác sĩ còn phải khám</th>
                                 </tr>
                             </thead>
-                            {groups.map((group) => (
+                            {pageGroups.map((group) => (
                                 <tbody key={group.name}>
                                     <tr className="border-b border-slate-200 bg-slate-50">
                                         <th scope="colgroup" colSpan={COUNT_COLUMNS.length + 2} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -346,7 +356,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                         return (
                                             <tr
                                                 key={room.roomId}
-                                                // The whole row opens the room; Enter does the same from the keyboard.
+                                                // bam ca dong (hoac Enter) de mo phong
                                                 onClick={() => navigate(roomQueuePath(room.roomId))}
                                                 onKeyDown={(event) => {
                                                     if (event.key === 'Enter') navigate(roomQueuePath(room.roomId));
@@ -372,6 +382,7 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
                                 </tbody>
                             ))}
                         </table>
+                        <ListPagination paged={pagedRooms} label="Phân trang danh sách phòng" />
                         {/* EF-01 shows only MSG102 above the table; the table itself stays empty. */}
                         {rooms.length === 0 && (loading || (loadError && !lastUpdated)) && (
                             <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">

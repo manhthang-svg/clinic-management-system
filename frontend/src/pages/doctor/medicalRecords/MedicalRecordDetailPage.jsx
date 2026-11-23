@@ -62,7 +62,7 @@ export function MedicalRecordDetailPage({ isVisitRoute = false, printApi = defau
   const [previewImage, setPreviewImage] = useState(null);
   const [openingFileId, setOpeningFileId] = useState(null);
 
-  // Modal xuất hồ sơ bệnh án (UC-53)
+  // Modal xuất bản sao hồ sơ bệnh án cho Bác sĩ (UC-53: Bản in PDF)
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // BR-52-08: chuyển lượt nhanh thì request cũ bị hủy, kết quả cũ không ghi đè lượt mới.

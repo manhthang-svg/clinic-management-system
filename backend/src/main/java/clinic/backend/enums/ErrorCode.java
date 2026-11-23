@@ -268,6 +268,7 @@ public enum ErrorCode {
             "A result holds at most 10 images.", HttpStatus.CONFLICT),
     RESULT_IMAGE_NOT_FOUND("RESULT_IMAGE_NOT_FOUND", "The image was not found on this result.",
             HttpStatus.NOT_FOUND),
+    AUDIT_LOG_NOT_FOUND("AUDIT_LOG_NOT_FOUND", "The audit log entry does not exist.", HttpStatus.NOT_FOUND),
     FILE_STORAGE_NOT_CONFIGURED("FILE_STORAGE_NOT_CONFIGURED",
             "The image storage is not configured.", HttpStatus.SERVICE_UNAVAILABLE),
     FILE_STORAGE_UNAVAILABLE("FILE_STORAGE_UNAVAILABLE",

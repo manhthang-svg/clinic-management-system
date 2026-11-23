@@ -83,6 +83,25 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
+    // bo loc danh sach KTV (UC-66): trang thai chi nhan cac gia tri FE dung, tu khoa toi da 100 ky tu
+    static final Set<String> QUEUE_STATUSES = Set.of("ALL", "WAITING", "SKIPPED", "IN_PROGRESS", "CANCELLED");
+    static final Set<String> PENDING_RESULT_STATUSES = Set.of("ALL", "PENDING", "DRAFT");
+    static final int MAX_SEARCH_LENGTH = 100;
+
+    static void validateFilters(String search, String status, Set<String> allowedStatuses) {
+        Map<String, String> errors = new java.util.LinkedHashMap<>();
+        if (search != null && search.strip().length() > MAX_SEARCH_LENGTH) {
+            errors.put("search", "TOO_LONG");
+        }
+        if (status != null && !status.isBlank() && !allowedStatuses.contains(status.strip().toUpperCase(Locale.ROOT))) {
+            errors.put("status", "INVALID_FORMAT");
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(ErrorCode.REQUEST_PARAMETER_INVALID, errors);
+        }
+    }
+
+
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm").withZone(CLINIC_ZONE);
     private static final String AUDIT_ENTITY = "paraclinical_order_details";
@@ -233,6 +252,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     @Override
     @Transactional(readOnly = true)
     public TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
+        validateFilters(search, status, QUEUE_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
             List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
@@ -414,6 +434,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     @Transactional(readOnly = true)
     public TechnicianPendingResultResponse getPendingResults(
             UUID roomId, String search, String status, String doctorRoom, UUID currentUserId) {
+        validateFilters(search, status, PENDING_RESULT_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
             List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
@@ -822,7 +843,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Xác nhận KTV đã làm xong kỹ thuật trên người bệnh nhân, chuyển sang chờ nhập kết quả
+    // UC-66: KTV xac nhan da thuc hien xong, dich vu chuyen sang cho nhap ket qua
     @Override
     @Transactional
     public TechnicianQueueItemResponse completeOrder(UUID detailId, UUID technicianAccountId) {
@@ -830,13 +851,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
+        // KTV phai truc phong nay va dang lam dich vu nay
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
         requireInProgressBy(detail, technicianAccountId);
 
-        // UC-66 step 3: Performed, waiting for its result (UC-64).
+        // dich vu -> cho nhap ket qua
         detail.completePerformance(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
+        // cac dich vu khac cung phieu, cung phong, KTV nay dang lam thi xong cung luc
         List<ParaclinicalOrderDetail> completeSiblings = paraclinicalOrderDetailRepository
                 .findByOrderId(detail.getOrder().getId());
         for (ParaclinicalOrderDetail sib : completeSiblings) {
@@ -866,7 +889,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Trả y lệnh đang làm về trạng thái chờ tiếp nhận kèm lý do khi gặp sự cố kỹ thuật
+    // UC-66: tra dich vu dang lam ve hang cho (giu so thu tu) kem ly do
     @Override
     @Transactional
     public TechnicianQueueItemResponse returnToWaiting(
@@ -878,7 +901,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         verifyRoomPermission(detail.getRoomId(), technicianAccountId);
         requireInProgressBy(detail, technicianAccountId);
 
-        // UC-66 AF-02: back to Waiting at its original place; the reason is recorded in the audit log.
+        // ve lai hang cho dung vi tri cu, ly do ghi vao audit
         detail.returnToWaiting(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
 
@@ -893,7 +916,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return getQueueDetail(detailId);
     }
 
-    // Kiểm tra điều kiện y lệnh phải đang IN_PROGRESS và do đúng KTV tiếp nhận thực hiện
+    // dich vu phai dang thuc hien va do chinh KTV nay tiep nhan
     private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
         if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);

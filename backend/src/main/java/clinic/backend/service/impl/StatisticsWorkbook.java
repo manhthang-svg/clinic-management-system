@@ -17,14 +17,11 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-/**
- * UC-33: a small writer over Apache POI for the statistics workbook. Each sheet is written top to bottom: a title,
- * label/value lines, then tables with a bold header row. Numbers stay numbers in Excel (sums and filters work);
- * {@link Money} values get the money format.
- */
+// UC-33: ghi file Excel bang Apache POI: tieu de, cac dong nhan: gia tri, roi cac bang
+// so van la so trong Excel (cong, loc duoc); tien dung dinh dang tien
 final class StatisticsWorkbook implements AutoCloseable {
 
-    /** A money amount, written with the money format. */
+    // so tien (ghi voi dinh dang tien)
     record Money(BigDecimal amount) {
     }
 
@@ -88,11 +85,11 @@ final class StatisticsWorkbook implements AutoCloseable {
         return date == null ? "" : date.format(DAY);
     }
 
-    /** Writes one sheet from top to bottom. */
+    // ghi 1 sheet tu tren xuong
     final class SheetWriter {
         private final Sheet sheet;
         private int next;
-        /** Longest text written in each column, in characters; sizes the columns without AWT font metrics. */
+        // do dai chu dai nhat moi cot, de tu chinh do rong cot
         private final java.util.Map<Integer, Integer> widths = new java.util.HashMap<>();
 
         private SheetWriter(Sheet sheet) {
@@ -106,7 +103,7 @@ final class StatisticsWorkbook implements AutoCloseable {
             return this;
         }
 
-        /** A "label: value" line. */
+        // 1 dong "nhan: gia tri"
         SheetWriter line(String label, Object value) {
             Row row = sheet.createRow(next++);
             Cell labelCell = row.createCell(0);
@@ -121,7 +118,7 @@ final class StatisticsWorkbook implements AutoCloseable {
             return this;
         }
 
-        /** A section heading followed by the table header row. */
+        // tieu de muc + dong tieu de bang
         SheetWriter table(String heading, String... columns) {
             if (heading != null) {
                 Cell cell = sheet.createRow(next++).createCell(0);
@@ -146,7 +143,7 @@ final class StatisticsWorkbook implements AutoCloseable {
             return this;
         }
 
-        /** Like {@link #row} with every cell in bold, for totals. */
+        // dong tong (in dam)
         SheetWriter totalRow(Object... values) {
             row(values);
             Row row = sheet.getRow(next - 1);
@@ -159,7 +156,7 @@ final class StatisticsWorkbook implements AutoCloseable {
             return this;
         }
 
-        /** Sizes the columns to their content (10 to 60 characters); call once the sheet is written. */
+        // chinh do rong cot theo noi dung (10 - 60 ky tu)
         void fit() {
             widths.forEach((column, length) ->
                     sheet.setColumnWidth(column, Math.min(Math.max(length + 2, 10), 60) * 256));

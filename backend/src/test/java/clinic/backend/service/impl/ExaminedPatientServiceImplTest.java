@@ -108,4 +108,13 @@ class ExaminedPatientServiceImplTest {
         assertThatThrownBy(call).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID));
     }
+
+    @Test
+    void rejectsAKeywordLongerThan100Characters() {
+        assertThatThrownBy(() -> service.getExaminedPatients(DOCTOR, null, null, "a".repeat(101), null, null))
+                .isInstanceOfSatisfying(clinic.backend.exceptions.AppException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID);
+                    assertThat(e.getDetails()).containsKey("keyword");
+                });
+    }
 }

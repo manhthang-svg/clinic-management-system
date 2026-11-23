@@ -5,7 +5,7 @@ import { ADULT_AGE, MSG, formAge } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
 import { clinicToday } from '../../components/visits/visitForm';
 
-/** UC-38 Update Patient Information (administrative data only; BR-23). */
+// UC-38: trang sua thong tin hanh chinh benh nhan (BR-23)
 export default function ReceptionistUpdatePatientPage({ patientApi }) {
     const { id } = useParams();
     const {
@@ -18,6 +18,7 @@ export default function ReceptionistUpdatePatientPage({ patientApi }) {
         confirmCancel,
         submitting,
         handleChange,
+        handleBlur,
         handleSubmit,
         goBack,
         openProfile,
@@ -86,7 +87,14 @@ export default function ReceptionistUpdatePatientPage({ patientApi }) {
                     />
                 </section>
 
-                <PatientFormSections form={form} fieldErrors={fieldErrors} handleChange={handleChange} adult={adult} minor={minor} />
+                <PatientFormSections
+                    form={form}
+                    fieldErrors={fieldErrors}
+                    handleChange={handleChange}
+                    handleBlur={handleBlur}
+                    adult={adult}
+                    minor={minor}
+                />
 
                 {conflict && (
                     <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

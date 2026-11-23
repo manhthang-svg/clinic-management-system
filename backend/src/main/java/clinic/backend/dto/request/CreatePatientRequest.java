@@ -9,8 +9,10 @@ import java.time.LocalDate;
  */
 public record CreatePatientRequest(
 
+        // chi chu cai (co dau), khoang trang, ' va - (giong FE NAME_REGEX)
         @NotBlank(message = "REQUIRED")
         @Size(max = 100, message = "TOO_LONG")
+        @Pattern(regexp = "^(?=.*\\p{L})[\\p{L}\\s'-]+$", message = "INVALID_FORMAT")
         String hoten,
 
         @NotNull(message = "REQUIRED")
@@ -38,7 +40,7 @@ public record CreatePatientRequest(
         @Size(max = 50, message = "TOO_LONG")
         String dantoc,
 
-        @NotBlank(message = "REQUIRED")
+        // optional: derived from dantoc on the server; only used for a name outside the ethnicity list
         @Size(max = 2, message = "TOO_LONG")
         String dantocMa,
 
@@ -83,6 +85,7 @@ public record CreatePatientRequest(
 
         /** Guardian name, required under 18 years old (checked by the service). */
         @Size(max = 255, message = "TOO_LONG")
+        @Pattern(regexp = "^$|^(?=.*\\p{L})[\\p{L}\\s'-]+$", message = "INVALID_FORMAT")
         String hotennguoithan,
 
         /** Guardian relationship, required under 18 years old (checked by the service). */

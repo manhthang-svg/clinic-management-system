@@ -15,7 +15,7 @@ import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { statisticsApi } from '../../apis/statisticsApi';
-import { formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
+import { dashboardError, formatDayLong, formatNumber } from '../../components/statistics/dashboardPeriod';
 import {
   ChartCard,
   EmptyChart,
@@ -29,6 +29,8 @@ import {
 import { COLORS } from '../../components/statistics/statisticsTheme';
 import { ReportActions } from '../../components/statistics/ReportExport';
 import { usePeriod, useStatisticsQuery } from '../../components/statistics/useStatistics';
+import { ListPagination } from '../../components/shared/ListPagination';
+import { useServerPage } from '../../components/shared/useServerPage';
 
 const { ADMIN } = ROUTES;
 
@@ -40,9 +42,7 @@ const TYPE_OPTIONS = [
 
 const DEPARTMENT_TYPE_LABEL = { CLINICAL: 'Lâm sàng', PARACLINICAL: 'Cận lâm sàng' };
 
-const workload = (item) => item.visits + item.services;
-
-/** "9 lượt (6 hoàn thành)" for an examination room, "18 dịch vụ (14 đã làm)" for a paraclinical one. */
+// tom tat khoi luong: phong kham "9 luot (6 hoan thanh)", phong CLS "18 dich vu (14 da lam)"
 function workSummary(item, isParaclinical) {
   return isParaclinical
     ? `${formatNumber(item.services)} dịch vụ (${formatNumber(item.performedServices)} đã làm)`
@@ -57,7 +57,7 @@ function InactiveBadge() {
   );
 }
 
-/** UC-29 View Department and Room Statistics. */
+// UC-29: trang thong ke khoa / phong
 export function DepartmentStatisticsPage({
   currentAdmin,
   onLogout,
@@ -68,8 +68,16 @@ export function DepartmentStatisticsPage({
   const navigate = useNavigate();
   const { period, presetId, periodError, choosePreset, changeDate } = usePeriod(today);
   const params = useMemo(() => ({ from: period.from, to: period.to }), [period.from, period.to]);
-  const { data, error, loading, reload } = useStatisticsQuery(api.getDepartments, params, !periodError);
+  // the + bieu do: chi so lieu tong va khoi luong tung khoa
+  const { data, error, loading, reload: reloadSummary } = useStatisticsQuery(api.getDepartmentOverview, params, !periodError);
   const [type, setType] = useState('ALL');
+  // bang khoa: loc loai khoa + phan trang o server (20 khoa / trang, phong di theo khoa)
+  const tableFilters = useMemo(() => ({ ...params, type }), [params, type]);
+  const table = useServerPage(api.getDepartmentRows, tableFilters, { enabled: !periodError, toMessage: dashboardError });
+  const reload = () => {
+    reloadSummary();
+    table.reload();
+  };
 
   const layoutProps = {
     currentAdmin,
@@ -79,12 +87,7 @@ export function DepartmentStatisticsPage({
     activeKey: 'reports',
   };
 
-  const departments = data?.departments ?? [];
-  const rooms = departments.flatMap((department) => department.rooms);
-  const busyDepartments = departments.filter((department) => workload(department) > 0);
-  const busyRooms = rooms.filter((room) => workload(room) > 0);
-  const shown = type === 'ALL' ? departments : departments.filter((department) => department.type === type);
-  const chartRows = busyDepartments.map((department) => ({
+  const chartRows = (data?.busy ?? []).map((department) => ({
     name: department.departmentName,
     visits: department.visits,
     services: department.services,
@@ -135,14 +138,14 @@ export function DepartmentStatisticsPage({
               <KpiCard
                 icon={Building2}
                 label="Khoa có hoạt động"
-                value={formatNumber(busyDepartments.length)}
-                hint={`Trên ${formatNumber(departments.length)} khoa`}
+                value={formatNumber(data.busyDepartments)}
+                hint={`Trên ${formatNumber(data.departmentCount)} khoa`}
               />
               <KpiCard
                 icon={DoorOpen}
                 label="Phòng có hoạt động"
-                value={formatNumber(busyRooms.length)}
-                hint={`Trên ${formatNumber(rooms.length)} phòng`}
+                value={formatNumber(data.busyRooms)}
+                hint={`Trên ${formatNumber(data.roomCount)} phòng`}
               />
             </div>
 
@@ -169,7 +172,7 @@ export function DepartmentStatisticsPage({
               description="Khoa và phòng tạm ngưng chỉ hiện khi có công việc trong khoảng này."
               actions={<SegmentedControl label="Loại khoa" options={TYPE_OPTIONS} value={type} onChange={setType} />}
             >
-              {shown.length > 0 ? (
+              {table.total > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -182,7 +185,7 @@ export function DepartmentStatisticsPage({
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {shown.map((department) => {
+                      {table.rows.map((department) => {
                         const isParaclinical = department.type === 'PARACLINICAL';
                         return (
                           <Fragment key={department.departmentId}>
@@ -227,6 +230,7 @@ export function DepartmentStatisticsPage({
                       })}
                     </tbody>
                   </table>
+                  <ListPagination paged={table} label="Phân trang danh sách khoa" />
                 </div>
               ) : (
                 <p className="py-8 text-center text-sm text-slate-400">Không có khoa nào thuộc loại này.</p>

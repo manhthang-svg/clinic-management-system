@@ -22,6 +22,31 @@ describe('ApiClient.download (UC-33)', () => {
     expect(new Headers(request?.headers).get('Authorization')).toBe('Bearer access-token');
   });
 
+  it('supports POST download with request body and returns sha256 header', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(new Response('<HoSoBenhAn/>', {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml',
+        'Content-Disposition': 'attachment; filename="HoSoBenhAn_BA01_DK01.xml"',
+        'X-File-SHA256': 'abc123sha256hash',
+      },
+    }));
+    const client = new ApiClient({ baseUrl: '/api/v1', fetchImplementation });
+
+    const file = await client.download('/medical-records/mr-1/export-data', {
+      method: 'POST',
+      body: { format: 'XML', purpose: 'LIEN_THONG' },
+    });
+
+    expect(file.fileName).toBe('HoSoBenhAn_BA01_DK01.xml');
+    expect(file.sha256).toBe('abc123sha256hash');
+    expect(await file.blob.text()).toBe('<HoSoBenhAn/>');
+    const request = fetchImplementation.mock.calls[0]?.[1];
+    expect(request.method).toBe('POST');
+    expect(request.body).toBe(JSON.stringify({ format: 'XML', purpose: 'LIEN_THONG' }));
+    expect(new Headers(request.headers).get('Content-Type')).toBe('application/json');
+  });
+
   it('turns an error response into an ApiError and reports an expired session', async () => {
     const onUnauthorized = vi.fn();
     const fetchImplementation = vi.fn()

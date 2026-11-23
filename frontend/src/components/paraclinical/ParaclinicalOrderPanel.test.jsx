@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ApiError from '../../apis/apiError';
 import ParaclinicalOrderPanel from './ParaclinicalOrderPanel';
 import {
-    MSG, createdMessage, estimate, filterServices, groupOptions, orderErrorMessage, roomOptionLabel, toServiceList,
+    MSG, createdMessage, estimate, filterServices, groupOptions, hasOnDutyRoom, orderErrorMessage, roomOptionLabel, toServiceList,
 } from './paraclinicalOrder';
 
 const services = [
@@ -55,7 +55,18 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         expect(onCreated).toHaveBeenCalledWith(order);
     });
 
-    it('shows the room the system assigns and lets the backend assign it (no choice for the Doctor)', async () => {
+    it('assigns no room to a self-paid visit until the payment (BR-50-02)', async () => {
+        const user = userEvent.setup();
+        const api = { getParaclinicalServices: vi.fn().mockResolvedValue(services), orderParaclinical: vi.fn() };
+        renderPanel(api);
+
+        await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
+
+        expect(screen.getByText('Phân phòng sau khi thanh toán')).toBeInTheDocument();
+        expect(screen.queryByTestId('assigned-room-s1')).not.toBeInTheDocument();
+    });
+
+    it('shows the room the system assigns to an insurance visit and lets the backend assign it', async () => {
         const user = userEvent.setup();
         const withRooms = [{
             ...services[0],
@@ -69,7 +80,7 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
             getParaclinicalServices: vi.fn().mockResolvedValue(withRooms),
             orderParaclinical: vi.fn().mockResolvedValue({ id: 'o1', sophieu: 'CD1' }),
         };
-        renderPanel(api);
+        renderPanel(api, { forVisit: { ...visit, doituongbnLoai: 'BHYT' } });
 
         await user.click(await screen.findByRole('checkbox', { name: 'Chọn Siêu âm ổ bụng' }));
         expect(screen.getByTestId('assigned-room-s1')).toHaveTextContent('Phòng siêu âm 2 – Tầng 3 (đang chờ: 1)');
@@ -272,5 +283,67 @@ describe('paraclinicalOrder helpers', () => {
             .toBe('Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.');
         expect(orderErrorMessage(failure('MEDICAL_RECORD_CLOSED')))
             .toBe('Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.');
+    });
+
+    it('identifies whether a service has an active room on duty (hasOnDutyRoom)', () => {
+        expect(hasOnDutyRoom(null)).toBe(false);
+        expect(hasOnDutyRoom({ id: 's1' })).toBe(true);
+        expect(hasOnDutyRoom({ id: 's1', rooms: [] })).toBe(false);
+        expect(hasOnDutyRoom({
+            id: 's1',
+            rooms: [
+                { roomId: 'r1', onDuty: false },
+                { roomId: 'r2', onDuty: false },
+            ],
+        })).toBe(false);
+        expect(hasOnDutyRoom({
+            id: 's1',
+            rooms: [
+                { roomId: 'r1', onDuty: false },
+                { roomId: 'r2', onDuty: true },
+            ],
+        })).toBe(true);
+    });
+
+    it('disables services whose rooms have no active shift', async () => {
+        const user = userEvent.setup();
+        const testServices = [
+            {
+                id: 's-active',
+                code: 'SA01',
+                name: 'Siêu âm tim',
+                type: 'IMAGING',
+                clinicPrice: 150000,
+                rooms: [{ roomId: 'r1', roomName: 'P1', onDuty: true }],
+            },
+            {
+                id: 's-inactive',
+                code: 'XN01',
+                name: 'Sinh hóa máu',
+                type: 'LAB',
+                clinicPrice: 90000,
+                rooms: [{ roomId: 'r2', roomName: 'P2', onDuty: false }],
+            },
+        ];
+        const api = { getParaclinicalServices: vi.fn().mockResolvedValue(testServices), orderParaclinical: vi.fn() };
+        renderPanel(api);
+
+        const activeCb = await screen.findByRole('checkbox', { name: 'Chọn Siêu âm tim' });
+        const inactiveCb = screen.getByRole('checkbox', { name: 'Chọn Sinh hóa máu' });
+
+        expect(activeCb).not.toBeDisabled();
+        expect(inactiveCb).toBeDisabled();
+        expect(inactiveCb).toHaveAttribute('title', 'Phòng thực hiện hiện chưa có ca trực');
+        expect(screen.getByText('Chưa có ca trực')).toBeInTheDocument();
+
+        // Attempt to click disabled checkbox
+        await user.click(inactiveCb);
+        expect(inactiveCb).not.toBeChecked();
+        expect(screen.getByText('Chưa chọn dịch vụ nào.')).toBeInTheDocument();
+
+        // Active service can be clicked
+        await user.click(activeCb);
+        expect(activeCb).toBeChecked();
+        expect(screen.getByRole('region', { name: 'Dịch vụ đã chọn (1)' })).toBeInTheDocument();
     });
 });

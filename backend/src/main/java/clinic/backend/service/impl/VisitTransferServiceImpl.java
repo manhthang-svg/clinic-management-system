@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,7 +26,6 @@ import clinic.backend.entity.Visit;
 import clinic.backend.entity.VisitTransfer;
 import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.ActivationStatus;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalRecordStatus;
@@ -46,7 +44,7 @@ import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.repository.VisitTransferRepository;
 import clinic.backend.security.user.StaffPrincipal;
-import clinic.backend.service.AuditLogService;
+import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.service.VisitTransferService;
 import clinic.backend.utils.UuidV7Generator;
 import lombok.RequiredArgsConstructor;
@@ -62,14 +60,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class VisitTransferServiceImpl implements VisitTransferService {
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    // Shift hours as in DutyShift, VisitServiceImpl and ClinicalExaminationServiceImpl.
-    private static final LocalTime MORNING_START = LocalTime.of(8, 0);
-    private static final LocalTime MORNING_END = LocalTime.of(11, 30);
-    private static final LocalTime AFTERNOON_START = LocalTime.of(13, 0);
-    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 30);
     private static final int REASON_MIN = 5;
     private static final int REASON_MAX = 500;
-    private static final String VISIT_AUDIT_ENTITY = "visits";
 
     private final VisitRepository visitRepository;
     private final VisitTransferRepository visitTransferRepository;
@@ -82,7 +74,8 @@ public class VisitTransferServiceImpl implements VisitTransferService {
     private final ClinicalExaminationRepository examinationRepository;
     private final RoomQueueCounterRepository queueCounterRepository;
     private final ExaminationRoomDuty examinationRoomDuty;
-    private final AuditLogService auditLogService;
+    // The shift hours the Admin configured, as the waiting list and the examination use (no hard-coded hours).
+    private final DutyShiftConfigService dutyShiftConfigService;
     private final UuidV7Generator ids;
     private final Clock clock;
 
@@ -136,16 +129,6 @@ public class VisitTransferServiceImpl implements VisitTransferService {
                 ids.next(), visit.getId(), sourceRoomId, destination.getId(), reason, notes,
                 oldQueueNumber, newQueueNumber, principal.accountId(), now));
 
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("action", "TRANSFER");
-        details.put("fromRoomId", sourceRoomId);
-        details.put("toRoomId", destination.getId());
-        details.put("oldQueueNumber", oldQueueNumber);
-        details.put("newQueueNumber", newQueueNumber);
-        details.put("status", visit.getStatus().name());
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.UPDATE, VISIT_AUDIT_ENTITY, visit.getId(),
-                visit.getSovaovien(), details, now);
         return new VisitTransferResponse(
                 visit.getId(), destination.getId(), destination.getRoomCode(), destination.getRoomName(),
                 destination.getLocation(), newQueueNumber, now);
@@ -197,7 +180,7 @@ public class VisitTransferServiceImpl implements VisitTransferService {
                 .map(Room::getId)
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
         LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
-        DutyShift shift = currentShift(LocalTime.ofInstant(now, CLINIC_ZONE));
+        DutyShift shift = dutyShiftConfigService.shiftAt(today, LocalTime.ofInstant(now, CLINIC_ZONE)).orElse(null);
         boolean onDuty = shift != null && dutyScheduleRepository
                 .findByWorkDateAndShiftAndStaffAccountId(today, shift, doctor.getId())
                 .map(DutySchedule::getRoomId)
@@ -207,11 +190,5 @@ public class VisitTransferServiceImpl implements VisitTransferService {
             throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
         }
         return roomId;
-    }
-
-    private static DutyShift currentShift(LocalTime time) {
-        if (!time.isBefore(MORNING_START) && !time.isAfter(MORNING_END)) return DutyShift.MORNING;
-        if (!time.isBefore(AFTERNOON_START) && !time.isAfter(AFTERNOON_END)) return DutyShift.AFTERNOON;
-        return null;
     }
 }

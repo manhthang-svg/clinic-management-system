@@ -522,7 +522,7 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Thao tác: Tiếp nhận & hoàn tất thực hiện kỹ thuật vào phòng máy (chuyển thẳng sang Chờ nhập kết quả)
+  // UC-66: bam Tiep nhan = tiep nhan + xac nhan da thuc hien luon, chuyen sang cho nhap ket qua
   const handleStartOrder = async (order, e) => {
     e?.stopPropagation();
     try {
@@ -637,7 +637,7 @@ export function TechnicianQueuePage() {
   // Điều hướng sang màn hình form nhập kết quả cận lâm sàng của chỉ định
   const openResult = (order) => navigate(`/technician/results/${order.id}`);
 
-  // Xác nhận KTV đã làm xong kỹ thuật trên người bệnh nhân, chuyển sang chờ nhập kết quả (UC-66)
+  // UC-66: xac nhan da thuc hien xong, chuyen sang cho nhap ket qua
   const handleCompleteOrder = async (order) => {
     try {
       setActionLoadingId(order.id);
@@ -666,7 +666,7 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Trả chỉ định đang làm về hàng chờ kèm lý do khi gặp sự cố kỹ thuật (UC-66 AF-02)
+  // UC-66: tra dich vu dang lam ve hang cho kem ly do
   const handleConfirmReturn = async (order, reason) => {
     try {
       setActionLoadingId(order.id);

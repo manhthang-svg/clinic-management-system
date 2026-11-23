@@ -3,7 +3,7 @@ import {
   ConclusionSection, ImageLinkField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** Fields shared by the CT and MRI slips (MS 09/BV2): technique, description, conclusion, QR link. */
+// truong dung chung phieu CT va MRI: ky thuat, mo ta, ket luan, link
 export function CtMriResultFields({ order, form, set, errors, readOnly, templateButton }) {
   return (
     <>
@@ -30,7 +30,7 @@ export function CtMriResultFields({ order, form, set, errors, readOnly, template
       </ResultSection>
       <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} />
+          <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} required />
           <SignerField order={order} form={form} set={set} readOnly={readOnly} />
         </div>
       </ConclusionSection>

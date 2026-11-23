@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatCountdown, secondsUntil } from './payosQrExpiry';
 
-/** Đếm ngược thời hạn mã QR PayOS theo expiredAt do backend trả về. */
+/** Dem nguoc thoi han ma QR PayOS theo expiredAt do backend tra ve. */
 export function PayosQrCountdown({ expiredAt, onRenew, renewing = false }) {
     const [now, setNow] = useState(() => Date.now());
     const remaining = secondsUntil(expiredAt, now);

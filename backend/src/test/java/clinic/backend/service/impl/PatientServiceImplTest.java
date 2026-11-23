@@ -107,7 +107,7 @@ class PatientServiceImplTest {
         assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, 
                 createRequest("Nguyễn Bé", LocalDate.of(2008, 11, 4), null, null, null, null, null)))
                 .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getDetails())
-                        .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe"));
+                        .containsOnlyKeys("hotennguoithan", "nguoithanQuanhe", "sodienthoainguoithan"));
     }
 
     @Test
@@ -160,6 +160,13 @@ class PatientServiceImplTest {
         return new CreatePatientRequest(name, birthDate, (short) 1, citizenId, passport, null, null, "Kinh", "01",
                 null, null, "Ha Noi", null, null, null, null, null, phone, null, null, null, guardianName,
                 guardianRelation, null, null);
+    }
+
+    @Test
+    void rejectsADuplicateCheckWithANameLongerThan100Characters() {
+        assertThatThrownBy(() -> service.findPossibleDuplicates("a".repeat(101), LocalDate.of(1990, 1, 1)))
+                .isInstanceOfSatisfying(AppException.class,
+                        ex -> assertThat(ex.getDetails()).containsEntry("hoten", "TOO_LONG"));
     }
 
     @Test
@@ -249,6 +256,87 @@ class PatientServiceImplTest {
         verify(patientRepository).save(any(Patient.class));
         verify(auditLogService).recordBusinessChange(eq(ACCOUNT_ID), eq(AuditLogAction.CREATE), eq("patients"),
                 eq(PATIENT_ID), any(), any(), any());
+    }
+
+    @Test
+    void derivesEthnicityCodeFromTheNameIgnoringTheSentCode() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, ethnicityRequest(" Mường ", "99"));
+
+        assertThat(response.dantocMa()).isEqualTo("06");
+    }
+
+    @Test
+    void createsWithoutAnEthnicityCode() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, ethnicityRequest("Kinh", null)).dantocMa()).isEqualTo("01");
+    }
+
+    @Test
+    void rejectsAnUnlistedEthnicityWithoutACode() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, ethnicityRequest("Khác", null)))
+                .isInstanceOfSatisfying(AppException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.REQUEST_PARAMETER_INVALID);
+                    assertThat(ex.getDetails()).containsEntry("dantoc", "INVALID_FORMAT");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void updateWithoutAnEthnicityCodeKeepsTheDerivedCodeAndSavesNothing() {
+        Patient patient = storedPatient();
+        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByCccdSo("012345678901")).thenReturn(Optional.of(patient));
+
+        service.updatePatient(ACCOUNT_ID, PATIENT_ID, new UpdatePatientRequest("Nguyen Van A",
+                LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, null, null, "Kinh", null, null, null,
+                "Ha Noi", null, null, null, null, null, "0901234567", "patient@example.com", null, null, null,
+                null, null, null, 0L));
+
+        verify(patientRepository, never()).save(any(Patient.class));
+        verifyNoInteractions(auditLogService);
+    }
+
+    @Test
+    void derivesOccupationCodeFromTheName() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, occupationRequest("Công nhân", "77"));
+
+        assertThat(response.nghenghiepMa()).isEqualTo("04");
+    }
+
+    @Test
+    void leavesOccupationCodeEmptyWithoutAnOccupation() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, occupationRequest(null, "04")).nghenghiepMa()).isNull();
+    }
+
+    @Test
+    void keepsTheSentCodeForAnOldFreeTextOccupation() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.createPatient(ACCOUNT_ID, occupationRequest("Kỹ sư", "07")).nghenghiepMa()).isEqualTo("07");
+    }
+
+    private CreatePatientRequest occupationRequest(String nghenghiep, String nghenghiepMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
+                nghenghiepMa, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null,
+                null, null, null, null, null, null);
+    }
+
+    private CreatePatientRequest ethnicityRequest(String dantoc, String dantocMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, null, null,
+                dantoc, dantocMa, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null, null,
+                null, null, null, null, null);
     }
 
     @Test
@@ -378,7 +466,7 @@ class PatientServiceImplTest {
 
     @Test
     void searchesByTypeWithTheMatchingQuery() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 20, Sort.by("mabenhnhan"));
         Page<Patient> found = new PageImpl<>(List.of(patient()));
         when(patientRepository.findAllByCccdSo("012345678901", page)).thenReturn(found);
         when(patientRepository.findAllByHochieuSoIgnoreCase("C1234567", page)).thenReturn(found);
@@ -399,7 +487,7 @@ class PatientServiceImplTest {
 
     @Test
     void addsLastVisitAndActiveVisitToEachResult() {
-        PageRequest page = PageRequest.of(0, 10, Sort.by("mabenhnhan"));
+        PageRequest page = PageRequest.of(0, 20, Sort.by("mabenhnhan"));
         when(patientRepository.searchByName("nguyen", page)).thenReturn(new PageImpl<>(List.of(patient())));
         Instant lastVisitAt = Instant.parse("2026-11-01T02:00:00Z");
         VisitRepository.PatientLastVisit lastVisit = mock(VisitRepository.PatientLastVisit.class);
@@ -451,15 +539,17 @@ class PatientServiceImplTest {
     }
 
     @Test
-    void returnsAtMostFiftyResults() {
+    void returnsTwentyPatientsPerPageWhateverSizeIsAsked() {
         when(patientRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
 
         service.listPatients(null, null, PageRequest.of(2, 500));
+        service.listPatients(null, null, PageRequest.of(0, 5));
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(patientRepository).findAll(pageable.capture());
-        assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
-        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+        verify(patientRepository, org.mockito.Mockito.times(2)).findAll(pageable.capture());
+        assertThat(pageable.getAllValues().get(0).getPageSize()).isEqualTo(20);
+        assertThat(pageable.getAllValues().get(0).getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getAllValues().get(1).getPageSize()).isEqualTo(20);
     }
 
     @Test

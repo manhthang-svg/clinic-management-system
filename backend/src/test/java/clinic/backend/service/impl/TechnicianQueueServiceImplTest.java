@@ -486,4 +486,26 @@ class TechnicianQueueServiceImplTest {
         assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.IN_PROGRESS);
         assertThat(detail.getPerformerAccountId()).isEqualTo(technicianId);
     }
+
+    @Test
+    void rejectsAnUnknownStatusFilterOrATooLongSearch() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TechnicianQueueServiceImpl.validateFilters(
+                        null, "DONE", TechnicianQueueServiceImpl.QUEUE_STATUSES))
+                .isInstanceOfSatisfying(clinic.backend.exceptions.AppException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getDetails()).containsKey("status"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TechnicianQueueServiceImpl.validateFilters(
+                        "a".repeat(101), null, TechnicianQueueServiceImpl.PENDING_RESULT_STATUSES))
+                .isInstanceOfSatisfying(clinic.backend.exceptions.AppException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getDetails()).containsKey("search"));
+    }
+
+    @Test
+    void acceptsTheStatusFiltersTheScreensUse() {
+        for (String status : new String[] {"ALL", "WAITING", "SKIPPED", "IN_PROGRESS", "CANCELLED", "waiting", "", null}) {
+            TechnicianQueueServiceImpl.validateFilters("an", status, TechnicianQueueServiceImpl.QUEUE_STATUSES);
+        }
+        for (String status : new String[] {"ALL", "PENDING", "DRAFT"}) {
+            TechnicianQueueServiceImpl.validateFilters(null, status, TechnicianQueueServiceImpl.PENDING_RESULT_STATUSES);
+        }
+    }
 }

@@ -548,7 +548,7 @@ public class VisitServiceImpl implements VisitService {
         if (transfer != null) {
             String sourceRoomName = sourceRoomNames.get(transfer.getFromRoomId());
             if (sourceRoomName != null && !sourceRoomName.isBlank()) {
-                notes.add("Chuyển từ: " + sourceRoomName);
+                notes.add("Chuyển từ phòng " + sourceRoomName);
             }
         }
         return notes.isEmpty() ? null : String.join("\n", notes);
@@ -736,13 +736,14 @@ public class VisitServiceImpl implements VisitService {
         return roomId;
     }
 
+    // UC-42: so luot cho / dang kham / bo qua cua tung phong kham dang mo, nhom theo khoa
     @Override
     @Transactional(readOnly = true)
     public List<RoomQueueStatusResponse> getRoomQueueStatus(LocalDate date) {
         LocalDate queryDate = date != null ? date : LocalDate.now(clock.withZone(CLINIC_ZONE));
         Map<UUID, List<VisitRepository.RoomQueueCount>> countsByRoom = visitRepository.countRoomQueues(queryDate)
                 .stream().collect(Collectors.groupingBy(VisitRepository.RoomQueueCount::getRoomId));
-        // UC-42: only rooms with a doctor on duty in the current shift, named by that doctor (BR-96).
+        // chi lay phong co bac si dang truc ca hien tai (BR-96)
         Map<UUID, StaffAccount> doctorsByRoom = examinationRoomDuty.onDutyDoctorsByRoom(clock.instant());
         List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
                         RoomType.EXAMINATION, ActivationStatus.ACTIVE).stream()
@@ -754,7 +755,7 @@ public class VisitServiceImpl implements VisitService {
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(Department::getId, Department::getDepartmentName));
-        // UC-42 bước 2: nhóm theo khoa (tên khoa A–Z), trong khoa giữ thứ tự mã phòng.
+        // sap theo ten khoa A-Z, trong khoa giu thu tu ma phong
         return rooms.stream()
                 .map(room -> toQueueStatus(
                         room,

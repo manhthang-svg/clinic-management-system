@@ -3,7 +3,7 @@ import {
   ConclusionSection, FilesSection, RecommendationField, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-/** UC-67 Phiếu siêu âm (MS 11/BV-02): one free-text description like the X-ray slip, two images beside it. */
+// UC-67: phieu sieu am (1 o mo ta + 2 anh)
 export function UltrasoundResultPage({ order, api }) {
   return (
     <ResultEditor order={order} api={api}>
@@ -26,6 +26,8 @@ export function UltrasoundResultPage({ order, api }) {
             form={form}
             set={set}
             readOnly={readOnly}
+            required
+            error={errors.files}
             description="Hai ảnh đầu tiên được in bên phải phần kết quả."
           />
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>

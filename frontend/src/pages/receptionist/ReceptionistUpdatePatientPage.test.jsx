@@ -122,7 +122,7 @@ describe('ReceptionistUpdatePatientPage (UC-38)', () => {
         };
         renderPage(patientApi);
 
-        await user.type(await screen.findByLabelText('Nghề nghiệp'), 'Giáo viên');
+        await user.selectOptions(await screen.findByLabelText('Nghề nghiệp'), 'Y tế');
         await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(MSG.STALE);
@@ -132,7 +132,7 @@ describe('ReceptionistUpdatePatientPage (UC-38)', () => {
         const user = userEvent.setup();
         renderPage({ detail: vi.fn().mockResolvedValue(stored), update: vi.fn() });
 
-        await user.type(await screen.findByLabelText('Nghề nghiệp'), 'Giáo viên');
+        await user.selectOptions(await screen.findByLabelText('Nghề nghiệp'), 'Y tế');
         await user.click(screen.getByRole('button', { name: 'Hủy' }));
         const dialog = screen.getByRole('dialog', { name: 'Hủy cập nhật hồ sơ' });
         await user.click(within(dialog).getByRole('button', { name: 'Loại bỏ' }));

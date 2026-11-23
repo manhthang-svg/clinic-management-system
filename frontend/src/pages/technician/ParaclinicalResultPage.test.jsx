@@ -136,6 +136,27 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(screen.getByText('Bắt buộc')).toBeInTheDocument();
   });
 
+  it('has no image section on a lab result', async () => {
+    renderPage('cls-002');
+
+    expect(await screen.findByRole('button', { name: 'Gửi kết quả' })).toBeInTheDocument();
+    expect(screen.queryByText('File đính kèm')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm ảnh' })).not.toBeInTheDocument();
+  });
+
+  it('does not submit an ultrasound result without an image', async () => {
+    const api = renderPage('cls-004');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Điền kết quả bình thường' }));
+    await user.type(screen.getByLabelText(/^Kết luận/), 'Bình thường');
+    await user.click(screen.getByRole('button', { name: 'Gửi kết quả' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Vui lòng tải lên ít nhất 1 ảnh kết quả.')).toBeInTheDocument();
+    expect((await api.get('cls-004')).result?.status).not.toBe('SUBMITTED');
+  });
+
   it('uses one free-text description for ultrasound, like X-ray, and fills it with the normal text', async () => {
     const api = renderPage('cls-004');
     const user = userEvent.setup();
