@@ -130,7 +130,7 @@ public class MedicalRecordController {
     }
 
     @Operation(summary = "UC-80 / BR-43: Kết xuất dữ liệu hồ sơ bệnh án điện tử (XML / JSON) theo CV 365")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     @PostMapping("/{id}/export-data")
     public ResponseEntity<byte[]> exportMedicalRecordData(
             @PathVariable UUID id,
