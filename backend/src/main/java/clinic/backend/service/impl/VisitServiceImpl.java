@@ -359,7 +359,10 @@ public class VisitServiceImpl implements VisitService {
         if (room.getStatus() != ActivationStatus.ACTIVE
                 || room.getType() != RoomType.EXAMINATION
                 || examinationRoomDuty.onDutyDoctor(roomId, clock.instant()).isEmpty()) {
-            throw new AppException(ErrorCode.ROOM_NOT_AVAILABLE);
+            // MSG53 names the room: "{room_name} đã ngừng hoạt động hoặc ...".
+            throw new AppException(ErrorCode.ROOM_NOT_AVAILABLE, room.getRoomName() == null
+                    ? Map.of()
+                    : Map.of("roomName", room.getRoomName()));
         }
     }
 
