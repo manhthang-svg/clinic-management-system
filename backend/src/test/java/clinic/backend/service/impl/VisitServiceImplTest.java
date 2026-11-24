@@ -50,6 +50,7 @@ import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.config.properties.FollowUpProperties;
 import clinic.backend.config.properties.InsuranceBillingProperties;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
@@ -162,6 +163,7 @@ class VisitServiceImplTest {
                 new InsuranceCoverageServiceImpl(
                         new InsuranceBillingProperties(BigDecimal.valueOf(2_340_000), BigDecimal.valueOf(15)),
                         paymentRepository, null, auditLogService, clock),
+                new FollowUpValidity(new FollowUpProperties(10)),
                 clock);
     }
 

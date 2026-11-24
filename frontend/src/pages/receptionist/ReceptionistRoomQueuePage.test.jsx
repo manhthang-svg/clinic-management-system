@@ -203,9 +203,9 @@ describe('ReceptionistRoomQueuePage', () => {
         expect(await screen.findByText('Chưa có dữ liệu để hiển thị.')).toBeInTheDocument();
     });
 
-    it('pages the waiting list of a room, 20 visits per page', async () => {
+    it('pages the waiting list of a room, 10 visits per page', async () => {
         const user = userEvent.setup();
-        const visits = Array.from({ length: 22 }, (_, index) => ({
+        const visits = Array.from({ length: 12 }, (_, index) => ({
             id: `visit-${index + 1}`, queueNumber: index + 1, patientName: `Bệnh nhân ${index + 1}`,
             patientCode: `BN${index + 1}`, isPriority: false, thoigianvaovien: '2026-11-05T01:30:00Z',
             status: 'WAITING', isSkipped: false,
@@ -216,20 +216,20 @@ describe('ReceptionistRoomQueuePage', () => {
         }, '/receptionist/room-queue/room-1');
 
         const detail = await screen.findByRole('region', { name: 'Hàng đợi Phòng khám Nội 1' });
-        // mo phong tu link: server loc dung phong; danh sach cho lay tung trang 20 benh nhan
+        // mo phong tu link: server loc dung phong; danh sach cho lay tung trang 10 benh nhan
         expect(server.getQueueStatusPage).toHaveBeenCalledWith(
-            { roomId: 'room-1', page: 0, size: 20 }, expect.any(AbortSignal));
-        expect(await within(detail).findByText('Bệnh nhân 20')).toBeInTheDocument();
-        expect(within(detail).queryByText('Bệnh nhân 21')).not.toBeInTheDocument();
-        expect(within(detail).getByText('Hiển thị 1 – 20 / 22')).toBeInTheDocument();
+            { roomId: 'room-1', page: 0, size: 10 }, expect.any(AbortSignal));
+        expect(await within(detail).findByText('Bệnh nhân 10')).toBeInTheDocument();
+        expect(within(detail).queryByText('Bệnh nhân 11')).not.toBeInTheDocument();
+        expect(within(detail).getByText('Hiển thị 1 – 10 / 12')).toBeInTheDocument();
 
         await user.click(within(detail).getByRole('button', { name: 'Trang 2' }));
 
-        expect(await within(detail).findByText('Bệnh nhân 22')).toBeInTheDocument();
+        expect(await within(detail).findByText('Bệnh nhân 12')).toBeInTheDocument();
         expect(server.getQueuePage).toHaveBeenLastCalledWith(
-            { roomId: 'room-1', page: 1, size: 20 }, expect.any(AbortSignal));
+            { roomId: 'room-1', page: 1, size: 10 }, expect.any(AbortSignal));
         expect(within(detail).queryByText('Bệnh nhân 1')).not.toBeInTheDocument();
-        expect(within(detail).getByText('Hiển thị 21 – 22 / 22')).toBeInTheDocument();
+        expect(within(detail).getByText('Hiển thị 11 – 12 / 12')).toBeInTheDocument();
         expect(within(detail).getByRole('button', { name: 'Trang sau' })).toBeDisabled();
     });
 
@@ -330,23 +330,23 @@ describe('ReceptionistRoomQueuePage', () => {
         expect(totalOf('Phòng khám Nội 1')).toBe('3');
     });
 
-    it('shows every room, 20 per page', async () => {
+    it('shows every room, 10 per page', async () => {
         const user = userEvent.setup();
-        const rooms = Array.from({ length: 25 }, (_, i) => room({
+        const rooms = Array.from({ length: 15 }, (_, i) => room({
             roomId: `room-${i + 1}`, roomCode: `PK${i + 1}`, roomName: `Phòng số ${i + 1}`,
         }));
         const { server } = renderPage({ getQueueStatus: vi.fn().mockResolvedValue(rooms) });
 
-        expect(await screen.findByText('Phòng số 20')).toBeInTheDocument();
-        // trinh duyet chi xin 1 trang 20 phong
-        expect(server.getQueueStatusPage).toHaveBeenCalledWith({ page: 0, size: 20 }, expect.any(AbortSignal));
-        expect(screen.queryByText('Phòng số 21')).not.toBeInTheDocument();
-        expect(screen.getByText('Hiển thị 1 – 20 / 25')).toBeInTheDocument();
+        expect(await screen.findByText('Phòng số 10')).toBeInTheDocument();
+        // trinh duyet chi xin 1 trang 10 phong
+        expect(server.getQueueStatusPage).toHaveBeenCalledWith({ page: 0, size: 10 }, expect.any(AbortSignal));
+        expect(screen.queryByText('Phòng số 11')).not.toBeInTheDocument();
+        expect(screen.getByText('Hiển thị 1 – 10 / 15')).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Trang sau' }));
 
-        expect(await screen.findByText('Phòng số 25')).toBeInTheDocument();
-        expect(server.getQueueStatusPage).toHaveBeenLastCalledWith({ page: 1, size: 20 }, expect.any(AbortSignal));
+        expect(await screen.findByText('Phòng số 15')).toBeInTheDocument();
+        expect(server.getQueueStatusPage).toHaveBeenLastCalledWith({ page: 1, size: 10 }, expect.any(AbortSignal));
         expect(screen.queryByText('Phòng số 1')).not.toBeInTheDocument();
         // tieu de khoa van hien tren trang 2
         expect(screen.getByRole('columnheader', { name: 'Khoa Nội' })).toBeInTheDocument();
