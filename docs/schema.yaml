@@ -5817,6 +5817,15 @@ tables:
         proposal: keep
         standard: Không
         description: In giấy hẹn
+      reminder_sent_at:
+        field: reminderSentAt
+        sql_type: timestamptz
+        base_type: timestamptz
+        nullable: true
+        java_type: Instant
+        proposal: add
+        standard: Không
+        description: UC-75 (V62) - thời điểm gửi email nhắc lịch tái khám; null khi chưa gửi, chỉ gửi một lần
       cancel_reason:
         field: cancelReason
         sql_type: text
