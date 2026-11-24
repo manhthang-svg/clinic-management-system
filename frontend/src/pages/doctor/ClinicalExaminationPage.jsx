@@ -52,6 +52,13 @@ function formFromResponse(data) {
 }
 
 /** Compares values as the inputs show them, so a loaded number and its typed text are equal. */
+/** The page message for client errors: the diagnosis message when it is the only error, otherwise MSG.CHECK_FIELDS. */
+function pageErrorFor(errors) {
+    const keys = Object.keys(errors);
+    if (!keys.length) return '';
+    return keys.length === 1 && errors.preliminaryDiagnosis ? errors.preliminaryDiagnosis : MSG.CHECK_FIELDS;
+}
+
 function sameForm(left, right) {
     return Object.keys(EMPTY_FORM).every((key) => (key === 'diagnoses'
         ? JSON.stringify(left[key] ?? []) === JSON.stringify(right[key] ?? [])
@@ -174,24 +181,29 @@ export default function ClinicalExaminationPage() {
             navigate(clinicalExaminationPath(visitId), { replace: true, state: location.state });
         }
     }, [location.state, navigate, routeVisitId, visitId]);
+    const revalidate = (next, query) => {
+        if (!validationMode) return;
+        const errors = validateExamination(next, validationMode, query);
+        setFieldErrors(errors);
+        setPageError(pageErrorFor(errors));
+        if (!Object.keys(errors).length) setValidationMode(null);
+    };
     const set = (key) => (value) => {
         const next = { ...form, [key]: value };
         setForm(next);
-        if (validationMode) {
-            const errors = validateExamination(next, validationMode);
-            setFieldErrors(errors);
-            setPageError(Object.keys(errors).length
-                ? (errors.preliminaryDiagnosis && Object.keys(errors).length === 1
-                    ? MSG.DIAGNOSIS_REQUIRED : MSG.CHECK_FIELDS)
-                : '');
-            if (!Object.keys(errors).length) setValidationMode(null);
-        }
+        revalidate(next, icdQuery);
+    };
+    const changeIcdQuery = (value) => {
+        setIcdQuery(value);
+        revalidate(form, value);
     };
     const addDiagnosis = (option) => {
         if (!option || form.diagnoses.some((item) => item.code === option.code)) return;
-        set('diagnoses')([...form.diagnoses, option]);
+        const next = { ...form, diagnoses: [...form.diagnoses, option] };
+        setForm(next);
         setIcdQuery('');
         setIcdOptions([]);
+        revalidate(next, '');
     };
     const dirty = !sameForm(form, savedForm);
     const bmi = useMemo(() => {
@@ -305,12 +317,11 @@ export default function ClinicalExaminationPage() {
     });
 
     const save = async (mode, nextStep = null) => {
-        const errors = validateExamination(form, mode);
+        const errors = validateExamination(form, mode, icdQuery);
         setFieldErrors(errors);
         if (Object.keys(errors).length) {
             setValidationMode(mode);
-            setPageError(errors.preliminaryDiagnosis && Object.keys(errors).length === 1
-                ? MSG.DIAGNOSIS_REQUIRED : MSG.CHECK_FIELDS);
+            setPageError(pageErrorFor(errors));
             return;
         }
         setValidationMode(null);
@@ -392,7 +403,7 @@ export default function ClinicalExaminationPage() {
             return;
         }
         // UC-47 "Save and Continue": the examination must be valid; otherwise the errors show and the tab stays.
-        if (Object.keys(validateExamination(form, 'CONTINUE')).length) {
+        if (Object.keys(validateExamination(form, 'CONTINUE', icdQuery)).length) {
             save('CONTINUE', 'CONCLUSION');
             return;
         }
@@ -414,7 +425,7 @@ export default function ClinicalExaminationPage() {
             return;
         }
         // AF-04: the examination must be valid (diagnosis required); otherwise the errors show and the tab stays.
-        if (Object.keys(validateExamination(form, 'CONTINUE')).length) {
+        if (Object.keys(validateExamination(form, 'CONTINUE', icdQuery)).length) {
             save('CONTINUE', 'PARACLINICAL');
             return;
         }
@@ -548,7 +559,7 @@ export default function ClinicalExaminationPage() {
                         <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-teal-800"><HeartPulse className="h-4 w-4" />Sinh hiệu <span className="font-normal text-slate-400">• Thời điểm đo: {formatTime(clinicalData?.vitalSigns?.measuredAt ?? new Date())}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Object.entries(VITAL_RULES).map(([key, [label, unit]]) => <Vital key={key} label={label} value={form[key]} onChange={set(key)} unit={unit} error={fieldErrors[key]} />)}</div>{fieldErrors.vitals && <p className="mt-2 text-[11px] text-rose-600">{fieldErrors.vitals}</p>}<div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4 text-teal-600" />BMI: <strong className="text-slate-700">{bmi.value}</strong> kg/m²{bmi.category && <strong className="text-teal-700">({bmi.category})</strong>}</div></div>
                         <div className="mt-4"><Field label="1. Toàn thân" value={form.generalExam} onChange={set('generalExam')} placeholder="Mô tả tình trạng toàn thân..." maxLength={4000} rows={3} error={fieldErrors.generalExam} /></div>
                         <div className="mt-4"><Field label="2. Khám bộ phận" value={form.organExam} onChange={set('organExam')} placeholder="Nhập kết quả khám bộ phận..." maxLength={2000} rows={4} error={fieldErrors.organExam} /></div>
-                        <div className="mt-4"><label className="block text-xs font-semibold text-slate-700">Chẩn đoán ban đầu (ICD-10)<input value={icdQuery} onChange={(event) => setIcdQuery(event.target.value)} onKeyDown={(event) => {
+                        <div className="mt-4"><label className="block text-xs font-semibold text-slate-700">Chẩn đoán ban đầu (ICD-10)<input value={icdQuery} onChange={(event) => changeIcdQuery(event.target.value)} onKeyDown={(event) => {
                             if (event.key === 'Enter' && icdOptions.length) {
                                 event.preventDefault();
                                 addDiagnosis(icdOptions[0]);
