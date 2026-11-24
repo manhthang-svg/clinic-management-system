@@ -234,10 +234,12 @@ describe('ReceptionistRoomQueuePage', () => {
     });
 
     it.each([
-        ['ROOM_NOT_AVAILABLE', 409, MSG53],
+        ['ROOM_NOT_AVAILABLE', 409, `Phòng khám Nội 2 ${MSG53.slice('Phòng khám '.length)}`],
         ['ROOM_NOT_FOUND', 404, 'Không tìm thấy phòng khám.'],
     ])('shows the reason a linked room cannot be viewed (%s, AF-03)', async (code, status, message) => {
-        const failure = new ApiError('x', { status, errorResponse: { code, message: 'x' } });
+        const failure = new ApiError('x', {
+            status, errorResponse: { code, message: 'x', details: { roomName: 'Phòng khám Nội 2' } },
+        });
         renderPage({
             getQueueStatus: vi.fn().mockResolvedValue([room()]),
             getQueue: vi.fn().mockRejectedValue(failure),

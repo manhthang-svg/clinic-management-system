@@ -32,7 +32,8 @@ function loadErrorMessage(error) {
 function roomQueueErrorMessage(error) {
     const code = error?.errorResponse?.code;
     if (code === 'ROOM_NOT_FOUND') return msg39('phòng khám');
-    if (code === 'ROOM_NOT_AVAILABLE') return msg53();
+    // MSG53 names the room; the backend sends its name because the room is no longer on the overview.
+    if (code === 'ROOM_NOT_AVAILABLE') return msg53(error.errorResponse?.details?.roomName);
     return loadErrorMessage(error);
 }
 
