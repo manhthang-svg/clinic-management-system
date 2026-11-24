@@ -133,6 +133,36 @@ class Icd10SearchCacheTest {
         assertThatThrownBy(() -> cache.search("j00", DAY, 10)).isInstanceOf(DataAccessResourceFailureException.class);
     }
 
+    @Test
+    void acceptsADiagnosisNamingIcd10DiseasesByCodeOrName() {
+        when(repository.findSearchable()).thenReturn(List.of(
+                code("J02.9", "Viêm họng cấp, không đặc hiệu", EFFECTIVE, null),
+                code("I10", "Bệnh lý tăng huyết áp vô căn (nguyên phát)", EFFECTIVE, null)));
+
+        assertThat(cache.namesIcd10Diseases("  viêm HỌNG cấp,  không đặc hiệu ", DAY)).isTrue();
+        assertThat(cache.namesIcd10Diseases("J02.9", DAY)).isTrue();
+        assertThat(cache.namesIcd10Diseases("j029", DAY)).isTrue();
+        assertThat(cache.namesIcd10Diseases("J02.9 - Viêm họng cấp, không đặc hiệu", DAY)).isTrue();
+        assertThat(cache.namesIcd10Diseases(
+                "J02.9 Viêm họng cấp, không đặc hiệu; Bệnh lý tăng huyết áp vô căn (nguyên phát)", DAY)).isTrue();
+    }
+
+    @Test
+    void refusesADiagnosisThatNamesNoUsableIcd10Disease() {
+        when(repository.findSearchable()).thenReturn(List.of(
+                code("J02.9", "Viêm họng cấp, không đặc hiệu", EFFECTIVE, null),
+                code("J06.9", "Nhiễm trùng hô hấp trên cấp", EFFECTIVE, DAY.minusDays(1))));
+
+        assertThat(cache.namesIcd10Diseases("abc xyz", DAY)).isFalse();
+        assertThat(cache.namesIcd10Diseases("Viêm họng", DAY)).isFalse();
+        assertThat(cache.namesIcd10Diseases("J02.9 Đau đầu", DAY)).isFalse();
+        // One unknown disease in the list is enough to refuse it.
+        assertThat(cache.namesIcd10Diseases("J02.9; abc", DAY)).isFalse();
+        // A code no longer in effect on the day.
+        assertThat(cache.namesIcd10Diseases("J06.9", DAY)).isFalse();
+        assertThat(cache.namesIcd10Diseases(" ; ", DAY)).isFalse();
+    }
+
     static SearchableCode code(String code, String name, LocalDate from, LocalDate until) {
         return new SearchableCode() {
             @Override public String getCode() { return code; }

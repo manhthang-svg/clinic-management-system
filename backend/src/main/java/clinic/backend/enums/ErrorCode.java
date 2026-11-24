@@ -186,6 +186,8 @@ public enum ErrorCode {
             "The clinical examination data is invalid.", HttpStatus.UNPROCESSABLE_ENTITY),
     CONCLUSION_INVALID("CONCLUSION_INVALID",
             "A required conclusion field is empty or a value is too long.", HttpStatus.UNPROCESSABLE_ENTITY),
+    CONCLUSION_DIAGNOSIS_NOT_ICD10("CONCLUSION_DIAGNOSIS_NOT_ICD10",
+            "The diagnosis does not match any ICD-10 disease.", HttpStatus.UNPROCESSABLE_ENTITY),
     CONCLUSION_MAIN_DIAGNOSIS_REQUIRED("CONCLUSION_MAIN_DIAGNOSIS_REQUIRED",
             "The conclusion needs exactly one main diagnosis.", HttpStatus.UNPROCESSABLE_ENTITY),
     CONCLUSION_MAIN_DIAGNOSIS_NOT_ALLOWED("CONCLUSION_MAIN_DIAGNOSIS_NOT_ALLOWED",

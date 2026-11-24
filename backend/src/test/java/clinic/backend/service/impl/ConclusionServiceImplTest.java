@@ -82,6 +82,7 @@ class ConclusionServiceImplTest {
     @Mock private ConclusionRepository conclusionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private Icd10Repository icd10Repository;
+    @Mock private Icd10SearchCache icd10Catalog;
     @Mock private AuditLogService auditLogService;
 
     private ConclusionServiceImpl service;
@@ -96,7 +97,25 @@ class ConclusionServiceImplTest {
                 medicalRecordRepository, clock);
         service = new ConclusionServiceImpl(
                 guard, staffAccountRepository, examinationRepository, conclusionRepository, prescriptionRepository,
-                icd10Repository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
+                icd10Repository, icd10Catalog, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
+        lenient().when(icd10Catalog.namesIcd10Diseases(any(), any())).thenReturn(true);
+    }
+
+    @Test
+    void refusesADiagnosisThatNamesNoIcd10Disease() {
+        stubVisit(VisitStatus.IN_EXAMINATION);
+        when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
+        when(icd10Catalog.namesIcd10Diseases(eq("abc xyz"), any())).thenReturn(false);
+        SaveConclusionRequest request = new SaveConclusionRequest(
+                " abc xyz ", "J02.9", List.of(), "Điều trị ngoại trú", (short) 2, "Uống nhiều nước", null, null,
+                false, null);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_DIAGNOSIS_NOT_ICD10);
+                    assertThat(error.getDetails()).containsEntry("field", "diagnosis");
+                });
+        verify(conclusionRepository, never()).saveAndFlush(any(Conclusion.class));
     }
 
     @Test
