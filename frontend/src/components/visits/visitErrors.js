@@ -40,10 +40,13 @@ function isNetworkError(error) {
 const ACTIVE_VISIT_CODES = ['ACTIVE_VISIT_EXISTS'];
 const ROOM_CODES = ['ROOM_NOT_AVAILABLE', 'ROOM_NOT_ACTIVE', 'ROOM_HAS_NO_DOCTOR'];
 const INSURANCE_CODES = ['INSURANCE_CARD_INVALID'];
+// BR-124: the linked follow-up appointment is out of its validity period or no longer scheduled.
+const APPOINTMENT_CODES = ['FOLLOW_UP_APPOINTMENT_NOT_USABLE', 'FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED'];
 
 /**
  * Classifies a failed POST /visits:
- * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'insurance' (UC-74 EF-02 at step 9), 'session' or 'system' (EF-04).
+ * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'insurance' (UC-74 EF-02 at step 9), 'appointment' (AF-09, BR-124),
+ * 'session' or 'system' (EF-04).
  * Any other failure, a lost connection included, is MSG80 on the confirmation (EF-04).
  */
 export function visitCreateError(error) {
@@ -51,6 +54,7 @@ export function visitCreateError(error) {
   if (ACTIVE_VISIT_CODES.includes(code)) return { kind: 'activeVisit' };
   if (ROOM_CODES.includes(code)) return { kind: 'room' };
   if (INSURANCE_CODES.includes(code)) return { kind: 'insurance', message: MSG17 };
+  if (APPOINTMENT_CODES.includes(code)) return { kind: 'appointment' };
   if (code === 'UNAUTHORIZED' || error?.status === 401) return { kind: 'session', message: MSG12 };
   return { kind: 'system', message: MSG80 };
 }

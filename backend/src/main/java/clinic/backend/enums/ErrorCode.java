@@ -118,6 +118,8 @@ public enum ErrorCode {
             "The follow-up appointment does not exist.", HttpStatus.NOT_FOUND),
     FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED("FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED",
             "The follow-up appointment is no longer scheduled.", HttpStatus.CONFLICT),
+    FOLLOW_UP_APPOINTMENT_NOT_USABLE("FOLLOW_UP_APPOINTMENT_NOT_USABLE",
+            "The follow-up appointment is not due yet or has expired.", HttpStatus.CONFLICT),
     FOLLOW_UP_APPOINTMENT_INVALID("FOLLOW_UP_APPOINTMENT_INVALID",
             "The follow-up date is missing or out of range, or the advice is too long.",
             HttpStatus.UNPROCESSABLE_ENTITY),

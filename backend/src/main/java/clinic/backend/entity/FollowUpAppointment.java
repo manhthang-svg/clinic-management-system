@@ -122,6 +122,15 @@ public class FollowUpAppointment extends VersionedEntity {
         touch(now);
     }
 
+    /** BR-124: the patient did not come within the validity period; the appointment can no longer be used. */
+    public void markMissed(Instant now) {
+        if (status != FollowUpAppointmentStatus.SCHEDULED) {
+            throw new IllegalStateException("Follow-up appointment is no longer scheduled");
+        }
+        status = FollowUpAppointmentStatus.MISSED;
+        touch(now);
+    }
+
     public void cancel(String reason, Instant now) {
         if (status != FollowUpAppointmentStatus.SCHEDULED) {
             throw new IllegalStateException("Follow-up appointment is no longer scheduled");

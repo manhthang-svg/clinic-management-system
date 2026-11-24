@@ -115,6 +115,7 @@ public class VisitServiceImpl implements VisitService {
     private final ExaminationRoomDuty examinationRoomDuty;
     private final DutyShiftConfigService dutyShiftConfigService;
     private final InsuranceCoverageService insuranceCoverageService;
+    private final FollowUpValidity followUpValidity;
     private final Clock clock;
 
     @Override
@@ -285,6 +286,11 @@ public class VisitServiceImpl implements VisitService {
         if (staleVersion || appointment.getStatus() != FollowUpAppointmentStatus.SCHEDULED
                 || !appointment.getPatientId().equals(patient.getId())) {
             throw new AppException(ErrorCode.FOLLOW_UP_APPOINTMENT_NOT_SCHEDULED);
+        }
+        // BR-124 (UC-40 AF-06, AF-09): only from the appointment date to the end of its validity period.
+        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
+        if (!followUpValidity.usableOn(appointment.getFollowUpDate(), today)) {
+            throw new AppException(ErrorCode.FOLLOW_UP_APPOINTMENT_NOT_USABLE);
         }
         return appointment;
     }

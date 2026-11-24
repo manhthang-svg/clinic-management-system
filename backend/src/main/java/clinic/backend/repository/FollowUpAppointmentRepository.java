@@ -1,5 +1,6 @@
 package clinic.backend.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +17,9 @@ public interface FollowUpAppointmentRepository extends JpaRepository<FollowUpApp
 
     List<FollowUpAppointment> findByPatientIdAndStatusOrderByFollowUpDateAsc(
             UUID patientId, FollowUpAppointmentStatus status);
+
+    /** BR-124: scheduled appointments dated before {@code date}, the candidates for "Lỡ hẹn". */
+    List<FollowUpAppointment> findByStatusAndFollowUpDateBefore(FollowUpAppointmentStatus status, LocalDate date);
 
     /** At most one appointment per visit record (uq_follow_up_appointments_medical_record_id). */
     Optional<FollowUpAppointment> findByMedicalRecordId(UUID medicalRecordId);

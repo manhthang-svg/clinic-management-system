@@ -92,6 +92,9 @@ clinic:
       cookie-secure: ${REFRESH_COOKIE_SECURE:true}
     password:
       bcrypt-strength: ${BCRYPT_STRENGTH:12}
+  follow-up:
+    # BR-124: working days after the appointment date during which it can still be linked (Sat/Sun not counted).
+    validity-working-days: ${FOLLOW_UP_VALIDITY_WORKING_DAYS:10}
   visit:
     # End-of-day job (BR-22): closes unfinished visits of earlier days; clinic time Asia/Ho_Chi_Minh (Q-32).
     end-of-day:

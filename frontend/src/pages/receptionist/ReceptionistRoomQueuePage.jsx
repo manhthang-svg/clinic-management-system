@@ -71,7 +71,7 @@ function groupByDepartment(rooms) {
     return groups;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 // thanh phan trang duoi danh sach cho
 function Pagination({ page, pageCount, total, onChange }) {

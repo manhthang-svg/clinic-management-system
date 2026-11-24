@@ -18,8 +18,8 @@ import {
   EMPTY_VISIT_FORM,
   NO_INSURANCE_CHECK,
   clinicToday,
-  daysBetween,
   formToVisitRequest,
+  isAppointmentUsable,
   isCardNumberFormatValid,
   referralSourceOf,
   validateVisitForm,
@@ -149,8 +149,9 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   const [rooms, setRooms] = useState({ loading: true, list: [], error: null });
   const [roomsKey, setRoomsKey] = useState(0);
   const [appointment, setAppointment] = useState(null);
-  // AF-05 / AF-06: the suggested room is marked only once the appointment is due.
-  const appointmentDue = Boolean(appointment) && daysBetween(appointment.appointmentDate, today) >= 0;
+  const [appointmentKey, setAppointmentKey] = useState(0);
+  // AF-05 / AF-06 / AF-09: the suggested room is marked only while the appointment can be linked (BR-124).
+  const appointmentDue = isAppointmentUsable(appointment, today);
 
   const [form, setForm] = useState(EMPTY_VISIT_FORM);
   const [insurance, setInsurance] = useState(NO_INSURANCE_CHECK);
@@ -219,9 +220,9 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         if (error.name !== 'AbortError') setAppointment(null);
       });
     return () => controller.abort();
-  }, [visitApi, patientId]);
+  }, [visitApi, patientId, appointmentKey]);
 
-  const patient = patientState.id === patientId ? patientState.patient : null;
+  const patient =patientState.id === patientId ? patientState.patient : null;
   const patientError = patientState.id === patientId ? patientState.error : null;
   const activeVisit = activeVisitState.visit;
   const counts = useMemo(
@@ -351,6 +352,11 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
         setRoomNotice(msg56(selectedRoom?.name));
         update({ roomId: '' });
         setRoomsKey((key) => key + 1);
+      } else if (result.kind === 'appointment') {
+        // BR-124: the appointment expired or changed meanwhile; register as a normal visit with a fresh card.
+        setConfirm(null);
+        update({ followUpAppointmentId: null, followUpAppointmentVersion: null });
+        setAppointmentKey((key) => key + 1);
       } else if (result.kind === 'insurance') {
         setConfirm(null);
         switchToSelfPaid(result.message);
