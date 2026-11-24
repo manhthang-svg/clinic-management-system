@@ -126,4 +126,39 @@ describe('FollowUpPanel (UC-61 Hẹn tái khám)', () => {
         expect(await screen.findByText(FOLLOW_UP_MSG.NOT_SCHEDULED)).toBeInTheDocument();
         expect(screen.getByLabelText(/Ngày tái khám/)).toBeDisabled();
     });
+    describe('UC-75 email nhắc lịch tái khám', () => {
+        const scheduled = { ...saved, patientHasEmail: true, reminderDaysBefore: 1 };
+
+        it('tells the Doctor the reminder will be sent automatically', async () => {
+            render(<FollowUpPanel visitId="v1" api={api({ getFollowUp: vi.fn().mockResolvedValue(scheduled) })} />);
+
+            expect(await screen.findByText(FOLLOW_UP_MSG.REMINDER_PLANNED(1))).toBeInTheDocument();
+        });
+
+        it('shows when the reminder was sent, in clinic time', async () => {
+            const sent = { ...scheduled, appointment: { ...appointment, reminderSentAt: '2026-12-02T01:00:00Z' } };
+            render(<FollowUpPanel visitId="v1" api={api({ getFollowUp: vi.fn().mockResolvedValue(sent) })} />);
+
+            expect(await screen.findByText(FOLLOW_UP_MSG.REMINDER_SENT('08:00 02/12/2026'))).toBeInTheDocument();
+        });
+
+        it('warns that a patient without email gets no reminder', async () => {
+            const noEmail = { ...scheduled, patientHasEmail: false };
+            render(<FollowUpPanel visitId="v1" api={api({ getFollowUp: vi.fn().mockResolvedValue(noEmail) })} />);
+
+            expect(await screen.findByText(FOLLOW_UP_MSG.REMINDER_NO_EMAIL)).toBeInTheDocument();
+        });
+
+        it('says nothing when the reminder job is off or before the appointment is saved', async () => {
+            const off = { ...scheduled, reminderDaysBefore: null };
+            const { unmount } = render(<FollowUpPanel visitId="v1" api={api({ getFollowUp: vi.fn().mockResolvedValue(off) })} />);
+            await screen.findByText('GH-DK0000000123');
+            expect(screen.queryByText(/email nhắc lịch/)).not.toBeInTheDocument();
+            unmount();
+
+            render(<FollowUpPanel visitId="v1" api={api({ getFollowUp: vi.fn().mockResolvedValue({ ...empty, patientHasEmail: true, reminderDaysBefore: 1 }) })} />);
+            await screen.findByLabelText(/Ngày tái khám/);
+            expect(screen.queryByText(/email nhắc lịch/)).not.toBeInTheDocument();
+        });
+    });
 });

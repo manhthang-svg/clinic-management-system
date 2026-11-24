@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import clinic.backend.config.properties.FollowUpReminderProperties;
 import clinic.backend.dto.request.SaveFollowUpAppointmentRequest;
 import clinic.backend.dto.response.FollowUpScheduleResponse;
 import clinic.backend.dto.response.FollowUpSlipResponse;
@@ -68,6 +69,7 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
     private final Clock clock;
+    private final FollowUpReminderProperties reminderProperties;
 
     @Override
     @Transactional
@@ -195,9 +197,11 @@ public class FollowUpScheduleServiceImpl implements FollowUpScheduleService {
                 appointment == null ? null : new FollowUpScheduleResponse.Appointment(
                         appointment.getId(), appointment.getVersion(), appointment.getSoGiayHen(),
                         appointment.getFollowUpDate(), appointment.getLoidanbacsi(), appointment.getStatus().name(),
-                        appointment.getPrintedAt()),
+                        appointment.getPrintedAt(), appointment.getReminderSentAt()),
                 accepted != null,
-                accepted == null ? null : accepted.getNgayTaiKham());
+                accepted == null ? null : accepted.getNgayTaiKham(),
+                context.patient().getEmail() != null && !context.patient().getEmail().isBlank(),
+                reminderProperties.enabled() ? reminderProperties.daysBefore() : null);
     }
 
     /** BR-61-06: the slip of TT 01/2025 Phụ lục V with the conclusion's current diagnoses (BR-61-05). */

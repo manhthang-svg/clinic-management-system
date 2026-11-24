@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import clinic.backend.config.properties.FollowUpReminderProperties;
 import clinic.backend.dto.request.SaveFollowUpAppointmentRequest;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.Conclusion;
@@ -82,7 +83,8 @@ class FollowUpScheduleServiceImplTest {
         Clock clock = Clock.fixed(NOW, ZONE);
         service = new FollowUpScheduleServiceImpl(guard, printGuard, appointmentRepository, conclusionRepository,
                 prescriptionRepository, medicalRecordRepository, clinicFacilityRepository, staffAccountRepository,
-                auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
+                auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock,
+                new FollowUpReminderProperties(true, 1, null));
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1960, 5, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "12 Lê Lợi", null, null,

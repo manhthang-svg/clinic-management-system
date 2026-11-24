@@ -16,6 +16,25 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 11MB
+  # UC-75: free SMTP for follow-up reminders. Locally Mailpit (docker compose up -d mailpit, inbox
+  # http://localhost:8025); in a deployment Gmail with an App Password: MAIL_HOST=smtp.gmail.com, MAIL_PORT=587,
+  # MAIL_SMTP_AUTH=true, MAIL_SMTP_STARTTLS=true. MAIL_PASSWORD is a secret, only from env.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+            required: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
   jpa:
     open-in-view: false
     hibernate:
@@ -33,6 +52,10 @@ server:
     include-stacktrace: never
 
 management:
+  health:
+    # The SMTP server is optional (UC-75); it must not mark the application down.
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -106,6 +129,13 @@ clinic:
   cloudinary:
     url: ${CLOUDINARY_URL:}
     folder: ${CLOUDINARY_FOLDER:clinic/paraclinical}
+  mail:
+    # UC-75: reminder email of a follow-up appointment, sent once, daysBefore days ahead (clinic time).
+    follow-up-reminder:
+      enabled: ${FOLLOW_UP_REMINDER_ENABLED:false}
+      days-before: ${FOLLOW_UP_REMINDER_DAYS_BEFORE:1}
+      cron: ${FOLLOW_UP_REMINDER_CRON:0 0 8,14,20 * * *}
+      from: ${MAIL_FROM:${MAIL_USERNAME:}}
   bootstrap-admin:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
