@@ -45,7 +45,7 @@ Backend environment variables:
 | `CLOUDINARY_URL` | For UC-67 result images | `cloudinary://<api_key>:<api_secret>@<cloud_name>` of the Cloudinary account (secret, never commit). Without it uploads answer `FILE_STORAGE_NOT_CONFIGURED`; `CLOUDINARY_FOLDER` sets the folder (default `clinic/paraclinical`) |
 | `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
 | `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
-| `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2340000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
+| `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2530000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
 | `VISIT_END_OF_DAY_ENABLED`, `VISIT_END_OF_DAY_CRON`, `VISIT_END_OF_DAY_RUN_ON_STARTUP` | No | End-of-day job (BR-22) that closes unfinished visits of earlier days; defaults `true`, `0 5 0 * * *` (00:05, Asia/Ho_Chi_Minh) and `true` (also run once at startup to catch up). Safe when several backends share one database: a visit is closed once and later runs skip it |
 
 | `FOLLOW_UP_REMINDER_ENABLED`, `FOLLOW_UP_REMINDER_DAYS_BEFORE`, `FOLLOW_UP_REMINDER_CRON` | For UC-75 reminder emails | Turns on the job that emails each patient with an email address one reminder before the follow-up date; defaults `false`, `1` (day before) and `0 0 8,14,20 * * *` (08:00, 14:00, 20:00 Asia/Ho_Chi_Minh; later runs retry a failed send, a sent reminder is never repeated). See [Follow-up reminder emails](#follow-up-reminder-emails-uc-75) |

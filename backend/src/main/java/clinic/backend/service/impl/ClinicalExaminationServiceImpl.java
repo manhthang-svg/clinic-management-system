@@ -273,11 +273,13 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 .filter(value -> value.getType() == RoomType.EXAMINATION)
                 .filter(value -> value.getStatus() == ActivationStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
-        if (!isOnDuty(doctor.getId(), room.getId(), today, time)) {
-            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
-        }
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        // BR-19, BR-20: outside the shift the Doctor still finishes today's visit they called in.
+        if (!isOnDuty(doctor.getId(), room.getId(), today, time)
+                && !DoctorShiftCheck.isOwnVisitOfToday(visit, doctor.getId(), today)) {
+            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
+        }
         if (!room.getId().equals(visit.getRoomId()) || !doctor.getId().equals(visit.getDoctorAccountId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }

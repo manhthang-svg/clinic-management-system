@@ -421,6 +421,7 @@ public class VisitServiceImpl implements VisitService {
         List<DoctorQueueItemResponse> allItems = visits.stream()
                 .map(visit -> toDoctorQueueItem(
                         visit,
+                        principal.accountId(),
                         patientsById.get(visit.getPatientId()),
                         latestTransfers.get(visit.getId()),
                         sourceRoomNames))
@@ -527,6 +528,7 @@ public class VisitServiceImpl implements VisitService {
 
     private DoctorQueueItemResponse toDoctorQueueItem(
             Visit visit,
+            UUID doctorAccountId,
             Patient patient,
             VisitTransfer transfer,
             Map<UUID, String> sourceRoomNames) {
@@ -543,7 +545,8 @@ public class VisitServiceImpl implements VisitService {
                 canAcceptSkippedVisit(visit),
                 transfer == null ? null : sourceRoomNames.get(transfer.getFromRoomId()),
                 transfer == null ? null : transfer.getTransferredAt(),
-                buildDoctorQueueNote(visit, transfer, sourceRoomNames));
+                buildDoctorQueueNote(visit, transfer, sourceRoomNames),
+                doctorAccountId.equals(visit.getDoctorAccountId()));
     }
 
     private static String buildDoctorQueueNote(
@@ -647,8 +650,7 @@ public class VisitServiceImpl implements VisitService {
     @Override
     @Transactional
     public VisitResponse startExamination(StaffPrincipal principal, UUID visitId) {
-        UUID roomId = requireDoctorRoomOnDuty(principal);
-        Visit visit = requireVisitInRoom(visitId, roomId);
+        Visit visit = requireCallableVisit(principal, visitId);
         if (visit.isSkipped() || !isDoctorWaitingStage(visit.getStatus())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
@@ -668,8 +670,7 @@ public class VisitServiceImpl implements VisitService {
     @Override
     @Transactional
     public VisitResponse skipVisit(StaffPrincipal principal, UUID visitId) {
-        UUID roomId = requireDoctorRoomOnDuty(principal);
-        Visit visit = requireVisitInRoom(visitId, roomId);
+        Visit visit = requireCallableVisit(principal, visitId);
         if (visit.isSkipped() || !isDoctorWaitingStage(visit.getStatus())) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
@@ -685,8 +686,7 @@ public class VisitServiceImpl implements VisitService {
     @Override
     @Transactional
     public VisitResponse acceptSkippedVisit(StaffPrincipal principal, UUID visitId) {
-        UUID roomId = requireDoctorRoomOnDuty(principal);
-        Visit visit = requireVisitInRoom(visitId, roomId);
+        Visit visit = requireCallableVisit(principal, visitId);
         if (!canAcceptSkippedVisit(visit)) {
             throw new AppException(ErrorCode.CONCURRENT_MODIFICATION);
         }
@@ -724,10 +724,24 @@ public class VisitServiceImpl implements VisitService {
                 || visit.getDoctorAccountId() != null;
     }
 
-    private UUID requireDoctorRoomOnDuty(StaffPrincipal principal) {
+    /**
+     * BR-19, BR-20: a new patient is called only in the Doctor's shift. Outside it, the Doctor may still call back,
+     * skip or accept again a patient of today who is waiting for the conclusion of a visit assigned to them.
+     */
+    private Visit requireCallableVisit(StaffPrincipal principal, UUID visitId) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
-        LocalTime localTime = LocalTime.ofInstant(now, CLINIC_ZONE);
+        UUID roomId = requireDoctorRoom(principal);
+        Visit visit = requireVisitInRoom(visitId, roomId);
+        boolean ownConclusion = visit.getStatus() == VisitStatus.WAITING_CONCLUSION
+                && DoctorShiftCheck.isOwnVisitOfToday(visit, principal.accountId(), today);
+        if (!ownConclusion && !isOnDuty(principal.accountId(), roomId, today, LocalTime.ofInstant(now, CLINIC_ZONE))) {
+            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
+        }
+        return visit;
+    }
+
+    private UUID requireDoctorRoom(StaffPrincipal principal) {
         StaffAccount doctor = staffAccountRepository.findById(principal.accountId())
                 .filter(account -> account.getRole() == Role.DOCTOR && account.canAuthenticate())
                 .orElseThrow(() -> new AppException(ErrorCode.ACCESS_DENIED));
@@ -739,9 +753,6 @@ public class VisitServiceImpl implements VisitService {
                 .filter(room -> room.getType() == RoomType.EXAMINATION)
                 .filter(room -> room.getStatus() == ActivationStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_ASSIGNMENT_REQUIRED));
-        if (!isOnDuty(doctor.getId(), roomId, today, localTime)) {
-            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
-        }
         return roomId;
     }
 

@@ -441,6 +441,9 @@ export default function DoctorWaitingListPage({
                                         const isFirstPatient = activeTab === 'patients' && visit.id === nextPatient?.id;
                                         const callable = ['WAITING', 'WAITING_CONCLUSION'].includes(visit.status);
                                         const opensExamination = canOpenExamination(visit);
+                                        // BR-19, BR-20: after the shift the Doctor still calls back their own patient for the conclusion.
+                                        const rowBlocked = actionsBlocked
+                                            && !(visit.status === 'WAITING_CONCLUSION' && visit.assignedToMe);
                                         return (
                                             <tr
                                                 key={visit.id}
@@ -464,11 +467,11 @@ export default function DoctorWaitingListPage({
                                                 <td className="px-3 py-3"><StatusBadge visit={visit} /></td>
                                                 <td className="px-3 py-3">
                                                     {callable && visit.isSkipped && visit.canAcceptAgain
-                                                        ? <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Tiếp nhận lại'}</button>
+                                                        ? <button type="button" disabled={calling || rowBlocked} title={rowBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void acceptSkippedPatient(visit)} className="h-9 cursor-pointer rounded-lg border border-teal-600 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">{processingVisitId === visit.id ? 'Đang xử lý…' : 'Tiếp nhận lại'}</button>
                                                         : callable && !visit.isSkipped
                                                             ? <div className="flex min-w-40 justify-center gap-2">
-                                                                <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
-                                                                <button type="button" disabled={calling || actionsBlocked} title={actionsBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void skipPatient(visit)} className="h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng mặt</button>
+                                                                <button type="button" disabled={calling || rowBlocked} title={rowBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void confirmPresent(visit)} className={`h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isFirstPatient ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-teal-600 text-teal-700 hover:bg-teal-50'}`}>{processingVisitId === visit.id ? 'Đang xử lý…' : 'Bắt đầu'}</button>
+                                                                <button type="button" disabled={calling || rowBlocked} title={rowBlocked ? 'Ngoài ca trực' : undefined} onClick={() => void skipPatient(visit)} className="h-9 flex-1 cursor-pointer whitespace-nowrap rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50">Vắng mặt</button>
                                                             </div>
                                                             : <span className="text-slate-300">—</span>}
                                                 </td>

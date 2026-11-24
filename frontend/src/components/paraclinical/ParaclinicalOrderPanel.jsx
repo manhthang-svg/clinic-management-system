@@ -332,6 +332,13 @@ export function ParaclinicalOrderPanel({
 
                 <section aria-labelledby="cls-selected-title" className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <h2 id="cls-selected-title" className="text-sm font-bold">Dịch vụ đã chọn ({cost.lines.length})</h2>
+                    {coverage?.threshold != null && (
+                        // BR-27: the estimate uses the card's rate; below the threshold the visit is covered in full.
+                        <p className="mt-1 text-xs text-slate-500" data-testid="cls-exemption-note">
+                            Bệnh nhân có thể phải trả ít hơn nếu tổng chi phí BHYT của lượt khám dưới 15% mức lương cơ
+                            sở: {formatAmount(coverage.threshold)} đ.
+                        </p>
+                    )}
 
                     <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                         <table className="w-full min-w-[640px] text-xs">
