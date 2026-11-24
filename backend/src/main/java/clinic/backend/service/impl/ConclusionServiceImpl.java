@@ -88,6 +88,7 @@ public class ConclusionServiceImpl implements ConclusionService {
     private final ConclusionRepository conclusionRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final Icd10Repository icd10Repository;
+    private final Icd10SearchCache icd10Catalog;
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
     private final Clock clock;
@@ -127,6 +128,10 @@ public class ConclusionServiceImpl implements ConclusionService {
         }
 
         LocalDate day = LocalDate.ofInstant(now, CLINIC_ZONE);
+        // The free-text diagnosis must name ICD-10 diseases, not arbitrary text.
+        if (!icd10Catalog.namesIcd10Diseases(diagnosis, day)) {
+            throw new AppException(ErrorCode.CONCLUSION_DIAGNOSIS_NOT_ICD10, Map.of("field", "diagnosis"));
+        }
         Icd10 main = mainDiagnosis(request, context.patient(), day);
         List<Icd10> secondary = secondaryDiagnoses(request.secondaryIcd10Codes(), main, context.patient(), day);
         if (conclusion != null && diagnosesLocked(context.record()) && diagnosesChanged(conclusion, main, secondary)) {

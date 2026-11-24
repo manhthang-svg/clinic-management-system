@@ -99,6 +99,34 @@ public class Icd10SearchCache {
         return List.copyOf(result);
     }
 
+    /**
+     * Whether {@code text} names one ICD-10 disease usable on {@code day}: its code ("J02.9", "j029"), its name
+     * ("Viêm họng cấp, không đặc hiệu") or both ("J02.9 Viêm họng cấp, không đặc hiệu", "J02.9 - ..."), without
+     * accents or case. Several diseases are separated by ";" and each one must match.
+     */
+    public boolean namesIcd10Diseases(String text, LocalDate day) {
+        if (text == null || text.isBlank()) return false;
+        List<String> parts = new ArrayList<>();
+        for (String part : text.split(";")) {
+            String folded = VietnameseText.fold(part);
+            if (!folded.isEmpty()) parts.add(folded);
+        }
+        if (parts.isEmpty()) return false;
+        List<Entry> usable = entries().stream().filter(entry -> entry.usableOn(day)).toList();
+        return parts.stream().allMatch(part -> usable.stream().anyMatch(entry -> names(entry, part)));
+    }
+
+    private static boolean names(Entry entry, String part) {
+        if (part.equals(entry.foldedName()) || part.equals(entry.foldedCode())
+                || part.replace(".", "").equals(entry.compactCode())) {
+            return true;
+        }
+        if (!part.startsWith(entry.foldedCode())) return false;
+        String rest = part.substring(entry.foldedCode().length()).strip();
+        if (rest.startsWith("-") || rest.startsWith(":")) rest = rest.substring(1).strip();
+        return rest.equals(entry.foldedName());
+    }
+
     static int rank(Entry entry, String query, String compactQuery) {
         boolean codeQuery = !compactQuery.isEmpty();
         if (entry.foldedCode().equals(query) || (codeQuery && entry.compactCode().equals(compactQuery))) return 0;
