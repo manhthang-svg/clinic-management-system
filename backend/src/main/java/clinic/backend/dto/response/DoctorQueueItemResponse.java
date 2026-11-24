@@ -28,5 +28,7 @@ public record DoctorQueueItemResponse(
         boolean canAcceptAgain,
         String sourceRoomName,
         Instant transferredAt,
-        String note) {
+        String note,
+        // BR-19, BR-20: the visit is assigned to the signed-in Doctor, who may finish it after the shift ends.
+        boolean assignedToMe) {
 }

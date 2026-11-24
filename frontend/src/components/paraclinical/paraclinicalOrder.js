@@ -11,6 +11,8 @@ export const MSG = {
     // EF-03: MSG75 ("Lượt khám") when the visit changed meanwhile, MSG68 when its medical record is closed.
     NOT_IN_EXAMINATION: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.',
     RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.',
+    // MSG48 (BR-19): outside the Doctor's shift no new order is created.
+    OFF_DUTY: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.',
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
@@ -52,19 +54,11 @@ export function filterServices(services, { keyword = '', type = '', groupId = ''
 }
 
 /**
- * BR-27 applied coverage rate: 100% while the visit's total cost within insurance scope stays below the
- * co-payment exemption threshold (15% of the base salary), otherwise the card's rate.
- */
-export function appliedCoverageRate(scopeTotal, { cardRate, threshold }) {
-    return threshold != null && scopeTotal < threshold ? 100 : cardRate;
-}
-
-/**
  * Step 4 (BR-27): each line is charged at the clinic price. For a valid-card insurance visit (`coverage` =
- * { cardRate, scopeTotal, threshold }), a service with an insurance price is covered for
- * min(insurance price, clinic price) × the applied rate of the whole visit once these services are added, and the
- * patient pays the rest; other services, and every service of a self-paid visit (no coverage), are paid in full.
- * The backend computes the receipts; this is the estimate shown before confirming.
+ * { cardRate, ... }), a service with an insurance price is covered for min(insurance price, clinic price) × the
+ * card's coverage rate, and the patient pays the rest; other services, and every service of a self-paid visit (no
+ * coverage), are paid in full. The estimate always uses the card's rate: the 100% coverage below 15% of the base
+ * salary is applied by the backend on the receipts, and the screen only notes that the patient may pay less.
  */
 export function estimate(services, selectedIds, coverage = null) {
     const selected = selectedIds
@@ -76,9 +70,7 @@ export function estimate(services, selectedIds, coverage = null) {
             const scope = insurancePrice == null ? 0 : Math.min(insurancePrice, clinicPrice);
             return { ...service, clinicPrice, insurancePrice, scope };
         });
-    const newScope = selected.reduce((total, line) => total + line.scope, 0);
-    const visitScope = Number(coverage?.scopeTotal || 0) + newScope;
-    const appliedRate = coverage?.cardRate ? appliedCoverageRate(visitScope, coverage) : null;
+    const appliedRate = coverage?.cardRate || null;
     const lines = selected.map((line) => {
         const insuranceAmount = appliedRate && line.insurancePrice != null
             ? Math.round((line.scope * appliedRate) / 100)
@@ -89,9 +81,6 @@ export function estimate(services, selectedIds, coverage = null) {
     return {
         lines,
         appliedRate,
-        // The earlier receipts of the visit are repriced when the applied rate changes (BR-27).
-        rateChanges: appliedRate != null && coverage?.cardRate
-            && appliedRate !== appliedCoverageRate(Number(coverage.scopeTotal || 0), coverage),
         clinicTotal: sum('clinicPrice'),
         insuranceTotal: lines.reduce((total, line) => total + (line.insurancePrice ?? 0), 0),
         insuranceAmount: sum('insuranceAmount'),
@@ -201,6 +190,7 @@ export function orderErrorMessage(error) {
     if (code === 'SERVICE_NOT_FOUND') return 'Dịch vụ đã chọn không còn hợp lệ. Vui lòng chọn dịch vụ khác.';
     if (code === 'VISIT_NOT_IN_EXAMINATION') return MSG.NOT_IN_EXAMINATION;
     if (code === 'MEDICAL_RECORD_CLOSED') return MSG.RECORD_CLOSED;
+    if (code === 'DOCTOR_OFF_DUTY' || code === 'ROOM_ASSIGNMENT_REQUIRED') return MSG.OFF_DUTY;
     if (error?.status === 401) return MSG.SESSION_EXPIRED;
     if (error?.status === 403) return MSG.FORBIDDEN;
     return MSG.SYSTEM_ERROR;

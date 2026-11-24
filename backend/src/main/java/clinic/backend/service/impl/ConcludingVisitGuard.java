@@ -77,11 +77,12 @@ public class ConcludingVisitGuard {
                 .flatMap(shift -> dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
                         today, shift, doctor.getId()))
                 .map(DutySchedule::getRoomId).filter(room.getId()::equals).isPresent();
-        if (!onDuty) {
-            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
-        }
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        // BR-19, BR-20: outside the shift the Doctor still finishes today's visit they called in.
+        if (!onDuty && !DoctorShiftCheck.isOwnVisitOfToday(visit, doctor.getId(), today)) {
+            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
+        }
         if (!room.getId().equals(visit.getRoomId()) || !doctor.getId().equals(visit.getDoctorAccountId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }

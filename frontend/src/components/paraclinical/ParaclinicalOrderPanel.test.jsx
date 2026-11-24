@@ -127,6 +127,8 @@ describe('ParaclinicalOrderPanel (UC-49)', () => {
         // 43 900 × 80% = 35 120 covered; the uncovered ECG is paid in full.
         expect(screen.getByTestId('cls-insurance-total')).toHaveTextContent('35.120');
         expect(screen.getByTestId('cls-total')).toHaveTextContent('214.880');
+        expect(screen.getByTestId('cls-exemption-note')).toHaveTextContent(
+            'Bệnh nhân có thể phải trả ít hơn nếu tổng chi phí BHYT của lượt khám dưới 15% mức lương cơ sở: 351.000 đ.');
     });
 
     it('removes a selected service from the selection table', async () => {
@@ -265,12 +267,10 @@ describe('paraclinicalOrder helpers', () => {
         expect(estimate(services, ['s3'], aboveThreshold)).toMatchObject({ insuranceAmount: 0, patientAmount: 50000 });
     });
 
-    it('covers the visit in full below 15% of the base salary and flags a rate change (BR-27)', () => {
-        const coverage = { cardRate: 80, scopeTotal: 300000, threshold: 351000 };
-        // 300 000 + 43 900 stays below 351 000: 100% of the insurance price is covered.
-        expect(estimate(services, ['s1'], coverage)).toMatchObject({ appliedRate: 100, insuranceAmount: 43900, rateChanges: false });
-        // + 46 200 crosses it: the card's 80% applies, and the earlier receipts are repriced.
-        expect(estimate(services, ['s1', 's2'], coverage)).toMatchObject({ appliedRate: 80, rateChanges: true });
+    it("always estimates with the card's rate, even below 15% of the base salary (BR-27)", () => {
+        const coverage = { cardRate: 80, scopeTotal: 0, threshold: 351000 };
+        // 43 900 is far below 351 000, but the estimate still applies the card's 80%.
+        expect(estimate(services, ['s1'], coverage)).toMatchObject({ appliedRate: 80, insuranceAmount: 35120 });
     });
 
     it('builds MSG63 and maps EF-02 / EF-03 to MSG40, MSG75 and MSG68', () => {
@@ -283,6 +283,9 @@ describe('paraclinicalOrder helpers', () => {
             .toBe('Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.');
         expect(orderErrorMessage(failure('MEDICAL_RECORD_CLOSED')))
             .toBe('Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.');
+        // BR-19: outside the Doctor's shift no new order is created (MSG48).
+        expect(orderErrorMessage(failure('DOCTOR_OFF_DUTY')))
+            .toBe('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.');
     });
 
     it('identifies whether a service has an active room on duty (hasOnDutyRoom)', () => {
