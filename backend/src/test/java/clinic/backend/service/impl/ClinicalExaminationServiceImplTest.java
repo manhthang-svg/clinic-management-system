@@ -139,6 +139,39 @@ class ClinicalExaminationServiceImplTest {
     }
 
     @Test
+    void requiresAnIcd10CodeBeforeContinuingEvenWithADiagnosisText() {
+        stubEditableExamination();
+        SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
+                ClinicalExaminationSaveMode.CONTINUE, ClinicalExaminationNextStep.CONCLUSION,
+                "Đau đầu", null, null, null,
+                new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
+                null, "Đau đầu nhẹ", null, List.of(), null, null);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRELIMINARY_DIAGNOSIS_REQUIRED));
+    }
+
+    @Test
+    void rejectsADiagnosisTextThatNamesNoIcd10Disease() {
+        stubEditableExamination();
+        when(icd10Repository.findById("J02")).thenReturn(Optional.of(icd10("J02", null, false, null)));
+        when(icd10Repository.findSearchable()).thenReturn(List.of(
+                Icd10SearchCacheTest.code("J02", "Bệnh J02", LocalDate.of(2026, 7, 1), null)));
+        SaveClinicalExaminationRequest request = new SaveClinicalExaminationRequest(
+                ClinicalExaminationSaveMode.DRAFT, null, "Đau họng", null, null, null,
+                new VitalSignRequest((short) 72, null, null, null, null, null, null, null, NOW),
+                null, "abc xyz", "J02", List.of("J02"), null, null);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRELIMINARY_DIAGNOSIS_NOT_ICD10);
+                    assertThat(error.getDetails()).containsEntry("field", "preliminaryDiagnosis");
+                });
+        verify(examinationRepository, never()).saveAndFlush(any(ClinicalExamination.class));
+    }
+
+    @Test
     void rejectsACategoryThatHasMoreDetailedCodes() {
         stubEditableExamination();
         when(icd10Repository.findById("A00")).thenReturn(Optional.of(icd10("A00", null, true, null)));

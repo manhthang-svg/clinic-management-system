@@ -296,6 +296,24 @@ describe('ClinicalExaminationPage', () => {
         expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
     });
 
+    it('does not save while text is typed in the ICD-10 box without picking a code', async () => {
+        renderPage();
+        await screen.findByRole('heading', { name: 'Khám lâm sàng' });
+        fireEvent.change(screen.getByLabelText(/Nhịp thở/), { target: { value: '36' } });
+        fireEvent.change(screen.getByLabelText(/Chẩn đoán ban đầu/), { target: { value: 'ádasdasd' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+
+        expect(screen.getByRole('alert')).toHaveTextContent('Chưa chọn mã ICD-10');
+        expect(screen.getByLabelText(/Chẩn đoán ban đầu/)).toHaveAttribute('aria-invalid', 'true');
+        expect(visitApi.saveClinicalExamination).not.toHaveBeenCalled();
+
+        // Clearing the box removes the error, and the draft saves.
+        fireEvent.change(screen.getByLabelText(/Chẩn đoán ban đầu/), { target: { value: '' } });
+        expect(screen.queryByText(/Chưa chọn mã ICD-10/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+        expect(visitApi.saveClinicalExamination).toHaveBeenCalled();
+    });
+
     it('blocks continuing without a preliminary diagnosis (EF-04, MSG98)', async () => {
         renderPage();
         await screen.findByRole('heading', { name: 'Khám lâm sàng' });

@@ -51,6 +51,14 @@ describe('validateExamination', () => {
         expect(validateExamination(blank, 'CONTINUE')).toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED });
         expect(validateExamination({ ...blank, diagnoses: [{ code: 'J02', name: 'Viêm họng cấp' }] }, 'CONTINUE')).toEqual({});
     });
+
+    it('blocks saving while text is left in the ICD-10 search box without a picked code', () => {
+        expect(validateExamination(blank, 'DRAFT', 'ádasdasd'))
+            .toEqual({ preliminaryDiagnosis: MSG.ICD10_NOT_SELECTED });
+        const picked = { ...blank, diagnoses: [{ code: 'J02', name: 'Viêm họng cấp' }] };
+        expect(validateExamination(picked, 'CONTINUE', 'viem')).toEqual({ preliminaryDiagnosis: MSG.ICD10_NOT_SELECTED });
+        expect(validateExamination(blank, 'DRAFT', '   ')).toEqual({});
+    });
 });
 
 describe('validateHistory', () => {
@@ -98,5 +106,9 @@ describe('fieldErrorsFromApi', () => {
             .toEqual({ icd10: MSG.ICD10_SEX_MISMATCH });
         expect(fieldErrorsFromApi({ errorResponse: { code: 'PRELIMINARY_DIAGNOSIS_REQUIRED' } }))
             .toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED });
+        expect(fieldErrorsFromApi({ errorResponse: { code: 'PRELIMINARY_DIAGNOSIS_NOT_ICD10' } }))
+            .toEqual({ preliminaryDiagnosis: MSG.DIAGNOSIS_NOT_ICD10 });
+        expect(examinationErrorMessage({ errorResponse: { code: 'PRELIMINARY_DIAGNOSIS_NOT_ICD10' } }))
+            .toBe(MSG.DIAGNOSIS_NOT_ICD10);
     });
 });

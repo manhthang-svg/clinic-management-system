@@ -177,6 +177,8 @@ public enum ErrorCode {
             "One or more vital-sign values are invalid.", HttpStatus.UNPROCESSABLE_ENTITY),
     PRELIMINARY_DIAGNOSIS_REQUIRED("PRELIMINARY_DIAGNOSIS_REQUIRED",
             "A preliminary diagnosis is required before continuing.", HttpStatus.UNPROCESSABLE_ENTITY),
+    PRELIMINARY_DIAGNOSIS_NOT_ICD10("PRELIMINARY_DIAGNOSIS_NOT_ICD10",
+            "The preliminary diagnosis does not match any ICD-10 disease.", HttpStatus.UNPROCESSABLE_ENTITY),
     ICD10_INVALID("ICD10_INVALID", "The selected ICD-10 code is unavailable.", HttpStatus.UNPROCESSABLE_ENTITY),
     ICD10_NOT_DETAILED("ICD10_NOT_DETAILED",
             "The selected ICD-10 code has more detailed codes; select one of them.", HttpStatus.UNPROCESSABLE_ENTITY),

@@ -61,6 +61,7 @@ import clinic.backend.service.ClinicalExaminationService;
 import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.service.InsuranceCoverageService;
 import clinic.backend.utils.UuidV7Generator;
+import clinic.backend.utils.VietnameseText;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -142,6 +143,7 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
                 .map(code -> resolveIcd10(code, context.patient(), examinationDay))
                 .distinct()
                 .toList();
+        requireIcd10Diagnosis(request, diagnoses, examinationDay);
         Icd10 icd10 = diagnoses.isEmpty() ? null : diagnoses.getFirst();
         Map<String, Object> oldValues = auditValues(context.visit(), examination);
 
@@ -309,6 +311,24 @@ public class ClinicalExaminationServiceImpl implements ClinicalExaminationServic
             if (request.nextStep() == null || diagnosis == null || diagnosis.length() < 2) {
                 throw new AppException(ErrorCode.PRELIMINARY_DIAGNOSIS_REQUIRED);
             }
+        }
+    }
+
+    /**
+     * Continuing needs at least one ICD-10 code, and the diagnosis text, when given, must name ICD-10 diseases:
+     * the names of the selected codes as the form sends them ("name; name"), or any code or name of the catalog.
+     */
+    private void requireIcd10Diagnosis(SaveClinicalExaminationRequest request, List<Icd10> diagnoses, LocalDate day) {
+        if (request.mode() == ClinicalExaminationSaveMode.CONTINUE && diagnoses.isEmpty()) {
+            throw new AppException(ErrorCode.PRELIMINARY_DIAGNOSIS_REQUIRED);
+        }
+        String text = normalize(request.preliminaryDiagnosis());
+        if (text == null) return;
+        String selectedNames = String.join("; ", diagnoses.stream().map(Icd10::getTenicd).toList());
+        boolean namesSelected = !diagnoses.isEmpty()
+                && VietnameseText.fold(text).equals(VietnameseText.fold(selectedNames));
+        if (!namesSelected && !icd10SearchCache.namesIcd10Diseases(text, day)) {
+            throw new AppException(ErrorCode.PRELIMINARY_DIAGNOSIS_NOT_ICD10, Map.of("field", "preliminaryDiagnosis"));
         }
     }
 

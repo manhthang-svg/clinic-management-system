@@ -45,6 +45,9 @@ export const MSG = {
         `${label} phải trong khoảng ${min.toLocaleString('vi-VN')}–${max.toLocaleString('vi-VN')} ${unit}.`, // MSG97
     DIASTOLIC_NOT_BELOW_SYSTOLIC: 'Huyết áp tâm trương phải nhỏ hơn huyết áp tâm thu.', // MSG97
     DIAGNOSIS_REQUIRED: 'Chẩn đoán ban đầu phải có từ 2 đến 1.000 ký tự trước khi tiếp tục.', // MSG98
+    // ASSUMPTION wording: no catalogue message for a diagnosis outside ICD-10.
+    DIAGNOSIS_NOT_ICD10: 'Chẩn đoán ban đầu phải là bệnh trong danh mục ICD-10. Vui lòng chọn mã từ danh sách.',
+    ICD10_NOT_SELECTED: 'Chưa chọn mã ICD-10. Hãy chọn một bệnh trong danh sách gợi ý hoặc xóa chữ đang nhập.',
     ICD10_INVALID: 'Mã ICD-10 không còn khả dụng. Vui lòng chọn mã khác hoặc để trống.',
     ICD10_NOT_DETAILED: 'Mã ICD-10 này có mã chi tiết hơn. Vui lòng chọn mã chi tiết.', // TT 06/2026, cột 26
     ICD10_SEX_MISMATCH: 'Mã ICD-10 này không áp dụng cho giới tính của người bệnh.', // TT 06/2026, cột 28-29
@@ -69,6 +72,7 @@ const CODE_MESSAGES = {
     VITAL_SIGNS_REQUIRED: MSG.VITALS_REQUIRED,
     VITAL_SIGNS_INVALID: MSG.CHECK_FIELDS,
     PRELIMINARY_DIAGNOSIS_REQUIRED: MSG.DIAGNOSIS_REQUIRED,
+    PRELIMINARY_DIAGNOSIS_NOT_ICD10: MSG.DIAGNOSIS_NOT_ICD10,
     REFERRAL_DIAGNOSIS_REQUIRED: MSG.REFERRAL_DIAGNOSIS_REQUIRED,
     ICD10_INVALID: MSG.ICD10_INVALID,
     ICD10_NOT_DETAILED: MSG.ICD10_NOT_DETAILED,
@@ -96,6 +100,7 @@ const API_FIELDS = {
 export function fieldErrorsFromApi(error) {
     const code = error?.errorResponse?.code;
     if (code === 'PRELIMINARY_DIAGNOSIS_REQUIRED') return { preliminaryDiagnosis: MSG.DIAGNOSIS_REQUIRED };
+    if (code === 'PRELIMINARY_DIAGNOSIS_NOT_ICD10') return { preliminaryDiagnosis: MSG.DIAGNOSIS_NOT_ICD10 };
     if (code === 'REFERRAL_DIAGNOSIS_REQUIRED') return { referralDiagnosis: MSG.REFERRAL_DIAGNOSIS_REQUIRED };
     if (code === 'ICD10_INVALID' || code === 'ICD10_NOT_DETAILED' || code === 'ICD10_SEX_MISMATCH') {
         return { icd10: MSG[code] };
@@ -122,8 +127,11 @@ function checkLength(errors, key, value, label, min, max, required) {
     else if (text.length < min) errors[key] = MSG.lengthBetween(label, min, max);
 }
 
-/** Mirrors the backend rules for the chosen action (AF-01 draft vs. AF-04/AF-05 continue). */
-export function validateExamination(form, mode) {
+/**
+ * Mirrors the backend rules for the chosen action (AF-01 draft vs. AF-04/AF-05 continue). `pendingIcdQuery` is the
+ * text left in the ICD-10 search box: it is never saved, so any such text blocks saving until a code is picked.
+ */
+export function validateExamination(form, mode, pendingIcdQuery = '') {
     const errors = {};
     checkLength(errors, 'reason', form.reason, 'Lý do khám', 2, 1000, true);
     // BR-129: only a visit referred by a health facility carries the referral diagnosis.
@@ -154,6 +162,7 @@ export function validateExamination(form, mode) {
     if (mode === 'CONTINUE') {
         if (!form.diagnoses?.length) errors.preliminaryDiagnosis = MSG.DIAGNOSIS_REQUIRED;
     }
+    if (pendingIcdQuery.trim()) errors.preliminaryDiagnosis = MSG.ICD10_NOT_SELECTED;
     return errors;
 }
 
