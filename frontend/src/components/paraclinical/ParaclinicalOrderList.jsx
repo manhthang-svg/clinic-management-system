@@ -173,9 +173,9 @@ function OrderCard({ order, api, results, onCancel }) {
                 <table className="w-full text-xs">
                     <thead className="border-b border-slate-200 bg-slate-50">
                         <tr>
-                            <th scope="col" className={thClass}>Mã dịch vụ</th>
+                            <th scope="col" className={thClass}>Mã chỉ định</th>
                             <th scope="col" className={thClass}>Tên dịch vụ</th>
-                            <th scope="col" className={thClass}>Nơi thực hiện</th>
+                            <th scope="col" className={thClass}>Phòng thực hiện</th>
                             <th scope="col" className={thClass}>Trạng thái</th>
                             <th scope="col" className={thClass}><span className="sr-only">Thao tác</span></th>
                         </tr>
@@ -264,7 +264,8 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = def
         const controller = new AbortController();
         api.getParaclinicalOrders(visitId, controller.signal)
             .then((response) => {
-                setOrders(response ?? []);
+                // UC-54 step 2: the newest order slip first.
+                setOrders([...(response ?? [])].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))));
                 // Load every submitted result in the background, so opening one needs no wait.
                 (response ?? []).forEach((item) => item.details
                     ?.filter((detail) => detail.status === 'COMPLETED')
@@ -307,7 +308,8 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = def
                 <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>
             )}
             {orders.length === 0
-                ? <p className="text-sm text-slate-500">Chưa có chỉ định cận lâm sàng.</p>
+                // UC-54 AF-01: MSG92.
+                ? <p className="text-sm text-slate-500">Chưa có dữ liệu để hiển thị.</p>
                 : orders.map((order) => <OrderCard key={order.id} order={order} api={api} results={results} onCancel={setCancelling} />)}
             {cancelling && (
                 <CancelServiceDialog

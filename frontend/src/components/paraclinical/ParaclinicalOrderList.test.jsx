@@ -51,9 +51,28 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(row).toHaveTextContent('Phòng siêu âm 1');
         expect(within(row).getByText('Tầng 2')).toBeInTheDocument();
         expect(within(screen.getByText('Tổng phân tích máu').closest('tr')).getByText('Chưa xếp phòng')).toBeInTheDocument();
-        expect(screen.getByRole('columnheader', { name: 'Nơi thực hiện' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Phòng thực hiện' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Mã chỉ định' })).toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Thành tiền (₫)' })).not.toBeInTheDocument();
         expect(screen.queryByText(/Tổng cộng/)).not.toBeInTheDocument();
+    });
+
+    it('lists the newest order slip first (UC-54 step 2)', async () => {
+        const older = { ...order([ultrasound])[0], id: 'o1', sophieu: 'CD1', createdAt: '2026-11-08T03:00:00Z' };
+        const newer = {
+            ...order([{ ...blood, id: 'd3', machidinh: 'CD2-01' }])[0],
+            id: 'o2', sophieu: 'CD2', createdAt: '2026-11-08T05:00:00Z',
+        };
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue([older, newer]) }} />);
+
+        const codes = (await screen.findAllByText(/^CD\d-01$/)).map((cell) => cell.textContent);
+        expect(codes).toEqual(['CD2-01', 'CD1-01']);
+    });
+
+    it('shows MSG92 when the visit has no order slip (UC-54 AF-01)', async () => {
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue([]) }} />);
+
+        expect(await screen.findByText('Chưa có dữ liệu để hiển thị.')).toBeInTheDocument();
     });
 
     it('offers to cancel only the services that can still be cancelled', async () => {
