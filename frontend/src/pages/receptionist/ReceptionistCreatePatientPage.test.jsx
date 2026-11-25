@@ -120,6 +120,35 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         });
     });
 
+    it('lets a foreigner pick a country only after choosing Ngoại kiều and fills its code', async () => {
+        const user = userEvent.setup();
+        const patientApi = {
+            possibleDuplicates: vi.fn().mockResolvedValue([]),
+            create: vi.fn().mockResolvedValue({ id: 'p-11' }),
+        };
+        renderPage(patientApi);
+
+        const country = screen.getByLabelText(/^Ngoại kiều/);
+        const countryCodeField = screen.getByLabelText('Mã ngoại kiều');
+        expect(country).toBeDisabled();
+        expect(countryCodeField).toHaveAttribute('readonly');
+        await fillAdult(user);
+        await user.selectOptions(screen.getByLabelText('Nghề nghiệp'), 'Ngoại kiều');
+        expect(country).toBeEnabled();
+        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+        expect(await screen.findByText('Trường này là bắt buộc.')).toBeInTheDocument();
+        expect(patientApi.create).not.toHaveBeenCalled();
+
+        await user.selectOptions(country, 'Nhật');
+        expect(countryCodeField).toHaveValue('16');
+        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+
+        await screen.findByText('Hồ sơ p-11');
+        expect(patientApi.create.mock.calls[0][0]).toMatchObject({
+            nghenghiep: 'Ngoại kiều', nghenghiepMa: '12', ngoaikieu: 'Nhật', ngoaikieuMa: '16',
+        });
+    });
+
     it('warns about possible duplicates and opens the chosen profile (AF-02)', async () => {
         const user = userEvent.setup();
         const patientApi = {

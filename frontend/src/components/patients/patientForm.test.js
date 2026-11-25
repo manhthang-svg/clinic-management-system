@@ -6,6 +6,8 @@ import {
     INITIAL_PATIENT_FORM,
     MSG,
     buildPatientPayload,
+    countryCode,
+    countryOptions,
     createErrorMessage,
     formatFullName,
     ethnicityCode,
@@ -178,5 +180,45 @@ describe('nghe nghiep: chi chon ten, ma tu dien', () => {
 
     it('reports a backend error on the occupation code under the occupation field', () => {
         expect(serverFieldErrors({ nghenghiepMa: 'TOO_LONG' })).toEqual({ nghenghiep: FIELD_MSG.TOO_LONG });
+    });
+});
+
+describe('ngoai kieu: chi chon nuoc khi nghe nghiep la Ngoai kieu, ma tu dien', () => {
+    const foreigner = (overrides) => adult({ nghenghiep: 'Ngoại kiều', nghenghiepMa: '12', ...overrides });
+
+    it('maps each country to its code', () => {
+        expect(countryCode('Anh')).toBe('01');
+        expect(countryCode('Nhật')).toBe('16');
+        expect(countryCode('Trung Quốc')).toBe('21');
+        expect(countryCode('Khác')).toBe('99');
+        expect(countryCode('Úc')).toBeNull();
+    });
+
+    it('starts with an empty choice and keeps an old free-text country', () => {
+        expect(countryOptions('')[0]).toEqual({ value: '', label: 'Chưa chọn' });
+        expect(countryOptions('')).toHaveLength(23);
+        expect(countryOptions('VN')[1]).toEqual({ value: 'VN', label: 'VN' });
+    });
+
+    it('fills the code from the country and clears both when the occupation is no longer foreigner', () => {
+        const chosen = withDerivedCodes(withDerivedCodes(adult(), 'nghenghiep', 'Ngoại kiều'), 'ngoaikieu', 'Pháp');
+        expect(chosen).toMatchObject({ nghenghiepMa: '12', ngoaikieu: 'Pháp', ngoaikieuMa: '17' });
+        expect(withDerivedCodes(chosen, 'ngoaikieu', '')).toMatchObject({ ngoaikieu: '', ngoaikieuMa: '' });
+        expect(withDerivedCodes(chosen, 'nghenghiep', 'Công nhân')).toMatchObject({ ngoaikieu: '', ngoaikieuMa: '' });
+    });
+
+    it('requires a listed country for a foreigner', () => {
+        expect(validatePatientForm(foreigner(), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.REQUIRED });
+        expect(validatePatientForm(foreigner({ ngoaikieu: 'Úc' }), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.INVALID_FORMAT });
+        expect(validatePatientForm(foreigner({ ngoaikieu: 'Nhật', ngoaikieuMa: '16' }), TODAY)).toEqual({});
+    });
+
+    it('rejects a country for someone who is not a foreigner', () => {
+        expect(validatePatientForm(adult({ ngoaikieu: 'Nhật' }), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.INVALID_FORMAT });
+        expect(validatePatientForm(adult(), TODAY)).toEqual({});
+    });
+
+    it('reports a backend error on the country code under the country field', () => {
+        expect(serverFieldErrors({ ngoaikieuMa: 'TOO_LONG' })).toEqual({ ngoaikieu: FIELD_MSG.TOO_LONG });
     });
 });

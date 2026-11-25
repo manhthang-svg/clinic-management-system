@@ -327,6 +327,50 @@ class PatientServiceImplTest {
         assertThat(service.createPatient(ACCOUNT_ID, occupationRequest("Kỹ sư", "07")).nghenghiepMa()).isEqualTo("07");
     }
 
+    @Test
+    void derivesCountryCodeForAForeignerFromTheCountryName() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", "Nhật", "77"));
+
+        assertThat(response.ngoaikieu()).isEqualTo("Nhật");
+        assertThat(response.ngoaikieuMa()).isEqualTo("16");
+    }
+
+    @Test
+    void requiresACountryForAForeigner() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", null, null)))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "REQUIRED"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void rejectsACountryOutsideTheList() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", "Úc", "22")))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void rejectsACountryWhenTheOccupationIsNotForeigner() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Công nhân", "Nhật", null)))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest(null, null, "16")))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    private CreatePatientRequest foreignerRequest(String nghenghiep, String ngoaikieu, String ngoaikieuMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
+                null, "Kinh", null, ngoaikieu, ngoaikieuMa, "Ha Noi", null, null, null, null, null, "0901234567",
+                null, null, null, null, null, null, null);
+    }
+
     private CreatePatientRequest occupationRequest(String nghenghiep, String nghenghiepMa) {
         return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
                 nghenghiepMa, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null,
