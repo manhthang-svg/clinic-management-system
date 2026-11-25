@@ -58,9 +58,9 @@ public class Conclusion extends VersionedEntity {
     @Column(name = "tomtat")
     private String tomtat;
 
-    /** CV 365 III.31.1; 1 cured, 2 improved, 3 unchanged, 4 worse. */
-    @Column(name = "ketquadieutri", nullable = false)
-    private short ketquadieutri;
+    /** CV 365 III.31.1: optional free text (V63); rows before V63 hold the former labels Khỏi, Đỡ, …. */
+    @Column(name = "ketquadieutri")
+    private String ketquadieutri;
 
     /** CV 365 III.31.2. */
     @Column(name = "loidanbacsi", nullable = false)
@@ -93,7 +93,7 @@ public class Conclusion extends VersionedEntity {
     /** UC-56 step 7: the conclusion as the Doctor saved it; the record stays open. */
     public void record(
             UUID doctorAccountId, String chandoan, String maicd, String tenicd, String huongdieutri,
-            short ketquadieutri, String loidanbacsi, String tomtat, String ghichu, Instant now) {
+            String ketquadieutri, String loidanbacsi, String tomtat, String ghichu, Instant now) {
         this.doctorAccountId = doctorAccountId;
         this.chandoan = chandoan;
         this.maicd = maicd;

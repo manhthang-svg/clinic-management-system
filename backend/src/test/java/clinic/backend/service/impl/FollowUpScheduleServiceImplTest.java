@@ -101,7 +101,7 @@ class FollowUpScheduleServiceImplTest {
         context = new ConcludingVisitGuard.Context(visit, patient, record, doctor);
         conclusion = new Conclusion(UUID.randomUUID(), NOW, record.getId());
         conclusion.record(DOCTOR_ID, "Tăng huyết áp", "I10", "Tăng huyết áp vô căn", "Điều trị ngoại trú",
-                (short) 2, null, null, null, NOW);
+                "Đỡ", null, null, null, NOW);
 
         lenient().when(guard.require(any(), eq(VISIT_ID))).thenReturn(context);
         lenient().when(printGuard.require(any(), eq(VISIT_ID))).thenReturn(context);

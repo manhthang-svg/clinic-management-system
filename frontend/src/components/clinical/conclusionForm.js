@@ -1,19 +1,11 @@
 /** UC-56 Conclude Examination: form rules and messages (feedback only; the backend decides). */
 
-// conclusions.ketquadieutri: 1 cured, 2 improved, 3 unchanged, 4 worse (CV 365 III.31.1).
-export const TREATMENT_RESULTS = [
-    [1, 'Khỏi'],
-    [2, 'Đỡ'],
-    [3, 'Không thay đổi'],
-    [4, 'Nặng hơn'],
-];
-
 // ASSUMPTION (BR-106 is not in docs/): at most 12 secondary diagnoses, as the backend. The texts have no length
 // limit (the conclusions columns are TEXT).
 export const LIMITS = { secondary: 12 };
 
 export const EMPTY_CONCLUSION = {
-    diagnosis: '', main: null, secondary: [], treatmentPlan: '', treatmentResult: null, advice: '', summary: '', note: '',
+    diagnosis: '', main: null, secondary: [], treatmentPlan: '', treatmentResult: '', advice: '', summary: '', note: '',
 };
 
 // MSG64, MSG65, MSG66 and MSG68 wording: ASSUMPTION where the catalogue has none.
@@ -55,7 +47,8 @@ export function formFromResponse(data) {
         main: data?.mainDiagnosis ?? null,
         secondary: data?.secondaryDiagnoses ?? [],
         treatmentPlan: data?.treatmentPlan ?? '',
-        treatmentResult: data?.treatmentResult ?? null,
+        // CV 365 III.31.1: optional free text (V63).
+        treatmentResult: data?.treatmentResult ?? '',
         advice: data?.advice ?? '',
         summary: data?.summary ?? '',
         note: data?.note ?? '',
@@ -75,7 +68,6 @@ export function validateConclusion(form) {
     if (!form.main) errors.main = MSG.MAIN_REQUIRED;
     else if (form.secondary.some((item) => item.code === form.main.code)) errors.secondary = MSG.MAIN_REQUIRED;
     if (form.secondary.length > LIMITS.secondary) errors.secondary = MSG.TOO_MANY_SECONDARY;
-    if (!form.treatmentResult) errors.treatmentResult = MSG.required(LABELS.treatmentResult);
     return errors;
 }
 
@@ -86,7 +78,7 @@ export function toPayload(form, version, confirmDiscouragedMain = false) {
         mainIcd10Code: form.main?.code ?? null,
         secondaryIcd10Codes: form.secondary.map((item) => item.code),
         treatmentPlan: form.treatmentPlan.trim(),
-        treatmentResult: form.treatmentResult,
+        treatmentResult: text(form.treatmentResult),
         advice: form.advice.trim(),
         summary: text(form.summary),
         note: text(form.note),

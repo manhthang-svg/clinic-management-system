@@ -57,7 +57,8 @@ export function ConclusionSlip({ slip }) {
             {slip.diagnosisText && <p className="whitespace-pre-line pl-4 italic">{slip.diagnosisText}</p>}
             <Line label="Bệnh kèm theo:">{secondary}</Line>
             <Line label="Hướng điều trị:">{slip.treatmentPlan}</Line>
-            <Line label="Kết quả điều trị:">{slip.treatmentResult}</Line>
+            {/* Free text since V63; may span several lines or be empty (dotted line). */}
+            <p className="whitespace-pre-line"><span>Kết quả điều trị:</span> {slip.treatmentResult || '……………………'}</p>
             {slip.advice && <p className="whitespace-pre-line">Lời dặn: {slip.advice}</p>}
 
             <div className="flex justify-end pt-2">

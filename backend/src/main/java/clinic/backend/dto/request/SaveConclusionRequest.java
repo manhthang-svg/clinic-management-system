@@ -10,7 +10,7 @@ import java.util.List;
  * @param mainIcd10Code        Bệnh chính, ICD-10 (required)
  * @param secondaryIcd10Codes  Bệnh kèm theo, ICD-10, in order
  * @param treatmentPlan        Hướng điều trị (required: {@code conclusions.huongdieutri} is NOT NULL)
- * @param treatmentResult      Kết quả điều trị: 1 Khỏi, 2 Đỡ, 3 Không thay đổi, 4 Nặng hơn
+ * @param treatmentResult      Kết quả điều trị: optional free text, no length limit
  * @param advice               Lời dặn (required)
  * @param summary              Tóm tắt bệnh án
  * @param note                 Ghi chú
@@ -21,7 +21,7 @@ public record SaveConclusionRequest(
         String mainIcd10Code,
         List<String> secondaryIcd10Codes,
         String treatmentPlan,
-        Short treatmentResult,
+        String treatmentResult,
         String advice,
         String summary,
         String note,

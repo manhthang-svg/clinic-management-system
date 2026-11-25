@@ -40,6 +40,7 @@ public class Form15Bv1Renderer {
     private static final String CANCELLED = "CANCELLED";
 
     private static final Map<String, String> ORGANS = organLabels();
+    /** Archive packages built before V63 hold the former codes; later ones hold the Doctor's free text. */
     private static final Map<String, String> TREATMENT_RESULTS = Map.of(
             "1", "Khỏi", "2", "Đỡ", "3", "Không thay đổi", "4", "Nặng hơn");
 
@@ -265,7 +266,7 @@ public class Form15Bv1Renderer {
         html.append("<p><span class=\"b\">4. Phương pháp điều trị:</span> ")
                 .append(multiline(text(treatment, "huongdieutri"))).append("</p>");
         html.append("<p><span class=\"b\">5. Tình trạng người bệnh ra viện:</span> ")
-                .append(escape(TREATMENT_RESULTS.getOrDefault(text(discharge, "ketquadieutri"), ""))).append("</p>");
+                .append(multiline(treatmentResult(text(discharge, "ketquadieutri")))).append("</p>");
         String followUp = text(extensions.path("lichhentaikham"), "ngayhen");
         html.append("<p><span class=\"b\">6. Hướng điều trị và các chế độ tiếp theo:</span> ")
                 .append(multiline(join("\n", text(discharge, "loidanbacsi"),
@@ -467,6 +468,11 @@ public class Form15Bv1Renderer {
 
     private static String para(String value) {
         return "<p>" + multiline(value) + "</p>";
+    }
+
+    /** "Tình trạng người bệnh ra viện": a former code (archives before V63) as its label, otherwise the text as is. */
+    static String treatmentResult(String value) {
+        return value == null ? "" : TREATMENT_RESULTS.getOrDefault(value.strip(), value);
     }
 
     private static String multiline(String value) {

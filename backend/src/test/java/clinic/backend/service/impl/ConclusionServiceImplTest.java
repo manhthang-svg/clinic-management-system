@@ -107,7 +107,7 @@ class ConclusionServiceImplTest {
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
         when(icd10Catalog.namesIcd10Diseases(eq("abc xyz"), any())).thenReturn(false);
         SaveConclusionRequest request = new SaveConclusionRequest(
-                " abc xyz ", "J02.9", List.of(), "Điều trị ngoại trú", (short) 2, "Uống nhiều nước", null, null,
+                " abc xyz ", "J02.9", List.of(), "Điều trị ngoại trú", "Đỡ", "Uống nhiều nước", null, null,
                 false, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
@@ -129,7 +129,7 @@ class ConclusionServiceImplTest {
 
         assertThat(response.mainDiagnosis().code()).isEqualTo("J02.9");
         assertThat(response.secondaryDiagnoses()).extracting(item -> item.code()).containsExactly("K29.7");
-        assertThat(response.treatmentResult()).isEqualTo((short) 2);
+        assertThat(response.treatmentResult()).isEqualTo("Đỡ");
         ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
         verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getLoidanbacsi()).isEqualTo("Uống nhiều nước");
@@ -139,12 +139,31 @@ class ConclusionServiceImplTest {
     }
 
     @Test
+    void savesAConclusionWithoutATreatmentResult() {
+        // V63: "Kết quả điều trị" is optional free text, e.g. nothing to assess yet at a first visit.
+        stubVisit(VisitStatus.IN_EXAMINATION);
+        stubIcd(icd("J02.9", false, false));
+        when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.saveAndFlush(any(Conclusion.class))).thenAnswer(call -> call.getArgument(0));
+        SaveConclusionRequest request = new SaveConclusionRequest(
+                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", "   ", "Uống nhiều nước", null, null,
+                false, null);
+
+        var response = service.save(principal(), VISIT_ID, request);
+
+        assertThat(response.treatmentResult()).isNull();
+        ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
+        verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getKetquadieutri()).isNull();
+    }
+
+    @Test
     void asksForTheEmptyRequiredFieldBeforeSaving() {
         stubVisit(VisitStatus.IN_EXAMINATION);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
 
         SaveConclusionRequest request = new SaveConclusionRequest(
-                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", (short) 2, "  ", null, null, false, null);
+                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", "Đỡ", "  ", null, null, false, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class, error -> {
@@ -196,7 +215,7 @@ class ConclusionServiceImplTest {
         stubVisit(VisitStatus.IN_EXAMINATION);
         stubIcd(icd("J02.9", false, false), icd("J03.9", false, false));
         Conclusion saved = new Conclusion(UUID.randomUUID(), NOW, record.getId());
-        saved.record(DOCTOR_ID, "Viêm họng", "J02.9", "Bệnh J02.9", "Điều trị", (short) 2, "Dặn", null, null, NOW);
+        saved.record(DOCTOR_ID, "Viêm họng", "J02.9", "Bệnh J02.9", "Điều trị", "Đỡ", "Dặn", null, null, NOW);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(saved));
         // BR-59-08: only an accepted prescription locks the diagnoses; a sent one without an answer does not.
         when(prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(
@@ -219,7 +238,7 @@ class ConclusionServiceImplTest {
 
     private static SaveConclusionRequest request(String main, List<String> secondary, boolean confirm) {
         return new SaveConclusionRequest(
-                " Viêm họng cấp ", main, secondary, "Điều trị ngoại trú 5 ngày", (short) 2, "Uống nhiều nước",
+                " Viêm họng cấp ", main, secondary, "Điều trị ngoại trú 5 ngày", "Đỡ", "Uống nhiều nước",
                 null, null, confirm, null);
     }
 

@@ -172,7 +172,7 @@ public record MedicalRecordDetailResponse(
             String icdName,
             String treatmentPlan,
             String doctorAdvice,
-            Short treatmentResult,
+            String treatmentResult,
             Instant concludedAt
     ) {}
 

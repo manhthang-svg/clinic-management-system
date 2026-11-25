@@ -87,7 +87,7 @@ class ConclusionPrintServiceImplTest {
                 DOCTOR_ID, "doctor01", "hash", "Bác sĩ An", null, null, null, null, null, null, Role.DOCTOR, null, NOW);
         conclusion = new Conclusion(UUID.randomUUID(), NOW, record.getId());
         conclusion.record(DOCTOR_ID, "Tăng huyết áp độ 1", "I10", "Tăng huyết áp vô căn", "Điều trị ngoại trú",
-                (short) 2, "Ăn nhạt, đo huyết áp mỗi sáng", null, null, NOW);
+                "Đỡ", "Ăn nhạt, đo huyết áp mỗi sáng", null, null, NOW);
         conclusion.replaceSecondaryDiagnoses(List.of(new ConclusionSecondaryDiagnosis(
                 UUID.randomUUID(), NOW, conclusion, "E11", "Bệnh đái tháo đường type 2", (short) 1)));
 
