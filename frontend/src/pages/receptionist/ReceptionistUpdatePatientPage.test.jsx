@@ -8,6 +8,15 @@ import { FIELD_MSG, MSG } from '../../components/patients/patientForm';
 import ReceptionistUpdatePatientPage from './ReceptionistUpdatePatientPage';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// danh muc don vi hanh chinh gia: test khong goi mang that
+vi.mock('../../apis/administrativeUnitApi', () => ({
+    default: {
+        provinces: vi.fn(async () => [{ code: '01', name: 'Thành phố Hà Nội' }, { code: '79', name: 'Thành phố Hồ Chí Minh' }]),
+        wards: vi.fn(async (code) => (code === '01'
+            ? [{ code: '00004', name: 'Phường Ba Đình' }, { code: '00008', name: 'Phường Ngọc Hà' }]
+            : [{ code: '26734', name: 'Phường Sài Gòn' }])),
+    },
+}));
 
 const stored = {
     id: 'p-1',
@@ -18,6 +27,10 @@ const stored = {
     cccdSo: '012345678901',
     sodienthoai: '0901234567',
     diachi: '12 Lê Lợi',
+    xaphuong: 'Phường Ba Đình',
+    tinhthanh: 'Thành phố Hà Nội',
+    nghenghiep: 'Công nhân',
+    nghenghiepMa: '04',
     dantoc: 'Kinh',
     dantocMa: '01',
     email: 'an@example.com',
@@ -29,12 +42,28 @@ function DetailPage() {
     return <p>Hồ sơ {id}</p>;
 }
 
+it.each([false, true])('returns to the patient list from the breadcrumb (edited: %s)', async (edited) => {
+    const user = userEvent.setup();
+    renderPage({ detail: vi.fn().mockResolvedValue(stored), update: vi.fn() });
+    const name = await screen.findByLabelText(/Họ và tên/);
+    if (edited) await user.type(name, ' B');
+
+    await user.click(screen.getByRole('button', { name: 'Quản lý bệnh nhân' }));
+    if (edited) {
+        const dialog = screen.getByRole('dialog');
+        await user.click(within(dialog).getByRole('button', { name: 'Loại bỏ' }));
+    }
+
+    expect(screen.getByRole('heading', { name: 'Danh sách bệnh nhân' })).toBeInTheDocument();
+});
+
 function renderPage(patientApi) {
     return render(
         <MemoryRouter initialEntries={['/receptionist/patients/p-1/edit']}>
             <Routes>
                 <Route path="/receptionist/patients/:id/edit" element={<ReceptionistUpdatePatientPage patientApi={patientApi} />} />
                 <Route path="/receptionist/patients/:id" element={<DetailPage />} />
+                <Route path="/receptionist/patients" element={<h1>Danh sách bệnh nhân</h1>} />
             </Routes>
         </MemoryRouter>,
     );
@@ -61,7 +90,10 @@ describe('ReceptionistUpdatePatientPage (UC-38)', () => {
         await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
         expect(await screen.findByText('Hồ sơ p-1')).toBeInTheDocument();
-        expect(patientApi.update).toHaveBeenCalledWith('p-1', expect.objectContaining({ diachi: '34 Trần Phú', version: 3 }));
+        // the stored email is sent back unchanged, so saving other fields does not erase it
+        expect(patientApi.update).toHaveBeenCalledWith('p-1', expect.objectContaining({
+            diachi: '34 Trần Phú', email: 'an@example.com', version: 3,
+        }));
     });
 
     it('goes back without saving when nothing changed (AF-02)', async () => {
@@ -122,7 +154,7 @@ describe('ReceptionistUpdatePatientPage (UC-38)', () => {
         };
         renderPage(patientApi);
 
-        await user.selectOptions(await screen.findByLabelText('Nghề nghiệp'), 'Y tế');
+        await user.selectOptions(await screen.findByLabelText(/^Nghề nghiệp/), 'Y tế');
         await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(MSG.STALE);
@@ -132,7 +164,7 @@ describe('ReceptionistUpdatePatientPage (UC-38)', () => {
         const user = userEvent.setup();
         renderPage({ detail: vi.fn().mockResolvedValue(stored), update: vi.fn() });
 
-        await user.selectOptions(await screen.findByLabelText('Nghề nghiệp'), 'Y tế');
+        await user.selectOptions(await screen.findByLabelText(/^Nghề nghiệp/), 'Y tế');
         await user.click(screen.getByRole('button', { name: 'Hủy' }));
         const dialog = screen.getByRole('dialog', { name: 'Hủy cập nhật hồ sơ' });
         await user.click(within(dialog).getByRole('button', { name: 'Loại bỏ' }));

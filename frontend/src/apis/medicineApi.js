@@ -11,9 +11,9 @@ export function createMedicineApi(client) {
         },
         formOptions: (signal) => client.request('/medicines/form-options', { signal }),
         detail: (id, signal) => client.request(`/medicines/${id}`, { signal }),
-        create: (body) => client.request('/medicines', { method: 'POST', body }),
-        update: (id, body) => client.request(`/medicines/${id}`, { method: 'PUT', body }),
-        updateStatus: (id, body) => client.request(`/medicines/${id}/status`, { method: 'PATCH', body }),
+        create: (body, signal) => client.request('/medicines', { method: 'POST', body, signal }),
+        update: (id, body, signal) => client.request(`/medicines/${id}`, { method: 'PUT', body, signal }),
+        updateStatus: (id, body, signal) => client.request(`/medicines/${id}/status`, { method: 'PATCH', body, signal }),
     };
 }
 

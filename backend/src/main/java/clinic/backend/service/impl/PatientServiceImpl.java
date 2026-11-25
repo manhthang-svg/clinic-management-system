@@ -95,6 +95,8 @@ public class PatientServiceImpl implements PatientService {
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
         checkAgeRules(request);
+        checkResidence(occupationCode(request.nghenghiep(), request.nghenghiepMa(), null),
+                request.xaphuong(), request.tinhthanh());
         // CCCD / ho chieu da co ho so thi bao trung (BR-12, MSG19)
         if (cccdSo != null) {
             patientRepository.findByCccdSo(cccdSo).ifPresent(existing -> identificationExists("cccdSo", existing));
@@ -168,12 +170,29 @@ public class PatientServiceImpl implements PatientService {
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
     }
 
+    // noi cu tru (BR-89): tinh va xa bat buoc, tru nguoi co nghe nghiep Ngoai kieu (co the khong cu tru o Viet Nam)
+    private void checkResidence(String occupationCode, String ward, String province) {
+        if (FOREIGNER_OCCUPATION_CODE.equals(occupationCode)) {
+            return;
+        }
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (normalize(ward) == null) {
+            errors.put("xaphuong", "REQUIRED");
+        }
+        if (normalize(province) == null) {
+            errors.put("tinhthanh", "REQUIRED");
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, errors);
+        }
+    }
+
     // kiem tra theo tuoi: tu 18 tuoi bat buoc SDT, duoi 18 bat buoc nguoi than va SDT nguoi than
     private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation, String guardianPhone) {
         LocalDate today = LocalDate.now(clock);
         int age = Period.between(birthDate, today).getYears();
         Map<String, String> errors = new LinkedHashMap<>();
-        if (birthDate.isBefore(today.minusYears(MAX_AGE_YEARS))) {
+        if (birthDate.isAfter(today) || birthDate.isBefore(today.minusYears(MAX_AGE_YEARS))) {
             errors.put("ngaysinh", "INVALID_FORMAT");
         }
         if (age >= ADULT_AGE && normalize(phone) == null) {
@@ -224,6 +243,8 @@ public class PatientServiceImpl implements PatientService {
         }
         // kiem tra tuoi giong luc tao ho so
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
+        checkResidence(occupationCode(request.nghenghiep(), request.nghenghiepMa(), patient.getNghenghiepMa()),
+                request.xaphuong(), request.tinhthanh());
 
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());

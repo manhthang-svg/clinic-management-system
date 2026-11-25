@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
 import defaultVisitApi from '../../apis/visitApi';
+import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
 import ROUTES, { roomQueuePath } from '../../routes/routes';
 import { MSG12, MSG13, MSG80, MSG92, msg39 } from '../../components/services/serviceMessages';
@@ -298,13 +299,12 @@ export default function ReceptionistRoomQueuePage({ visitApi = defaultVisitApi }
     return (
         <div className="mx-auto max-w-[1400px] space-y-4 pb-8 text-slate-800">
             <header className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                    <DoorOpen className="mt-1 h-7 w-7 text-teal-600" />
-                    <div>
-                        <h1 className="text-2xl font-extrabold tracking-tight text-[#142534]">Tình trạng hàng đợi phòng khám</h1>
-                        <p className="mt-1 text-sm text-slate-500">Các phòng khám đang có bác sĩ trực và số bệnh nhân của từng phòng tại thời điểm hiện tại, nhóm theo khoa. Chọn một phòng để xem danh sách chờ.</p>
-                    </div>
-                </div>
+                <AccountPageHeader
+                    title="Tình trạng hàng đợi phòng khám"
+                    description="Các phòng khám đang có bác sĩ trực và số bệnh nhân của từng phòng tại thời điểm hiện tại, nhóm theo khoa. Chọn một phòng để xem danh sách chờ."
+                    crumbs={[{ label: 'Hàng đợi phòng khám' }]}
+                    onHome={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
+                />
                 <button type="button" disabled={refreshing || loading} onClick={() => void refreshNow()} className="flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50">
                     <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     {refreshing ? 'Đang tải…' : 'Tải lại'}

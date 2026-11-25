@@ -372,6 +372,7 @@ export function AppRoutes({
               <ScheduleManagementPage
                 currentUser={session.account}
                 readOnly={true}
+                onHome={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
               />
             }
           />
@@ -381,6 +382,7 @@ export function AppRoutes({
               <OwnProfilePage
                 accountApi={account}
                 onBack={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
+                showHomeLink
                 onChangePassword={onChangePassword}
               />
             }

@@ -27,7 +27,7 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const [fieldErrors, setFieldErrors] = useState({});
     const [error, setError] = useState('');
     const [conflict, setConflict] = useState(null);
-    const [confirmCancel, setConfirmCancel] = useState(false);
+    const [discardDestination, setDiscardDestination] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
     const profilePath = useCallback(
@@ -151,11 +151,11 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     }, [form, initialForm, navigate, patient, patientApi, patientId, profilePath, submitting]);
 
     // huy khi da sua thi hoi xac nhan (MSG40)
-    const goBack = useCallback(() => {
+    const leaveForm = (destination) => {
         if (submitting) return;
-        if (form && isDirty(form, initialForm)) setConfirmCancel(true);
-        else navigate(profilePath(patientId));
-    }, [form, initialForm, navigate, patientId, profilePath, submitting]);
+        if (form && isDirty(form, initialForm)) setDiscardDestination(destination);
+        else navigate(destination);
+    };
 
     return {
         patient,
@@ -164,14 +164,16 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
         fieldErrors,
         error,
         conflict,
-        confirmCancel,
+        confirmCancel: Boolean(discardDestination),
         submitting,
         handleChange,
         handleBlur,
         handleSubmit,
-        goBack,
+        goBack: () => leaveForm(profilePath(patientId)),
+        goToPatients: () => leaveForm(ROUTES.RECEPTIONIST.PATIENTS),
+        goToOverview: () => leaveForm(ROUTES.RECEPTIONIST.OVERVIEW),
         openProfile: (id) => navigate(profilePath(id)),
-        keepEditing: () => setConfirmCancel(false),
-        discard: () => navigate(profilePath(patientId)),
+        keepEditing: () => setDiscardDestination(null),
+        discard: () => navigate(discardDestination),
     };
 }

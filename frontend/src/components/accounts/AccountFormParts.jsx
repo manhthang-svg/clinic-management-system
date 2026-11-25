@@ -50,11 +50,15 @@ export function FormSection({ icon: Icon, title, description, children, action }
 }
 
 /** Page title with breadcrumb, shared by the account sub-pages. */
-export function AccountPageHeader({ title, description, crumbs }) {
+export function AccountPageHeader({ title, description, crumbs, onHome }) {
   return (
     <div className="flex flex-col items-start gap-3">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
-        <House className="w-3.5 h-3.5" />
+        {onHome ? (
+          <button type="button" aria-label="Trang chủ" onClick={onHome} className="cursor-pointer hover:text-[#127e7a]">
+            <House className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        ) : <House className="w-3.5 h-3.5" />}
         {crumbs.map((crumb, i) => (
           <span key={crumb.label} className="flex items-center gap-1.5">
             <ChevronRight className="w-3.5 h-3.5 text-slate-400" />

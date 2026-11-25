@@ -4,7 +4,7 @@ import { ProfileView } from '../../components/accounts';
 import { ownProfileFromApi } from '../../utils/ownProfile';
 
 /** UC-04 page shared by every role that uses the routed dashboard layout. */
-export function OwnProfilePage({ accountApi, onBack, onChangePassword }) {
+export function OwnProfilePage({ accountApi, onBack, onChangePassword, showHomeLink = false }) {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState('');
 
@@ -39,6 +39,7 @@ export function OwnProfilePage({ accountApi, onBack, onChangePassword }) {
         setProfile(ownProfileFromApi(updated));
       }}
       onCancel={onBack}
+      onHome={showHomeLink ? onBack : undefined}
       onChangePassword={onChangePassword}
     />
   );

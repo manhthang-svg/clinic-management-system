@@ -15,7 +15,7 @@ public record UpdatePatientRequest(
         @Max(value = 3, message = "INVALID_FORMAT") Short gioitinh,
         @Pattern(regexp = "^$|^\\d{12}$", message = "INVALID_FORMAT") String cccdSo,
         @Pattern(regexp = "^$|^[A-Za-z0-9]{1,15}$", message = "INVALID_FORMAT") String hochieuSo,
-        @Size(max = 100, message = "TOO_LONG") String nghenghiep,
+        @NotBlank(message = "REQUIRED") @Size(max = 100, message = "TOO_LONG") String nghenghiep,
         @Size(max = 5, message = "TOO_LONG") String nghenghiepMa,
         @NotBlank(message = "REQUIRED") @Size(max = 50, message = "TOO_LONG") String dantoc,
         // optional: derived from dantoc on the server; only used for a name outside the ethnicity list
@@ -23,6 +23,7 @@ public record UpdatePatientRequest(
         @Size(max = 255, message = "TOO_LONG") String ngoaikieu,
         @Size(max = 2, message = "TOO_LONG") String ngoaikieuMa,
         @NotBlank(message = "REQUIRED") @Size(max = 1024, message = "TOO_LONG") String diachi,
+        // xaphuong, tinhthanh: required unless the occupation is Ngoai kieu (checked by the service)
         @Size(max = 1024, message = "TOO_LONG") String xaphuong,
         @Size(max = 5, message = "TOO_LONG") String xaphuongMa,
         @Size(max = 1024, message = "TOO_LONG") String tinhthanh,

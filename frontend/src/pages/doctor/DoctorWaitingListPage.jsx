@@ -58,6 +58,7 @@ const msg54 = (patientName) => `${patientName} không có mặt khi được g�
 const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 const MSG92 = 'Chưa có dữ liệu để hiển thị.';
 const MSG96 = 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+const MSG99 = 'Bạn chưa được phân công vào phòng nào. Vui lòng liên hệ quản trị viên.';
 
 // AF-01 shows MSG92 with this hint per tab; AF-03 (search or filter matches nothing) shows MSG01 with FILTER_HINT.
 const EMPTY_HINT = {
@@ -112,7 +113,7 @@ function StatusBadge({ visit }) {
 /** Maps a failed queue load or call action to its message; NOT_FOUND and unexpected errors show MSG80. */
 function queueErrorMessage(error) {
     const code = error?.errorResponse?.code;
-    if (code === 'ROOM_ASSIGNMENT_REQUIRED') return 'Bạn chưa được phân công vào phòng khám đang hoạt động.';
+    if (code === 'ROOM_ASSIGNMENT_REQUIRED') return MSG99;
     if (code === 'DOCTOR_OFF_DUTY') return MSG48;
     if (code === 'FORBIDDEN') return MSG13;
     if (code === 'CONCURRENT_MODIFICATION') return MSG23;
