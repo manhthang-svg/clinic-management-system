@@ -75,15 +75,13 @@ class FollowUpAppointmentServiceImplTest {
     }
 
     @Test
-    void anExpiredAppointmentIsStillReturnedWhenNothingElseIsScheduled() {
+    void anExpiredAppointmentIsNotShownEvenBeforeTheExpiryJobRuns() {
+        // BR-124: still "Đã hẹn" in the database, but its period ended on 2026-10-15; the visit is a normal one.
         FollowUpAppointment expired = appointment(LocalDate.of(2026, 10, 1));
         when(appointmentRepository.findByPatientIdAndStatusOrderByFollowUpDateAsc(
                 PATIENT, FollowUpAppointmentStatus.SCHEDULED)).thenReturn(List.of(expired));
 
-        var result = service.findScheduledForPatient(PATIENT);
-
-        assertThat(result.id()).isEqualTo(expired.getId());
-        assertThat(result.validUntil()).isEqualTo(LocalDate.of(2026, 10, 15));
+        assertThat(service.findScheduledForPatient(PATIENT)).isNull();
     }
 
     @Test

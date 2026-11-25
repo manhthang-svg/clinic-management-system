@@ -19,6 +19,7 @@ import {
   NO_INSURANCE_CHECK,
   clinicToday,
   formToVisitRequest,
+  isAppointmentExpired,
   isAppointmentUsable,
   isCardNumberFormatValid,
   referralSourceOf,
@@ -150,7 +151,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   const [roomsKey, setRoomsKey] = useState(0);
   const [appointment, setAppointment] = useState(null);
   const [appointmentKey, setAppointmentKey] = useState(0);
-  // AF-05 / AF-06 / AF-09: the suggested room is marked only while the appointment can be linked (BR-124).
+  // AF-05 / AF-06: the suggested room is marked only while the appointment can be linked (BR-124).
   const appointmentDue = isAppointmentUsable(appointment, today);
 
   const [form, setForm] = useState(EMPTY_VISIT_FORM);
@@ -215,7 +216,9 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
   useEffect(() => {
     const controller = new AbortController();
     visitApi.getFollowUpAppointment(patientId, controller.signal)
-      .then((data) => setAppointment(data?.status === 'SCHEDULED' ? data : null))
+      // BR-124: an appointment past its validity period is not shown; the visit is registered as "Khám bệnh".
+      .then((data) => setAppointment(
+        data?.status === 'SCHEDULED' && !isAppointmentExpired(data, clinicToday()) ? data : null))
       .catch((error) => {
         if (error.name !== 'AbortError') setAppointment(null);
       });
