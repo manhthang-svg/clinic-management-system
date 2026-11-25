@@ -1,17 +1,15 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, History, PencilLine, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { AdminLayout } from '../../layouts';
 import { ROUTES } from '../../routes/routes';
 import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import { FormAlert, INPUT_CLASS } from '../../components/shared/FormFields';
 import { LabValueTypeBadge } from '../../components/services/LabValueTypeBadge';
-import { LabRangeRevisionModal } from '../../components/services/LabRangeRevisionModal';
 import { formatReferenceConditions, formatReferenceValue } from '../../components/services/serviceFormat';
 import { clinicToday, isCurrentRange } from '../../components/services/labRangeRevision';
 import { serviceErrorMessage } from '../../components/services/serviceErrors';
-import { msg03 } from '../../components/services/serviceMessages';
+import { MSG01, MSG92 } from '../../components/services/serviceMessages';
 import { createServiceApi } from '../../apis/serviceApi';
 import { apiClient } from '../../services/session';
 
@@ -34,16 +32,12 @@ function RangeConditions({ range }) {
   return formatReferenceConditions(range) || <span className="text-slate-400">Mọi giới tính, độ tuổi</span>;
 }
 
-/** The ranges of one parameter: those in force today, which can be revised, and the ones they replaced. */
-function RangeDetail({ parameter, today, onRevise }) {
-  const ranges = parameter.referenceRanges ?? [];
-  const current = ranges.filter((range) => isCurrentRange(range, today));
-  const history = ranges.filter((range) => !isCurrentRange(range, today));
+/** UC-93 step 5: the reference ranges of one parameter that are in force today (read-only). */
+function RangeDetail({ parameter, today }) {
+  const current = (parameter.referenceRanges ?? []).filter((range) => isCurrentRange(range, today));
 
   return (
-    <div className="space-y-4 bg-slate-50/60 px-4 py-4 sm:px-6">
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-[#1b2533]">Đang áp dụng</h3>
+    <div className="bg-slate-50/60 px-4 py-4 sm:px-6">
         {current.length === 0 ? (
           <p className="text-sm text-slate-400">Chỉ số này chưa có khoảng tham chiếu đang áp dụng.</p>
         ) : (
@@ -55,7 +49,6 @@ function RangeDetail({ parameter, today, onRevise }) {
                   <th scope="col" className="px-3 py-2.5">Giá trị</th>
                   <th scope="col" className="px-3 py-2.5">Hiệu lực</th>
                   <th scope="col" className="px-3 py-2.5">Nguồn</th>
-                  <th scope="col" className="px-3 py-2.5 text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -67,72 +60,23 @@ function RangeDetail({ parameter, today, onRevise }) {
                     </td>
                     <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{effectivePeriod(range)}</td>
                     <td className="px-3 py-2.5 text-slate-500">{range.source}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => onRevise(range)}
-                        aria-label={`Cập nhật ${formatReferenceConditions(range) || 'khoảng chung'} của ${parameter.code}`}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-teal-200 px-3 text-xs font-semibold text-[#127e7a] hover:bg-teal-50 cursor-pointer"
-                      >
-                        <PencilLine aria-hidden="true" className="h-3.5 w-3.5" />
-                        Cập nhật
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </div>
-
-      {history.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-            <History aria-hidden="true" className="h-4 w-4" />
-            Lịch sử ({history.length})
-          </h3>
-          <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
-            <table className="w-full min-w-[640px] text-left border-collapse">
-              <thead>
-                <tr className="bg-[#f6f8f9] text-xs font-semibold text-[#1b2533]">
-                  <th scope="col" className="px-3 py-2.5">Áp dụng cho</th>
-                  <th scope="col" className="px-3 py-2.5">Giá trị</th>
-                  <th scope="col" className="px-3 py-2.5">Hiệu lực</th>
-                  <th scope="col" className="px-3 py-2.5">Nguồn</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm text-slate-500">
-                {history.map((range) => (
-                  <tr key={range.id}>
-                    <td className="px-3 py-2.5"><RangeConditions range={range} /></td>
-                    <td className="px-3 py-2.5 whitespace-nowrap line-through decoration-slate-300">
-                      {formatReferenceValue(range)}{parameter.unit ? ` ${parameter.unit}` : ''}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      {range.active ? effectivePeriod(range) : `${effectivePeriod(range)} · đã tắt`}
-                    </td>
-                    <td className="px-3 py-2.5">{range.source}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-/** Admin screen for lab parameters and their reference ranges; a value change creates a new range from today. */
+/** UC-93 View Laboratory Indicators: the indicator catalog with the reference ranges in force today (read-only). */
 export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePassword, api = defaultApi }) {
   const navigate = useNavigate();
   const today = clinicToday();
   const [state, setState] = useState({ loading: true, parameters: [], error: null });
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState(null);
-  // { parameter, range } being revised
-  const [revising, setRevising] = useState(null);
 
   const load = useCallback((signal) => api.listLabParameters(signal)
     .then((parameters) => setState({ loading: false, parameters: parameters ?? [], error: null }))
@@ -153,14 +97,6 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
     ? state.parameters.filter((parameter) =>
       parameter.code.toLowerCase().includes(keyword) || parameter.name.toLowerCase().includes(keyword))
     : state.parameters;
-
-  const revise = async (request) => {
-    const { parameter, range } = revising;
-    await api.reviseReferenceRange(parameter.id, range.id, request);
-    toast.success(msg03(`Chỉ số tham chiếu của ${parameter.code}`)); // MSG03
-    setRevising(null);
-    await load();
-  };
 
   const layoutProps = {
     currentAdmin,
@@ -193,7 +129,8 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
             {shown.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-slate-400">
-                  {keyword ? 'Không tìm thấy chỉ số phù hợp.' : 'Chưa có chỉ số xét nghiệm nào.'}
+                  {/* UC-93 AF-01: MSG01 when the search matches nothing, MSG92 when the catalog is empty. */}
+                  {keyword ? MSG01 : MSG92}
                 </td>
               </tr>
             ) : shown.map((parameter) => {
@@ -244,11 +181,7 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
                   {expanded && (
                     <tr>
                       <td colSpan={6} className="p-0">
-                        <RangeDetail
-                          parameter={parameter}
-                          today={today}
-                          onRevise={(range) => setRevising({ parameter, range })}
-                        />
+                        <RangeDetail parameter={parameter} today={today} />
                       </td>
                     </tr>
                   )}
@@ -266,7 +199,7 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
       <div className="px-6 pb-8 space-y-6">
         <AccountPageHeader
           title="Chỉ số xét nghiệm"
-          description="Danh mục chỉ số và khoảng tham chiếu. Thay đổi giá trị tạo khoảng mới áp dụng từ hôm nay, khoảng cũ được giữ trong lịch sử."
+          description="Danh mục chỉ số xét nghiệm và khoảng tham chiếu đang áp dụng theo giới tính, độ tuổi."
           crumbs={[{ label: 'Chỉ số xét nghiệm' }]}
         />
 
@@ -304,17 +237,6 @@ export function LabParameterManagementPage({ currentAdmin, onLogout, onChangePas
           {body}
         </section>
       </div>
-
-      {revising && (
-        <LabRangeRevisionModal
-          parameter={revising.parameter}
-          range={revising.range}
-          today={today}
-          onRevise={revise}
-          onClose={() => setRevising(null)}
-          onStale={() => load()}
-        />
-      )}
     </AdminLayout>
   );
 }

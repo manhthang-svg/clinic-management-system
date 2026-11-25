@@ -80,6 +80,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
     private final InsuranceCoverageService insuranceCoverageService;
     private final ParaclinicalProgressService paraclinicalProgressService;
     private final ParaclinicalRoomDuty paraclinicalRoomDuty;
+    private final DoctorShiftCheck doctorShiftCheck;
     private final UuidV7Generator uuidV7Generator;
     private final Clock clock;
 
@@ -170,6 +171,10 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                 || visit.getStatus() == VisitStatus.WAITING_CONCLUSION;
         if (!orderable || !doctorAccountId.equals(visit.getDoctorAccountId())) {
             throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION, Map.of("status", visit.getStatus().name()));
+        }
+        // BR-19: no new order outside the Doctor's shift, even for a visit the Doctor called in before it ended (MSG48)
+        if (!doctorShiftCheck.isOnDuty(doctorAccountId, now)) {
+            throw new AppException(ErrorCode.DOCTOR_OFF_DUTY);
         }
 
         // chon dich vu

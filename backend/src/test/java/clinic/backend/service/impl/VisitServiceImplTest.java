@@ -50,6 +50,7 @@ import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.FollowUpAppointmentRepository;
 import clinic.backend.repository.RoomQueueCounterRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.config.properties.FollowUpProperties;
 import clinic.backend.config.properties.InsuranceBillingProperties;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.InsuranceVerificationService;
@@ -162,6 +163,7 @@ class VisitServiceImplTest {
                 new InsuranceCoverageServiceImpl(
                         new InsuranceBillingProperties(BigDecimal.valueOf(2_340_000), BigDecimal.valueOf(15)),
                         paymentRepository, null, auditLogService, clock),
+                new FollowUpValidity(new FollowUpProperties(10)),
                 clock);
     }
 
@@ -304,12 +306,44 @@ class VisitServiceImplTest {
         when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
         when(dutyScheduleRepository.findByWorkDateAndShiftAndStaffAccountId(
                 QUEUE_DATE, DutyShift.MORNING, DOCTOR_ID)).thenReturn(Optional.empty());
+        Visit waiting = visit(VisitStatus.WAITING);
+        when(visitRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
 
+        // BR-19: no new patient is called outside the shift.
         assertThatThrownBy(() -> service.startExamination(
-                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), UUID.randomUUID()))
+                new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), waiting.getId()))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.DOCTOR_OFF_DUTY));
+    }
+
+    @Test
+    void doctorOutsideShiftStillCallsBackTheirOwnPatientForTheConclusion() {
+        Room assignedRoom = new Room(
+                BUSY_ROOM_ID, clock.instant(), UUID.randomUUID(), null,
+                "PK01", "Phòng PK01", "Tầng 1", RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffAccount doctor = StaffAccount.builder()
+                .id(DOCTOR_ID).fullName("Nguyễn Văn An")
+                .role(clinic.backend.enums.Role.DOCTOR).status(AccountStatus.ACTIVE)
+                .build();
+        when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(DOCTOR_ID))
+                .thenReturn(Optional.of(new StaffRoomAssignment(
+                        UUID.randomUUID(), DOCTOR_ID, BUSY_ROOM_ID, clock.instant(), null, null, null, 0L)));
+        when(roomRepository.findById(BUSY_ROOM_ID)).thenReturn(Optional.of(assignedRoom));
+        // The Doctor called the patient in before the shift ended; the results are back for the conclusion.
+        Visit own = visit(VisitStatus.WAITING);
+        own.startExamination(DOCTOR_ID, clock.instant());
+        own.markAsWaitingParaclinical();
+        own.markAsWaitingConclusion(clock.instant());
+        when(visitRepository.findById(own.getId())).thenReturn(Optional.of(own));
+        when(visitRepository.save(own)).thenReturn(own);
+
+        // BR-19, BR-20: no duty check is needed for the Doctor's own visit of today.
+        var response = service.startExamination(new StaffPrincipal(DOCTOR_ID, UUID.randomUUID()), own.getId());
+
+        assertThat(response.status()).isEqualTo(VisitStatus.WAITING_CONCLUSION);
+        verify(dutyScheduleRepository, never()).findByWorkDateAndShiftAndStaffAccountId(any(), any(), any());
     }
 
     @Test

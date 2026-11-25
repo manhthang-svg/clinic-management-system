@@ -16,6 +16,9 @@ import java.util.UUID;
  * @param appointment              the saved appointment, or null
  * @param prescriptionAccepted     AF-03: the prescription was accepted by the national prescription system
  * @param prescriptionFollowUpDate the follow-up date sent with that prescription, if any (BR-59-08)
+ * @param patientHasEmail          UC-75: the patient has an email address for the reminder
+ * @param reminderDaysBefore       UC-75: days before the follow-up date the reminder email goes out; null when the
+ *                                 reminder job is off
  */
 public record FollowUpScheduleResponse(
         UUID visitId,
@@ -26,10 +29,15 @@ public record FollowUpScheduleResponse(
         List<Icd10OptionResponse> diagnoses,
         Appointment appointment,
         boolean prescriptionAccepted,
-        LocalDate prescriptionFollowUpDate
+        LocalDate prescriptionFollowUpDate,
+        boolean patientHasEmail,
+        Integer reminderDaysBefore
 ) {
 
-    /** The saved appointment (BR-61-01). {@code status} is SCHEDULED, ARRIVED, MISSED or CANCELLED. */
+    /**
+     * The saved appointment (BR-61-01). {@code status} is SCHEDULED, ARRIVED, MISSED or CANCELLED;
+     * {@code reminderSentAt} is when its UC-75 reminder email was sent, or null.
+     */
     public record Appointment(
             UUID id,
             Long version,
@@ -37,7 +45,8 @@ public record FollowUpScheduleResponse(
             LocalDate followUpDate,
             String advice,
             String status,
-            Instant printedAt
+            Instant printedAt,
+            Instant reminderSentAt
     ) {
     }
 }

@@ -2,6 +2,11 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.dto.request.CancelFollowUpAppointmentRequest;
@@ -11,6 +16,7 @@ import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
+import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.exceptions.AppException;
@@ -20,6 +26,7 @@ import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.user.StaffPrincipal;
+import clinic.backend.service.AuditLogService;
 import clinic.backend.service.FollowUpAppointmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,14 +41,58 @@ public class FollowUpAppointmentServiceImpl implements FollowUpAppointmentServic
     private final VisitRepository visitRepository;
     private final RoomRepository roomRepository;
     private final StaffAccountRepository accountRepository;
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    private final FollowUpValidity followUpValidity;
+    private final AuditLogService auditLogService;
     private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
     public FollowUpAppointmentResponse findScheduledForPatient(UUID patientId) {
-        return appointmentRepository
-                .findByPatientIdAndStatusOrderByFollowUpDateAsc(patientId, FollowUpAppointmentStatus.SCHEDULED)
-                .stream().findFirst().map(this::toResponse).orElse(null);
+        List<FollowUpAppointment> scheduled = appointmentRepository
+                .findByPatientIdAndStatusOrderByFollowUpDateAsc(patientId, FollowUpAppointmentStatus.SCHEDULED);
+        // BR-124: an appointment whose validity period has ended is not shown, even before the expiry job marks it
+        // "Lỡ hẹn"; the patient is registered as a normal visit. So an expired one never hides a newer appointment.
+        LocalDate today = today();
+        return scheduled.stream()
+                .filter(appointment -> !isExpired(appointment, today))
+                .findFirst()
+                .map(this::toResponse)
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public int markExpiredAsMissed() {
+        LocalDate today = today();
+        Instant now = clock.instant();
+        int marked = 0;
+        for (FollowUpAppointment appointment : appointmentRepository
+                .findByStatusAndFollowUpDateBefore(FollowUpAppointmentStatus.SCHEDULED, today)) {
+            if (!isExpired(appointment, today)) {
+                continue;
+            }
+            appointment.markMissed(now);
+            appointmentRepository.save(appointment);
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put("fromStatus", FollowUpAppointmentStatus.SCHEDULED.name());
+            values.put("status", FollowUpAppointmentStatus.MISSED.name());
+            values.put("followUpDate", appointment.getFollowUpDate().toString());
+            values.put("reason", "HET_HAN_LICH_HEN");
+            auditLogService.recordSystemChange(
+                    AuditLogAction.UPDATE, FollowUpScheduleServiceImpl.AUDIT_ENTITY, appointment.getId(), null, values, now);
+            marked++;
+        }
+        return marked;
+    }
+
+    private boolean isExpired(FollowUpAppointment appointment, LocalDate today) {
+        return today.isAfter(followUpValidity.validUntil(appointment.getFollowUpDate()));
+    }
+
+    private LocalDate today() {
+        return LocalDate.now(clock.withZone(CLINIC_ZONE));
     }
 
     @Override
@@ -73,6 +124,7 @@ public class FollowUpAppointmentServiceImpl implements FollowUpAppointmentServic
         }
         return new FollowUpAppointmentResponse(
                 appointment.getId(), appointment.getFollowUpDate(), doctorName,
-                suggestedRoomId, suggestedRoomName, appointment.getStatus().name(), appointment.getVersion());
+                suggestedRoomId, suggestedRoomName, appointment.getStatus().name(), appointment.getVersion(),
+                followUpValidity.validUntil(appointment.getFollowUpDate()));
     }
 }

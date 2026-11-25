@@ -60,6 +60,10 @@ public class FollowUpAppointment extends VersionedEntity {
     @Column(name = "printed_at")
     private Instant printedAt;
 
+    /** UC-75: when the reminder email was sent; null until then. */
+    @Column(name = "reminder_sent_at")
+    private Instant reminderSentAt;
+
     @Column(name = "cancel_reason")
     private String cancelReason;
 
@@ -109,6 +113,20 @@ public class FollowUpAppointment extends VersionedEntity {
         }
     }
 
+    /** UC-75: the appointment still waits for its one reminder email. */
+    public boolean needsReminder() {
+        return status == FollowUpAppointmentStatus.SCHEDULED && reminderSentAt == null;
+    }
+
+    /** UC-75: the reminder email was sent; it is never sent again. */
+    public void markReminderSent(Instant now) {
+        if (!needsReminder()) {
+            throw new IllegalStateException("Follow-up appointment needs no reminder");
+        }
+        reminderSentAt = now;
+        touch(now);
+    }
+
     public boolean isScheduled() {
         return status == FollowUpAppointmentStatus.SCHEDULED;
     }
@@ -119,6 +137,15 @@ public class FollowUpAppointment extends VersionedEntity {
         }
         status = FollowUpAppointmentStatus.ARRIVED;
         arrivedVisitId = visitId;
+        touch(now);
+    }
+
+    /** BR-124: the patient did not come within the validity period; the appointment can no longer be used. */
+    public void markMissed(Instant now) {
+        if (status != FollowUpAppointmentStatus.SCHEDULED) {
+            throw new IllegalStateException("Follow-up appointment is no longer scheduled");
+        }
+        status = FollowUpAppointmentStatus.MISSED;
         touch(now);
     }
 

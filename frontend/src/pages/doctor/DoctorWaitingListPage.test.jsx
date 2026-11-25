@@ -213,6 +213,29 @@ describe('DoctorWaitingListPage backend integration', () => {
         expect(screen.getByRole('button', { name: 'Vắng mặt' })).toBeDisabled();
     });
 
+    it("still calls back the Doctor's own patient for the conclusion outside the shift (BR-19, BR-20)", async () => {
+        const visitApi = {
+            getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({
+                onDuty: false,
+                visits: {
+                    content: [{
+                        id: 'visit-3', patientName: 'Lê Văn Cường', queueNumber: 3, status: 'WAITING_CONCLUSION',
+                        isSkipped: false, assignedToMe: true,
+                    }],
+                    page: { number: 0, size: 10, totalElements: 1, totalPages: 1 },
+                },
+            })),
+            startExamination: vi.fn(),
+            skipVisit: vi.fn(),
+            acceptSkippedVisit: vi.fn(),
+        };
+
+        renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
+
+        expect(await screen.findByRole('button', { name: 'Bắt đầu' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Vắng mặt' })).toBeEnabled();
+    });
+
     it('filters skipped visits by their interrupted stage and shows the retained stage', async () => {
         const visitApi = {
             getDoctorQueue: vi.fn().mockResolvedValue(queueResponse({

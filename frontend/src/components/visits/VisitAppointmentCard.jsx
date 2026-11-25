@@ -18,7 +18,7 @@ export function VisitAppointmentCard({ appointment, today, attached, onAttach, o
 
   const daysLate = daysBetween(appointment.appointmentDate, today);
 
-  // AF-05: an appointment on a later day is only a note.
+  // AF-06: an appointment on a later day is only a note.
   if (daysLate < 0) {
     return (
       <p className="flex items-start gap-2 p-3.5 rounded-xl bg-[#e8f0fe] border border-[#cfdffb] text-sm text-[#3b6fd8]">

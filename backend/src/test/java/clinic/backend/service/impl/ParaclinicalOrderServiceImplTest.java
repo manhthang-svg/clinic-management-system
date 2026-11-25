@@ -86,6 +86,7 @@ class ParaclinicalOrderServiceImplTest {
     @Mock private PaymentCompletionService paymentCompletionService;
     @Mock private ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
     @Mock private ParaclinicalRoomDuty roomDuty;
+    @Mock private DoctorShiftCheck doctorShiftCheck;
 
     private ParaclinicalOrderServiceImpl service;
 
@@ -101,8 +102,22 @@ class ParaclinicalOrderServiceImplTest {
                         paymentRepository, paraclinicalOrderRepository, auditLogService, clock),
                 new ParaclinicalProgressServiceImpl(
                         medicalRecordRepository, paraclinicalOrderRepository, visitRepository, auditLogService, clock),
-                roomDuty, new UuidV7Generator(clock, new SecureRandom()), clock);
+                roomDuty, doctorShiftCheck, new UuidV7Generator(clock, new SecureRandom()), clock);
         lenient().when(roomDuty.staffedRooms(any())).thenReturn(Set.of());
+        lenient().when(doctorShiftCheck.isOnDuty(any(), any())).thenReturn(true);
+    }
+
+    @Test
+    void refusesANewOrderOutsideTheDoctorsShift() {
+        // BR-19: the visit was called in before the shift ended, but no new order is created after it (MSG48).
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.IN_EXAMINATION, DOCTOR_ID)));
+        when(doctorShiftCheck.isOnDuty(DOCTOR_ID, NOW)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createOrder(DOCTOR_ID, request(UUID.randomUUID())))
+                .isInstanceOfSatisfying(AppException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_OFF_DUTY));
+        verify(paymentRepository, never()).saveAndFlush(any());
+        verify(paraclinicalOrderRepository, never()).saveAndFlush(any());
     }
 
     @Test

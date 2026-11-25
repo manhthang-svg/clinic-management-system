@@ -10,5 +10,7 @@ public record FollowUpAppointmentResponse(
         UUID suggestedRoomId,
         String suggestedRoomName,
         String status,
-        Long version) {
+        Long version,
+        /** BR-124: the last day the appointment can be linked to a visit. */
+        LocalDate validUntil) {
 }

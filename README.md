@@ -45,9 +45,11 @@ Backend environment variables:
 | `CLOUDINARY_URL` | For UC-67 result images | `cloudinary://<api_key>:<api_secret>@<cloud_name>` of the Cloudinary account (secret, never commit). Without it uploads answer `FILE_STORAGE_NOT_CONFIGURED`; `CLOUDINARY_FOLDER` sets the folder (default `clinic/paraclinical`) |
 | `REFRESH_COOKIE_SECURE` | Local HTTP only | Set to `false` only for plain-HTTP local development |
 | `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` | First start | Creates the first Admin when none exists; the password must be changed at first login |
-| `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2340000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
+| `INSURANCE_BASE_SALARY` | No | Mức lương cơ sở in VND for BR-27; default `2530000`. An insurance visit whose total cost within insurance scope is below 15% of it is covered at 100% |
 | `VISIT_END_OF_DAY_ENABLED`, `VISIT_END_OF_DAY_CRON`, `VISIT_END_OF_DAY_RUN_ON_STARTUP` | No | End-of-day job (BR-22) that closes unfinished visits of earlier days; defaults `true`, `0 5 0 * * *` (00:05, Asia/Ho_Chi_Minh) and `true` (also run once at startup to catch up). Safe when several backends share one database: a visit is closed once and later runs skip it |
 
+| `FOLLOW_UP_REMINDER_ENABLED`, `FOLLOW_UP_REMINDER_DAYS_BEFORE`, `FOLLOW_UP_REMINDER_CRON` | For UC-75 reminder emails | Turns on the job that emails each patient with an email address one reminder before the follow-up date; defaults `false`, `1` (day before) and `0 0 8,14,20 * * *` (08:00, 14:00, 20:00 Asia/Ho_Chi_Minh; later runs retry a failed send, a sent reminder is never repeated). See [Follow-up reminder emails](#follow-up-reminder-emails-uc-75) |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | For UC-75 reminder emails | Free SMTP server. Defaults `localhost`, `1025`, no account, no TLS (Mailpit). Gmail: `smtp.gmail.com`, `587`, the Gmail address, its App Password (secret, never commit), the same address, `true`, `true` |
 | `SIGNING_SIMULATOR_KEYSTORE_PASSWORD` | To sign e-prescriptions | Password of the simulated signing CA's key file (UC-90); the `dev` profile sets a development value. Without it, signing answers "service unavailable" |
 | `CLINIC_HEALTH_DEPARTMENT` | No | "Sở Y tế" printed in the header of the medical-record PDF, form 15/BV1 (UC-53); default empty |
 | `CLINIC_ARCHIVE_ROOT` | No | Directory of the write-once archive packages of closed medical records (UC-58, BR-126); default `.clinic-archive` (git-ignored). Back it up, with one off-site copy (CV 365 mục III.2) |
@@ -147,6 +149,75 @@ The command opens no HTTP port and exits. It validates the whole file against BR
 The columns are `ma_thuoc,so_dang_ky,ma_thuoc_bhyt,ten_thuoc,hoat_chat,ham_luong,duong_dung,don_vi_tinh,nhom_kiem_soat`; any further columns record the source and are not stored. In the bundled list `duong_dung` and `don_vi_tinh` are derived from the dosage form, the special-control groups are assigned by active ingredient, and `ma_thuoc_bhyt` is empty until its format is confirmed for UC-80 (I1-D45).
 
 The CSV is extracted from the official appendix PDF with the scripts in `backend/tools/icd10/` (header `ma,ten,ma_cha,ghi_chu`; `ghi_chu` holds the column 18 and 24–29 rules as `|`-separated flags).
+
+### Follow-up reminder emails (UC-75)
+
+The backend emails a reminder of the follow-up appointment (UC-61) to the patient's email address, once, the day before
+the appointment. It uses only free tools: Spring Boot Mail over SMTP, Mailpit on a developer machine and a personal
+Gmail account with an App Password in a deployment (free, about 500 recipients a day). No paid email service is used.
+The email carries the date, slip number, Doctor and clinic contact, never the diagnosis or advice. Patients without an
+email address get no reminder; the "Hẹn tái khám" tab tells the Doctor which case applies.
+
+**Local test with Mailpit** (nothing leaves the machine):
+
+```powershell
+docker compose up -d mailpit
+```
+
+Run the backend with `FOLLOW_UP_REMINDER_ENABLED=true` (the `MAIL_*` defaults point at Mailpit) and open the inbox at
+`http://localhost:8025`. To send at once instead of waiting for 08:00, set for example
+`FOLLOW_UP_REMINDER_CRON=0 * * * * *` (every minute) while testing. `docker compose up -d` of the whole system already
+starts Mailpit and turns the job on.
+
+**Real email with Gmail (free):**
+
+1. Turn on 2-Step Verification for the Gmail account, then create an App Password at
+   `https://myaccount.google.com/apppasswords` (16 characters).
+2. Set `FOLLOW_UP_REMINDER_ENABLED=true`, `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USERNAME` and `MAIL_FROM`
+   to the Gmail address, `MAIL_PASSWORD` to the App Password, `MAIL_SMTP_AUTH=true`, `MAIL_SMTP_STARTTLS=true` — in
+   `.env` for Docker, or in the Elastic Beanstalk environment properties for a deployment. Never commit the password.
+
+Elastic Beanstalk (EC2) blocks only outbound port 25, so Gmail on port 587 works there without AWS SES.
+
+## Run the whole system with Docker
+
+`compose.yml` builds the backend (`backend/Dockerfile`) and the frontend (`frontend/Dockerfile`, served by nginx, which
+forwards `/api` to the backend) next to PostgreSQL.
+
+1. Copy `.env.example` to `.env` and fill at least `POSTGRES_PASSWORD`, `JWT_SIGNING_KEY`, the three `PAYOS_*` keys
+   and, for the first start, `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`. Add `CLOUDINARY_URL` to upload
+   result images (UC-67).
+2. Build and start:
+
+   ```powershell
+   docker compose up -d --build
+   ```
+
+3. Open `http://localhost:8081` (`FRONTEND_PORT`). The API is also on `http://localhost:8080` (`BACKEND_PORT`).
+
+The database stays in the `clinic_postgres_data` volume; archived medical-record packages and the signing simulator
+files stay in `clinic_backend_data`. `docker compose logs -f backend` shows the backend log; `docker compose down`
+stops everything (`--volumes` also deletes the data). Running only the database for IDE development still works with
+`docker compose up -d postgres`.
+
+## Deploy to AWS Elastic Beanstalk
+
+`.github/workflows/deploy-beanstalk.yml` deploys on every push to `main` that touches `backend/`, `frontend/` or
+`deploy/beanstalk/` (and from the Actions tab with "Run workflow"). It runs the same checks as the CI workflows, builds
+the backend jar and the frontend, packages them with `deploy/beanstalk` (a `Procfile` and an nginx config that serves
+the React app and forwards `/api` to Spring Boot on port 5000) and deploys the zip to the Java SE environment.
+
+One-time setup:
+
+1. In IAM, create a user for GitHub with the managed policy `AdministratorAccess-AWSElasticBeanstalk` and an access key.
+2. In GitHub, **Settings → Secrets and variables → Actions**, add the secrets `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY`. Variables `AWS_REGION`, `EB_APPLICATION` and `EB_ENVIRONMENT` are optional (defaults
+   `ap-northeast-3`, `clinic-management-system`, `clinic-management-system-env`).
+3. In the Beanstalk environment properties set `SERVER_PORT=5000`, the database, JWT, PayOS and Cloudinary values, and
+   `APP_FRONTEND_ORIGIN` to the environment URL.
+   For UC-75 reminder emails add the Gmail values of [Follow-up reminder emails](#follow-up-reminder-emails-uc-75).
+
+Without the secrets the workflow is skipped, so forks and branches without AWS access are unaffected.
 
 ## Testing
 

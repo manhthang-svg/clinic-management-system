@@ -1,12 +1,12 @@
 import { useEffect, useId, useState } from 'react';
-import { CalendarDays, Info, LoaderCircle, Save } from 'lucide-react';
+import { CalendarDays, Info, LoaderCircle, Mail, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 import defaultVisitApi from '../../apis/visitApi';
 import { BUTTON } from './buttonStyles';
 import {
-    ADVICE_MAX, EMPTY_FOLLOW_UP, FOLLOW_UP_MSG, FOLLOW_UP_STATUS, followUpError, formFromResponse, sameFollowUp,
-    shortDate, toPayload, validateFollowUp,
+    ADVICE_MAX, EMPTY_FOLLOW_UP, FOLLOW_UP_MSG, FOLLOW_UP_STATUS, followUpError, formFromResponse, reminderNotice,
+    sameFollowUp, shortDate, toPayload, validateFollowUp,
 } from './followUpForm';
 
 const inputClass = 'w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
@@ -113,6 +113,7 @@ export function FollowUpPanel({ visitId, api = defaultVisitApi }) {
     const scheduled = !appointment || appointment.status === 'SCHEDULED';
     const editable = Boolean(data?.conclusionSaved) && scheduled;
     const adviceLength = form.advice.trim().length;
+    const reminder = reminderNotice(data);
     return (
         <form
             noValidate
@@ -160,6 +161,14 @@ export function FollowUpPanel({ visitId, api = defaultVisitApi }) {
                             <button type="button" onClick={discard} className="rounded-lg bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700">Loại bỏ</button>
                         </div>
                     </div>
+                )}
+
+                {/* UC-75: the automatic reminder email of the saved appointment. */}
+                {reminder && (
+                    <p role="status" className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                        <Mail aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" />
+                        {reminder}
+                    </p>
                 )}
 
                 {data?.diagnoses?.length > 0 && (

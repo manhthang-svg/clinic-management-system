@@ -23,6 +23,10 @@ export const FOLLOW_UP_MSG = {
     CONCURRENT_MODIFICATION: 'Lịch hẹn vừa được cập nhật ở nơi khác. Vui lòng tải lại và thử lại.',
     SESSION_EXPIRED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
     SYSTEM_ERROR: 'Không thể kết nối hoặc hệ thống đang gặp sự cố. Vui lòng tải lại và thử lại.', // MSG80
+    // UC-75 (ASSUMPTION): the reminder email is sent automatically, once, before the follow-up date.
+    REMINDER_PLANNED: (days) => `Hệ thống sẽ tự động gửi email nhắc lịch cho bệnh nhân trước ngày tái khám ${days} ngày.`,
+    REMINDER_SENT: (time) => `Đã gửi email nhắc lịch tái khám cho bệnh nhân lúc ${time}.`,
+    REMINDER_NO_EMAIL: 'Bệnh nhân chưa có email nên sẽ không nhận được email nhắc lịch tái khám.',
 };
 
 /** Lịch hẹn statuses (V7); only SCHEDULED is made and changed by the Doctor. */
@@ -108,4 +112,28 @@ export function shortDate(value) {
     if (!value) return '';
     const [year, month, day] = String(value).split('-');
     return `${day}/${month}/${year}`;
+}
+
+/** "08:00 24/11/2026" in clinic time for an ISO instant. */
+export function clinicDateTime(value) {
+    if (!value) return '';
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+    }).formatToParts(new Date(value)).map((part) => [part.type, part.value]));
+    return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
+}
+
+/**
+ * UC-75: what the Doctor is told about the reminder email of the saved appointment, or null when there is nothing
+ * to say (no appointment, an appointment no longer scheduled, or the reminder job is off).
+ */
+export function reminderNotice(data) {
+    const appointment = data?.appointment;
+    if (!appointment) return null;
+    if (appointment.reminderSentAt) return FOLLOW_UP_MSG.REMINDER_SENT(clinicDateTime(appointment.reminderSentAt));
+    if (appointment.status !== 'SCHEDULED') return null;
+    if (!data.patientHasEmail) return FOLLOW_UP_MSG.REMINDER_NO_EMAIL;
+    if (data.reminderDaysBefore == null) return null;
+    return FOLLOW_UP_MSG.REMINDER_PLANNED(data.reminderDaysBefore);
 }

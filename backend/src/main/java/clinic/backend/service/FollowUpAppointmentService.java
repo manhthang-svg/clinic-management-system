@@ -11,4 +11,10 @@ public interface FollowUpAppointmentService {
 
     FollowUpAppointmentResponse cancel(
             StaffPrincipal principal, UUID appointmentId, CancelFollowUpAppointmentRequest request);
+
+    /**
+     * BR-124: marks "Lỡ hẹn" (MISSED) every scheduled appointment whose validity period ended before today.
+     * Returns how many were marked.
+     */
+    int markExpiredAsMissed();
 }

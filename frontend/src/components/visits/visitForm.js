@@ -32,6 +32,17 @@ export function daysBetween(from, to) {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 }
 
+/** BR-124: the appointment's validity period (`validUntil`, from the backend) ended before `today`. */
+export function isAppointmentExpired(appointment, today) {
+  return Boolean(appointment?.validUntil) && daysBetween(appointment.validUntil, today) > 0;
+}
+
+/** BR-124 (UC-40 AF-05): the appointment can be linked today, from its date to the end of its validity period. */
+export function isAppointmentUsable(appointment, today) {
+  return Boolean(appointment) && daysBetween(appointment.appointmentDate, today) >= 0
+    && !isAppointmentExpired(appointment, today);
+}
+
 /** BR-50: a 10-digit social-insurance number or a 15-character legacy card number. */
 export function isCardNumberFormatValid(cardNumber) {
   return /^(?:\d{10}|[A-Z]{2}\d{13})$/.test(cardNumber);
