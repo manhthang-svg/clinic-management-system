@@ -391,6 +391,14 @@ public class ArchivePackageBuilder {
      * @param department Khoa điều trị
      * @return Map chứa thông tin điều trị và ra viện
      */
+    /** CV 365 III.14 as saved; a conclusion saved before it was filled gets it from the main and secondary codes. */
+    private static String diagnosisCodes(Conclusion conclusion, String secondaryCodes) {
+        if (conclusion == null) return null;
+        if (conclusion.getChandoanMa() != null) return conclusion.getChandoanMa();
+        if (conclusion.getMaicd() == null) return null;
+        return secondaryCodes.isEmpty() ? conclusion.getMaicd() : conclusion.getMaicd() + ";" + secondaryCodes;
+    }
+
     private Map<String, Object> treatmentGroup(Closing closing, Department department) {
         Conclusion conclusion = closing.conclusion();
         String secondaryCodes = conclusion == null ? "" : conclusion.getSecondaryDiagnoses().stream()
@@ -404,7 +412,7 @@ public class ArchivePackageBuilder {
         values.put("khoadieutri", department == null ? null : department.getDepartmentName());
         values.put("ngayravien", conclusion == null ? null : date(conclusion.getNgayravien()));
         values.put("chandoan", conclusion == null ? null : conclusion.getChandoan());
-        values.put("chandoan_ma", conclusion == null ? null : conclusion.getChandoanMa());
+        values.put("chandoan_ma", diagnosisCodes(conclusion, secondaryCodes));
         values.put("maicd", conclusion == null ? null : conclusion.getMaicd());
         values.put("tenicd", conclusion == null ? null : conclusion.getTenicd());
         values.put("maicd_khac", secondaryCodes.isEmpty() ? null : secondaryCodes);

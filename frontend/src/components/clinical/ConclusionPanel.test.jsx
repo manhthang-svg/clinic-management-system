@@ -151,6 +151,14 @@ describe('conclusionForm', () => {
         expect(validateConclusion(form)).toEqual({ secondary: MSG.MAIN_REQUIRED });
     });
 
+    it('takes any diagnosis text but refuses one made only of spaces (MSG02)', () => {
+        const base = {
+            ...EMPTY_CONCLUSION, treatmentPlan: 'B', advice: 'C', main: { code: 'J02.0', name: 'x' },
+        };
+        expect(validateConclusion({ ...base, diagnosis: 'Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan' })).toEqual({});
+        expect(validateConclusion({ ...base, diagnosis: '   ' })).toEqual({ diagnosis: MSG.required('Chẩn đoán') });
+    });
+
     it('sends empty optional texts as null', () => {
         const payload = toPayload({ ...EMPTY_CONCLUSION, diagnosis: ' A ', main: { code: 'J02.0' }, summary: '  ' }, 3);
         expect(payload).toMatchObject({ diagnosis: 'A', mainIcd10Code: 'J02.0', summary: null, note: null, version: 3 });

@@ -12,8 +12,6 @@ export const EMPTY_CONCLUSION = {
 export const MSG = {
     required: (field) => `Trường ${field} là bắt buộc.`, // MSG02
     SAVED: 'Kết luận khám cập nhật thành công.', // MSG03
-    // ASSUMPTION wording: no catalogue message for a diagnosis outside ICD-10.
-    DIAGNOSIS_NOT_ICD10: 'Chẩn đoán phải là tên hoặc mã bệnh trong danh mục ICD-10 (nhiều bệnh cách nhau bằng dấu ";").',
     MAIN_REQUIRED: 'Kết luận phải có đúng một bệnh chính (ICD-10), không trùng với bệnh kèm theo.', // MSG64
     mainNotAllowed: (code) => `Mã ${code} không được dùng làm bệnh chính.`, // MSG65
     mainDiscouraged: (code) => `Mã ${code} không được khuyến khích dùng làm bệnh chính. Bạn có muốn tiếp tục không?`, // MSG66
@@ -108,8 +106,6 @@ export function conclusionError(error) {
                 : MSG.required(LABELS[field] ?? 'này');
             return { fields: field ? { [field]: message } : {}, message: MSG.CHECK_FIELDS };
         }
-        case 'CONCLUSION_DIAGNOSIS_NOT_ICD10':
-            return { fields: { diagnosis: MSG.DIAGNOSIS_NOT_ICD10 }, message: MSG.CHECK_FIELDS };
         case 'CONCLUSION_MAIN_DIAGNOSIS_REQUIRED':
             return { fields: { main: MSG.MAIN_REQUIRED }, message: MSG.MAIN_REQUIRED };
         case 'CONCLUSION_MAIN_DIAGNOSIS_NOT_ALLOWED':

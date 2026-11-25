@@ -4,7 +4,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.UUID;
 
 import jakarta.persistence.CascadeType;
@@ -38,7 +41,10 @@ public class Conclusion extends VersionedEntity {
     @Column(name = "chandoan", nullable = false)
     private String chandoan;
 
-    /** CV 365 III.14. */
+    /**
+     * CV 365 III.14: the main code then the secondary codes in order, separated by ";" (e.g. "J02.0;B87.0").
+     * Kept in step with {@link #maicd} and the secondary diagnoses; never entered by hand.
+     */
     @Column(name = "chandoan_ma", length = 255)
     private String chandoanMa;
 
@@ -104,6 +110,7 @@ public class Conclusion extends VersionedEntity {
         this.tomtat = tomtat;
         this.ghichu = ghichu;
         this.concludedAt = now;
+        refreshDiagnosisCodes();
         touch(now);
     }
 
@@ -117,5 +124,18 @@ public class Conclusion extends VersionedEntity {
     public void replaceSecondaryDiagnoses(List<ConclusionSecondaryDiagnosis> values) {
         secondaryDiagnoses.clear();
         secondaryDiagnoses.addAll(values);
+        refreshDiagnosisCodes();
+    }
+
+    /** CV 365 III.14 from III.19 and the secondary codes (12 codes at most, so it fits the 255 characters). */
+    private void refreshDiagnosisCodes() {
+        if (maicd == null) {
+            chandoanMa = null;
+            return;
+        }
+        chandoanMa = Stream.concat(Stream.of(maicd), secondaryDiagnoses.stream()
+                        .sorted(Comparator.comparingInt(ConclusionSecondaryDiagnosis::getThuTu))
+                        .map(ConclusionSecondaryDiagnosis::getMaicd))
+                .collect(Collectors.joining(";"));
     }
 }
