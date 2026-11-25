@@ -1,10 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 
 import ApiError from '../../apis/apiError';
 import { MOCK_RESULT_ORDERS } from '../paraclinicalResult/resultMockData';
 import { ParaclinicalOrderList } from './ParaclinicalOrderList';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function order(details) {
     return [{
@@ -109,8 +112,8 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
 
         expect(api.cancelParaclinicalService).toHaveBeenCalledWith('d1', 'Bệnh nhân từ chối');
-        expect(await screen.findByText('Đã hủy dịch vụ Siêu âm ổ bụng. Khoản thu đã được tính lại.')).toBeInTheDocument();
         expect(await screen.findByText('Lý do: Bệnh nhân từ chối')).toBeInTheDocument();
+        expect(toast.success).toHaveBeenCalledWith('Đã hủy dịch vụ Siêu âm ổ bụng. Khoản thu đã được tính lại.');
         expect(onCancelled).toHaveBeenCalledWith(result);
     });
 

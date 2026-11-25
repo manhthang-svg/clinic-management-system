@@ -16,7 +16,10 @@ export const TRANSFER_MESSAGES = {
     visitChanged: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75 ("Lượt khám")
     sessionExpired: MSG12,
     systemError: MSG80,
-    unsavedChanges: 'Bạn có thay đổi chưa lưu. Nếu rời khỏi trang, các thay đổi này sẽ bị mất.', // MSG38
+    // ASSUMPTION wording: the Doctor confirms the room before the transfer is sent (no catalogue message).
+    confirmTransfer: (patientName, roomLabel) =>
+        `Chuyển bệnh nhân ${patientName} sang ${roomLabel}? Lượt khám sẽ trở về "Chờ khám" ở phòng mới với số thứ tự mới.`,
+    unsavedChanges: 'Bạn có các thay đổi chưa được lưu. Bạn có muốn loại bỏ những thay đổi này không?', // MSG38
     noEligibleRoom: MSG102, // AF-03
     loadRoomsError: MSG80,
 };

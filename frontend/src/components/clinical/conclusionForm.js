@@ -33,7 +33,7 @@ export const MSG = {
 };
 
 const LABELS = {
-    diagnosis: 'Chẩn đoán', main: 'Bệnh chính (ICD-10)', treatmentPlan: 'Hướng điều trị',
+    diagnosis: 'Chẩn đoán kết luận', main: 'Bệnh chính (ICD-10)', treatmentPlan: 'Hướng điều trị',
     treatmentResult: 'Kết quả điều trị', advice: 'Lời dặn', summary: 'Tóm tắt bệnh án', note: 'Ghi chú',
 };
 

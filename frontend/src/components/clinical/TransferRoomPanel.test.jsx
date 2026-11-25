@@ -8,7 +8,7 @@ import { TRANSFER_MESSAGES, transferError, validateTransfer } from './transferRo
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const visit = { id: 'visit-1', sovaovien: 'DK0000000019', queueNumber: 4, lydovaovien: 'Đau khớp gối' };
+const visit = { id: 'visit-1', patientName: 'Đỗ Văn Nam', sovaovien: 'DK0000000019', queueNumber: 4, lydovaovien: 'Đau khớp gối' };
 const ngoai = {
     roomId: 'room-ngoai', roomCode: 'PK-NGOAI', roomName: 'Phòng khám Ngoại', location: 'Tầng 2',
     departmentName: 'Khoa Ngoại', doctorName: 'BS Lê Thị Bình',
@@ -67,11 +67,30 @@ describe('TransferRoomPanel', () => {
         expect(screen.getByText('BS Lê Thị Bình')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
 
+        // Step 6: nothing is sent before the Doctor confirms the room.
+        expect(screen.getByText(TRANSFER_MESSAGES.confirmTransfer('Đỗ Văn Nam', 'PK-NGOAI - Phòng khám Ngoại')))
+            .toBeInTheDocument();
+        expect(api.transferVisit).not.toHaveBeenCalled();
+        await user.click(screen.getByRole('button', { name: 'Đồng ý chuyển' }));
+
         expect(api.transferVisit).toHaveBeenCalledWith('visit-1', {
             toRoomId: 'room-ngoai', reason: 'Cần khám chuyên khoa Ngoại', notes: null,
         });
         expect(await screen.findByRole('status')).toHaveTextContent('Đã chuyển bệnh nhân đến Phòng khám Ngoại. Số thứ tự mới: 7.');
         expect(screen.getByRole('button', { name: 'In phiếu khám' })).toBeInTheDocument();
+    });
+
+    it('goes back to the form without transferring when the Doctor does not confirm', async () => {
+        const user = userEvent.setup();
+        const api = renderPanel();
+
+        await fillForm(user);
+        await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
+        await user.click(screen.getByRole('button', { name: 'Quay lại' }));
+
+        expect(api.transferVisit).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Đồng ý chuyển' })).not.toBeInTheDocument();
+        expect(screen.getByLabelText(/Lý do chuyển/)).toHaveValue('Cần khám chuyên khoa Ngoại');
     });
 
     it('keeps the confirm button disabled when no room can receive the patient (AF-03)', async () => {
@@ -102,22 +121,34 @@ describe('TransferRoomPanel', () => {
 
         await fillForm(user);
         await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển' }));
+        await user.click(screen.getByRole('button', { name: 'Đồng ý chuyển' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(TRANSFER_MESSAGES.recordOpened);
         expect(screen.getByRole('button', { name: 'Xác nhận chuyển' })).toBeDisabled();
     });
 
-    it('asks before discarding an unfinished form (MSG38)', async () => {
+    it('asks before discarding an unfinished form (AF-01, MSG38)', async () => {
         const user = userEvent.setup();
         const onCancel = vi.fn();
-        renderPanel(apiWith(), { onCancel });
+        const api = apiWith();
+        renderPanel(api, { onCancel });
 
         await fillForm(user);
         await user.click(screen.getByRole('button', { name: 'Hủy' }));
+        expect(screen.getByText('Bạn có các thay đổi chưa được lưu. Bạn có muốn loại bỏ những thay đổi này không?'))
+            .toBeInTheDocument();
 
-        expect(screen.getByText(TRANSFER_MESSAGES.unsavedChanges)).toBeInTheDocument();
+        // "Tiếp tục chỉnh sửa" keeps the entered data.
+        await user.click(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' }));
+        expect(screen.queryByText(TRANSFER_MESSAGES.unsavedChanges)).not.toBeInTheDocument();
+        expect(screen.getByLabelText(/Phòng chuyển đến/)).toHaveValue('room-ngoai');
+        expect(screen.getByLabelText(/Lý do chuyển/)).toHaveValue('Cần khám chuyên khoa Ngoại');
         expect(onCancel).not.toHaveBeenCalled();
-        await user.click(screen.getByRole('button', { name: 'Hủy chuyển phòng' }));
+
+        // "Loại bỏ" closes the screen without transferring.
+        await user.click(screen.getByRole('button', { name: 'Hủy' }));
+        await user.click(screen.getByRole('button', { name: 'Loại bỏ' }));
         expect(onCancel).toHaveBeenCalled();
+        expect(api.transferVisit).not.toHaveBeenCalled();
     });
 });

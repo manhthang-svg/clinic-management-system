@@ -74,7 +74,7 @@ describe('ConclusionPanel (UC-56)', () => {
         await user.click(screen.getByRole('button', { name: 'Lưu kết luận' }));
 
         expect(screen.getByRole('alert')).toHaveTextContent(MSG.CHECK_FIELDS);
-        expect(screen.getByText('Trường Chẩn đoán là bắt buộc.')).toBeInTheDocument();
+        expect(screen.getByText('Trường Chẩn đoán kết luận là bắt buộc.')).toBeInTheDocument();
         expect(screen.getByText(MSG.MAIN_REQUIRED)).toBeInTheDocument();
         expect(client.saveConclusion).not.toHaveBeenCalled();
     });
@@ -156,7 +156,7 @@ describe('conclusionForm', () => {
             ...EMPTY_CONCLUSION, treatmentPlan: 'B', advice: 'C', main: { code: 'J02.0', name: 'x' },
         };
         expect(validateConclusion({ ...base, diagnosis: 'Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan' })).toEqual({});
-        expect(validateConclusion({ ...base, diagnosis: '   ' })).toEqual({ diagnosis: MSG.required('Chẩn đoán') });
+        expect(validateConclusion({ ...base, diagnosis: '   ' })).toEqual({ diagnosis: MSG.required('Chẩn đoán kết luận') });
     });
 
     it('places an ICD-10 error under the picker holding the code (MSG40, MSG110, MSG111)', () => {
