@@ -86,7 +86,7 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
     }
 
-    /** UC-60 AF-01 (MSG112): only an accepted prescription is printed. */
+    /** UC-60 AF-01 (MSG135): only an accepted prescription is printed. */
     private static void requireAccepted(Prescription prescription) {
         if (!prescription.isPrintable()) {
             throw new AppException(ErrorCode.PRESCRIPTION_NOT_PRINTABLE,

@@ -1,11 +1,11 @@
 /** UC-90 Submit e-Prescription: messages and error mapping of the digital signature (docs/uc-59-e-prescription.md). */
 import { prescriptionError } from './prescriptionForm';
 
-// MSG86, MSG107, MSG110-MSG111, MSG117-MSG118, MSG120-MSG124; MSG106 onward are ASSUMPTION wording.
+// MSG86, MSG107, MSG133-MSG134, MSG117-MSG118, MSG120-MSG124; MSG106 onward are ASSUMPTION wording.
 export const SIGNING_MSG = {
     REMINDER: 'Sau khi gửi thành công, đơn thuốc và chẩn đoán không sửa được nữa.',
-    ACCEPTED: (code) => `Đã gửi đơn thuốc ${code} thành công. Đơn thuốc đã được khóa.`, // MSG110
-    REJECTED: 'Hệ thống đơn thuốc quốc gia từ chối đơn thuốc. Vui lòng sửa theo danh sách lỗi và gửi lại.', // MSG111
+    ACCEPTED: (code) => `Đã gửi đơn thuốc ${code} thành công. Đơn thuốc đã được khóa.`, // MSG133
+    REJECTED: 'Hệ thống đơn thuốc quốc gia từ chối đơn thuốc. Vui lòng sửa theo danh sách lỗi và gửi lại.', // MSG134
     NO_ANSWER: 'Không thể kết nối với Hệ thống đơn thuốc quốc gia. Vui lòng thử lại.', // MSG86
     NOT_REGISTERED: 'Tài khoản của bạn chưa được đăng ký chứng thư chữ ký số. Vui lòng liên hệ quản trị viên.', // MSG117
     CERTIFICATE_INVALID: (reason) => `Chứng thư chữ ký số không còn hiệu lực (${reason}). Không thể ký đơn thuốc.`, // MSG118

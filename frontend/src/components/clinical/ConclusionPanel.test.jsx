@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
 import { ConclusionPanel } from './ConclusionPanel';
-import { MSG, toPayload, validateConclusion, EMPTY_CONCLUSION } from './conclusionForm';
+import { MSG, conclusionError, toPayload, validateConclusion, EMPTY_CONCLUSION } from './conclusionForm';
 
 const emptyForm = {
     visitId: 'v1', medicalRecordId: 'r1', conclusionId: null, version: null,
@@ -137,7 +137,7 @@ describe('ConclusionPanel (UC-56)', () => {
             })),
         })} />);
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(MSG.NOT_CONCLUDABLE);
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG.VISIT_CHANGED);
         expect(screen.queryByText('Visit is not concludable')).not.toBeInTheDocument();
     });
 });
@@ -157,6 +157,31 @@ describe('conclusionForm', () => {
         };
         expect(validateConclusion({ ...base, diagnosis: 'Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan' })).toEqual({});
         expect(validateConclusion({ ...base, diagnosis: '   ' })).toEqual({ diagnosis: MSG.required('Chẩn đoán') });
+    });
+
+    it('places an ICD-10 error under the picker holding the code (MSG40, MSG110, MSG111)', () => {
+        const form = {
+            ...EMPTY_CONCLUSION, main: { code: 'J02.0', name: 'x' }, secondary: [{ code: 'N76.0', name: 'y' }],
+        };
+        const failure = (code, icd10Code) => ({ errorResponse: { code, details: { icd10Code } } });
+
+        expect(conclusionError(failure('ICD10_NOT_DETAILED', 'J02.0'), form)).toEqual({
+            fields: { main: `J02.0: ${MSG.ICD10_NOT_DETAILED}` }, message: MSG.CHECK_FIELDS,
+        });
+        expect(conclusionError(failure('ICD10_SEX_MISMATCH', 'N76.0'), form)).toEqual({
+            fields: { secondary: `N76.0: ${MSG.ICD10_SEX_MISMATCH}` }, message: MSG.CHECK_FIELDS,
+        });
+        // A code not in the form (should not happen) stays at the top.
+        expect(conclusionError(failure('ICD10_INVALID', 'A00'), form)).toEqual({
+            fields: {}, message: `A00: ${MSG.ICD10_INVALID}`,
+        });
+    });
+
+    it('asks to reload when the visit changed meanwhile (EF-03, MSG75)', () => {
+        expect(conclusionError({ status: 409, errorResponse: { code: 'VISIT_NOT_IN_EXAMINATION' } }).message)
+            .toBe('Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.');
+        expect(conclusionError({ status: 409, errorResponse: { code: 'MEDICAL_RECORD_CLOSED' } }).message)
+            .toBe(MSG.RECORD_CLOSED);
     });
 
     it('sends empty optional texts as null', () => {

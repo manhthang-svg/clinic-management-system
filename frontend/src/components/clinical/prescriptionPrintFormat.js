@@ -4,7 +4,7 @@ import { prescriptionError } from './prescriptionForm';
 const ZONE = 'Asia/Ho_Chi_Minh';
 
 export const PRINT_MSG = {
-    NOT_PRINTABLE: 'Gửi đơn thành công trước khi in.', // MSG112 (ASSUMPTION wording)
+    NOT_PRINTABLE: 'Gửi đơn thành công trước khi in.', // MSG135 (ASSUMPTION wording)
     // PO 23/11/2026: the conclusion, prescription and appointment are printed once the record is closed.
     RECORD_NOT_CLOSED: 'Vui lòng xác nhận kết luận trước khi in.', // MSG61
     // Luật GDĐT Điều 12 khoản 2: the mark of a paper copy converted from the data message (ASSUMPTION wording, TBD).

@@ -89,11 +89,11 @@ After saving the conclusion (UC-56) and before confirming it (UC-58), the Doctor
 5. The server obtains the signature, verifies it and attaches the time stamp (BR-59-10 steps 4–6, EF-16), then in one transaction: writes the signature row and the `SIGN` audit row (step 7); obtains or reuses the national-system token (BR-59-11); creates the submission row with the next `attempt_no` and `submitted_at = now`.
 6. The system calls the national prescription system.
 7. The national system accepts. The system sets the submission to `ACCEPTED` with `responded_at`, sets the prescription to `ACCEPTED` with `lienthong_sent_at`, and locks it. The conclusion's diagnoses are locked (BR-59-08).
-8. The system shows MSG110 with the prescription code, the signature status "Chữ ký số hợp lệ" (BR-59-10 step 8) and the actions "In đơn thuốc" (UC-60) and "Xác nhận kết luận" (UC-58). The use case ends.
+8. The system shows MSG133 with the prescription code, the signature status "Chữ ký số hợp lệ" (BR-59-10 step 8) and the actions "In đơn thuốc" (UC-60) and "Xác nhận kết luận" (UC-58). The use case ends.
 
 ## Alternative flows — UC-90
 
-- **AF-01 (step 7): The national system rejects.** The submission is `REJECTED` with the error list; the prescription becomes `REJECTED` and stays editable. The system shows MSG111 and the error list; "Sửa đơn" opens UC-92. The signature row stays as a record of the attempt.
+- **AF-01 (step 7): The national system rejects.** The submission is `REJECTED` with the error list; the prescription becomes `REJECTED` and stays editable. The system shows MSG134 and the error list; "Sửa đơn" opens UC-92. The signature row stays as a record of the attempt.
 - **AF-02 (step 6): No answer.** After the timeout the submission is `NO_RESPONSE`; the prescription becomes `SENT`. The system shows MSG86. "Gửi lại" repeats UC-90 from step 1 with a new attempt number and a new signature; the simulator treats a resend of a code it already accepted as accepted (idempotent, **ASSUMPTION**).
 - **AF-03 (steps 2 and 4): Cancel.** "Hủy" closes the dialog. Before step 3 nothing changes; after it the pending signing request is cancelled (`CANCELLED`), the copied diagnoses stay until the next send overwrites them, and nothing is sent.
 - **AF-04 (step 4): The Doctor declines the signature with the CA.** The request becomes `DECLINED`; MSG121; nothing is sent; the Doctor can start again from step 1.
@@ -123,7 +123,7 @@ After saving the conclusion (UC-56) and before confirming it (UC-58), the Doctor
 3. The Doctor clicks "In". The system records the `PRINT` audit row, sets `printed_at` on the first print and opens the browser print dialog (printer integration TBD, HW-02).
 4. The Doctor hands the prescription to the patient with the conclusion (UC-57). The use case ends.
 
-- **AF-01 (step 1): The prescription is not accepted.** The button is disabled with the hint "Gửi đơn thành công trước khi in." (MSG112). A preview with the watermark "BẢN NHÁP – KHÔNG CÓ GIÁ TRỊ" is available from UC-90 step 1 only; it is not printed and not logged (**ASSUMPTION**).
+- **AF-01 (step 1): The prescription is not accepted.** The button is disabled with the hint "Gửi đơn thành công trước khi in." (MSG135). A preview with the watermark "BẢN NHÁP – KHÔNG CÓ GIÁ TRỊ" is available from UC-90 step 1 only; it is not printed and not logged (**ASSUMPTION**).
 - **AF-02 (step 3): The print fails.** MSG49; the Doctor can retry.
 
 ## Exception flows
@@ -210,7 +210,7 @@ Registering a Doctor's signing certificate and maintaining the trusted CA list (
 | `PRESCRIPTION_ALREADY_SENT` | 409 | MSG115 | Save or delete of an `ACCEPTED` prescription |
 | `PRESCRIPTION_CHILD_DATA_REQUIRED` (new) | 409 | MSG107 | Under 72 months without weight or accompanying person |
 | `PRESCRIPTION_NOT_ACCEPTED` (new) | 409 | MSG67 | UC-58 with a prescription not accepted |
-| `PRESCRIPTION_NOT_PRINTABLE` (new) | 409 | MSG112 | Print of a prescription not accepted |
+| `PRESCRIPTION_NOT_PRINTABLE` (new) | 409 | MSG135 | Print of a prescription not accepted |
 | `PRESCRIBER_LINK_CODE_REQUIRED` (new) | 409 | MSG116 | Doctor without `ma_lienthong_bacsi` |
 | `FACILITY_LINK_CODE_REQUIRED` (new) | 409 | MSG116 | Facility without `ma_lienthong_donthuoc` or `ma_cskcb` |
 | `SIGNING_CERTIFICATE_NOT_REGISTERED` (new) | 409 | MSG117 | Doctor without a registered signing certificate |
@@ -246,9 +246,9 @@ Existing codes `VISIT_NOT_FOUND`, `VISIT_NOT_IN_EXAMINATION`, `MEDICAL_RECORD_CL
 | MSG107 | **ASSUMPTION** (new): Trẻ dưới 72 tháng tuổi cần có {item} trước khi gửi đơn thuốc. |
 | MSG67 | Vui lòng gửi đơn thuốc thành công trước khi xác nhận kết luận. (BR v7 message sheet; replaces the MSG108 proposed here, which Report 3 uses for the signing PIN; shortened by UC-58 decision 2 on 17/11/2026) |
 | MSG109 | **ASSUMPTION** (new): Xóa đơn thuốc này? Mã đơn {code} sẽ không dùng lại. |
-| MSG110 | **ASSUMPTION** (new): Đã gửi đơn thuốc {code} thành công. Đơn thuốc đã được khóa. |
-| MSG111 | **ASSUMPTION** (new): Hệ thống đơn thuốc quốc gia từ chối đơn thuốc. Vui lòng sửa theo danh sách lỗi và gửi lại. |
-| MSG112 | **ASSUMPTION** (new): Gửi đơn thành công trước khi in. |
+| MSG133 | **ASSUMPTION** (new): Đã gửi đơn thuốc {code} thành công. Đơn thuốc đã được khóa. |
+| MSG134 | **ASSUMPTION** (new): Hệ thống đơn thuốc quốc gia từ chối đơn thuốc. Vui lòng sửa theo danh sách lỗi và gửi lại. |
+| MSG135 | **ASSUMPTION** (new): Gửi đơn thành công trước khi in. |
 | MSG113 | **ASSUMPTION** (new): Lưu kết luận với chẩn đoán bệnh chính trước khi kê đơn. |
 | MSG114 | **ASSUMPTION** (new): Số ngày dùng tối đa 30 ngày. Chỉ kê đến 90 ngày khi chẩn đoán thuộc danh mục bệnh được kê dài ngày. |
 | MSG115 | **ASSUMPTION** (new): Đơn thuốc đã gửi thành công nên không sửa hoặc xóa được. |
@@ -348,7 +348,7 @@ Assumptions made by the implementation, to be confirmed with the decisions above
 - The certificate subject names the Doctor by CN = full name and UID = `CCCD:` + the personal identification number of the account (BR-59-16); the prefix is an assumption about real certificates. The simulator also uses the number as the subscriber's user id at the CA, as VNPT SmartCA does.
 - `chan_doan[]` items use the keys of QĐ 808 VII.3 row 12 (`ma_benh`, `ten_benh`, `ket_luan`), not those of the sample request (`ma_chan_doan`, `ten_chan_doan`); `ket_luan` is the conclusion's diagnosis text. `ma_so_bao_hiem_y_te` is the 10-digit social insurance number of an insurance visit; `can_nang` is the latest weight of the visit when there is one; `thong_tin_nguoi_giam_ho` is the relative's name, phone and address; `hinh_thuc_dieu_tri` = 1 (Decisions needed 4).
 - In the canonical payload absent optional values are left out; `signature` is appended as the last key of the sent JSON, so the receiver can remove it and verify the rest byte for byte.
-- The UC-90 dialog shows a summary of the prescription with a "BẢN NHÁP" watermark, not the printed form: `GET /print` serves only an accepted prescription (MSG112), so a draft of the printed form for UC-90 step 1 would need its own read; not done.
+- The UC-90 dialog shows a summary of the prescription with a "BẢN NHÁP" watermark, not the printed form: `GET /print` serves only an accepted prescription (MSG135), so a draft of the printed form for UC-90 step 1 would need its own read; not done.
 - UC-60 (implemented 15/11/2026, frontend dependency `qrcode.react` approved 15/11/2026): `GET /print` returns the form for the preview and records nothing; `POST /commands/prepare-print` writes the `PRINT` audit row (`prescriptionCode`, `reprint`) on every print, sets `printed_at` only on the first one and returns the form with the printer and the print time. The QR code holds the prescription code only. Every line is printed as "{hoatchat} ({tenthuocvattu}) {hamluong}", the strength left out when the trade name already contains it, and the ingredient alone when it equals the trade name (PO 15/11, Decisions needed 9). The mark is "Bản in từ đơn thuốc điện tử {code} lưu tại {facility}; người in {name}, {time}." (PO 15/11, Decisions needed 12, still **TBD** against the Government's rules). The insurance number printed is the one sent (`ma_so_bao_hiem_y_te`); the ID line shows the citizen ID number, otherwise the passport number; the contact phone is the patient's, otherwise the relative's (TT 26 Phụ lục I chú thích 8). Since 23/11/2026, printing needs a closed record and the Doctor of the visit (`ClosedRecordPrintGuard`), from the dialog after closing or from UC-52, and `copy` is true after the first print ([`uc-57-print-conclusion.md`](uc-57-print-conclusion.md)).
 - The signature status shown in UC-91 (the history and the latest result on the tab) re-runs BR-59-10 step 5 on the stored CAdES-T signature without calling any service: the signature against the stored payload, the certificate against the serial and issuer of the signature row, the embedded time stamp, the chain to the CA list trusted now and the validity at the time-stamp time; the revocation status is the one kept in the verification evidence at signing time (**ASSUMPTION**: a later revocation does not invalidate a signature made before it, NĐ 23 Điều 16).
 - A send is shown with the latest signature row created no later than its `submitted_at`, because UC-90 step 5 writes the signature just before the submission; `prescription_submissions` has no link to the signature.
