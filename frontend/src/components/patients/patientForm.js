@@ -77,12 +77,46 @@ export function occupationOptions(current) {
         : options;
 }
 
-// khi doi ten dan toc / nghe nghiep thi tu dien ma tuong ung
+// ma nghe nghiep "Ngoai kieu": chi khi do moi chon nuoc o o Ngoai kieu
+export const FOREIGNER_OCCUPATION_CODE = '12';
+
+// Bang ma mot so nuoc (QD 4069/2001/QD-BYT, Phu luc 7), ma cho ngoaikieu_ma (CV 365).
+// Giu ten khop COUNTRIES trong backend CountryCatalog.java.
+export const COUNTRIES = [
+    ['01', 'Anh'], ['02', 'Brunei'], ['03', 'Campuchia'], ['04', 'Canada'], ['05', 'Cuba'],
+    ['06', 'Đài Loan'], ['07', 'Đức'], ['08', 'Hà Lan'], ['09', 'Hàn Quốc'], ['10', 'Hoa Kỳ'],
+    ['11', 'Indonesia'], ['12', 'Lào'], ['13', 'Malaysia'], ['14', 'Myanmar'], ['15', 'Nga'],
+    ['16', 'Nhật'], ['17', 'Pháp'], ['18', 'Philippines'], ['19', 'Singapore'], ['20', 'Thái Lan'],
+    ['21', 'Trung Quốc'], ['99', 'Khác'],
+].map(([code, name]) => ({ code, name }));
+
+// ma nuoc theo ten, khong co trong danh muc thi tra null
+export function countryCode(name) {
+    return COUNTRIES.find((item) => item.name === name)?.code ?? null;
+}
+
+// o Ngoai kieu chi mo khi nghe nghiep la Ngoai kieu
+export function isForeigner(form) {
+    return form.nghenghiepMa === FOREIGNER_OCCUPATION_CODE;
+}
+
+// lua chon cho o Ngoai kieu; ten cu ngoai danh muc van hien de nguoi dung thay va chon lai
+export function countryOptions(current) {
+    const options = [{ value: '', label: 'Chưa chọn' },
+        ...COUNTRIES.map(({ name }) => ({ value: name, label: name }))];
+    return current && !countryCode(current) ? [options[0], { value: current, label: current }, ...options.slice(1)]
+        : options;
+}
+
+// khi doi ten dan toc / nghe nghiep / nuoc thi tu dien ma tuong ung
 export function withDerivedCodes(previous, name, value) {
     if (name === 'dantoc') return { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa };
     if (name === 'nghenghiep') {
-        return { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+        const next = { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+        // bo chon Ngoai kieu thi xoa nuoc da chon
+        return isForeigner(next) ? next : { ...next, ngoaikieu: '', ngoaikieuMa: '' };
     }
+    if (name === 'ngoaikieu') return { ...previous, ngoaikieu: value, ngoaikieuMa: countryCode(value) ?? '' };
     return { ...previous, [name]: value };
 }
 
@@ -158,6 +192,13 @@ export function validatePatientForm(form, today) {
     require('dantoc');
     // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
     if (!errors.dantoc && !text('dantocMa')) errors.dantoc = FIELD_MSG.REQUIRED;
+    // Ngoai kieu: bat buoc chon nuoc trong danh muc; nguoi khong phai ngoai kieu thi de trong
+    if (isForeigner(form)) {
+        if (!text('ngoaikieu')) errors.ngoaikieu = FIELD_MSG.REQUIRED;
+        else if (!countryCode(text('ngoaikieu'))) errors.ngoaikieu = FIELD_MSG.INVALID_FORMAT;
+    } else if (text('ngoaikieu') || text('ngoaikieuMa')) {
+        errors.ngoaikieu = FIELD_MSG.INVALID_FORMAT;
+    }
 
     const age = formAge(form, today);
     if (!form.ngaysinh) errors.ngaysinh = FIELD_MSG.REQUIRED;
@@ -206,7 +247,7 @@ export function toFormValues(patient) {
 }
 
 // o ma chi doc: loi cua ma hien o o ten tuong ung
-const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep' };
+const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep', ngoaikieuMa: 'ngoaikieu' };
 
 // doi ma loi backend thanh loi tung truong
 export function serverFieldErrors(details) {

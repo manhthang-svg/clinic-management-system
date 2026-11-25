@@ -1,4 +1,4 @@
-import { MAX_NAME_LENGTH, ethnicityOptions, occupationOptions } from './patientForm';
+import { MAX_NAME_LENGTH, countryOptions, ethnicityOptions, isForeigner, occupationOptions } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
 
 // form dung chung cho UC-37 tao ho so va UC-38 sua ho so
@@ -298,15 +298,18 @@ export function PatientFormSections({ form, fieldErrors, handleChange, handleBlu
                             placeholder="Tên cơ quan hoặc nơi làm việc"
                         />
 
-                        <Field
+                        <SelectField
                             label="Ngoại kiều"
                             name="ngoaikieu"
                             form={form}
                             errors={fieldErrors}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            maxLength={255}
-                            placeholder="Nếu có"
+                            required={isForeigner(form)}
+                            // ho so cu co nuoc nhung khong phai ngoai kieu van mo de bo chon
+                            disabled={!isForeigner(form) && !form.ngoaikieu}
+                            title={isForeigner(form) ? undefined : 'Chỉ chọn khi nghề nghiệp là Ngoại kiều'}
+                            options={countryOptions(form.ngoaikieu)}
                         />
 
                         <Field
@@ -314,10 +317,9 @@ export function PatientFormSections({ form, fieldErrors, handleChange, handleBlu
                             name="ngoaikieuMa"
                             form={form}
                             errors={fieldErrors}
-                            onChange={handleChange}
-                            onBlur={handleBlur}
-                            maxLength={2}
-                            placeholder="Nếu có"
+                            readOnly
+                            title="Tự điền theo nước đã chọn"
+                            placeholder="Tự điền theo nước"
                         />
 
                         <Field
