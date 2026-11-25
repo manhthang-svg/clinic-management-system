@@ -284,6 +284,9 @@ class PatientSearchApiIT extends PostgresIntegrationTest {
         body.put("dantoc", "Kinh");
         body.put("dantocMa", "01");
         body.put("diachi", "Hà Nội");
+        body.put("xaphuong", "Phường Ba Đình");
+        body.put("tinhthanh", "Thành phố Hà Nội");
+        body.put("nghenghiep", "Công nhân");
         body.put("sodienthoai", phone);
         return objectMapper.writeValueAsString(body);
     }
