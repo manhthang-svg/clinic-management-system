@@ -69,6 +69,12 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(codes).toEqual(['CD2-01', 'CD1-01']);
     });
 
+    it('shows MSG80 when the order list cannot be loaded (UC-54 EF-03)', async () => {
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockRejectedValue(new Error('down')) }} />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
+    });
+
     it('shows MSG92 when the visit has no order slip (UC-54 AF-01)', async () => {
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue([]) }} />);
 

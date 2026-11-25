@@ -9,8 +9,9 @@ import { formForSave, resultToForm } from '../paraclinicalResult/resultForm';
 import { cancelErrorMessage, cancelledMessage, isPrintable } from './paraclinicalOrder';
 import { PrintOrderButton } from './ParaclinicalOrderSlip';
 
-const LOAD_FAILED = 'Không tải được danh sách chỉ định cận lâm sàng.';
-const RESULT_LOAD_FAILED = 'Không tải được phiếu kết quả. Vui lòng thử lại.';
+// UC-54 EF-03, UC-55 EF-02: MSG80 when the order list or a result cannot be loaded.
+const LOAD_FAILED = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+const RESULT_LOAD_FAILED = LOAD_FAILED;
 const REASON_LENGTH = 'Lý do hủy từ 5 đến 500 ký tự.';
 
 const thClass = 'whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500';
