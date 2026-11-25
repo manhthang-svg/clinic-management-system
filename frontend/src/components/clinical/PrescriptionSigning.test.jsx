@@ -145,7 +145,7 @@ describe('PrescriptionPanel (UC-90 Ký số và gửi đơn thuốc)', () => {
         expect(screen.getByText(SIGNING_MSG.NOT_REGISTERED)).toBeInTheDocument();
     });
 
-    it('lists the errors of a rejected send (UC-91, MSG111)', async () => {
+    it('lists the errors of a rejected send (UC-91, MSG134)', async () => {
         render(<PrescriptionPanel visitId="v1" api={api({
             getPrescription: vi.fn().mockResolvedValue({
                 ...saved, status: 'REJECTED',

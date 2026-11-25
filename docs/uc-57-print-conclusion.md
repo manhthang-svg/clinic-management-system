@@ -42,7 +42,7 @@ Report 3 states the "after closure" precondition for UC-57 only. For UC-60 and U
 - **EF-01 (step 2).** The record is not closed: MSG61 "Vui lòng xác nhận kết luận trước khi in."
 - **EF-02 (step 3).** The printer fails: MSG49.
 
-UC-60 and UC-62 follow the same steps, with their own forms (BR-59-13, BR-61-06) and their existing checks: only an accepted prescription (MSG112), only a scheduled appointment (MSG128).
+UC-60 and UC-62 follow the same steps, with their own forms (BR-59-13, BR-61-06) and their existing checks: only an accepted prescription (MSG135), only a scheduled appointment (MSG128).
 
 ## API
 

@@ -86,13 +86,16 @@ public class ConcludingVisitGuard {
         if (!room.getId().equals(visit.getRoomId()) || !doctor.getId().equals(visit.getDoctorAccountId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
+        // UC-56 EF-03: a closed record is reported first (MSG68); closing it also completes the visit.
+        MedicalRecord record = medicalRecordRepository.findByVisitId(visitId).orElse(null);
+        if (record != null && record.getStatus() != MedicalRecordStatus.OPEN) {
+            throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
+        }
         if (visit.isSkipped() || !CONCLUDABLE.contains(visit.getStatus())) {
             throw new AppException(ErrorCode.VISIT_NOT_IN_EXAMINATION);
         }
-        MedicalRecord record = medicalRecordRepository.findByVisitId(visitId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-        if (record.getStatus() != MedicalRecordStatus.OPEN) {
-            throw new AppException(ErrorCode.MEDICAL_RECORD_CLOSED);
+        if (record == null) {
+            throw new AppException(ErrorCode.NOT_FOUND);
         }
         Patient patient = patientRepository.findById(visit.getPatientId())
                 .orElseThrow(() -> new AppException(ErrorCode.PATIENT_NOT_FOUND));

@@ -53,7 +53,7 @@ describe('UC-60 In đơn thuốc', () => {
         expect(quantityText(21)).toBe('21');
     });
 
-    it('cannot print a prescription that was not accepted (AF-01, MSG112)', () => {
+    it('cannot print a prescription that was not accepted (AF-01, MSG135)', () => {
         const client = api();
         render(<PrintPrescriptionButton prescriptionId="p1" accepted={false} api={client} />);
 
@@ -92,7 +92,7 @@ describe('UC-60 In đơn thuốc', () => {
             .toHaveTextContent('lưu tại Phòng khám METPH; người in ThS. BS An, 11:00 12/11/2026.');
     });
 
-    it('shows MSG112 when the server refuses the print', async () => {
+    it('shows MSG135 when the server refuses the print', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});
         const client = api({

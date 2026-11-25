@@ -15,17 +15,18 @@ export const MSG = {
     MAIN_REQUIRED: 'Kết luận phải có đúng một bệnh chính (ICD-10), không trùng với bệnh kèm theo.', // MSG64
     mainNotAllowed: (code) => `Mã ${code} không được dùng làm bệnh chính.`, // MSG65
     mainDiscouraged: (code) => `Mã ${code} không được khuyến khích dùng làm bệnh chính. Bạn có muốn tiếp tục không?`, // MSG66
-    TOO_MANY_SECONDARY: `Chỉ chọn tối đa ${LIMITS.secondary} bệnh kèm theo.`,
+    TOO_MANY_SECONDARY: `Chỉ chọn tối đa ${LIMITS.secondary} bệnh kèm theo.`, // MSG112
     DIAGNOSES_LOCKED: 'Bệnh chính và bệnh kèm theo đã gửi kèm đơn thuốc nên không thể thay đổi.', // BR-47
     ICD10_INVALID: 'Mã ICD-10 không còn khả dụng. Vui lòng chọn mã khác.', // MSG40
-    ICD10_NOT_DETAILED: 'Mã ICD-10 này có mã chi tiết hơn. Vui lòng chọn mã chi tiết.',
-    ICD10_SEX_MISMATCH: 'Mã ICD-10 này không áp dụng cho giới tính của người bệnh.',
+    ICD10_NOT_DETAILED: 'Mã ICD-10 này có mã chi tiết hơn. Vui lòng chọn mã chi tiết.', // MSG110
+    ICD10_SEX_MISMATCH: 'Mã ICD-10 này không áp dụng cho giới tính của người bệnh.', // MSG111
     RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng hoặc bị khóa, không thể chỉnh sửa.', // MSG68
-    NOT_CONCLUDABLE: 'Lượt khám chưa thể kết luận: bệnh nhân không còn đang khám hoặc chưa đủ kết quả cận lâm sàng.',
+    // EF-03: the visit changed meanwhile (more paraclinical orders, skipped, ended at the end of the day).
+    VISIT_CHANGED: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75
     OUTSIDE_ROOM_OR_SHIFT: 'Bạn không được phân công phòng khám này hoặc đang ngoài ca trực.', // MSG48
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.', // MSG13
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
-    CONCURRENT_MODIFICATION: 'Kết luận vừa được cập nhật ở nơi khác. Vui lòng tải lại.',
+    CONCURRENT_MODIFICATION: 'Kết luận vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75
     SYSTEM_ERROR: 'Không thể kết nối hoặc hệ thống đang gặp sự cố. Vui lòng tải lại và thử lại.', // MSG80
     CHECK_FIELDS: 'Vui lòng kiểm tra các trường được đánh dấu.',
     UNSAVED_CHANGES: 'Bạn có thay đổi chưa lưu. Nếu rời khỏi trang, các thay đổi này sẽ bị mất.', // MSG38
@@ -90,11 +91,21 @@ const FIELD_OF = {
     treatmentResult: 'treatmentResult', secondaryIcd10Codes: 'secondary',
 };
 
+/** The picker holding `code` in the form sent: 'main', 'secondary' or null. */
+function icdField(form, code) {
+    if (!form || !code) return null;
+    const upper = String(code).toUpperCase();
+    if (form.main?.code?.toUpperCase() === upper) return 'main';
+    if (form.secondary?.some((item) => item.code?.toUpperCase() === upper)) return 'secondary';
+    return null;
+}
+
 /**
  * Where a save failure is shown: `fields` under the inputs, `message` at the top, `discouragedCode` asks MSG66
- * before saving again. Never the raw backend message.
+ * before saving again. Never the raw backend message. `form` is the form that was sent, to place an ICD-10 error
+ * under the picker holding the code (MSG40, MSG110, MSG111).
  */
-export function conclusionError(error) {
+export function conclusionError(error, form = null) {
     const code = error?.errorResponse?.code;
     const details = error?.errorResponse?.details ?? {};
     const icdCode = details.icd10Code;
@@ -116,12 +127,15 @@ export function conclusionError(error) {
             return { fields: {}, message: MSG.DIAGNOSES_LOCKED };
         case 'ICD10_INVALID':
         case 'ICD10_NOT_DETAILED':
-        case 'ICD10_SEX_MISMATCH':
-            return { fields: {}, message: `${icdCode ? `${icdCode}: ` : ''}${MSG[code]}` };
+        case 'ICD10_SEX_MISMATCH': {
+            const message = `${icdCode ? `${icdCode}: ` : ''}${MSG[code]}`;
+            const field = icdField(form, icdCode);
+            return field ? { fields: { [field]: message }, message: MSG.CHECK_FIELDS } : { fields: {}, message };
+        }
         case 'MEDICAL_RECORD_CLOSED':
             return { fields: {}, message: MSG.RECORD_CLOSED };
         case 'VISIT_NOT_IN_EXAMINATION':
-            return { fields: {}, message: MSG.NOT_CONCLUDABLE };
+            return { fields: {}, message: MSG.VISIT_CHANGED };
         case 'DOCTOR_OFF_DUTY':
         case 'ROOM_ASSIGNMENT_REQUIRED':
             return { fields: {}, message: MSG.OUTSIDE_ROOM_OR_SHIFT };

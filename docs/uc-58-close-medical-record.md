@@ -1,6 +1,6 @@
 # UC-58 — Close Medical Record
 
-**Status:** Proposed 17/11/2026 and revised the same day against the legal texts of [Legal basis](#legal-basis). Implemented 17/11/2026 (backend, frontend, migration V61). Since UC-53 (17/11/2026) the package's `extensions` group also holds `khambenh_bophan` and `daxuly` ([`uc-53-export-medical-record.md`](uc-53-export-medical-record.md) BR-53-10); the integration tests need Docker and have not run yet. The "Xác nhận kết luận" action after MSG110 of UC-90 is not added yet. Written from `Business_Rules_v7.xlsx`: the rules sheet (BR-xx) and its message sheet (MSG-xx). Report 3 §11.5 and the other project documents are used only where they agree with BR v7. Where they disagree, BR v7 wins and the difference is listed under [Deviations from the sources](#deviations-from-the-sources). Choices that no source makes are marked **ASSUMPTION** or **TBD** and are listed under [Decisions needed](#decisions-needed).
+**Status:** Proposed 17/11/2026 and revised the same day against the legal texts of [Legal basis](#legal-basis). Implemented 17/11/2026 (backend, frontend, migration V61). Since UC-53 (17/11/2026) the package's `extensions` group also holds `khambenh_bophan` and `daxuly` ([`uc-53-export-medical-record.md`](uc-53-export-medical-record.md) BR-53-10); the integration tests need Docker and have not run yet. The "Xác nhận kết luận" action after MSG133 of UC-90 is not added yet. Written from `Business_Rules_v7.xlsx`: the rules sheet (BR-xx) and its message sheet (MSG-xx). Report 3 §11.5 and the other project documents are used only where they agree with BR v7. Where they disagree, BR v7 wins and the difference is listed under [Deviations from the sources](#deviations-from-the-sources). Choices that no source makes are marked **ASSUMPTION** or **TBD** and are listed under [Decisions needed](#decisions-needed).
 
 **Sources:** `Business_Rules_v7.xlsx` (BR-02, BR-05, BR-15, BR-19, BR-22, BR-26, BR-27, BR-30, BR-32, BR-35, BR-37, BR-41, BR-42, BR-43, BR-44, BR-47, BR-53, BR-54, BR-55, BR-119, BR-121, BR-122, BR-125, BR-126; messages MSG05, MSG12, MSG13, MSG25, MSG27, MSG38, MSG48, MSG67, MSG68, MSG75, MSG80); `usecases.xlsx` (UC-58); Report 3 §11.5; [`uc-59-e-prescription.md`](uc-59-e-prescription.md) BR-59-09; [`uc-61-follow-up-appointment.md`](uc-61-follow-up-appointment.md) BR-61-04; `schema.yaml` tables `medical_records`, `export_logs`, `record_signatures`, `record_archives` (V7, V10). Legal texts, all in force on 17/11/2026:
 
@@ -133,7 +133,7 @@ Left to the facility, not the software: the clinic's quy chế on records (TT 13
 
 ## Normal flow
 
-1. On the "Kết luận" tab of a visit with a saved conclusion, the Doctor clicks "Xác nhận kết luận". The button is disabled while the conclusion is not saved or has unsaved changes. Adding it after MSG110 of UC-90 is still to do.
+1. On the "Kết luận" tab of a visit with a saved conclusion, the Doctor clicks "Xác nhận kết luận". The button is disabled while the conclusion is not saved or has unsaved changes. Adding it after MSG133 of UC-90 is still to do.
 2. The client loads the close check (see [API](#api)). It shows any blocking condition of BR-58-01 inline (EF-02, EF-03). Otherwise it shows the confirmation dialog: MSG27 and the field "Loại hồ sơ lưu trữ" (BR-58-06), default "Thông thường (10 năm)".
 3. The Doctor checks the category and clicks "Xác nhận". The button shows "Đang xác nhận…" while the request runs.
 4. The server checks the guard, BR-58-01 and BR-58-02, then runs BR-58-03 to BR-58-07 and BR-58-09 in one transaction.
@@ -282,5 +282,5 @@ All decisions were settled with the product owner on 17/11/2026; they still need
    - the MSG27 dialog with the "Loại hồ sơ lưu trữ" field, and the "Đang xác nhận…" progress label;
    - MSG130 and the read-only record afterwards.
    
-   Still to do: the action after MSG110 of UC-90.
+   Still to do: the action after MSG133 of UC-90.
 4. **Docs.** Decisions 1 and 2 are applied. `schema.yaml` table 37 has `retention_category` (V61). `Business_Rules_v7.xlsx` (BR-44 wording, MSG67 text) is updated by its owner.

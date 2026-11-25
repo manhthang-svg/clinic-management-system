@@ -243,6 +243,18 @@ class ConclusionServiceImplTest {
     }
 
     @Test
+    void reportsAClosedRecordBeforeTheCompletedVisit() {
+        // UC-56 EF-03: closing the record (UC-58) also completes the visit; the Doctor sees MSG68.
+        stubVisit(VisitStatus.COMPLETED);
+        record.close(DOCTOR_ID, "LT0001", NOW);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request("J02.9", List.of(), false)))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MEDICAL_RECORD_CLOSED));
+        verify(conclusionRepository, never()).saveAndFlush(any(Conclusion.class));
+    }
+
+    @Test
     void refusesAVisitStillWaitingForParaclinicalResults() {
         stubVisit(VisitStatus.WAITING_PARACLINICAL);
 

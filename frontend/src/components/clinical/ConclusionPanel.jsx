@@ -217,7 +217,7 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
             toast.success(MSG.SAVED); // MSG03
             onSaved?.(saved);
         } catch (error) {
-            const result = conclusionError(error);
+            const result = conclusionError(error, form);
             if (result.discouragedCode) {
                 setDiscouragedCode(result.discouragedCode); // AF-01, MSG66
             } else {
