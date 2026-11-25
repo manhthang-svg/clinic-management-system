@@ -82,7 +82,6 @@ class ConclusionServiceImplTest {
     @Mock private ConclusionRepository conclusionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private Icd10Repository icd10Repository;
-    @Mock private Icd10SearchCache icd10Catalog;
     @Mock private AuditLogService auditLogService;
 
     private ConclusionServiceImpl service;
@@ -97,23 +96,39 @@ class ConclusionServiceImplTest {
                 medicalRecordRepository, clock);
         service = new ConclusionServiceImpl(
                 guard, staffAccountRepository, examinationRepository, conclusionRepository, prescriptionRepository,
-                icd10Repository, icd10Catalog, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
-        lenient().when(icd10Catalog.namesIcd10Diseases(any(), any())).thenReturn(true);
+                icd10Repository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 
     @Test
-    void refusesADiagnosisThatNamesNoIcd10Disease() {
+    void savesTheDoctorsOwnDiagnosisTextAndBuildsTheDiagnosisCodes() {
+        // CV 365 III.13: free text; III.14: the main code then the secondary codes, separated by ";".
+        stubVisit(VisitStatus.IN_EXAMINATION);
+        stubIcd(icd("J02.9", false, false), icd("K29.7", false, false), icd("B87.0", false, false));
+        when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.saveAndFlush(any(Conclusion.class))).thenAnswer(call -> call.getArgument(0));
+        SaveConclusionRequest request = new SaveConclusionRequest(
+                "  Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan  ", "J02.9", List.of("K29.7", "B87.0"),
+                "Điều trị ngoại trú", null, "Uống nhiều nước", null, null, false, null);
+
+        service.save(principal(), VISIT_ID, request);
+
+        ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
+        verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getChandoan()).isEqualTo("Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan");
+        assertThat(saved.getValue().getChandoanMa()).isEqualTo("J02.9;K29.7;B87.0");
+    }
+
+    @Test
+    void refusesABlankDiagnosis() {
         stubVisit(VisitStatus.IN_EXAMINATION);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
-        when(icd10Catalog.namesIcd10Diseases(eq("abc xyz"), any())).thenReturn(false);
         SaveConclusionRequest request = new SaveConclusionRequest(
-                " abc xyz ", "J02.9", List.of(), "Điều trị ngoại trú", "Đỡ", "Uống nhiều nước", null, null,
-                false, null);
+                "   ", "J02.9", List.of(), "Điều trị ngoại trú", null, "Uống nhiều nước", null, null, false, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class, error -> {
-                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_DIAGNOSIS_NOT_ICD10);
-                    assertThat(error.getDetails()).containsEntry("field", "diagnosis");
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_INVALID);
+                    assertThat(error.getDetails()).containsEntry("field", "diagnosis").containsEntry("reason", "REQUIRED");
                 });
         verify(conclusionRepository, never()).saveAndFlush(any(Conclusion.class));
     }

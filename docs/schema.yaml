@@ -3679,7 +3679,7 @@ tables:
         - III.13
         standard: Có – III.13
         description: Chẩn đoán xác định
-        note: Field theo chuẩn/Phụ lục
+        note: Văn bản tự do do bác sĩ nhập (UC-56), bắt buộc, không được chỉ có khoảng trắng; không đối chiếu danh mục ICD-10
       chandoan_ma:
         field: chandoanMa
         sql_type: varchar(255)
@@ -3693,7 +3693,7 @@ tables:
         - III.14
         standard: Có – ICD-10 theo TT 06/2026/TT-BYT
         description: Các mã ICD, ngăn cách ;
-        note: Ghép từ maicd + maicd_khac khi xuất
+        note: Hệ thống tự ghép khi lưu kết luận (UC-56) = maicd rồi các mã bệnh kèm theo theo thứ tự, ngăn cách ; (VD J02.9;K29.7). Bác sĩ không nhập.
       maicd:
         field: maicd
         sql_type: varchar(10)

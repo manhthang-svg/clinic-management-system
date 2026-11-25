@@ -88,7 +88,6 @@ public class ConclusionServiceImpl implements ConclusionService {
     private final ConclusionRepository conclusionRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final Icd10Repository icd10Repository;
-    private final Icd10SearchCache icd10Catalog;
     private final AuditLogService auditLogService;
     private final UuidV7Generator ids;
     private final Clock clock;
@@ -125,11 +124,8 @@ public class ConclusionServiceImpl implements ConclusionService {
         // Kết quả điều trị: optional free text (V63), e.g. nothing to assess yet at a first visit.
         String result = text(request.treatmentResult(), "treatmentResult", false);
 
+        // Chẩn đoán is the Doctor's own free text (CV 365 III.13); the codes come from the ICD-10 pickers below.
         LocalDate day = LocalDate.ofInstant(now, CLINIC_ZONE);
-        // The free-text diagnosis must name ICD-10 diseases, not arbitrary text.
-        if (!icd10Catalog.namesIcd10Diseases(diagnosis, day)) {
-            throw new AppException(ErrorCode.CONCLUSION_DIAGNOSIS_NOT_ICD10, Map.of("field", "diagnosis"));
-        }
         Icd10 main = mainDiagnosis(request, context.patient(), day);
         List<Icd10> secondary = secondaryDiagnoses(request.secondaryIcd10Codes(), main, context.patient(), day);
         if (conclusion != null && diagnosesLocked(context.record()) && diagnosesChanged(conclusion, main, secondary)) {
@@ -258,6 +254,7 @@ public class ConclusionServiceImpl implements ConclusionService {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("diagnosis", conclusion.getChandoan());
         values.put("mainIcd10Code", conclusion.getMaicd());
+        values.put("diagnosisCodes", conclusion.getChandoanMa());
         values.put("secondaryIcd10Codes", conclusion.getSecondaryDiagnoses().stream()
                 .sorted(Comparator.comparingInt(ConclusionSecondaryDiagnosis::getThuTu))
                 .map(ConclusionSecondaryDiagnosis::getMaicd).toList());
