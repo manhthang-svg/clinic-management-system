@@ -5,6 +5,9 @@ import { ageOn } from './patientOverview';
 export const ADULT_AGE = 18;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
+// Email khong bat buoc; dung de gui email nhac lich tai kham (UC-75). Backend kiem tra lai (@Email, toi da 100).
+export const MAX_EMAIL_LENGTH = 100;
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Ho va ten chi gom chu cai (Unicode), khoang trang, dau gach noi va dau nhay don (cho ten dong bao dan toc)
 export const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'-]+$/u;
 
@@ -139,6 +142,7 @@ export const INITIAL_PATIENT_FORM = {
     tinhthanhMa: '',
     noilamviec: '',
     sodienthoai: '',
+    email: '',
     yeutorh: '',
     nhommau: '',
     hotennguoithan: '',
@@ -176,8 +180,28 @@ export const msg19 = (field, code, name) =>
 
 // tinh tuoi tu ngay sinh tren form, sai ngay thi tra null
 export function formAge(form, today) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) ? ageOn(form.ngaysinh, today) : null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) || form.ngaysinh > today) return null;
+    const birthDate = new Date(`${form.ngaysinh}T00:00:00Z`);
+    if (!Number.isFinite(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== form.ngaysinh) return null;
+
+    const [year, month] = today.split('-').map(Number);
+    const cutoff = new Date(`${today}T00:00:00Z`);
+    cutoff.setUTCFullYear(year - MAX_AGE_YEARS);
+    if (cutoff.getUTCMonth() !== month - 1) cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+    if (birthDate < cutoff) return null;
+    return ageOn(form.ngaysinh, today);
 }
+
+const TEXT_LENGTH_LIMITS = {
+    diachi: 1024,
+    xaphuong: 1024,
+    tinhthanh: 1024,
+    noilamviec: 1024,
+    diachinguoithan: 1024,
+    nghenghiep: 100,
+    dantoc: 50,
+    nguoithanQuanhe: 50,
+};
 
 // kiem tra form, tra ve { truong: loi } (rong la hop le)
 export function validatePatientForm(form, today) {
@@ -189,6 +213,15 @@ export function validatePatientForm(form, today) {
     if (text('hoten').length > MAX_NAME_LENGTH) errors.hoten = FIELD_MSG.TOO_LONG;
     else if (text('hoten') && !NAME_REGEX.test(text('hoten'))) errors.hoten = FIELD_MSG.INVALID_FORMAT;
     require('diachi');
+    require('gioitinh');
+    if (text('gioitinh') && !/^[123]$/.test(text('gioitinh'))) errors.gioitinh = FIELD_MSG.INVALID_FORMAT;
+    // noi cu tru va nghe nghiep: can cho bieu mau benh an va du lieu XML BHYT (ma tinh, ma xa, ma nghe nghiep).
+    // Ngoai kieu co the khong cu tru o Viet Nam: khong bat buoc tinh, xa (dia chi van bat buoc)
+    if (!isForeigner(form)) {
+        require('tinhthanh');
+        require('xaphuong');
+    }
+    require('nghenghiep');
     require('dantoc');
     // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
     if (!errors.dantoc && !text('dantocMa')) errors.dantoc = FIELD_MSG.REQUIRED;
@@ -202,11 +235,17 @@ export function validatePatientForm(form, today) {
 
     const age = formAge(form, today);
     if (!form.ngaysinh) errors.ngaysinh = FIELD_MSG.REQUIRED;
-    else if (age === null || form.ngaysinh > today || age > MAX_AGE_YEARS) errors.ngaysinh = FIELD_MSG.INVALID_FORMAT;
+    else if (age === null) errors.ngaysinh = FIELD_MSG.INVALID_FORMAT;
+
+    for (const [field, limit] of Object.entries(TEXT_LENGTH_LIMITS)) {
+        if (text(field).length > limit) errors[field] = FIELD_MSG.TOO_LONG;
+    }
 
     if (text('cccdSo') && !/^\d{12}$/.test(text('cccdSo'))) errors.cccdSo = FIELD_MSG.INVALID_FORMAT;
     if (text('hochieuSo') && !/^[A-Za-z0-9]{1,15}$/.test(text('hochieuSo'))) errors.hochieuSo = FIELD_MSG.INVALID_FORMAT;
     if (text('sodienthoai') && !/^\d{10}$/.test(text('sodienthoai'))) errors.sodienthoai = FIELD_MSG.INVALID_FORMAT;
+    if (text('email').length > MAX_EMAIL_LENGTH) errors.email = FIELD_MSG.TOO_LONG;
+    else if (text('email') && !EMAIL_REGEX.test(text('email'))) errors.email = FIELD_MSG.INVALID_FORMAT;
     if (text('sodienthoainguoithan') && !/^\d{10}$/.test(text('sodienthoainguoithan'))) {
         errors.sodienthoainguoithan = FIELD_MSG.INVALID_FORMAT;
     }

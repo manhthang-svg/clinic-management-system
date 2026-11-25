@@ -98,6 +98,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
 
     const header = (
         <AccountPageHeader
+            onHome={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
             title="Thông tin bệnh nhân"
             description="Thông tin hành chính và lịch sử khám của bệnh nhân"
             crumbs={[{ label: 'Quản lý bệnh nhân', onClick: goToPatients }, { label: 'Thông tin bệnh nhân' }]}
@@ -234,6 +235,7 @@ export default function ReceptionistPatientDetailPage({ patientApi = defaultPati
                     <Info label="Giới tính">{GENDER_LABELS[patient.gioitinh]}</Info>
                     <Info label="CCCD / Hộ chiếu">{patient.cccdSo || patient.hochieuSo}</Info>
                     <Info label="Số điện thoại">{patient.sodienthoai}</Info>
+                    <Info label="Email">{patient.email}</Info>
                     <Info label="Địa chỉ">{fullAddress(patient)}</Info>
                     <Info label="Nghề nghiệp">{patient.nghenghiep}</Info>
                     <Info label="Dân tộc">{patient.dantoc}</Info>

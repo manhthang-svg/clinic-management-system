@@ -27,13 +27,41 @@ const adult = (overrides) => ({
     hoten: 'Nguyễn Văn An',
     ngaysinh: '1990-01-01',
     diachi: 'Hà Nội',
+    xaphuong: 'Phường Ba Đình',
+    tinhthanh: 'Thành phố Hà Nội',
+    nghenghiep: 'Công nhân',
+    nghenghiepMa: '04',
     sodienthoai: '0901234567',
     ...overrides,
 });
 
 describe('validatePatientForm (UC-37 steps 4–5)', () => {
+    it('flags invalid dates, gender and overlong administrative fields', () => {
+        expect(validatePatientForm(adult({ ngaysinh: '2026-02-30', gioitinh: '4', diachi: 'a'.repeat(1025), nguoithanQuanhe: 'a'.repeat(51) }), TODAY)).toEqual({
+            ngaysinh: FIELD_MSG.INVALID_FORMAT,
+            gioitinh: FIELD_MSG.INVALID_FORMAT,
+            diachi: FIELD_MSG.TOO_LONG,
+            nguoithanQuanhe: FIELD_MSG.TOO_LONG,
+        });
+        expect(validatePatientForm(adult({ ngaysinh: '1906-11-02' }), TODAY).ngaysinh).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ ngaysinh: '1906-11-03' }), TODAY).ngaysinh).toBeUndefined();
+    });
+
     it('accepts a valid adult', () => {
         expect(validatePatientForm(adult(), TODAY)).toEqual({});
+    });
+
+    it('requires the province, the ward and the occupation', () => {
+        expect(validatePatientForm(adult({ tinhthanh: ' ', xaphuong: '', nghenghiep: '', nghenghiepMa: '' }), TODAY))
+            .toEqual({ tinhthanh: FIELD_MSG.REQUIRED, xaphuong: FIELD_MSG.REQUIRED, nghenghiep: FIELD_MSG.REQUIRED });
+    });
+
+    it('does not require a Vietnamese province or ward for a foreigner', () => {
+        const foreigner = adult({
+            nghenghiep: 'Ngoại kiều', nghenghiepMa: '12', ngoaikieu: 'Nhật', ngoaikieuMa: '16', tinhthanh: '', xaphuong: '',
+        });
+        expect(validatePatientForm(foreigner, TODAY)).toEqual({});
+        expect(validatePatientForm({ ...foreigner, diachi: '' }, TODAY)).toEqual({ diachi: FIELD_MSG.REQUIRED });
     });
 
     it('requires the phone from 18 years old', () => {
@@ -88,6 +116,14 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
     it('rejects a birth date in the future', () => {
         expect(validatePatientForm(adult({ ngaysinh: '2026-11-04' }), TODAY).ngaysinh).toBe(FIELD_MSG.INVALID_FORMAT);
     });
+
+    it('accepts an empty or valid email and rejects a wrong or too long one', () => {
+        expect(validatePatientForm(adult({ email: '' }), TODAY).email).toBeUndefined();
+        expect(validatePatientForm(adult({ email: ' an@example.com ' }), TODAY).email).toBeUndefined();
+        expect(validatePatientForm(adult({ email: 'an@example' }), TODAY).email).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ email: 'an example@x.vn' }), TODAY).email).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ email: `${'a'.repeat(92)}@mail.com` }), TODAY).email).toBe(FIELD_MSG.TOO_LONG);
+    });
 });
 
 describe('patientForm helpers', () => {
@@ -96,6 +132,8 @@ describe('patientForm helpers', () => {
         expect(payload.hoten).toBe('An');
         expect(payload.cccdSo).toBeNull();
         expect(payload.gioitinh).toBe(1);
+        expect(payload.email).toBeNull();
+        expect(buildPatientPayload(adult({ email: ' an@example.com ' })).email).toBe('an@example.com');
     });
 
     it('maps backend validation codes to field messages', () => {

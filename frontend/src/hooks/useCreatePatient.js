@@ -29,7 +29,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
     const [error, setError] = useState('');
     const [conflict, setConflict] = useState(null);
     const [duplicates, setDuplicates] = useState(null);
-    const [confirmCancel, setConfirmCancel] = useState(false);
+    const [discardDestination, setDiscardDestination] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
     const handleChange = useCallback((event) => {
@@ -146,11 +146,11 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
     }, [form, patientApi, save, submitting]);
 
     // huy khi da nhap du lieu thi hoi xac nhan (MSG40)
-    const goBack = useCallback(() => {
+    const leaveForm = (destination) => {
         if (submitting) return;
-        if (isDirty(form, initialForm)) setConfirmCancel(true);
-        else navigate(ROUTES.RECEPTIONIST.PATIENTS);
-    }, [form, initialForm, navigate, submitting]);
+        if (isDirty(form, initialForm)) setDiscardDestination(destination);
+        else navigate(destination);
+    };
 
     return {
         form,
@@ -158,16 +158,17 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
         error,
         conflict,
         duplicates,
-        confirmCancel,
+        confirmCancel: Boolean(discardDestination),
         submitting,
         handleChange,
         handleBlur,
         handleSubmit,
-        goBack,
+        goBack: () => leaveForm(ROUTES.RECEPTIONIST.PATIENTS),
+        goToOverview: () => leaveForm(ROUTES.RECEPTIONIST.OVERVIEW),
         openProfile,
         createAnyway: save,
         closeDuplicates: () => setDuplicates(null),
-        keepEditing: () => setConfirmCancel(false),
-        discard: () => navigate(ROUTES.RECEPTIONIST.PATIENTS),
+        keepEditing: () => setDiscardDestination(null),
+        discard: () => navigate(discardDestination),
     };
 }

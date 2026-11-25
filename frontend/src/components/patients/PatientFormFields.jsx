@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { MAX_NAME_LENGTH, countryOptions, ethnicityOptions, isForeigner, occupationOptions } from './patientForm';
 import { clinicToday } from '../visits/visitForm';
+import defaultAdministrativeUnitApi from '../../apis/administrativeUnitApi';
 
 // form dung chung cho UC-37 tao ho so va UC-38 sua ho so
 const inputClass =
@@ -104,6 +106,200 @@ export function SelectField({
     );
 }
 
+// so sanh / loc ten khong phan biet hoa thuong va dau tieng Viet (go "ba dinh" ra "Phường Ba Đình")
+const fold = (text) => (text ?? '').normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
+const sameName = (a, b) => fold(a) === fold(b);
+
+/**
+ * O nhap co bang goi y trang xo xuong (giong cac o chon khac) nhung go duoc de loc.
+ * Chon bang chuot hoac phim mui ten / Enter; Esc dong bang.
+ */
+export function SuggestField({
+    label, name, form, errors, required = false, placeholder, options, onType, onPick, onBlur, emptyText,
+}) {
+    const [open, setOpen] = useState(false);
+    const [active, setActive] = useState(-1);
+    const value = form[name] ?? '';
+    const error = errors?.[name];
+    const listId = `${name}-options`;
+    const query = fold(value);
+    // dang hien dung ten da chon thi hien ca danh sach de chon lai
+    const shown = !query || options.some((item) => fold(item.name) === query)
+        ? options
+        : options.filter((item) => fold(item.name).includes(query));
+
+    const pick = (item) => {
+        onPick(item);
+        setOpen(false);
+        setActive(-1);
+    };
+
+    const handleKeyDown = (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setOpen(true);
+            if (!shown.length) return;
+            const step = event.key === 'ArrowDown' ? 1 : -1;
+            setActive((current) => (current + step + shown.length) % shown.length);
+        } else if (event.key === 'Enter' && open && shown[active]) {
+            event.preventDefault();
+            pick(shown[active]);
+        } else if (event.key === 'Escape') {
+            setOpen(false);
+        }
+    };
+
+    return (
+        <div className="relative">
+            <label htmlFor={name} className={labelClass}>
+                {label}
+                {required && <span className="ml-1 text-red-500">*</span>}
+            </label>
+            <input
+                id={name}
+                name={name}
+                value={value}
+                role="combobox"
+                aria-expanded={open}
+                aria-controls={listId}
+                aria-autocomplete="list"
+                aria-activedescendant={open && shown[active] ? `${listId}-${active}` : undefined}
+                aria-invalid={error ? 'true' : undefined}
+                aria-describedby={error ? `${name}-error` : undefined}
+                autoComplete="off"
+                placeholder={placeholder}
+                className={`${inputClass} ${error ? 'border-red-400' : ''}`}
+                onFocus={() => setOpen(true)}
+                onClick={() => setOpen(true)}
+                onChange={(event) => {
+                    onType(event.target.value);
+                    setOpen(true);
+                    setActive(-1);
+                }}
+                onKeyDown={handleKeyDown}
+                onBlur={(event) => {
+                    setOpen(false);
+                    onBlur?.(event);
+                }}
+            />
+            {open && (
+                <ul
+                    id={listId}
+                    role="listbox"
+                    aria-label={`Danh sách ${label}`}
+                    className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+                >
+                    {shown.length ? shown.map((item, index) => (
+                        <li
+                            key={item.code}
+                            id={`${listId}-${index}`}
+                            role="option"
+                            aria-selected={fold(item.name) === query}
+                            // giu focus o o nhap de bang khong dong truoc khi chon
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => pick(item)}
+                            className={`cursor-pointer rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 ${
+                                index === active ? 'bg-teal-50' : ''} ${fold(item.name) === query ? 'font-semibold text-teal-700' : ''}`}
+                        >
+                            {item.name}
+                        </li>
+                    )) : (
+                        <li className="px-3 py-2 text-sm text-slate-400">{emptyText}</li>
+                    )}
+                </ul>
+            )}
+            <FieldError name={name} error={error} />
+        </div>
+    );
+}
+
+/**
+ * UC-37, UC-38: Tỉnh/thành phố và Xã/phường gợi ý từ danh mục đơn vị hành chính (BR-46, BR-89).
+ * Chọn một tên trong danh sách thì mã tự điền; đổi tỉnh thì xóa xã đã chọn.
+ * Không tải được danh mục thì vẫn cho nhập tay (mã để trống).
+ */
+export function AdministrativeUnitFields({ form, fieldErrors, handleChange, handleBlur, required, unitApi }) {
+    const [provinces, setProvinces] = useState([]);
+    // xa/phuong cua tinh da tai; doi tinh thi danh sach cu khong con dung
+    const [loadedWards, setLoadedWards] = useState({ provinceCode: '', items: [] });
+    const [loadFailed, setLoadFailed] = useState(false);
+    const provinceCode = form.tinhthanhMa ?? '';
+    const wards = provinceCode && loadedWards.provinceCode === provinceCode ? loadedWards.items : [];
+
+    useEffect(() => {
+        const controller = new AbortController();
+        unitApi.provinces(controller.signal)
+            .then(setProvinces)
+            .catch(() => { if (!controller.signal.aborted) setLoadFailed(true); });
+        return () => controller.abort();
+    }, [unitApi]);
+
+    useEffect(() => {
+        if (!provinceCode) return undefined;
+        const controller = new AbortController();
+        unitApi.wards(provinceCode, controller.signal)
+            .then((items) => setLoadedWards({ provinceCode, items }))
+            .catch(() => { if (!controller.signal.aborted) setLoadFailed(true); });
+        return () => controller.abort();
+    }, [unitApi, provinceCode]);
+
+    const emit = (name, value) => handleChange({ target: { name, value } });
+
+    const setProvince = (value, match) => {
+        const code = match?.code ?? '';
+        emit('tinhthanh', match ? match.name : value);
+        if (code !== provinceCode) {
+            emit('tinhthanhMa', code);
+            emit('xaphuong', '');
+            emit('xaphuongMa', '');
+        }
+    };
+
+    const setWard = (value, match) => {
+        emit('xaphuong', match ? match.name : value);
+        emit('xaphuongMa', match?.code ?? '');
+    };
+
+    return (
+        <>
+            <SuggestField
+                label="Tỉnh/thành phố"
+                name="tinhthanh"
+                form={form}
+                errors={fieldErrors}
+                required={required}
+                placeholder="Gõ hoặc chọn tỉnh/thành phố"
+                options={provinces}
+                onType={(value) => setProvince(value, provinces.find((item) => sameName(item.name, value)))}
+                onPick={(item) => setProvince(item.name, item)}
+                onBlur={handleBlur}
+                emptyText={loadFailed ? 'Không tải được danh mục' : 'Không có tỉnh/thành phố phù hợp'}
+            />
+
+            <SuggestField
+                label="Xã/phường"
+                name="xaphuong"
+                form={form}
+                errors={fieldErrors}
+                required={required}
+                placeholder={provinceCode ? 'Gõ hoặc chọn xã/phường' : 'Chọn tỉnh/thành phố trước'}
+                options={wards}
+                onType={(value) => setWard(value, wards.find((item) => sameName(item.name, value)))}
+                onPick={(item) => setWard(item.name, item)}
+                onBlur={handleBlur}
+                emptyText={provinceCode ? 'Không có xã/phường phù hợp' : 'Chọn tỉnh/thành phố trước'}
+            />
+
+            {loadFailed && (
+                <p className="text-xs text-amber-700 md:col-span-2 xl:col-span-3">
+                    Không tải được danh mục đơn vị hành chính. Vẫn có thể nhập tay tỉnh/thành phố và xã/phường.
+                </p>
+            )}
+        </>
+    );
+}
+
 export function Dialog({ title, children }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -116,7 +312,9 @@ export function Dialog({ title, children }) {
 }
 
 // 3 phan cua form; dau bat buoc SDT / nguoi than theo tuoi
-export function PatientFormSections({ form, fieldErrors, handleChange, handleBlur, adult, minor }) {
+export function PatientFormSections({
+    form, fieldErrors, handleChange, handleBlur, adult, minor, unitApi = defaultAdministrativeUnitApi,
+}) {
     return (
         <>
                 {/* 1. Thong tin ca nhan */}
@@ -206,6 +404,18 @@ export function PatientFormSections({ form, fieldErrors, handleChange, handleBlu
                             placeholder="10 chữ số, bắt buộc từ 18 tuổi"
                         />
 
+                        <Field
+                            label="Email"
+                            name="email"
+                            form={form}
+                            errors={fieldErrors}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            type="email"
+                            autoComplete="off"
+                            placeholder="Để gửi email nhắc lịch tái khám"
+                        />
+
                         <SelectField
                             label="Dân tộc"
                             name="dantoc"
@@ -275,17 +485,8 @@ export function PatientFormSections({ form, fieldErrors, handleChange, handleBlu
                             errors={fieldErrors}
                             onChange={handleChange}
                             onBlur={handleBlur}
+                            required
                             options={occupationOptions(form.nghenghiep)}
-                        />
-
-                        <Field
-                            label="Mã nghề nghiệp"
-                            name="nghenghiepMa"
-                            form={form}
-                            errors={fieldErrors}
-                            readOnly
-                            title="Tự điền theo nghề nghiệp đã chọn"
-                            placeholder="Tự điền theo nghề nghiệp"
                         />
 
                         <Field
@@ -312,56 +513,13 @@ export function PatientFormSections({ form, fieldErrors, handleChange, handleBlu
                             options={countryOptions(form.ngoaikieu)}
                         />
 
-                        <Field
-                            label="Mã ngoại kiều"
-                            name="ngoaikieuMa"
+                        <AdministrativeUnitFields
                             form={form}
-                            errors={fieldErrors}
-                            readOnly
-                            title="Tự điền theo nước đã chọn"
-                            placeholder="Tự điền theo nước"
-                        />
-
-                        <Field
-                            label="Xã/phường"
-                            name="xaphuong"
-                            form={form}
-                            errors={fieldErrors}
-                            onChange={handleChange}
-                            onBlur={handleBlur}
-                            placeholder="Tên xã/phường"
-                        />
-
-                        <Field
-                            label="Mã xã/phường"
-                            name="xaphuongMa"
-                            form={form}
-                            errors={fieldErrors}
-                            onChange={handleChange}
-                            onBlur={handleBlur}
-                            maxLength={5}
-                            placeholder="Mã xã/phường"
-                        />
-
-                        <Field
-                            label="Tỉnh/thành phố"
-                            name="tinhthanh"
-                            form={form}
-                            errors={fieldErrors}
-                            onChange={handleChange}
-                            onBlur={handleBlur}
-                            placeholder="Tên tỉnh/thành phố"
-                        />
-
-                        <Field
-                            label="Mã tỉnh/thành"
-                            name="tinhthanhMa"
-                            form={form}
-                            errors={fieldErrors}
-                            onChange={handleChange}
-                            onBlur={handleBlur}
-                            maxLength={3}
-                            placeholder="Mã tỉnh/thành"
+                            fieldErrors={fieldErrors}
+                            handleChange={handleChange}
+                            handleBlur={handleBlur}
+                            required={!isForeigner(form)}
+                            unitApi={unitApi}
                         />
 
                         <div className="md:col-span-2 xl:col-span-3">
