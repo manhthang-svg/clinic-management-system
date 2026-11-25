@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  House,
   RotateCcw,
   Copy,
   Clock,
@@ -78,6 +79,7 @@ export function ScheduleManagementPage({
   onChangePassword,
   onOpenProfile,
   readOnly = false,
+  onHome,
 }) {
   const effectiveUser = currentAdmin || currentUser;
   const isAdmin = !readOnly && effectiveUser?.role === 'ADMIN';
@@ -660,6 +662,15 @@ export function ScheduleManagementPage({
 
   const pageContent = (
     <div className="p-3.5 sm:p-5 max-w-full space-y-4">
+      {onHome && (
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
+          <button type="button" aria-label="Trang chủ" onClick={onHome} className="cursor-pointer hover:text-[#127e7a]">
+            <House className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+          <span aria-current="page" className="font-medium text-slate-700">Lịch trực</span>
+        </nav>
+      )}
       {/* Page Header (Chuẩn Image 2: Tiêu đề bên trái, Điều hướng tuần & Sao chép bên phải) */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-1">
         <div className="flex items-start gap-3">

@@ -416,6 +416,7 @@ export function ReceptionistVisitRegisterPage({ patientApi = defaultPatientApi, 
 
   const header = (
     <AccountPageHeader
+        onHome={() => navigate(RECEPTIONIST.OVERVIEW)}
       title="Đăng ký khám"
       description="Đăng ký lượt khám mới cho bệnh nhân, kể cả lượt tái khám"
       crumbs={[{ label: 'Quản lý bệnh nhân', onClick: goToPatients }, { label: 'Đăng ký khám' }]}

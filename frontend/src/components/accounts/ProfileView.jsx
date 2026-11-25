@@ -19,7 +19,7 @@ function ReadOnly({ id, label, value }) {
 }
 
 /** UC-4 Update Profile: own account, phone and email editable, everything else read-only. */
-export function ProfileView({ account, accounts, onSave, onCancel, onChangePassword }) {
+export function ProfileView({ account, accounts, onSave, onCancel, onChangePassword, onHome }) {
   const initialForm = accountToForm(account);
   const [form, setForm] = useState(initialForm);
   const [touched, setTouched] = useState(false);
@@ -68,6 +68,7 @@ export function ProfileView({ account, accounts, onSave, onCancel, onChangePassw
         title="Hồ sơ cá nhân"
         description="Xem thông tin tài khoản và cập nhật thông tin liên hệ của bạn"
         onBack={onCancel}
+        onHome={onHome}
         crumbs={[{ label: 'Hồ sơ cá nhân' }]}
       />
 

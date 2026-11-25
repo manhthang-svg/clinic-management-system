@@ -14,6 +14,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
 } from 'lucide-react';
+import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
 import defaultPatientApi from '../../apis/patientApi';
 import { ROUTES } from '../../routes/routes';
 import { VISIT_STATUS_LABELS } from '../../constants/visitData';
@@ -151,13 +152,12 @@ export default function ReceptionistPatientsPage({ patientApi = defaultPatientAp
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6">
             <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                    <p className="mb-2 text-xs text-slate-400">Trang chủ / Tiếp đón bệnh nhân</p>
-                    <h1 className="text-2xl font-bold text-slate-800">Quản lý & Tiếp đón bệnh nhân</h1>
-                    <p className="mt-1 text-sm text-slate-500">
-                        Tìm kiếm hồ sơ bệnh nhân, đăng ký lượt khám và chuyển thu ngân thanh toán phí khám lần 1.
-                    </p>
-                </div>
+                <AccountPageHeader
+                    onHome={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
+                    title="Quản lý & Tiếp đón bệnh nhân"
+                    description="Tìm kiếm hồ sơ bệnh nhân, đăng ký lượt khám và chuyển thu ngân thanh toán phí khám lần 1."
+                    crumbs={[{ label: 'Quản lý bệnh nhân' }]}
+                />
 
                 <div className="flex items-center gap-2">
                     <button
