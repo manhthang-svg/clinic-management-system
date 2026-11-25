@@ -271,7 +271,7 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
                 {locked && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{MSG.DIAGNOSES_LOCKED}</p>}
 
                 {/* CV 365 III.13: the Doctor's own words; the ICD-10 codes are picked below (III.14 is built from them). */}
-                <TextField label="Chẩn đoán" required value={form.diagnosis} onChange={set('diagnosis')} error={errors.diagnosis} placeholder="VD: Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan" />
+                <TextField label="Chẩn đoán kết luận" required value={form.diagnosis} onChange={set('diagnosis')} error={errors.diagnosis} placeholder="VD: Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan" />
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     <IcdPicker

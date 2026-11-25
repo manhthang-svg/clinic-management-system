@@ -39,6 +39,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, on
     const [ended, setEnded] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
+    const [confirmTransfer, setConfirmTransfer] = useState(false);
     const [result, setResult] = useState(null);
     const [ticket, setTicket] = useState({ data: null, loading: false, error: null });
 
@@ -81,11 +82,17 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, on
         else onCancel();
     };
 
-    const submit = async (event) => {
+    // Step 6: the form is checked first, then the Doctor confirms the room before anything is sent.
+    const submit = (event) => {
         event.preventDefault();
         const found = validateTransfer({ toRoomId, reason, notes });
         setErrors(found);
         if (Object.keys(found).length > 0) return;
+        setConfirmTransfer(true);
+    };
+
+    const transfer = async () => {
+        setConfirmTransfer(false);
         setSubmitting(true);
         setPageError('');
         try {
@@ -220,7 +227,7 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, on
                 </label>
 
                 <label htmlFor={notesId} className="mt-3 block text-xs font-semibold text-slate-700">
-                    Ghi chú (không bắt buộc)
+                    Ghi chú
                     <textarea
                         id={notesId}
                         rows={2}
@@ -272,12 +279,24 @@ export function TransferRoomPanel({ visit, currentRoomName, onCancel, onDone, on
                 </dl>
             </aside>
 
+            {/* AF-01 (MSG38): "Tiếp tục chỉnh sửa" keeps the entered data; "Loại bỏ" closes without transferring. */}
+            <ConfirmModal
+                isOpen={confirmTransfer}
+                title="Xác nhận chuyển phòng"
+                description={TRANSFER_MESSAGES.confirmTransfer(
+                    visit.patientName, target ? `${target.roomCode} - ${target.roomName}` : 'phòng đã chọn',
+                )}
+                confirmText="Đồng ý chuyển"
+                cancelText="Quay lại"
+                variant="mint"
+                onConfirm={transfer}
+                onClose={() => setConfirmTransfer(false)}
+            />
             <ConfirmModal
                 isOpen={confirmCancel}
-                title="Hủy chuyển phòng?"
                 description={TRANSFER_MESSAGES.unsavedChanges}
-                confirmText="Hủy chuyển phòng"
-                cancelText="Ở lại"
+                confirmText="Loại bỏ"
+                cancelText="Tiếp tục chỉnh sửa"
                 variant="destructive"
                 onConfirm={() => { setConfirmCancel(false); onCancel(); }}
                 onClose={() => setConfirmCancel(false)}

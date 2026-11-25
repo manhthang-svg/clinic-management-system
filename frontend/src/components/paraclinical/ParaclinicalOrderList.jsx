@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useId, useState } from 'react';
 import { ChevronDown, ClipboardList, LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 import visitApi from '../../apis/visitApi';
 import { ORDERED_SERVICE_STATUS_LABELS as SERVICE_STATUS_LABELS } from '../../constants/visitData';
@@ -256,7 +257,6 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = def
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [cancelling, setCancelling] = useState(null);
-    const [notice, setNotice] = useState('');
     const [reloadKey, setReloadKey] = useState(0);
     // Submitted results, loaded once per service: reopening a result shows it at once.
     const [results] = useState(() => createResultCache(resultApi));
@@ -283,7 +283,7 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = def
 
     const handleCancelled = (result) => {
         setCancelling(null);
-        setNotice(cancelledMessage(result));
+        toast.success(cancelledMessage(result)); // MSG70, shown for a few seconds like the other screens
         setReloadKey((key) => key + 1);
         onCancelled?.(result);
     };
@@ -305,9 +305,6 @@ export function ParaclinicalOrderList({ visitId, api = visitApi, resultApi = def
             <h2 id="cls-orders-title" className="flex items-center gap-2 text-sm font-bold">
                 <ClipboardList aria-hidden="true" className="h-4 w-4 text-teal-600" />Chỉ định cận lâm sàng đã chỉ định
             </h2>
-            {notice && (
-                <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>
-            )}
             {orders.length === 0
                 // UC-54 AF-01: MSG92.
                 ? <p className="text-sm text-slate-500">Chưa có dữ liệu để hiển thị.</p>
