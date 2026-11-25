@@ -78,7 +78,7 @@ describe('ReceptionistVisitRegisterPage (UC-40)', () => {
         expect(api.getQueue).not.toHaveBeenCalled();
     });
 
-    it('shows an expired follow-up appointment only as a notice, without "Đến tái khám" (AF-09)', async () => {
+    it('does not show a follow-up appointment past its validity period (BR-124)', async () => {
         renderPage(visitApi({
             getFollowUpAppointment: vi.fn().mockResolvedValue({
                 id: 'a-1', appointmentDate: '2020-01-06', validUntil: '2020-01-20', doctorName: 'BS Châu',
@@ -86,7 +86,9 @@ describe('ReceptionistVisitRegisterPage (UC-40)', () => {
             }),
         }));
 
-        expect(await screen.findByText(/^Lịch hẹn tái khám ngày \S*2020 đã quá hạn\.$/)).toBeInTheDocument();
+        expect(await screen.findByLabelText(/Lý do khám/)).toBeInTheDocument();
+        expect(screen.queryByText(/đã quá hạn/)).not.toBeInTheDocument();
+        expect(screen.queryByText('Lịch hẹn tái khám')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Đến tái khám' })).not.toBeInTheDocument();
         expect(screen.queryByText('Phòng gợi ý')).not.toBeInTheDocument();
         expect(screen.getByText('Khám bệnh')).toBeInTheDocument();

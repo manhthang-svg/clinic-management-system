@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalendarClock, CalendarCheck2, Info, Link2Off } from 'lucide-react';
-import { daysBetween, isAppointmentExpired } from './visitForm';
+import { daysBetween } from './visitForm';
 import { formatDate } from './visitFormat';
 
 const OUTLINE_BUTTON_CLASS =
@@ -17,16 +17,6 @@ export function VisitAppointmentCard({ appointment, today, attached, onAttach, o
   const [decision, setDecision] = useState(null);
 
   const daysLate = daysBetween(appointment.appointmentDate, today);
-
-  // AF-09 (BR-124): past its validity period the appointment cannot be linked; the visit is a normal one.
-  if (isAppointmentExpired(appointment, today)) {
-    return (
-      <p role="status" className="flex items-start gap-2 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
-        <Info className="w-4 h-4 shrink-0 mt-0.5" />
-        Lịch hẹn tái khám ngày {formatDate(appointment.appointmentDate)} đã quá hạn.
-      </p>
-    );
-  }
 
   // AF-06: an appointment on a later day is only a note.
   if (daysLate < 0) {

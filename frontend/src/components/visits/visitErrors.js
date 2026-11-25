@@ -45,7 +45,7 @@ const APPOINTMENT_CODES = ['FOLLOW_UP_APPOINTMENT_NOT_USABLE', 'FOLLOW_UP_APPOIN
 
 /**
  * Classifies a failed POST /visits:
- * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'insurance' (UC-74 EF-02 at step 9), 'appointment' (AF-09, BR-124),
+ * kind is 'activeVisit' (EF-01), 'room' (EF-03), 'insurance' (UC-74 EF-02 at step 9), 'appointment' (BR-124),
  * 'session' or 'system' (EF-04).
  * Any other failure, a lost connection included, is MSG80 on the confirmation (EF-04).
  */

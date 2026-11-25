@@ -52,13 +52,12 @@ public class FollowUpAppointmentServiceImpl implements FollowUpAppointmentServic
     public FollowUpAppointmentResponse findScheduledForPatient(UUID patientId) {
         List<FollowUpAppointment> scheduled = appointmentRepository
                 .findByPatientIdAndStatusOrderByFollowUpDateAsc(patientId, FollowUpAppointmentStatus.SCHEDULED);
-        // BR-124: an appointment still in its validity period comes first, so an expired one never hides a newer
-        // appointment; an expired one is returned only when nothing else is scheduled (UC-40 AF-09 notice).
+        // BR-124: an appointment whose validity period has ended is not shown, even before the expiry job marks it
+        // "Lỡ hẹn"; the patient is registered as a normal visit. So an expired one never hides a newer appointment.
         LocalDate today = today();
         return scheduled.stream()
                 .filter(appointment -> !isExpired(appointment, today))
                 .findFirst()
-                .or(() -> scheduled.stream().reduce((first, later) -> later))
                 .map(this::toResponse)
                 .orElse(null);
     }
