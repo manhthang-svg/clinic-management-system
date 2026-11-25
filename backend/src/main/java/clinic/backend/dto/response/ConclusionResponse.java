@@ -22,7 +22,7 @@ public record ConclusionResponse(
         Icd10OptionResponse mainDiagnosis,
         List<Icd10OptionResponse> secondaryDiagnoses,
         String treatmentPlan,
-        Short treatmentResult,
+        String treatmentResult,
         String advice,
         String summary,
         String note,

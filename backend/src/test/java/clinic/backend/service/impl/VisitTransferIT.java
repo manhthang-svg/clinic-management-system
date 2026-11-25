@@ -1,5 +1,6 @@
 package clinic.backend.service.impl;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -33,6 +34,7 @@ import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.DutyShiftConfigService;
 import clinic.backend.support.PostgresIntegrationTest;
 import clinic.backend.utils.UuidV7Generator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,8 +68,9 @@ class VisitTransferIT extends PostgresIntegrationTest {
     @Autowired MedicalRecordRepository medicalRecordRepository;
     @Autowired ClinicalExaminationRepository examinationRepository;
     @Autowired RoomQueueCounterRepository queueCounterRepository;
-    @Autowired ExaminationRoomDuty examinationRoomDuty;
-    @Autowired DutyShiftConfigService dutyShiftConfigService;
+    // The default shift hours, not the git-ignored data/duty_shift_config.json of the machine running the test.
+    private DutyShiftConfigService dutyShiftConfigService;
+    private ExaminationRoomDuty examinationRoomDuty;
     @Autowired UuidV7Generator ids;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbc;
@@ -79,6 +82,10 @@ class VisitTransferIT extends PostgresIntegrationTest {
     void setUp() {
         today = LocalDate.now(CLINIC_ZONE);
         queueNumber = 0;
+        dutyShiftConfigService = new DutyShiftConfigServiceImpl(
+                new ObjectMapper().findAndRegisterModules(), Path.of("target", "visit-transfer-it-shifts.json"));
+        examinationRoomDuty = new ExaminationRoomDuty(dutyScheduleRepository, staffAccountRepository,
+                dutyShiftConfigService);
         duty(DOCTOR_AN, ROOM_NOI);
         duty(DOCTOR_BINH, ROOM_NGOAI);
     }

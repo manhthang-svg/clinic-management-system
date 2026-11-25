@@ -44,10 +44,6 @@ public class ConclusionPrintServiceImpl implements ConclusionPrintService {
 
     static final String AUDIT_ENTITY = "conclusions";
 
-    /** CV 365 III.31.1, as on form 15/BV1 ({@link Form15Bv1Renderer}). */
-    private static final Map<Short, String> TREATMENT_RESULTS = Map.of(
-            (short) 1, "Khỏi", (short) 2, "Đỡ", (short) 3, "Không thay đổi", (short) 4, "Nặng hơn");
-
     private final ClosedRecordPrintGuard guard;
     private final ConclusionRepository conclusionRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
@@ -113,7 +109,7 @@ public class ConclusionPrintServiceImpl implements ConclusionPrintService {
                 secondaryDiagnoses(conclusion),
                 text(conclusion.getChandoan()),
                 text(conclusion.getHuongdieutri()),
-                TREATMENT_RESULTS.get(conclusion.getKetquadieutri()),
+                conclusion.getKetquadieutri(),
                 text(conclusion.getLoidanbacsi()),
                 conclusion.getConcludedAt(),
                 staffAccountRepository.findById(conclusion.getDoctorAccountId())

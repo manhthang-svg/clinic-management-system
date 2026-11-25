@@ -466,7 +466,7 @@ class PrescriptionServiceImplTest {
 
     private void stubConclusion() {
         Conclusion conclusion = new Conclusion(UUID.randomUUID(), NOW, context.record().getId());
-        conclusion.record(DOCTOR_ID, "Viêm họng cấp", "J02.9", "Viêm họng cấp", "Điều trị", (short) 2, "Dặn", null,
+        conclusion.record(DOCTOR_ID, "Viêm họng cấp", "J02.9", "Viêm họng cấp", "Điều trị", "Đỡ", "Dặn", null,
                 null, NOW);
         when(conclusionRepository.findByMedicalRecordId(context.record().getId())).thenReturn(Optional.of(conclusion));
         lenient().when(longTermCodeRepository.existsByMaicdIn(any())).thenReturn(false);

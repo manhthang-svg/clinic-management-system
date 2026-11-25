@@ -122,10 +122,8 @@ public class ConclusionServiceImpl implements ConclusionService {
         String advice = text(request.advice(), "advice", true);
         String summary = text(request.summary(), "summary", false);
         String note = text(request.note(), "note", false);
-        Short result = request.treatmentResult();
-        if (result == null || result < 1 || result > 4) {
-            throw invalid("treatmentResult", "REQUIRED");
-        }
+        // Kết quả điều trị: optional free text (V63), e.g. nothing to assess yet at a first visit.
+        String result = text(request.treatmentResult(), "treatmentResult", false);
 
         LocalDate day = LocalDate.ofInstant(now, CLINIC_ZONE);
         // The free-text diagnosis must name ICD-10 diseases, not arbitrary text.

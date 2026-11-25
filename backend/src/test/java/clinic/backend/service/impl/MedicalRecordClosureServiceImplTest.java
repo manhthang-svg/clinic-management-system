@@ -353,7 +353,7 @@ class MedicalRecordClosureServiceImplTest {
 
     private void stubConclusion() {
         conclusion = new Conclusion(UUID.randomUUID(), NOW, record.getId());
-        conclusion.record(DOCTOR_ID, "Viêm họng", "J02.9", "Viêm họng cấp", "Điều trị ngoại trú", (short) 1,
+        conclusion.record(DOCTOR_ID, "Viêm họng", "J02.9", "Viêm họng cấp", "Điều trị ngoại trú", "Khỏi",
                 "Uống nhiều nước", null, null, NOW);
         ReflectionTestUtils.setField(conclusion, "version", 3L);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(conclusion));
