@@ -41,7 +41,7 @@ async function paste(user, field, text) {
     await user.paste(text);
 }
 
-async function fillAdult(user, { phone = '0901234567' } = {}) {
+async function fillAdult(user, { phone = '0901234567', passport = 'C7654323' } = {}) {
     await user.type(screen.getByLabelText(/Họ và tên/), 'Nguyễn Văn An');
     await user.type(screen.getByLabelText(/Ngày sinh/), '1990-01-01');
     await paste(user, screen.getByLabelText(/^Địa chỉ\s*\*?$/), '12 Lê Lợi');
@@ -49,6 +49,7 @@ async function fillAdult(user, { phone = '0901234567' } = {}) {
     await paste(user, screen.getByLabelText(/^Tỉnh\/thành phố/), 'Thành phố Hà Nội');
     await paste(user, screen.getByLabelText(/^Xã\/phường/), 'Phường Ba Đình');
     if (phone) await user.type(screen.getByLabelText(/^Số điện thoại\s*\*?$/), phone);
+    if (passport) await user.type(screen.getByLabelText('Số hộ chiếu'), passport);
 }
 
 describe('ReceptionistCreatePatientPage (UC-37)', () => {
@@ -113,8 +114,15 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         };
         renderPage(patientApi);
 
-        await fillAdult(user);
-        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+        await fillAdult(user, { passport: '' });
+        const save = screen.getByRole('button', { name: 'Lưu hồ sơ' });
+        await user.click(save);
+        expect(screen.getByText(FIELD_MSG.IDENTIFICATION_REQUIRED)).toBeInTheDocument();
+        expect(patientApi.create).not.toHaveBeenCalled();
+
+        await user.type(screen.getByLabelText('Số hộ chiếu'), 'C7654323');
+        expect(screen.queryByText(FIELD_MSG.IDENTIFICATION_REQUIRED)).not.toBeInTheDocument();
+        await user.click(save);
 
         expect(await screen.findByText('Hồ sơ p-9')).toBeInTheDocument();
         expect(patientApi.possibleDuplicates).toHaveBeenCalledWith('Nguyễn Văn An', '1990-01-01');
@@ -166,6 +174,7 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         await paste(user, screen.getByLabelText(/^Địa chỉ\s*\*?$/), '12 Lê Lợi');
         await user.selectOptions(screen.getByLabelText(/^Nghề nghiệp/), 'Công nhân');
         await user.type(screen.getByLabelText(/^Số điện thoại\s*\*?$/), '0901234567');
+        await user.type(screen.getByLabelText('CCCD'), '012345678901');
         await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
 
         expect(await screen.findByText('Hồ sơ p-11')).toBeInTheDocument();
@@ -183,7 +192,7 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         renderPage(patientApi);
 
         const code = screen.getByLabelText('Mã dân tộc');
-        expect(code).toHaveAttribute('readonly');
+        expect(code).toBeDisabled();
         expect(code).toHaveValue('01');
         await fillAdult(user);
         await user.selectOptions(screen.getByLabelText(/^Dân tộc/), 'Mường');
@@ -208,11 +217,21 @@ describe('ReceptionistCreatePatientPage (UC-37)', () => {
         };
         renderPage(patientApi);
 
-        const country = screen.getByLabelText(/^Ngoại kiều/);
+        const country = screen.getByLabelText(/^Quốc tịch/);
         expect(country).toBeDisabled();
         await fillAdult(user);
+        const province = screen.getByLabelText(/^Tỉnh\/thành phố/);
+        const ward = screen.getByLabelText(/^Xã\/phường/);
+        await user.clear(province);
+        await user.clear(ward);
+        await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
+        expect(province).toHaveAccessibleDescription(FIELD_MSG.REQUIRED);
+        expect(ward).toHaveAccessibleDescription(FIELD_MSG.REQUIRED);
+
         await user.selectOptions(screen.getByLabelText(/^Nghề nghiệp/), 'Ngoại kiều');
         expect(country).toBeEnabled();
+        expect(province).not.toHaveAccessibleDescription(FIELD_MSG.REQUIRED);
+        expect(ward).not.toHaveAccessibleDescription(FIELD_MSG.REQUIRED);
         await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }));
         expect(await screen.findByText('Trường này là bắt buộc.')).toBeInTheDocument();
         expect(patientApi.create).not.toHaveBeenCalled();

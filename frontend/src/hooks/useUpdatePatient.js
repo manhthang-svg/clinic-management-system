@@ -5,6 +5,7 @@ import defaultPatientApi from '../apis/patientApi';
 import {
     MSG,
     buildPatientPayload,
+    clearPatientFieldErrors,
     createErrorMessage,
     formatFullName,
     isDirty,
@@ -54,15 +55,12 @@ export function useUpdatePatient(patientId, patientApi = defaultPatientApi) {
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
         setForm((previous) => withDerivedCodes(previous, name, value));
-        setFieldErrors((previous) => {
-            if (!previous[name]) return previous;
-            const next = { ...previous };
-            delete next[name];
-            return next;
-        });
+        const nextForm = withDerivedCodes(form, name, value);
+        const today = clinicToday();
+        setFieldErrors((previous) => clearPatientFieldErrors(previous, name, nextForm, today));
         setError('');
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
-    }, []);
+    }, [form]);
 
     const handleBlur = useCallback((event) => {
         const { name } = event.target;

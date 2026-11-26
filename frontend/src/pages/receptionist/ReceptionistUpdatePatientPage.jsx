@@ -1,5 +1,5 @@
 import { useParams } from 'react-router';
-import { ArrowLeft, ChevronRight, House, Save } from 'lucide-react';
+import { ChevronRight, House, Save } from 'lucide-react';
 import { useUpdatePatient } from '../../hooks/useUpdatePatient';
 import { ADULT_AGE, MSG, formAge } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
@@ -52,15 +52,6 @@ export default function ReceptionistUpdatePatientPage({ patientApi }) {
                     Chỉ cập nhật thông tin hành chính. Tiền sử và dị ứng do bác sĩ cập nhật khi khám.
                 </p>
             </div>
-            <button
-                type="button"
-                onClick={goBack}
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-            >
-                <ArrowLeft size={16} />
-                Quay lại
-            </button>
         </header>
     );
 

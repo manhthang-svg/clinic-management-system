@@ -3,6 +3,7 @@
 import { ageOn } from './patientOverview';
 
 export const ADULT_AGE = 18;
+const IDENTIFICATION_AGE = 14;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
 // Email khong bat buoc; dung de gui email nhac lich tai kham (UC-75). Backend kiem tra lai (@Email, toi da 100).
@@ -153,10 +154,28 @@ export const INITIAL_PATIENT_FORM = {
 
 // thong bao theo bang System Messages
 export const FIELD_MSG = {
+    IDENTIFICATION_REQUIRED: 'Vui lòng nhập CCCD hoặc số hộ chiếu.',
     REQUIRED: 'Trường này là bắt buộc.',
     INVALID_FORMAT: 'Định dạng không hợp lệ.',
     TOO_LONG: 'Vượt quá độ dài tối đa cho phép.',
 };
+
+export function clearPatientFieldErrors(errors, name, form, today, validate = validatePatientForm) {
+    const next = { ...errors };
+    delete next[name];
+    if (name === 'nghenghiep') delete next.ngoaikieu;
+    if (['nghenghiep', 'ngaysinh', 'cccdSo', 'hochieuSo'].includes(name)) {
+        const currentErrors = validate(form, today);
+        for (const field of Object.keys(next)) {
+            const message = next[field];
+            if ((message === FIELD_MSG.REQUIRED || message === FIELD_MSG.IDENTIFICATION_REQUIRED)
+                && currentErrors[field] !== message) {
+                delete next[field];
+            }
+        }
+    }
+    return next;
+}
 export const MSG = {
     CREATED: 'Tạo hồ sơ bệnh nhân thành công.',
     UPDATED: 'Cập nhật hồ sơ bệnh nhân thành công.',
@@ -259,6 +278,15 @@ export function validatePatientForm(form, today) {
     if (text('hotennguoithan')) {
         if (text('hotennguoithan').length > 255) errors.hotennguoithan = FIELD_MSG.TOO_LONG;
         else if (!NAME_REGEX.test(text('hotennguoithan'))) errors.hotennguoithan = FIELD_MSG.INVALID_FORMAT;
+    }
+    return errors;
+}
+
+export function validateCreatePatientForm(form, today) {
+    const errors = validatePatientForm(form, today);
+    const age = formAge(form, today);
+    if (age !== null && age >= IDENTIFICATION_AGE && !form.cccdSo?.trim() && !form.hochieuSo?.trim()) {
+        errors.cccdSo = FIELD_MSG.IDENTIFICATION_REQUIRED;
     }
     return errors;
 }

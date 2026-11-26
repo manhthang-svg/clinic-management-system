@@ -6,6 +6,7 @@ import {
     INITIAL_PATIENT_FORM,
     MSG,
     buildPatientPayload,
+    clearPatientFieldErrors,
     countryCode,
     countryOptions,
     createErrorMessage,
@@ -19,6 +20,7 @@ import {
     serverFieldErrors,
     toFormValues,
     validatePatientForm,
+    validateCreatePatientForm,
 } from './patientForm';
 
 const TODAY = '2026-11-03';
@@ -36,6 +38,23 @@ const adult = (overrides) => ({
 });
 
 describe('validatePatientForm (UC-37 steps 4–5)', () => {
+    it('requires either identification field from the 14th birthday', () => {
+        const form = adult({ ngaysinh: '2012-11-03', cccdSo: '', hochieuSo: '' });
+        expect(validateCreatePatientForm(form, TODAY).cccdSo).toBe(FIELD_MSG.IDENTIFICATION_REQUIRED);
+        expect(validateCreatePatientForm({ ...form, ngaysinh: '2012-11-04' }, TODAY).cccdSo).toBeUndefined();
+        expect(validateCreatePatientForm({ ...form, cccdSo: '012345678901' }, TODAY).cccdSo).toBeUndefined();
+        expect(validateCreatePatientForm({ ...form, hochieuSo: 'C7654323' }, TODAY).cccdSo).toBeUndefined();
+    });
+    it('clears obsolete required errors when the birth date crosses the adult age boundary', () => {
+        const minor = adult({ ngaysinh: '2008-11-04', sodienthoai: '', diachi: '' });
+        const grown = { ...minor, ngaysinh: '2008-11-03' };
+
+        expect(clearPatientFieldErrors(validatePatientForm(minor, TODAY), 'ngaysinh', grown, TODAY))
+            .toEqual({ diachi: FIELD_MSG.REQUIRED });
+        expect(clearPatientFieldErrors(validatePatientForm(grown, TODAY), 'ngaysinh', minor, TODAY))
+            .toEqual({ diachi: FIELD_MSG.REQUIRED });
+    });
+
     it('flags invalid dates, gender and overlong administrative fields', () => {
         expect(validatePatientForm(adult({ ngaysinh: '2026-02-30', gioitinh: '4', diachi: 'a'.repeat(1025), nguoithanQuanhe: 'a'.repeat(51) }), TODAY)).toEqual({
             ngaysinh: FIELD_MSG.INVALID_FORMAT,

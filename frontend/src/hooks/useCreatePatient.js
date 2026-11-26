@@ -6,12 +6,13 @@ import {
     INITIAL_PATIENT_FORM,
     MSG,
     buildPatientPayload,
+    clearPatientFieldErrors,
     createErrorMessage,
     formatFullName,
     isDirty,
     msg19,
     serverFieldErrors,
-    validatePatientForm,
+    validateCreatePatientForm,
     withDerivedCodes,
 } from '../components/patients/patientForm';
 import { clinicToday } from '../components/visits/visitForm';
@@ -35,15 +36,12 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
     const handleChange = useCallback((event) => {
         const { name, value } = event.target;
         setForm((previous) => withDerivedCodes(previous, name, value));
-        setFieldErrors((previous) => {
-            if (!previous[name]) return previous;
-            const next = { ...previous };
-            delete next[name];
-            return next;
-        });
+        const nextForm = withDerivedCodes(form, name, value);
+        const today = clinicToday();
+        setFieldErrors((previous) => clearPatientFieldErrors(previous, name, nextForm, today, validateCreatePatientForm));
         setError('');
         if (name === 'cccdSo' || name === 'hochieuSo') setConflict(null);
-    }, []);
+    }, [form]);
 
     const handleBlur = useCallback((event) => {
         const { name } = event.target;
@@ -58,7 +56,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
             }
         }
 
-        const errors = validatePatientForm(nextForm, clinicToday());
+        const errors = validateCreatePatientForm(nextForm, clinicToday());
         const fieldError = errors[name];
         setFieldErrors((previous) => {
             if (fieldError) {
@@ -122,7 +120,7 @@ export function useCreatePatient(patientApi = defaultPatientApi) {
             setForm(currentForm);
         }
 
-        const errors = validatePatientForm(currentForm, clinicToday());
+        const errors = validateCreatePatientForm(currentForm, clinicToday());
         setFieldErrors(errors);
         if (Object.keys(errors).length > 0) {
             setError(MSG.FIX_FIELDS);
