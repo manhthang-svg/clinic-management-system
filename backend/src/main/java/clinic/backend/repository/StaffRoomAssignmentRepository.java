@@ -17,6 +17,8 @@ public interface StaffRoomAssignmentRepository extends JpaRepository<StaffRoomAs
     // tim kiem nhan vien tai 1 phong
     Optional<StaffRoomAssignment> findByStaffAccountIdAndRemovedAtIsNull(UUID staffAccountId);
 
+    List<StaffRoomAssignment> findAllByRoomId(UUID roomId);
+
     // tim kiem cho nhieu nhan vien
     List<StaffRoomAssignment> findAllByStaffAccountIdInAndRemovedAtIsNull(Collection<UUID> staffAccountIds);
 

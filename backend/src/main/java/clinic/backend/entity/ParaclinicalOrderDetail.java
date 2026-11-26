@@ -2,6 +2,7 @@ package clinic.backend.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import clinic.backend.enums.ParaclinicalOrderDetailStatus;
@@ -96,6 +97,9 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
 
     @Column(name = "performer_account_id")
     private UUID performerAccountId;
+
+    @Column(name = "assigned_technician_account_id")
+    private UUID assignedTechnicianAccountId;
 
     @Column(name = "released_at")
     private Instant releasedAt;
@@ -233,10 +237,19 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
      */
     public void releaseTo(UUID roomId, Integer queueNumber, Instant when) {
         if (this.status == ParaclinicalOrderDetailStatus.PENDING_PAYMENT) {
+            if (!Objects.equals(this.roomId, roomId)) {
+                this.assignedTechnicianAccountId = null;
+            }
             this.roomId = roomId;
             this.queueNumber = queueNumber;
             this.status = ParaclinicalOrderDetailStatus.WAITING;
             this.releasedAt = when;
+        }
+    }
+
+    public void assignToOrderShift(UUID technicianAccountId) {
+        if (roomId != null && assignedTechnicianAccountId == null) {
+            assignedTechnicianAccountId = technicianAccountId;
         }
     }
 

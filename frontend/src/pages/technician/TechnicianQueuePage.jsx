@@ -66,6 +66,7 @@ export function TechnicianQueuePage() {
     stats: null,
     items: [],
     canManage: null,
+    hasOwnWork: false,
   });
   const [queueLoading, setQueueLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -120,7 +121,7 @@ export function TechnicianQueuePage() {
           const validRooms = Array.isArray(roomList) ? roomList : [];
           setRooms(validRooms);
           if (validRooms.length > 0) {
-            const assignedRoom = validRooms.find((r) => r.isAssigned);
+            const assignedRoom = validRooms.find((r) => r.hasOwnWork) || validRooms.find((r) => r.isAssigned);
             const defaultRoom = assignedRoom || validRooms[0];
             setCurrentRoomId((prev) => {
               const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
@@ -179,7 +180,8 @@ export function TechnicianQueuePage() {
         const stats = response?.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
         const canManage = typeof response?.canManage === 'boolean' ? response.canManage : false;
 
-        setQueueData({ stats, items, canManage });
+        const hasOwnWork = response?.hasOwnWork ?? items.some((item) => item.canComplete || item.canManageOrder);
+        setQueueData({ stats, items, canManage, hasOwnWork });
 
         // Khởi tạo tab linh hoạt khi mới tải dữ liệu: nếu không có ca chưa đến nhưng có ca trong active queue thì mở active queue
         if (!tabInitializedRef.current && items.length > 0) {
@@ -249,6 +251,9 @@ export function TechnicianQueuePage() {
   const canManage = typeof queueData?.canManage === 'boolean'
     ? queueData.canManage
     : Boolean(currentRoom?.isAssigned);
+  const hasOwnWork = queueData.hasOwnWork;
+  const manageableService = (order) => serviceForAction(order, (service) => service.canManageOrder ?? canManage);
+  const completableService = (order) => (order.roomServices ?? [order]).find((service) => service.canComplete);
 
   // Xử lý đổi phòng thủ công
   const handleRoomSelect = (roomId) => {
@@ -259,6 +264,7 @@ export function TechnicianQueuePage() {
     setQueueData((prev) => ({
       ...prev,
       canManage: selectedRoom ? selectedRoom.isAssigned : null,
+      hasOwnWork: Boolean(selectedRoom?.hasOwnWork),
     }));
     toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom?.code || ''} - ${selectedRoom?.name || ''}`);
   };
@@ -485,10 +491,11 @@ export function TechnicianQueuePage() {
   // Thao tác: KTV xác nhận bệnh nhân có mặt tại phòng (Check-in cấp STT cho toàn bộ lượt khám)
   const handleCheckInOrder = async (order, e) => {
     e?.stopPropagation();
+    const targetService = manageableService(order);
+    if (!targetService) return;
     try {
       setActionLoadingId(order.id);
-      const targetId = order.roomServices?.[0]?.id || order.id;
-      const updated = await technicianApi.checkInOrder(targetId);
+      const updated = await technicianApi.checkInOrder(targetService.id);
       const numStr = updated?.queueNumber
         ? (updated.queueNumber < 10 ? `0${updated.queueNumber}` : updated.queueNumber)
         : '';
@@ -525,9 +532,10 @@ export function TechnicianQueuePage() {
   // UC-66: bam Tiep nhan = tiep nhan + xac nhan da thuc hien luon, chuyen sang cho nhap ket qua
   const handleStartOrder = async (order, e) => {
     e?.stopPropagation();
+    const targetService = manageableService(order);
+    if (!targetService) return;
     try {
       setActionLoadingId(order.id);
-      const targetService = serviceForAction(order);
       await technicianApi.acceptOrder(targetService.id);
       try {
         await technicianApi.completeOrder(targetService.id);
@@ -563,9 +571,11 @@ export function TechnicianQueuePage() {
   // Thao tác: Bỏ qua lượt bệnh nhân vắng mặt
   const handleSkipOrder = async (order, e) => {
     e?.stopPropagation();
+    const targetService = manageableService(order);
+    if (!targetService) return;
     try {
       setActionLoadingId(order.id);
-      await technicianApi.skipOrder(serviceForAction(order).id);
+      await technicianApi.skipOrder(targetService.id);
       const numStr = order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber;
       toast.info(
         `Đã chuyển bệnh nhân ${order.patientName} (Số #${numStr}) sang trạng thái bỏ qua!`
@@ -584,9 +594,11 @@ export function TechnicianQueuePage() {
   // Thao tác: Gọi lại / Khôi phục bệnh nhân đã bỏ qua
   const handleUnskipOrder = async (order, e) => {
     e?.stopPropagation();
+    const targetService = manageableService(order);
+    if (!targetService) return;
     try {
       setActionLoadingId(order.id);
-      await technicianApi.unskipOrder(serviceForAction(order).id);
+      await technicianApi.unskipOrder(targetService.id);
       toast.success(`Đã khôi phục bệnh nhân ${order.patientName} về danh sách chờ gọi!`);
       if (selectedOrder?.id === order.id) {
         setSelectedOrder((prev) => (prev ? { ...prev, isSkipped: false, status: 'WAITING' } : null));
@@ -607,9 +619,10 @@ export function TechnicianQueuePage() {
 
   // Thao tác: Xác nhận tiếp nhận lại bệnh nhân bị bỏ qua (UC-46)
   const handleConfirmReaccept = async (order, note) => {
+    const targetService = manageableService(order);
+    if (!targetService) return;
     try {
       setActionLoadingId(order.id);
-      const targetService = serviceForAction(order);
       await technicianApi.unskipOrder(targetService.id);
       const numStr = order.queueNumber != null
         ? (order.queueNumber < 10 ? `0${order.queueNumber}` : order.queueNumber)
@@ -639,9 +652,12 @@ export function TechnicianQueuePage() {
 
   // UC-66: xac nhan da thuc hien xong, chuyen sang cho nhap ket qua
   const handleCompleteOrder = async (order) => {
+    const service = completableService(order);
+    if (!service) return;
+
     try {
       setActionLoadingId(order.id);
-      await technicianApi.completeOrder(serviceForAction(order).id);
+      await technicianApi.completeOrder(service.id);
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
@@ -649,10 +665,10 @@ export function TechnicianQueuePage() {
       toast.success(
         `Đã hoàn tất thực hiện kỹ thuật cho bệnh nhân ${order.patientName}!`,
         {
-          description: `${order.roomServices?.[0]?.serviceName || order.serviceName} • Chuyển sang chờ nhập kết quả`,
+          description: `${service.serviceName} • Chuyển sang chờ nhập kết quả`,
           action: {
             label: 'Nhập KQ ngay',
-            onClick: () => openResult(serviceForAction(order)),
+            onClick: () => openResult(service),
           },
           duration: 5000,
         }
@@ -687,7 +703,9 @@ export function TechnicianQueuePage() {
 
   // Mở modal nhập lý do từ chối thực hiện y lệnh cận lâm sàng
   const handleOpenRejectModal = (order) => {
-    setOrderToReject(order);
+    const targetService = manageableService(order);
+    if (!targetService) return;
+    setOrderToReject(targetService);
     setRejectModalOpen(true);
   };
 
@@ -750,6 +768,10 @@ export function TechnicianQueuePage() {
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 Phòng bạn phụ trách
+              </span>
+            ) : hasOwnWork ? (
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                Còn chỉ định thuộc ca của bạn
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/90 shadow-2xs">
@@ -819,7 +841,9 @@ export function TechnicianQueuePage() {
         <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
           <Eye className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
-            <strong>Chế độ chỉ xem:</strong> Bạn không được phân công quản lý phòng máy này trong ca trực. Bạn có thể tra cứu và xem hồ sơ cận lâm sàng nhưng không thể thao tác tiếp nhận, gọi số, hoàn tất hay từ chối y lệnh.
+            {hasOwnWork
+              ? 'Bạn có thể tiếp nhận, thực hiện và gửi kết quả cho các chỉ định thuộc ca của mình.'
+              : 'Bạn có thể tra cứu chỉ định của phòng.'}
           </span>
         </div>
       )}
@@ -1090,6 +1114,9 @@ export function TechnicianQueuePage() {
                   const isWaiting = order.status === 'WAITING';
                   const isSkipped = order.isSkipped || order.status === 'SKIPPED';
                   const isInProgress = order.status === 'IN_PROGRESS';
+                  const orderService = manageableService(order);
+                  const canManageOrder = Boolean(orderService);
+                  const canComplete = isInProgress && Boolean(completableService(order));
                   const isPendingResult = order.status === 'PENDING_RESULT';
                   const isCompleted = order.status === 'COMPLETED';
                   const isCancelled = order.status === 'CANCELLED';
@@ -1283,23 +1310,23 @@ export function TechnicianQueuePage() {
                           <div className="flex items-center justify-center">
                             <button
                               type="button"
-                              disabled={!canManage || isRowBusy}
+                              disabled={!canManageOrder || isRowBusy}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenReacceptModal(order);
                               }}
                               className={`h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold rounded-lg shadow-2xs transition-all shrink-0 ${
-                                !canManage
+                                !canManageOrder
                                   ? 'opacity-50 cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200'
                                   : 'text-white bg-[#0d9488] hover:bg-[#0f766e] cursor-pointer active:scale-95'
                               }`}
-                              title={!canManage ? MSG48 : 'Tiếp nhận lại bệnh nhân quay lại hàng đợi phục vụ'}
+                              title={!canManageOrder ? MSG48 : 'Tiếp nhận lại bệnh nhân quay lại hàng đợi phục vụ'}
                             >
                               <RotateCcw className="w-3 h-3 shrink-0" />
                               <span>Tiếp nhận lại</span>
                             </button>
                           </div>
-                        ) : !canManage ? (
+                        ) : !canManageOrder && !canComplete ? (
                           <div className="flex items-center justify-center">
                             <button
                               type="button"
@@ -1378,29 +1405,28 @@ export function TechnicianQueuePage() {
                               </button>
                             )}
 
-                            {/* UC-66: Đã thực hiện & Trả về khi IN_PROGRESS (Phương án 2) */}
-                            {isInProgress && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={actionLoadingId === order.id}
-                                  onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
-                                  className="h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                  title="Xác nhận đã thực hiện xong dịch vụ"
-                                >
-                                  <span>Đã thực hiện</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={actionLoadingId === order.id}
-                                  onClick={(e) => { e.stopPropagation(); setOrderToReturn(order); }}
-                                  className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
-                                  title="Không thực hiện được: trả về hàng chờ kèm lý do"
-                                >
-                                  <RotateCcw className="w-3 h-3 shrink-0" />
-                                  <span>Trả về</span>
-                                </button>
-                              </>
+                            {canComplete && (
+                              <button
+                                type="button"
+                                disabled={isRowBusy}
+                                onClick={(e) => { e.stopPropagation(); handleCompleteOrder(order); }}
+                                className="h-7 inline-flex items-center gap-1 px-2.5 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                title="Xác nhận đã thực hiện xong dịch vụ"
+                              >
+                                <span>Đã thực hiện</span>
+                              </button>
+                            )}
+                            {canManageOrder && isInProgress && (
+                              <button
+                                type="button"
+                                disabled={isRowBusy}
+                                onClick={(e) => { e.stopPropagation(); setOrderToReturn({ ...order, id: orderService.id }); }}
+                                className="h-7 inline-flex items-center gap-1 px-2 text-[10.5px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50"
+                                title="Không thực hiện được: trả về hàng chờ kèm lý do"
+                              >
+                                <RotateCcw className="w-3 h-3 shrink-0" />
+                                <span>Trả về</span>
+                              </button>
                             )}
                           </div>
                         )}
@@ -1584,7 +1610,8 @@ export function TechnicianQueuePage() {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         order={selectedOrder}
-        canManage={canManage}
+        canManage={Boolean(selectedOrder && manageableService(selectedOrder))}
+        canComplete={Boolean(selectedOrder && completableService(selectedOrder))}
         onCheckInOrder={(order) => handleCheckInOrder(order)}
         onStartOrder={(order) => handleStartOrder(order)}
         onSkipOrder={(order) => handleSkipOrder(order)}

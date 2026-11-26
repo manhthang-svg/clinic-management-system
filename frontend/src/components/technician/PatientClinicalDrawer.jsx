@@ -50,6 +50,7 @@ export function PatientClinicalDrawer({
   onClose,
   order,
   canManage = true,
+  canComplete = false,
   onCheckInOrder,
   onStartOrder,
   onSkipOrder,
@@ -125,7 +126,7 @@ export function PatientClinicalDrawer({
             </div>
 
             <div className="flex items-center gap-2.5">
-              {!canManage && (
+              {!canManage && !canComplete && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
                   <Eye className="w-3.5 h-3.5 text-amber-600" />
                   Chỉ xem
@@ -379,7 +380,7 @@ export function PatientClinicalDrawer({
 
           {/* 5. CỤM NÚT ĐIỀU HƯỚNG HÀNH ĐỘNG (ACTION FOOTER) */}
           <div className="p-4 sm:p-5 px-6 border-t border-slate-200 bg-slate-50/95 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            {!canManage ? (
+            {!canManage && !canComplete ? (
               <div className="flex items-center justify-between w-full gap-3">
                 <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200/90 rounded-xl text-amber-800 text-xs font-semibold">
                   <Eye className="w-4 h-4 text-amber-600 shrink-0" />
@@ -395,15 +396,17 @@ export function PatientClinicalDrawer({
               </div>
             ) : (
               <>
-                <button
-                  type="button"
-                  disabled={isCancelled || isCurrentRoomCompleted}
-                  onClick={() => onOpenRejectModal(currentOrder)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
-                >
-                  <Ban className="w-4 h-4" />
-                  <span>Hủy / Từ chối (Lý do)</span>
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    disabled={isCancelled || isCurrentRoomCompleted}
+                    onClick={() => onOpenRejectModal(currentOrder)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span>Hủy / Từ chối (Lý do)</span>
+                  </button>
+                )}
 
                 <div className="flex items-center gap-3">
                   {isCurrentRoomWaiting && !currentOrder.isCheckedIn && onCheckInOrder && (
@@ -464,7 +467,7 @@ export function PatientClinicalDrawer({
                     </span>
                   )}
 
-                  {isCurrentRoomInProgress && onCompleteOrder && (
+                  {canComplete && isCurrentRoomInProgress && onCompleteOrder && (
                     <button
                       type="button"
                       onClick={() => onCompleteOrder(currentOrder)}

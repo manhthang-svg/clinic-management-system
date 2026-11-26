@@ -39,5 +39,7 @@ public record TechnicianQueueItemResponse(
         boolean isCheckedIn,
         String checkedInAtTime,
         String skippedAtTime,
-        java.time.Instant skippedAt
+        java.time.Instant skippedAt,
+        boolean canComplete,
+        boolean canManageOrder
 ) {}

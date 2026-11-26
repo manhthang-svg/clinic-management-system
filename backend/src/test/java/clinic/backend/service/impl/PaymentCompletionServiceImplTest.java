@@ -228,6 +228,30 @@ class PaymentCompletionServiceImplTest {
     }
 
     @Test
+    void keepsTheRoomAndTechnicianAssignedBeforePayment() {
+        Payment payment = paidParaclinicalFee();
+        ParaclinicalOrder order = order(payment);
+        Room chosen = room(UUID.randomUUID(), "CLS01");
+        UUID originalTechnician = UUID.randomUUID();
+        ParaclinicalOrderDetail detail = detail(order, chosen.getId());
+        detail.assignToOrderShift(originalTechnician);
+        order.addDetail(detail);
+        when(visitRepository.findById(VISIT_ID)).thenReturn(Optional.of(visit(VisitStatus.WAITING_PARACLINICAL)));
+        when(paraclinicalOrderRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(order));
+        when(roomRepository.findById(chosen.getId())).thenReturn(Optional.of(chosen));
+        when(paraclinicalRoomDuty.staffedRooms(NOW)).thenReturn(Set.of(UUID.randomUUID()));
+        when(paraclinicalRoomDuty.techniciansAt(detail.getNgaychidinh()))
+                .thenReturn(Map.of(chosen.getId(), UUID.randomUUID()));
+
+        service.completePaidReceipt(payment, UUID.randomUUID());
+
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
+        assertThat(detail.getRoomId()).isEqualTo(chosen.getId());
+        assertThat(detail.getAssignedTechnicianAccountId()).isEqualTo(originalTechnician);
+        verify(roomRepository, never()).findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(any(), any());
+    }
+
+    @Test
     void prefersARoomWithStaffOnDutyEvenWhenAnUnstaffedRoomIsLessBusy() {
         UUID groupId = UUID.randomUUID();
         Payment payment = paidParaclinicalFee();

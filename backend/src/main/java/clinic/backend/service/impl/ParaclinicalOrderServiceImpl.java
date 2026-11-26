@@ -246,6 +246,7 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
 
         // 5. Mỗi dịch vụ là một chỉ định chờ thanh toán, cùng số tiền với dòng phiếu thu của nó
         List<PaymentItem> paymentItems = new ArrayList<>();
+        Map<UUID, UUID> technicians = roomsAtOrder ? paraclinicalRoomDuty.techniciansAt(now) : Map.of();
         for (int i = 0; i < services.size(); i++) {
             MedicalService service = services.get(i);
             UUID detailId = uuidV7Generator.next();
@@ -259,6 +260,9 @@ public class ParaclinicalOrderServiceImpl implements ParaclinicalOrderService {
                     "%s-%02d".formatted(sophieu, i + 1), now, service.getTenchidinh(), null, null,
                     BigDecimal.ONE, item.getDongia(), item.getThanhtien(), item.getBhytChitra(),
                     item.getBenhnhanphaitra(), roomIds.get(i), ParaclinicalOrderDetailStatus.PENDING_PAYMENT);
+            if (detail.getRoomId() != null) {
+                detail.assignToOrderShift(technicians.get(detail.getRoomId()));
+            }
             order.addDetail(detail);
             paymentItems.add(item);
         }

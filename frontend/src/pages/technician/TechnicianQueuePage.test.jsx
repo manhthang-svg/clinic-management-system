@@ -29,7 +29,7 @@ const inProgress = {
   id: 'detail-1', orderId: 'order-1', queueNumber: 7, orderCode: 'CD0000000009', roomId: 'room-1',
   priority: 'NORMAL', priorityLabel: 'Thường', patientId: 'BN-0001', patientName: 'Nguyễn Văn Bình', age: 45,
   gender: 'Nam', serviceName: 'Siêu âm ổ bụng tổng quát', serviceCode: 'SA-01', doctorName: 'BS An',
-  doctorRoom: 'PK Nội 1', orderTime: '08:00', status: 'IN_PROGRESS', isSkipped: false, isCheckedIn: true, allOrdersToday: [],
+  doctorRoom: 'PK Nội 1', orderTime: '08:00', status: 'IN_PROGRESS', canComplete: true, isSkipped: false, isCheckedIn: true, allOrdersToday: [],
 };
 
 function renderPage() {
@@ -88,6 +88,27 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(screen.queryByText('Nguyễn Văn Bình')).not.toBeInTheDocument();
   });
 
+  it('lets an off-duty technician finish only their own in-progress service', async () => {
+    const otherService = { ...inProgress, id: 'detail-other', canComplete: false };
+    const waiting = {
+      ...inProgress, id: 'detail-waiting', orderId: 'order-waiting', patientName: 'Trần Văn Nam',
+      status: 'WAITING', canComplete: false,
+    };
+    technicianApi.getQueue.mockResolvedValue({
+      items: [otherService, inProgress, waiting], stats: { total: 3, waiting: 1, priority: 0, skipped: 0 },
+      canManage: false,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    const row = within(await rowOf(inProgress.patientName));
+    expect(row.queryByRole('button', { name: 'Trả về' })).not.toBeInTheDocument();
+    expect(within(await rowOf(waiting.patientName)).queryByRole('button', { name: 'Tiếp nhận' })).not.toBeInTheDocument();
+    await user.click(row.getByRole('button', { name: 'Đã thực hiện' }));
+
+    expect(technicianApi.completeOrder).toHaveBeenCalledWith(inProgress.id);
+  });
+
   it('returns the service to the waiting list with a reason', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -104,6 +125,27 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(technicianApi.returnToWaiting).toHaveBeenCalledWith('detail-1', 'Máy siêu âm mất nguồn');
     expect(toast.info).toHaveBeenCalledWith(expect.stringContaining('Nguyễn Văn Bình'));
     expect(screen.queryByRole('dialog', { name: 'Trả chỉ định về hàng chờ' })).not.toBeInTheDocument();
+  });
+
+  it('offers admission only for the off-duty technician’s assigned work and switches to read-only once it is done', async () => {
+    const waiting = { ...inProgress, status: 'WAITING', canComplete: false, canManageOrder: true };
+    const other = {
+      ...waiting, id: 'other-detail', orderId: 'other-order', patientName: 'Trần Văn Nam', canManageOrder: false,
+    };
+    const response = { canManage: false, hasOwnWork: true, items: [waiting, other] };
+    technicianApi.getQueue.mockResolvedValue(response);
+    technicianApi.acceptOrder.mockImplementation(async () => {
+      technicianApi.getQueue.mockResolvedValue({ ...response, hasOwnWork: false, items: [other] });
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('Còn chỉ định thuộc ca của bạn')).toBeInTheDocument();
+    expect(within(await rowOf(other.patientName)).queryByRole('button', { name: 'Tiếp nhận' })).not.toBeInTheDocument();
+    await user.click(within(await rowOf(waiting.patientName)).getByRole('button', { name: 'Tiếp nhận' }));
+
+    expect(technicianApi.acceptOrder).toHaveBeenCalledWith(waiting.id);
+    expect(await screen.findByText('Chế độ chỉ xem')).toBeInTheDocument();
   });
 
   it.each([
