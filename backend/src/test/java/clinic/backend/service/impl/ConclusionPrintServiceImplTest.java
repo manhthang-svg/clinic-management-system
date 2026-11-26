@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,7 +16,6 @@ import clinic.backend.entity.Patient;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.Role;
@@ -30,7 +28,6 @@ import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.security.user.StaffPrincipal;
-import clinic.backend.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,12 +37,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,14 +57,13 @@ class ConclusionPrintServiceImplTest {
     @Mock private ClinicFacilityRepository clinicFacilityRepository;
     @Mock private RoomRepository roomRepository;
     @Mock private StaffAccountRepository staffAccountRepository;
-    @Mock private AuditLogService auditLogService;
     private ConclusionPrintServiceImpl service;
     private Conclusion conclusion;
 
     @BeforeEach
     void setUp() {
         service = new ConclusionPrintServiceImpl(guard, conclusionRepository, clinicFacilityRepository,
-                roomRepository, staffAccountRepository, auditLogService, Clock.fixed(NOW, ZONE));
+                roomRepository, staffAccountRepository, Clock.fixed(NOW, ZONE));
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1960, 5, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "12 Lê Lợi", null, null,
@@ -104,11 +97,10 @@ class ConclusionPrintServiceImplTest {
     }
 
     @Test
-    void printsTheConclusionSlipAndAuditsTheFirstPrint() {
+    void printsTheConclusionSlip() {
         var slip = service.preparePrint(principal(), VISIT_ID);
 
         assertThat(slip.visitCode()).isEqualTo("DK0000000123");
-        assertThat(slip.copy()).isFalse();
         assertThat(slip.facility().name()).isEqualTo("Phòng khám METPH");
         assertThat(slip.patient().patientCode()).isEqualTo("BN001");
         assertThat(slip.patient().gender()).isEqualTo("Nam");
@@ -124,31 +116,15 @@ class ConclusionPrintServiceImplTest {
         assertThat(slip.doctorName()).isEqualTo("Bác sĩ An");
         assertThat(slip.printedAt()).isEqualTo(NOW);
         assertThat(slip.printedBy()).isEqualTo("Bác sĩ An");
-        verify(auditLogService).recordBusinessChange(
-                eq(DOCTOR_ID), eq(AuditLogAction.PRINT), eq("conclusions"), eq(conclusion.getId()),
-                eq("DK0000000123"), eq(Map.of("visitCode", "DK0000000123", "reprint", false)), eq(NOW));
     }
 
     @Test
-    void marksAReprintAsACopy() {
-        when(auditLogService.hasAction(AuditLogAction.PRINT, "conclusions", conclusion.getId())).thenReturn(true);
-
-        var slip = service.preparePrint(principal(), VISIT_ID);
-
-        assertThat(slip.copy()).isTrue();
-        verify(auditLogService).recordBusinessChange(
-                any(), eq(AuditLogAction.PRINT), any(), any(), any(),
-                eq(Map.of("visitCode", "DK0000000123", "reprint", true)), any());
-    }
-
-    @Test
-    void previewsWithoutRecordingAPrint() {
+    void previewsWithoutThePrintTime() {
         var slip = service.printPreview(principal(), VISIT_ID);
 
         assertThat(slip.printedAt()).isNull();
         assertThat(slip.printedBy()).isNull();
-        assertThat(slip.copy()).isFalse();
-        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
+        assertThat(slip.diagnosis().code()).isEqualTo("I10");
     }
 
     @Test
@@ -158,7 +134,6 @@ class ConclusionPrintServiceImplTest {
         assertThatThrownBy(() -> service.preparePrint(principal(), VISIT_ID))
                 .isInstanceOfSatisfying(AppException.class,
                         error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.PRINT_RECORD_NOT_CLOSED));
-        verify(auditLogService, never()).recordBusinessChange(any(), any(), any(), any(), any(), anyMap(), any());
     }
 
     private static StaffPrincipal principal() {

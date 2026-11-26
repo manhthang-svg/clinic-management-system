@@ -208,7 +208,7 @@ describe('DoctorWaitingListPage backend integration', () => {
 
         renderPage({ visitApi, loadProfile: vi.fn().mockResolvedValue({}) });
 
-        expect(await screen.findByText('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.')).toBeInTheDocument();
+        expect(await screen.findByText('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Vắng mặt' })).toBeDisabled();
     });

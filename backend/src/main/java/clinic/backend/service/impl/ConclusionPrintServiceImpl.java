@@ -3,9 +3,7 @@ package clinic.backend.service.impl;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import clinic.backend.dto.response.ConclusionSlipResponse;
@@ -17,7 +15,6 @@ import clinic.backend.entity.Patient;
 import clinic.backend.entity.Room;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
-import clinic.backend.enums.AuditLogAction;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
@@ -25,7 +22,6 @@ import clinic.backend.repository.ConclusionRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.security.user.StaffPrincipal;
-import clinic.backend.service.AuditLogService;
 import clinic.backend.service.ConclusionPrintService;
 import clinic.backend.service.impl.ConcludingVisitGuard.Context;
 import lombok.RequiredArgsConstructor;
@@ -34,46 +30,33 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UC-57 Print Conclusion (docs/uc-57-print-conclusion.md): the conclusion slip of a closed record, printed by the
- * Doctor of the visit right after closing or later from the record (UC-52). The first print is the original; every
- * later one carries "Bản sao". The conclusion has no {@code printed_at}, so the earlier {@code PRINT} audit rows tell
- * whether it was printed before.
+ * Doctor of the visit right after closing or later from the record (UC-52). Printing changes nothing and writes no
+ * audit row; every print is the same slip, without a "Bản sao" mark (PO 26/11/2026).
  */
 @Service
 @RequiredArgsConstructor
 public class ConclusionPrintServiceImpl implements ConclusionPrintService {
-
-    static final String AUDIT_ENTITY = "conclusions";
 
     private final ClosedRecordPrintGuard guard;
     private final ConclusionRepository conclusionRepository;
     private final ClinicFacilityRepository clinicFacilityRepository;
     private final RoomRepository roomRepository;
     private final StaffAccountRepository staffAccountRepository;
-    private final AuditLogService auditLogService;
     private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
     public ConclusionSlipResponse printPreview(StaffPrincipal principal, UUID visitId) {
         Context context = guard.require(principal, visitId);
-        Conclusion conclusion = conclusion(context);
-        return slip(context, conclusion, printedBefore(conclusion), null, null);
+        return slip(context, conclusion(context), null, null);
     }
 
+    /** Step 3: the slip with the print time and the Doctor who prints it; nothing is recorded. */
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public ConclusionSlipResponse preparePrint(StaffPrincipal principal, UUID visitId) {
         Context context = guard.require(principal, visitId);
-        Conclusion conclusion = conclusion(context);
-        boolean reprint = printedBefore(conclusion);
-        Instant now = clock.instant();
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("visitCode", context.visit().getSovaovien());
-        audit.put("reprint", reprint);
-        auditLogService.recordBusinessChange(
-                principal.accountId(), AuditLogAction.PRINT, AUDIT_ENTITY, conclusion.getId(),
-                context.visit().getSovaovien(), audit, now);
-        return slip(context, conclusion, reprint, now, displayName(context.doctor()));
+        return slip(context, conclusion(context), clock.instant(), displayName(context.doctor()));
     }
 
     /** A closed record always has its conclusion (BR-58-01); MSG61 otherwise. */
@@ -82,12 +65,8 @@ public class ConclusionPrintServiceImpl implements ConclusionPrintService {
                 .orElseThrow(() -> new AppException(ErrorCode.PRINT_RECORD_NOT_CLOSED));
     }
 
-    private boolean printedBefore(Conclusion conclusion) {
-        return auditLogService.hasAction(AuditLogAction.PRINT, AUDIT_ENTITY, conclusion.getId());
-    }
-
     private ConclusionSlipResponse slip(
-            Context context, Conclusion conclusion, boolean copy, Instant printedAt, String printedBy) {
+            Context context, Conclusion conclusion, Instant printedAt, String printedBy) {
         ClinicFacility facility = clinicFacilityRepository.findCurrent()
                 .orElseThrow(() -> new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED));
         Visit visit = context.visit();
@@ -95,7 +74,6 @@ public class ConclusionPrintServiceImpl implements ConclusionPrintService {
         return new ConclusionSlipResponse(
                 visit.getId(),
                 visit.getSovaovien(),
-                copy,
                 printedAt,
                 printedBy,
                 new ConclusionSlipResponse.Facility(

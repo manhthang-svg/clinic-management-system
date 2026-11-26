@@ -11,6 +11,6 @@ public interface ConclusionPrintService {
     /** UC-57 step 2: the conclusion slip for the preview; nothing is recorded. */
     ConclusionSlipResponse printPreview(StaffPrincipal principal, UUID visitId);
 
-    /** UC-57 step 3: records the print ({@code PRINT} audit row) and returns the slip. */
+    /** UC-57 step 3: returns the slip with the print time; nothing is recorded. */
     ConclusionSlipResponse preparePrint(StaffPrincipal principal, UUID visitId);
 }

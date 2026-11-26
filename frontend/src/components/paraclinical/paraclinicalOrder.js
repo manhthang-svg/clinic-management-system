@@ -12,7 +12,7 @@ export const MSG = {
     NOT_IN_EXAMINATION: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.',
     RECORD_CLOSED: 'Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.',
     // MSG48 (BR-19): outside the Doctor's shift no new order is created.
-    OFF_DUTY: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.',
+    OFF_DUTY: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.',
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.',
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.',
