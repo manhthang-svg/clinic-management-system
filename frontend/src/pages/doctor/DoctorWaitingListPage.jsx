@@ -53,7 +53,7 @@ const MSG01 = 'Không tìm thấy kết quả.';
 const MSG12 = 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.';
 const MSG13 = 'Bạn không có quyền thực hiện thao tác này.';
 const MSG23 = 'Bệnh nhân này đã được gọi.';
-const MSG48 = 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.';
+const MSG48 = 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.';
 const msg54 = (patientName) => `${patientName} không có mặt khi được gọi và đã được chuyển sang danh sách bỏ qua.`;
 const MSG80 = 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 const MSG92 = 'Chưa có dữ liệu để hiển thị.';

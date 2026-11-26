@@ -30,7 +30,6 @@ export function ConclusionSlip({ slip }) {
                     {facility.address && <div className="text-[12px]">Địa chỉ: {facility.address}</div>}
                     {facility.phone && <div className="text-[12px]">Điện thoại: {facility.phone}</div>}
                     <div>Mã lượt khám: <strong className="font-mono">{slip.visitCode}</strong></div>
-                    {slip.copy && <div className="font-extrabold">BẢN SAO</div>}
                 </div>
                 <div className="text-center">
                     <div className="font-bold uppercase">Cộng hòa xã hội chủ nghĩa Việt Nam</div>

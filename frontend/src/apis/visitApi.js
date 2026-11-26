@@ -250,7 +250,7 @@ export const visitApi = {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/print`, { signal });
     },
 
-    // UC-57 step 3: the server records the print (PRINT audit row) and returns the slip.
+    // UC-57 step 3: the slip with its print time; the server records nothing (PO 26/11/2026).
     prepareConclusionPrint(visitId) {
         return apiClient.request(`/conclusions/visits/${encodeURIComponent(visitId)}/commands/prepare-print`, {
             method: 'POST',

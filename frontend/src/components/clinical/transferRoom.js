@@ -10,7 +10,7 @@ export const TRANSFER_MESSAGES = {
     reasonRequired: 'Vui lòng nhập lý do.', // MSG31
     reasonLength: `Lý do phải có từ ${REASON_MIN} đến ${REASON_MAX} ký tự.`, // MSG95
     roomRequired: 'Vui lòng chọn phòng chuyển đến.',
-    outsideShift: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.', // MSG48
+    outsideShift: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.', // MSG48
     roomNotEligible: msg56, // MSG53
     recordOpened: 'Không thể chuyển bệnh nhân vì hồ sơ bệnh án của lượt khám này đã được mở.', // MSG56
     visitChanged: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75 ("Lượt khám")

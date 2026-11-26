@@ -76,7 +76,7 @@ public class ConclusionController {
     }
 
     @PostMapping("/visits/{visitId}/commands/prepare-print")
-    @Operation(summary = "UC-57: ghi nhận lần in (nhật ký PRINT) và trả về phiếu kết luận")
+    @Operation(summary = "UC-57: trả về phiếu kết luận kèm thời điểm in; không ghi nhận gì")
     public ApiResponse<ConclusionSlipResponse> preparePrint(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID visitId) {
         return ApiResponse.success(printService.preparePrint(StaffPrincipal.from(jwt), visitId));

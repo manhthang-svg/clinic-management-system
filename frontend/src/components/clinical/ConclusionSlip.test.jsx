@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { ConclusionSlip } from './ConclusionSlip';
 
 describe('ConclusionSlip (UC-57)', () => {
-    it('shows the closed-record conclusion and marks a reprint as a copy', () => {
+    it('shows the closed-record conclusion without a "Bản sao" mark (PO 26/11/2026)', () => {
         render(<ConclusionSlip slip={{
-            copy: true,
             printedAt: '2026-11-18T02:30:00Z',
             facility: { name: 'Phòng khám Đa khoa A', address: '1 Lê Lợi', phone: '0281234567' },
             patient: {
@@ -26,7 +25,7 @@ describe('ConclusionSlip (UC-57)', () => {
         }} />);
 
         const sheet = screen.getByRole('article', { name: 'Phiếu kết luận khám bệnh' });
-        expect(sheet).toHaveTextContent('BẢN SAO');
+        expect(sheet).not.toHaveTextContent('BẢN SAO');
         expect(sheet).toHaveTextContent('J02.9 – Viêm họng cấp, không đặc hiệu');
         expect(sheet).toHaveTextContent('Kết quả điều trị: Đỡ');
         expect(sheet).toHaveTextContent('ThS.BS Nguyễn Đức Hải');

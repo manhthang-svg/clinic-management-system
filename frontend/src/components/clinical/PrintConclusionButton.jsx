@@ -7,8 +7,8 @@ import { ConclusionSlip } from './ConclusionSlip';
 import { printError } from './prescriptionPrintFormat';
 
 /**
- * UC-57: "In kết luận" opens the preview of the conclusion slip of a closed record (step 2); "In" records the print on
- * the server (PRINT audit row) and opens the browser print dialog (step 3; printer integration TBD). The printed copy
+ * UC-57: "In kết luận" opens the preview of the conclusion slip of a closed record (step 2); "In" gets the slip with
+ * its print time and opens the browser print dialog (step 3; nothing is recorded, PO 26/11/2026). The printed copy
  * is rendered into `document.body` and shown only when printing, as for the follow-up slip.
  */
 export function PrintConclusionButton({ visitId, api }) {
