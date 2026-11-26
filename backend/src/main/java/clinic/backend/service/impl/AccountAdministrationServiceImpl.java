@@ -3,6 +3,7 @@ package clinic.backend.service.impl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +52,7 @@ import clinic.backend.mapper.AccountMapper;
 import clinic.backend.repository.AuditLogRepository;
 import clinic.backend.repository.AuthSessionRepository;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
@@ -79,6 +81,8 @@ import org.springframework.transaction.annotation.Transactional;
 @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
 public class AccountAdministrationServiceImpl implements AccountAdministrationService {
 
+    private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private static final Pattern PRACTICE_LICENSE_FORMAT =
             Pattern.compile("^[\\p{L}\\p{N}/-]{5,50}$");
 
@@ -99,6 +103,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
 
     private final StaffAccountRepository accountRepository;
     private final StaffRoomAssignmentRepository assignmentRepository;
+    private final DutyScheduleRepository dutyScheduleRepository;
     private final RoomRepository roomRepository;
     private final DepartmentRepository departmentRepository;
     private final AuthSessionRepository sessionRepository;
@@ -139,7 +144,8 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 ? ""
                 : "%" + search.strip().toLowerCase(Locale.ROOT) + "%";
         Page<AccountSummaryView> result = accountRepository.searchSummaries(
-                searchPattern, role, departmentId, status, PageRequest.of(page, size, sort));
+                searchPattern, role, departmentId, status, LocalDate.ofInstant(clock.instant(), CLINIC_ZONE),
+                PageRequest.of(page, size, sort));
         List<AccountSummaryResponse> content = result.getContent().stream()
                 .map(this::toSummary)
                 .toList();
@@ -251,6 +257,16 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 .findByStaffAccountIdAndRemovedAtIsNull(accountId).orElse(null);
         if (current != null && current.getRoomId().equals(room.getId())) {
             return detail(account, principal.accountId());
+        }
+        // BR-55: a shift is worked in the staff member's room, so the room can change only when
+        // no shift remains from today onwards (MSG83 shows the number of remaining shifts).
+        if (current != null) {
+            long remainingShifts = dutyScheduleRepository.countByStaffAccountIdAndWorkDateGreaterThanEqual(
+                    accountId, LocalDate.ofInstant(now, CLINIC_ZONE));
+            if (remainingShifts > 0) {
+                throw new AppException(ErrorCode.STAFF_HAS_DUTY_SCHEDULES, Map.of(
+                        "accountId", accountId.toString(), "shiftCount", Long.toString(remainingShifts)));
+            }
         }
         UUID oldRoomId = current == null ? null : current.getRoomId();
         if (current != null) {
@@ -479,7 +495,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
                 account.getEmail(), account.getRole(), account.getStatus(),
                 account.getRoomId(), account.getRoomCode(), account.getRoomName(),
                 account.getDepartmentName(), account.getLastLoginAt(), account.getPasswordChangeRequired(),
-                account.getVersion());
+                account.getVersion(), account.getHasUpcomingDutySchedule());
     }
 
     private Location location(UUID accountId) {

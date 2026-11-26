@@ -12,6 +12,7 @@ import {
   DepartmentTable,
   DepartmentFormModal,
   DepartmentDetailModal,
+  RoomAssignmentDialog,
 } from '../../components/departments';
 import { departmentApi } from '../../apis/departmentApi';
 import { createAccountApi } from '../../apis/accountApi';
@@ -61,7 +62,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [roomAssignment, setRoomAssignment] = useState(null);
   const [staffOptions, setStaffOptions] = useState([]);
-  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [selectedStaffIds, setSelectedStaffIds] = useState([]);
   const [staffLoading, setStaffLoading] = useState(false);
 
   // Fetch data từ backend
@@ -292,7 +293,7 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   const handleOpenRoomAssignment = async (room) => {
     const role = room.type === 'EXAMINATION' ? 'DOCTOR' : 'TECHNICIAN';
     setRoomAssignment(room);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setStaffOptions([]);
     setStaffLoading(true);
     try {
@@ -312,30 +313,60 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
   };
 
   const handleConfirmRoomAssignment = async () => {
-    if (!roomAssignment || !selectedStaffId) {
+    if (!roomAssignment || selectedStaffIds.length === 0) {
       toast.error('Vui lòng chọn nhân sự cần phân phòng');
       return;
     }
-    const staff = staffOptions.find((option) => option.id === selectedStaffId);
-    try {
-      await accountApi.assignRoom(selectedStaffId, { roomId: roomAssignment.id });
-      const assignedName = staff?.fullName || staff?.username || 'nhân sự';
-      toast.success(`Đã phân ${assignedName} vào phòng "${roomAssignment.name}"`);
-      // Cập nhật ngay Người phụ trách (headPerson) trên bảng phòng và đồng bộ dữ liệu
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === roomAssignment.id && i.unitType === 'ROOM'
-            ? { ...i, headPerson: assignedName }
-            : i
-        )
-      );
-      setRoomAssignment(null);
-      setSelectedStaffId('');
-      setStaffOptions([]);
-      fetchData();
-    } catch (err) {
-      toast.error(describeApiError(err, 'Không thể phân phòng'));
+    // The API assigns one account per call, so the selected staff are assigned one after another;
+    // a rejection for one person does not stop the others.
+    const assigned = [];
+    const failedIds = [];
+    for (const staffId of selectedStaffIds) {
+      const staff = staffOptions.find((option) => option.id === staffId);
+      const staffName = staff?.fullName || staff?.username || 'nhân sự';
+      try {
+        await accountApi.assignRoom(staffId, { roomId: roomAssignment.id });
+        assigned.push(staffName);
+      } catch (err) {
+        failedIds.push(staffId);
+        if (err?.errorResponse?.code === 'STAFF_HAS_DUTY_SCHEDULES') {
+          // MSG83 (BR-55).
+          const shiftCount = err.errorResponse.details?.shiftCount;
+          toast.error(
+            `${staffName} còn ${shiftCount ?? 'một số'} ca làm việc từ hôm nay trở đi nên chưa thể đổi hoặc rút khỏi phòng. Vui lòng xóa các ca của những ngày tới; ca của hôm nay chỉ có thể đổi từ ngày mai.`
+          );
+        } else {
+          toast.error(describeApiError(err, `Không thể phân phòng cho ${staffName}`));
+        }
+      }
     }
+
+    if (assigned.length > 0) {
+      toast.success(`Đã phân ${assigned.join(', ')} vào phòng "${roomAssignment.name}"`);
+      fetchData(true);
+    }
+    if (failedIds.length === 0) {
+      setRoomAssignment(null);
+      setSelectedStaffIds([]);
+      setStaffOptions([]);
+      return;
+    }
+    // Keep the dialog open with only the staff that failed still selected; the assigned ones
+    // move to the room's assigned list.
+    const assignedIds = selectedStaffIds.filter((id) => !failedIds.includes(id));
+    setStaffOptions((prev) =>
+      prev.map((option) =>
+        assignedIds.includes(option.id)
+          ? {
+              ...option,
+              roomId: roomAssignment.id,
+              roomCode: roomAssignment.code,
+              roomName: roomAssignment.name,
+            }
+          : option
+      )
+    );
+    setSelectedStaffIds(failedIds);
   };
 
   // Tạm ngưng / Kích hoạt lại (Soft delete)
@@ -873,43 +904,23 @@ export function DepartmentManagementPage({ currentAdmin, onLogout, onChangePassw
       )}
 
       {roomAssignment && (
-        <ConfirmModal
-          isOpen
-          title={`Phân phòng: ${roomAssignment.name}`}
-          description={`${roomAssignment.code} — ${roomAssignment.departmentName || 'Chưa xác định khoa'}`}
-          confirmText="Phân phòng"
-          variant="mint"
+        <RoomAssignmentDialog
+          room={roomAssignment}
+          staffOptions={staffOptions}
+          loading={staffLoading}
+          selectedStaffIds={selectedStaffIds}
+          onToggle={(staffId) =>
+            setSelectedStaffIds((prev) =>
+              prev.includes(staffId) ? prev.filter((id) => id !== staffId) : [...prev, staffId]
+            )
+          }
           onConfirm={handleConfirmRoomAssignment}
           onClose={() => {
             setRoomAssignment(null);
-            setSelectedStaffId('');
+            setSelectedStaffIds([]);
             setStaffOptions([]);
           }}
-        >
-          <label htmlFor="room-staff" className="block text-xs font-semibold text-slate-700 mb-1.5">
-            {roomAssignment.type === 'EXAMINATION' ? 'Bác sĩ' : 'Kỹ thuật viên'} <span className="text-rose-500">*</span>
-          </label>
-          <select
-            id="room-staff"
-            value={selectedStaffId}
-            disabled={staffLoading}
-            onChange={(event) => setSelectedStaffId(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#127e7a]/20 disabled:bg-slate-50"
-          >
-            <option value="">{staffLoading ? 'Đang tải danh sách…' : 'Chọn nhân sự'}</option>
-            {staffOptions.map((staff) => (
-              <option key={staff.id} value={staff.id}>
-                {staff.fullName} ({staff.username}){staff.roomName ? ` — hiện tại: ${staff.roomName}` : ''}
-              </option>
-            ))}
-          </select>
-          {!staffLoading && staffOptions.length === 0 && (
-            <p className="mt-2 text-xs text-amber-600">Không có nhân sự đang hoạt động phù hợp với loại phòng này.</p>
-          )}
-          <p className="mt-2 text-[11px] text-slate-500">
-            Nếu nhân sự đang thuộc phòng khác, hệ thống sẽ chuyển họ sang phòng này.
-          </p>
-        </ConfirmModal>
+        />
       )}
     </AdminLayout>
   );
