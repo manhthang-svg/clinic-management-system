@@ -32,7 +32,7 @@ public interface TechnicianQueueService {
         return getPendingResults(roomId, search, status, doctorRoom, null);
     }
 
-    TechnicianQueueItemResponse getQueueDetail(UUID detailId);
+    TechnicianQueueItemResponse getQueueDetail(UUID detailId, UUID currentUserId);
 
     /** Case 1: Confirms the patient's physical arrival at the paraclinical room and assigns daily queue number. */
     TechnicianQueueItemResponse checkInOrder(UUID detailId, UUID technicianAccountId);

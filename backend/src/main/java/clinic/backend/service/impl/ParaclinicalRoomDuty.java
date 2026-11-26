@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -32,6 +33,15 @@ public class ParaclinicalRoomDuty {
     private final DutyScheduleRepository dutyScheduleRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final DutyShiftConfigService dutyShiftConfigService;
+
+    public Map<UUID, UUID> techniciansAt(Instant when) {
+        LocalDate date = LocalDate.ofInstant(when, CLINIC_ZONE);
+        return dutyShiftConfigService.shiftAt(date, LocalTime.ofInstant(when, CLINIC_ZONE))
+                .map(shift -> dutyScheduleRepository.findByWorkDateAndShift(date, shift).stream()
+                        .filter(schedule -> schedule.getRoomId() != null)
+                        .collect(Collectors.toMap(DutySchedule::getRoomId, DutySchedule::getStaffAccountId)))
+                .orElse(Map.of());
+    }
 
     /** Rooms with an active staff member on duty now, in two queries whatever the number of rooms. */
     public Set<UUID> staffedRooms(Instant now) {

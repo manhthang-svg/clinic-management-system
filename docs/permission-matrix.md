@@ -84,8 +84,8 @@ Status values:
 | Doctor | Follow-up appointment | Create, change | UC-61 | Doctor of the visit, on duty in its room, record open, conclusion saved; one appointment per visit, changed only while scheduled; the Doctor decides who needs one (TT 01/2025 Điều 11); date after the visit date, at most 365 days (BR-108). | Decided (PO 15/11, [`uc-61-follow-up-appointment.md`](uc-61-follow-up-appointment.md#decisions-needed)) |
 | Doctor | Visit / medical record | Close | UC-58 | Locks the record (BR-32). | Source |
 | Technician | Paraclinical waiting list | View | UC-63 | Assigned room only; paid or released orders (BR-19, BR-26). | Source |
-| Technician | Paraclinical order | Call and accept | UC-65 | Assigned room only (BR-19, BR-20). | Source |
-| Technician | Paraclinical order | Perform | UC-66 | Orders accepted by the technician. | Source |
+| Technician | Paraclinical order | Call and accept | UC-65 | The technician assigned to the performing room when the doctor ordered the service may receive it after their shift. If no assignment at order time is available, current room duty applies. | Updated |
+| Technician | Paraclinical order | Perform | UC-66 | The accepting technician can finish the service and submit the result after their shift. | Updated |
 | Technician | Paraclinical result | View pending, record and submit, print | UC-64, UC-67, UC-68 | Only services the technician performed; no edit after submission (BR-29). | Source |
 | Cashier | Payment / receipt | View pending, search, view history | UC-69, UC-70, UC-73 | — | Source |
 | Cashier | Payment / receipt | Confirm payment | UC-71 | Cannot create receipts manually (BR-36). | Source |
@@ -99,7 +99,7 @@ Explicit consequences of the matrix, useful for authorization tests:
 
 - Only Admin manages accounts, departments, rooms, services, prices, and organisation-wide statistics.
 - Receptionists cannot read or change medical records, medical history, or allergies (BR-23; OQ-09).
-- Doctors and Technicians cannot act on patients or services outside their assigned room, except Doctor read access to medical records (BR-19, BR-35).
+- Doctors and Technicians generally act within their assigned room. Doctors may read medical records (BR-19, BR-35), and Technicians may continue to receive and finish paraclinical services assigned to their shift after it ends.
 - Cashiers cannot create or cancel receipts manually (BR-36).
 - No role can edit a locked medical record or a submitted paraclinical result (BR-29, BR-32).
 - No role can manually set a visit to Abandoned (BR-21).

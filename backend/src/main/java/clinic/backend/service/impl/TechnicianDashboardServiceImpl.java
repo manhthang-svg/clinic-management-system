@@ -82,8 +82,11 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
                     .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
         }
         return rooms.stream()
-                .filter(TechnicianRoomResponse::isAssigned)
+                .filter(TechnicianRoomResponse::hasOwnWork)
                 .findFirst()
+                .or(() -> rooms.stream()
+                        .filter(TechnicianRoomResponse::isAssigned)
+                        .findFirst())
                 .orElse(rooms.isEmpty() ? null : rooms.getFirst());
     }
 }

@@ -265,6 +265,8 @@ public enum ErrorCode {
             "Bệnh nhân chưa được xác nhận có mặt tại phòng.", HttpStatus.CONFLICT),
     ORDER_ALREADY_CHECKED_IN("ORDER_ALREADY_CHECKED_IN",
             "Bệnh nhân đã được xác nhận có mặt.", HttpStatus.CONFLICT),
+    PARACLINICAL_ORDER_NOT_WAITING("PARACLINICAL_ORDER_NOT_WAITING",
+            "Chỉ định không còn ở trạng thái chờ thực hiện.", HttpStatus.CONFLICT),
     PARACLINICAL_ORDER_NOT_PAID("PARACLINICAL_ORDER_NOT_PAID",
             "Chỉ định cận lâm sàng chưa được thanh toán viện phí.", HttpStatus.CONFLICT),
     RESULT_IMAGE_INVALID("RESULT_IMAGE_INVALID",

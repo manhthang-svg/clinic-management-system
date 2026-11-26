@@ -88,8 +88,10 @@ public class TechnicianQueueController {
     @GetMapping("/queue/{detailId}")
     @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
     @Operation(summary = "Xem chi tiết một ca trong hàng đợi cận lâm sàng")
-    public ApiResponse<TechnicianQueueItemResponse> getQueueDetail(@PathVariable UUID detailId) {
-        return ApiResponse.success(technicianQueueService.getQueueDetail(detailId));
+    public ApiResponse<TechnicianQueueItemResponse> getQueueDetail(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID detailId) {
+        UUID currentUserId = jwt != null ? StaffPrincipal.from(jwt).accountId() : null;
+        return ApiResponse.success(technicianQueueService.getQueueDetail(detailId, currentUserId));
     }
 
     @PostMapping("/queue/{detailId}/check-in")

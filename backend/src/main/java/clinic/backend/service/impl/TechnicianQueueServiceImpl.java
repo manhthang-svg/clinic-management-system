@@ -233,6 +233,17 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             }
         }
 
+        QueueAccess access = new QueueAccess(currentUserId, currentStaff);
+        Set<UUID> workRoomIds = access.isTechnician() && !rooms.isEmpty()
+                ? paraclinicalOrderDetailRepository.findQueueWorkForTechnician(
+                                rooms.stream().map(Room::getId).toList(), currentUserId, List.of(
+                                        ParaclinicalOrderDetailStatus.PENDING_PAYMENT, ParaclinicalOrderDetailStatus.WAITING,
+                                        ParaclinicalOrderDetailStatus.IN_PROGRESS, ParaclinicalOrderDetailStatus.PENDING_RESULT))
+                        .stream()
+                        .filter(access::hasOwnWork)
+                        .map(ParaclinicalOrderDetail::getRoomId)
+                        .collect(Collectors.toSet())
+                : Set.of();
         return rooms.stream()
                 .map(room -> {
                     boolean canManage = userIsAdmin || manageableRoomIds.contains(room.getId());
@@ -242,7 +253,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                             room.getRoomName(),
                             room.getLocation(),
                             roomTechMap.getOrDefault(room.getId(), "Chưa có"),
-                            canManage
+                            canManage,
+                            workRoomIds.contains(room.getId())
                     );
                 })
                 .toList();
@@ -267,7 +279,13 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             targetRoomId = rooms.getFirst().getId();
         }
 
-        boolean canManage = canManageRoom(targetRoomId, currentUserId);
+        QueueAccess access = queueAccess(currentUserId);
+        boolean canManage = access.canManageRoom(targetRoomId);
+        boolean hasWorkOutsideQueue = access.isTechnician()
+                && paraclinicalOrderDetailRepository.findQueueWorkForTechnician(
+                        List.of(targetRoomId), currentUserId, List.of(
+                                ParaclinicalOrderDetailStatus.PENDING_PAYMENT, ParaclinicalOrderDetailStatus.PENDING_RESULT))
+                        .stream().anyMatch(access::hasOwnWork);
         LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
         Instant startOfDay = today.atStartOfDay(CLINIC_ZONE).toInstant();
 
@@ -278,7 +296,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             return new TechnicianQueueResponse(
                     new TechnicianQueueStatsResponse(0, 0, 0, 0),
                     Collections.emptyList(),
-                    canManage
+                    canManage,
+                    hasWorkOutsideQueue
             );
         }
 
@@ -349,7 +368,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                     historiesMap,
                     siblingOrdersMap,
                     targetRoomId,
-                    today
+                    today,
+                    access
             ));
         }
 
@@ -426,7 +446,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 })
                 .toList();
 
-        return new TechnicianQueueResponse(statsResponse, filtered, canManage);
+        return new TechnicianQueueResponse(statsResponse, filtered, canManage,
+                hasWorkOutsideQueue || details.stream().anyMatch(access::hasOwnWork));
     }
 
     // Tải danh sách các ca đã thực hiện xong đang chờ nhập kết luận hoặc đang lưu nháp
@@ -564,7 +585,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                     order.getNoichidinh(),
                     completedAtTime,
                     completedMinutesAgo,
-                    itemStatus
+                    itemStatus,
+                    detail.awaitsResultFrom(currentUserId)
             ));
         }
 
@@ -623,7 +645,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
     // Lấy thông tin chi tiết một y lệnh cận lâm sàng kèm hồ sơ bệnh án và tiền sử bệnh
     @Override
     @Transactional(readOnly = true)
-    public TechnicianQueueItemResponse getQueueDetail(UUID detailId) {
+    public TechnicianQueueItemResponse getQueueDetail(UUID detailId, UUID currentUserId) {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
@@ -660,7 +682,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return mapToItemResponse(
                 detail, service, record, visitMap, patientMap, doctor, roomMap,
                 examMap, historiesMap, siblingOrdersMap,
-                detail.getRoomId(), today
+                detail.getRoomId(), today, queueAccess(currentUserId)
         );
     }
 
@@ -672,7 +694,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        QueueAccess access = queueAccess(technicianAccountId);
+        access.verify(detail);
 
         if (detail.isCheckedIn()) {
             throw new AppException(ErrorCode.ORDER_ALREADY_CHECKED_IN);
@@ -682,9 +705,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             throw new AppException(ErrorCode.PARACLINICAL_ORDER_NOT_PAID);
         }
 
-        if (detail.getStatus() != ParaclinicalOrderDetailStatus.WAITING) {
-            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
-        }
+        requireWaiting(detail);
 
         LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
         Instant startOfDay = today.atStartOfDay(CLINIC_ZONE).toInstant();
@@ -703,6 +724,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             if (!sib.getId().equals(detail.getId())
                     && Objects.equals(sib.getRoomId(), detail.getRoomId())
                     && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && access.canManage(sib)
                     && !sib.isCheckedIn()) {
                 sib.checkIn(nextQueueNumber, technicianAccountId, now);
                 paraclinicalOrderDetailRepository.save(sib);
@@ -725,7 +747,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // Tiếp nhận bệnh nhân vào phòng thực hiện kỹ thuật và chuyển trạng thái sang IN_PROGRESS
@@ -736,7 +758,9 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        QueueAccess access = queueAccess(technicianAccountId);
+        access.verify(detail);
+        requireWaiting(detail);
 
         if (!detail.isCheckedIn()) {
             throw new AppException(ErrorCode.ORDER_NOT_CHECKED_IN);
@@ -752,6 +776,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             if (!sib.getId().equals(detail.getId())
                     && Objects.equals(sib.getRoomId(), detail.getRoomId())
                     && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && access.canManage(sib)
                     && sib.isCheckedIn()) {
                 sib.accept(technicianAccountId, now);
                 paraclinicalOrderDetailRepository.save(sib);
@@ -772,7 +797,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // Đánh dấu tạm bỏ qua bệnh nhân vắng mặt khi gọi tên và chuyển vào tab Đã bỏ qua
@@ -783,7 +808,9 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        QueueAccess access = queueAccess(technicianAccountId);
+        access.verify(detail);
+        requireWaiting(detail);
 
         detail.skip(now);
         paraclinicalOrderDetailRepository.save(detail);
@@ -793,7 +820,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         for (ParaclinicalOrderDetail sib : skipSiblings) {
             if (!sib.getId().equals(detail.getId())
                     && Objects.equals(sib.getRoomId(), detail.getRoomId())
-                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING) {
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && access.canManage(sib)) {
                 sib.skip(now);
                 paraclinicalOrderDetailRepository.save(sib);
             }
@@ -806,7 +834,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // Tiếp nhận lại bệnh nhân vắng mặt quay lại phòng và khôi phục vào hàng đợi
@@ -817,7 +845,9 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        QueueAccess access = queueAccess(technicianAccountId);
+        access.verify(detail);
+        requireWaiting(detail);
 
         detail.unskip(now);
         paraclinicalOrderDetailRepository.save(detail);
@@ -827,6 +857,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         for (ParaclinicalOrderDetail sib : unskipSiblings) {
             if (!sib.getId().equals(detail.getId())
                     && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && sib.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && access.canManage(sib)
                     && sib.isSkipped()) {
                 sib.unskip(now);
                 paraclinicalOrderDetailRepository.save(sib);
@@ -840,7 +872,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // UC-66: KTV xac nhan da thuc hien xong, dich vu chuyen sang cho nhap ket qua
@@ -851,8 +883,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        // KTV phai truc phong nay va dang lam dich vu nay
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        // The technician who accepted the service can finish it after their shift ends.
         requireInProgressBy(detail, technicianAccountId);
 
         // dich vu -> cho nhap ket qua
@@ -886,7 +917,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // UC-66: tra dich vu dang lam ve hang cho (giu so thu tu) kem ly do
@@ -898,7 +929,6 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
         requireInProgressBy(detail, technicianAccountId);
 
         // ve lai hang cho dung vi tri cu, ly do ghi vao audit
@@ -913,7 +943,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
     // dich vu phai dang thuc hien va do chinh KTV nay tiep nhan
@@ -934,7 +964,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        verifyRoomPermission(detail.getRoomId(), technicianAccountId);
+        queueAccess(technicianAccountId).verify(detail);
 
         detail.cancel(request.reason(), technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
@@ -947,15 +977,99 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 technicianAccountId, AuditLogAction.CANCEL, AUDIT_ENTITY, detail.getId(),
                 detail.getMachidinh(), audit, now);
 
-        return getQueueDetail(detailId);
+        return getQueueDetail(detailId, technicianAccountId);
     }
 
-    // Kiểm tra quyền phụ trách phòng máy của KTV, ném lỗi 403 nếu không có thẩm quyền
-    private void verifyRoomPermission(UUID roomId, UUID technicianAccountId) {
-        if (!canManageRoom(roomId, technicianAccountId)) {
-            throw new AppException(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM,
-                    "Bạn không được phân công phụ trách phòng máy này",
-                    Map.of("roomId", "Bạn không được phân công phụ trách phòng máy này"));
+    private static void requireWaiting(ParaclinicalOrderDetail detail) {
+        if (detail.getStatus() != ParaclinicalOrderDetailStatus.WAITING) {
+            throw new AppException(ErrorCode.PARACLINICAL_ORDER_NOT_WAITING);
+        }
+    }
+
+    private QueueAccess queueAccess(UUID staffId) {
+        return new QueueAccess(staffId, staffId == null ? null : staffAccountRepository.findById(staffId).orElse(null));
+    }
+
+    private final class QueueAccess {
+        private final UUID staffId;
+        private final Role role;
+        private final Map<UUID, Map<LocalDate, List<DutySchedule>>> schedules = new HashMap<>();
+        private final Map<UUID, Boolean> roomPermissions = new HashMap<>();
+        private final Map<UUID, List<StaffRoomAssignment>> assignments = new HashMap<>();
+
+        private QueueAccess(UUID staffId, StaffAccount staff) {
+            this.staffId = staffId;
+            this.role = staff == null ? null : staff.getRole();
+        }
+
+        private boolean isTechnician() {
+            return role == Role.TECHNICIAN;
+        }
+
+        private boolean canManageRoom(UUID roomId) {
+            return roomPermissions.computeIfAbsent(roomId,
+                    room -> TechnicianQueueServiceImpl.this.canManageRoom(room, staffId));
+        }
+
+        private Optional<Boolean> orderShiftPermission(ParaclinicalOrderDetail detail) {
+            UUID assigned = detail.getAssignedTechnicianAccountId();
+            if (assigned != null) {
+                return Optional.of(assigned.equals(staffId));
+            }
+            if (detail.getRoomId() == null || dutyShiftConfigService == null) {
+                return Optional.empty();
+            }
+            Instant orderedAt = detail.getNgaychidinh();
+            LocalDate date = LocalDate.ofInstant(orderedAt, CLINIC_ZONE);
+            Optional<DutyShift> shift = dutyShiftConfigService.shiftAt(date, LocalTime.ofInstant(orderedAt, CLINIC_ZONE));
+            if (shift.isEmpty()) {
+                return Optional.empty();
+            }
+            List<DutySchedule> roomDay = schedules.computeIfAbsent(detail.getRoomId(), ignored -> new HashMap<>())
+                    .computeIfAbsent(date, day -> dutyScheduleRepository
+                            .findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(detail.getRoomId(), day, day));
+            if (!roomDay.isEmpty()) {
+                return roomDay.stream().filter(schedule -> schedule.getShift() == shift.get())
+                        .findFirst().map(schedule -> staffId.equals(schedule.getStaffAccountId()));
+            }
+            List<StaffRoomAssignment> roomAssignments = assignments.computeIfAbsent(detail.getRoomId(),
+                    staffRoomAssignmentRepository::findAllByRoomId);
+            List<StaffRoomAssignment> activeAtOrderTime = roomAssignments.stream()
+                    .filter(assignment -> !assignment.getAssignedAt().isAfter(orderedAt)
+                            && (assignment.getRemovedAt() == null || assignment.getRemovedAt().isAfter(orderedAt)))
+                    .toList();
+            return activeAtOrderTime.isEmpty() ? Optional.empty() : Optional.of(activeAtOrderTime.stream()
+                    .anyMatch(assignment -> staffId.equals(assignment.getStaffAccountId())));
+        }
+
+        private boolean hasOwnWork(ParaclinicalOrderDetail detail) {
+            return isTechnician() && (detail.awaitsResultFrom(staffId)
+                    || ((detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                         || detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_PAYMENT)
+                        && orderShiftPermission(detail).orElse(false)));
+        }
+
+        private boolean canManage(ParaclinicalOrderDetail detail) {
+            if (role == Role.ADMIN) {
+                return true;
+            }
+            if (!isTechnician()) {
+                return false;
+            }
+            if (detail.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS
+                    || detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT) {
+                return detail.awaitsResultFrom(staffId);
+            }
+            return orderShiftPermission(detail).orElseGet(() -> canManageRoom(detail.getRoomId()));
+        }
+
+        private void verify(ParaclinicalOrderDetail detail) {
+            if (!canManage(detail)) {
+                String message = canManageRoom(detail.getRoomId())
+                        ? "Bạn không được phân công thực hiện dịch vụ này"
+                        : "Bạn không được phân công phụ trách phòng máy này";
+                throw new AppException(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM, message, Map.of("roomId", message));
+            }
         }
     }
 
@@ -1023,7 +1137,8 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             Map<UUID, List<MedicalHistory>> historiesMap,
             Map<UUID, List<ParaclinicalOrderDetail>> siblingOrdersMap,
             UUID currentRoomId,
-            LocalDate today
+            LocalDate today,
+            QueueAccess access
     ) {
         ParaclinicalOrder order = detail.getOrder();
         Visit visit = record != null ? visitMap.get(record.getVisitId()) : null;
@@ -1173,7 +1288,10 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 detail.isCheckedIn(),
                 detail.getCheckedInAt() != null ? TIME_FORMATTER.format(detail.getCheckedInAt()) : null,
                 detail.getSkippedAt() != null ? TIME_FORMATTER.format(detail.getSkippedAt()) : null,
-                detail.getSkippedAt()
+                detail.getSkippedAt(),
+                detail.isPerformedBy(access.staffId),
+                (detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                        || detail.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS) && access.canManage(detail)
         );
     }
 
