@@ -30,7 +30,9 @@ public record UpdatePatientRequest(
         @Size(max = 3, message = "TOO_LONG") String tinhthanhMa,
         @Size(max = 1024, message = "TOO_LONG") String noilamviec,
         @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT") String sodienthoai,
-        @Email(message = "INVALID_FORMAT") @Size(max = 100, message = "TOO_LONG") String email,
+        @Email(message = "INVALID_FORMAT")
+        @Pattern(regexp = "^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", message = "INVALID_FORMAT")
+        @Size(max = 100, message = "TOO_LONG") String email,
         @Size(max = 5, message = "TOO_LONG") String yeutorh,
         @Size(max = 5, message = "TOO_LONG") String nhommau,
         @Size(max = 255, message = "TOO_LONG")

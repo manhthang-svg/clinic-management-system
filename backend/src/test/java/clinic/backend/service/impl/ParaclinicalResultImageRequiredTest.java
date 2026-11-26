@@ -63,12 +63,13 @@ class ParaclinicalResultImageRequiredTest {
     @InjectMocks ParaclinicalResultServiceImpl service;
 
     private final UUID detailId = UUID.randomUUID();
+    private MedicalService medicalService;
 
     @BeforeEach
     void ultrasoundPerformedByTheTechnician() {
         ParaclinicalOrderDetail detail = mock(ParaclinicalOrderDetail.class);
         ParaclinicalOrder order = mock(ParaclinicalOrder.class);
-        MedicalService medicalService = mock(MedicalService.class);
+        medicalService = mock(MedicalService.class);
         MedicalRecord record = mock(MedicalRecord.class);
         Visit visit = mock(Visit.class);
         UUID serviceId = UUID.randomUUID();
@@ -158,5 +159,20 @@ class ParaclinicalResultImageRequiredTest {
                 request("", "https://pacs.example/xem/123")));
 
         assertThat(details(thrown)).doesNotContainKey("images").containsKey("conclusion");
+    }
+
+    @Test
+    @DisplayName("CT/MRI: thiếu kỹ thuật chụp thì báo lỗi; có kỹ thuật thì không báo")
+    void requiresTheTechniqueOfACtOrMriScan() {
+        when(medicalService.getTenchidinh()).thenReturn("Chụp CT sọ não không tiêm thuốc cản quang");
+
+        Throwable missing = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId,
+                request("Bình thường", "https://pacs.example/xem/123")));
+        assertThat(details(missing)).containsEntry("technique", "Vui lòng nhập kỹ thuật");
+
+        SaveParaclinicalResultRequest withTechnique = new SaveParaclinicalResultRequest(null, null, "", "Chụp xoắn ốc",
+                "Nhu mô não bình thường", null, null, "https://pacs.example/xem/123", null, null, null);
+        Throwable other = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, withTechnique));
+        assertThat(details(other)).doesNotContainKey("technique").containsKey("conclusion");
     }
 }

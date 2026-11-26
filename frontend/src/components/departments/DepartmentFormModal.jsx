@@ -28,6 +28,8 @@ const SELECT_CLASS =
 function getDepartmentCategory(dept) {
   if (!dept) return 'CLINICAL';
   if (dept.type === 'PARACLINICAL') return 'PARACLINICAL';
+  // the stored type wins; the name is only a fallback for items without one
+  if (dept.type === 'CLINICAL') return 'CLINICAL';
   const paraclinicalType = getParaclinicalDepartmentType(dept);
   return paraclinicalType ? 'PARACLINICAL' : 'CLINICAL';
 }

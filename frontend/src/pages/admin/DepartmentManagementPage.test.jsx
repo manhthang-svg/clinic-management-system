@@ -277,6 +277,32 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
     });
   });
 
+  it('xếp khoa vào nhóm theo Phân loại đã lưu, không đoán theo tên khoa', async () => {
+    const rehabilitation = {
+      id: 'dept-9', unitType: 'DEPARTMENT', code: 'K64', name: 'Khoa Phục hồi chức năng',
+      type: 'CLINICAL', status: 'ACTIVE',
+    };
+    departmentApi.getItems.mockResolvedValue([dept1, rehabilitation, roomWithoutDoctor]);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={<DepartmentManagementPage currentAdmin={admin} onLogout={vi.fn()} onChangePassword={vi.fn()} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Ngoại 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Thêm phòng mới' }));
+
+    expect(screen.getByRole('option', { name: 'Khoa Phục hồi chức năng (K64) - Khoa lâm sàng' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Khoa Phục hồi chức năng (K64) - Khoa cận lâm sàng' })).not.toBeInTheDocument();
+  });
+
   it('phân bác sĩ vào phòng khám từ nút Phân phòng', async () => {
     const accountApi = {
       list: vi.fn().mockResolvedValue({

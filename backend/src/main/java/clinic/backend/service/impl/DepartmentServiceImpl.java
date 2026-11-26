@@ -431,7 +431,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 now
         );
 
-        Department saved = departmentRepository.save(department);
+        Department saved = departmentRepository.saveAndFlush(department); // flush: the response must carry the new version
         int roomCount = roomRepository.findByDepartmentId(id).size();
 
 
@@ -472,7 +472,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         department.setActive(nextActive, now);
-        Department saved = departmentRepository.save(department);
+        Department saved = departmentRepository.saveAndFlush(department);
         int roomCount = roomRepository.findByDepartmentId(id).size();
 
 
@@ -547,6 +547,16 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new AppException(ErrorCode.DEPARTMENT_INACTIVE,
                     "Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động",
                     Map.of("departmentId", "Không thể tạo phòng trong chuyên khoa đang tạm ngưng hoạt động"));
+        }
+
+        DepartmentType requiredDepartmentType = request.getType() == RoomType.PARACLINICAL
+                ? DepartmentType.PARACLINICAL
+                : DepartmentType.CLINICAL;
+        if (department.getType() != requiredDepartmentType) {
+            String message = request.getType() == RoomType.PARACLINICAL
+                    ? "Phòng khám cận lâm sàng phải trực thuộc Khoa cận lâm sàng"
+                    : "Phòng khám lâm sàng phải trực thuộc Khoa lâm sàng";
+            throw new AppException(ErrorCode.ROOM_DEPARTMENT_TYPE_MISMATCH, message, Map.of("type", message));
         }
 
         final UUID serviceGroupId;
@@ -724,7 +734,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 now
         );
 
-        Room saved = roomRepository.save(room);
+        Room saved = roomRepository.saveAndFlush(room); // flush: the response must carry the new version
 
         String serviceGroupName = saved.getServiceGroupId() != null
                 ? serviceGroupRepository.findById(saved.getServiceGroupId())
@@ -784,7 +794,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 : ActivationStatus.ACTIVE;
 
         room.setStatus(nextStatus, now);
-        Room saved = roomRepository.save(room);
+        Room saved = roomRepository.saveAndFlush(room);
 
         String serviceGroupName = saved.getServiceGroupId() != null
                 ? serviceGroupRepository.findById(saved.getServiceGroupId())
