@@ -82,7 +82,6 @@ class ConclusionServiceImplTest {
     @Mock private ConclusionRepository conclusionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private Icd10Repository icd10Repository;
-    @Mock private Icd10SearchCache icd10Catalog;
     @Mock private AuditLogService auditLogService;
 
     private ConclusionServiceImpl service;
@@ -97,23 +96,39 @@ class ConclusionServiceImplTest {
                 medicalRecordRepository, clock);
         service = new ConclusionServiceImpl(
                 guard, staffAccountRepository, examinationRepository, conclusionRepository, prescriptionRepository,
-                icd10Repository, icd10Catalog, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
-        lenient().when(icd10Catalog.namesIcd10Diseases(any(), any())).thenReturn(true);
+                icd10Repository, auditLogService, new UuidV7Generator(clock, new SecureRandom()), clock);
     }
 
     @Test
-    void refusesADiagnosisThatNamesNoIcd10Disease() {
+    void savesTheDoctorsOwnDiagnosisTextAndBuildsTheDiagnosisCodes() {
+        // CV 365 III.13: free text; III.14: the main code then the secondary codes, separated by ";".
+        stubVisit(VisitStatus.IN_EXAMINATION);
+        stubIcd(icd("J02.9", false, false), icd("K29.7", false, false), icd("B87.0", false, false));
+        when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.saveAndFlush(any(Conclusion.class))).thenAnswer(call -> call.getArgument(0));
+        SaveConclusionRequest request = new SaveConclusionRequest(
+                "  Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan  ", "J02.9", List.of("K29.7", "B87.0"),
+                "Điều trị ngoại trú", null, "Uống nhiều nước", null, null, false, null);
+
+        service.save(principal(), VISIT_ID, request);
+
+        ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
+        verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getChandoan()).isEqualTo("Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan");
+        assertThat(saved.getValue().getChandoanMa()).isEqualTo("J02.9;K29.7;B87.0");
+    }
+
+    @Test
+    void refusesABlankDiagnosis() {
         stubVisit(VisitStatus.IN_EXAMINATION);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
-        when(icd10Catalog.namesIcd10Diseases(eq("abc xyz"), any())).thenReturn(false);
         SaveConclusionRequest request = new SaveConclusionRequest(
-                " abc xyz ", "J02.9", List.of(), "Điều trị ngoại trú", (short) 2, "Uống nhiều nước", null, null,
-                false, null);
+                "   ", "J02.9", List.of(), "Điều trị ngoại trú", null, "Uống nhiều nước", null, null, false, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class, error -> {
-                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_DIAGNOSIS_NOT_ICD10);
-                    assertThat(error.getDetails()).containsEntry("field", "diagnosis");
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_INVALID);
+                    assertThat(error.getDetails()).containsEntry("field", "diagnosis").containsEntry("reason", "REQUIRED");
                 });
         verify(conclusionRepository, never()).saveAndFlush(any(Conclusion.class));
     }
@@ -129,7 +144,7 @@ class ConclusionServiceImplTest {
 
         assertThat(response.mainDiagnosis().code()).isEqualTo("J02.9");
         assertThat(response.secondaryDiagnoses()).extracting(item -> item.code()).containsExactly("K29.7");
-        assertThat(response.treatmentResult()).isEqualTo((short) 2);
+        assertThat(response.treatmentResult()).isEqualTo("Đỡ");
         ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
         verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getLoidanbacsi()).isEqualTo("Uống nhiều nước");
@@ -139,12 +154,31 @@ class ConclusionServiceImplTest {
     }
 
     @Test
+    void savesAConclusionWithoutATreatmentResult() {
+        // V63: "Kết quả điều trị" is optional free text, e.g. nothing to assess yet at a first visit.
+        stubVisit(VisitStatus.IN_EXAMINATION);
+        stubIcd(icd("J02.9", false, false));
+        when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
+        when(conclusionRepository.saveAndFlush(any(Conclusion.class))).thenAnswer(call -> call.getArgument(0));
+        SaveConclusionRequest request = new SaveConclusionRequest(
+                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", "   ", "Uống nhiều nước", null, null,
+                false, null);
+
+        var response = service.save(principal(), VISIT_ID, request);
+
+        assertThat(response.treatmentResult()).isNull();
+        ArgumentCaptor<Conclusion> saved = ArgumentCaptor.forClass(Conclusion.class);
+        verify(conclusionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getKetquadieutri()).isNull();
+    }
+
+    @Test
     void asksForTheEmptyRequiredFieldBeforeSaving() {
         stubVisit(VisitStatus.IN_EXAMINATION);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.empty());
 
         SaveConclusionRequest request = new SaveConclusionRequest(
-                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", (short) 2, "  ", null, null, false, null);
+                "Viêm họng cấp", "J02.9", List.of(), "Điều trị ngoại trú", "Đỡ", "  ", null, null, false, null);
 
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request))
                 .isInstanceOfSatisfying(AppException.class, error -> {
@@ -196,7 +230,7 @@ class ConclusionServiceImplTest {
         stubVisit(VisitStatus.IN_EXAMINATION);
         stubIcd(icd("J02.9", false, false), icd("J03.9", false, false));
         Conclusion saved = new Conclusion(UUID.randomUUID(), NOW, record.getId());
-        saved.record(DOCTOR_ID, "Viêm họng", "J02.9", "Bệnh J02.9", "Điều trị", (short) 2, "Dặn", null, null, NOW);
+        saved.record(DOCTOR_ID, "Viêm họng", "J02.9", "Bệnh J02.9", "Điều trị", "Đỡ", "Dặn", null, null, NOW);
         when(conclusionRepository.findByMedicalRecordId(record.getId())).thenReturn(Optional.of(saved));
         // BR-59-08: only an accepted prescription locks the diagnoses; a sent one without an answer does not.
         when(prescriptionRepository.existsByMedicalRecordIdAndLienthongStatusIn(
@@ -206,6 +240,18 @@ class ConclusionServiceImplTest {
         assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request("J03.9", List.of(), false)))
                 .isInstanceOfSatisfying(AppException.class, error ->
                         assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONCLUSION_DIAGNOSES_LOCKED));
+    }
+
+    @Test
+    void reportsAClosedRecordBeforeTheCompletedVisit() {
+        // UC-56 EF-03: closing the record (UC-58) also completes the visit; the Doctor sees MSG68.
+        stubVisit(VisitStatus.COMPLETED);
+        record.close(DOCTOR_ID, "LT0001", NOW);
+
+        assertThatThrownBy(() -> service.save(principal(), VISIT_ID, request("J02.9", List.of(), false)))
+                .isInstanceOfSatisfying(AppException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MEDICAL_RECORD_CLOSED));
+        verify(conclusionRepository, never()).saveAndFlush(any(Conclusion.class));
     }
 
     @Test
@@ -219,7 +265,7 @@ class ConclusionServiceImplTest {
 
     private static SaveConclusionRequest request(String main, List<String> secondary, boolean confirm) {
         return new SaveConclusionRequest(
-                " Viêm họng cấp ", main, secondary, "Điều trị ngoại trú 5 ngày", (short) 2, "Uống nhiều nước",
+                " Viêm họng cấp ", main, secondary, "Điều trị ngoại trú 5 ngày", "Đỡ", "Uống nhiều nước",
                 null, null, confirm, null);
     }
 

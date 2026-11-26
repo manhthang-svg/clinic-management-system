@@ -1,4 +1,4 @@
-import { ArrowLeft, Save } from 'lucide-react';
+import { ChevronRight, House, Save } from 'lucide-react';
 import { useCreatePatient } from '../../hooks/useCreatePatient';
 import { ADULT_AGE, MSG, formAge, msg57 } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
@@ -19,6 +19,7 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         handleBlur,
         handleSubmit,
         goBack,
+        goToOverview,
         openProfile,
         createAnyway,
         closeDuplicates,
@@ -35,13 +36,24 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
         <div className="mx-auto w-full max-w-[1500px] space-y-6">
             <header className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-                        <span>Bệnh nhân</span>
-                        <span>/</span>
-                        <span className="text-teal-700">
+                    <nav aria-label="Breadcrumb" className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        <button type="button" aria-label="Trang chủ" onClick={goToOverview} disabled={submitting} className="cursor-pointer hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            <House className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                        <button
+                            type="button"
+                            onClick={goBack}
+                            disabled={submitting}
+                            className="transition hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Quản lý bệnh nhân
+                        </button>
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                        <span aria-current="page" className="font-medium text-slate-700">
                             Tạo hồ sơ bệnh nhân mới
                         </span>
-                    </div>
+                    </nav>
 
                     <h1 className="text-2xl font-bold tracking-tight text-slate-800">
                         Tạo hồ sơ bệnh nhân mới
@@ -52,15 +64,6 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={goBack}
-                    disabled={submitting}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                    <ArrowLeft size={16} />
-                    Quay lại
-                </button>
             </header>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">

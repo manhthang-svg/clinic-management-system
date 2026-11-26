@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,12 +111,14 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
     // chuyen cac dich vu vao phong; atPayment = vua thanh toan thi chon lai phong luc nay
     private List<String> release(ParaclinicalOrder order, Instant now, boolean atPayment) {
         Set<UUID> staffed = atPayment ? paraclinicalRoomDuty.staffedRooms(now) : Set.of();
+        Map<Instant, Map<UUID, UUID>> techniciansAtOrderTime = new HashMap<>();
         order.release();
         paraclinicalOrderRepository.save(order);
         List<String> unrouted = new ArrayList<>();
         for (ParaclinicalOrderDetail detail : order.getDetails()) {
             if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_PAYMENT
-                    && !routeToRoom(detail, now, atPayment, staffed)) {
+                    && !routeToRoom(detail, now, atPayment, staffed, techniciansAtOrderTime.computeIfAbsent(
+                            detail.getNgaychidinh(), paraclinicalRoomDuty::techniciansAt))) {
                 unrouted.add(detail.getTenchidinh());
             }
         }
@@ -135,16 +138,18 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
                         .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING)));
     }
 
-    // chon phong luc thanh toan: phong co nguoi truc ca nay, it dich vu cho nhat (BR-28)
-    // khong phong nao co nguoi truc thi xet tat ca phong dang hoat dong
-    Optional<Room> roomAtPayment(UUID serviceGroupId, Set<UUID> staffedRooms) {
+    // Prefer rooms staffed when the doctor ordered the service, then rooms staffed now.
+    private Optional<Room> roomForOrder(UUID serviceGroupId, Set<UUID> orderShiftRooms, Set<UUID> staffedRooms) {
         if (serviceGroupId == null) {
             return Optional.empty();
         }
         List<Room> active = roomRepository
                 .findAllByServiceGroupIdAndStatusOrderByRoomCodeAsc(serviceGroupId, ActivationStatus.ACTIVE);
-        List<Room> onDuty = active.stream().filter(room -> staffedRooms.contains(room.getId())).toList();
-        return (onDuty.isEmpty() ? active : onDuty).stream()
+        List<Room> available = active.stream().filter(room -> orderShiftRooms.contains(room.getId())).toList();
+        if (available.isEmpty()) {
+            available = active.stream().filter(room -> staffedRooms.contains(room.getId())).toList();
+        }
+        return (available.isEmpty() ? active : available).stream()
                 .sorted(Comparator.comparing(Room::getRoomCode))
                 .min(Comparator.comparingLong(candidate -> paraclinicalOrderDetailRepository
                         .countByRoomIdAndStatus(candidate.getId(), ParaclinicalOrderDetailStatus.WAITING)));
@@ -152,7 +157,8 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
 
     // chuyen 1 dich vu vao phong: luc thanh toan chon lai phong; khong qua thanh toan thi dung phong bac si chon
     // (phong do ngung thi lay phong it nguoi nhat); khong co phong nao thi tra false
-    private boolean routeToRoom(ParaclinicalOrderDetail detail, Instant now, boolean atPayment, Set<UUID> staffed) {
+    private boolean routeToRoom(ParaclinicalOrderDetail detail, Instant now, boolean atPayment, Set<UUID> staffed,
+                                Map<UUID, UUID> techniciansAtOrderTime) {
         Optional<UUID> groupId = medicalServiceRepository.findById(detail.getServiceId())
                 .map(MedicalService::getServiceGroupId);
         Room chosen = Optional.ofNullable(detail.getRoomId())
@@ -160,8 +166,10 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
                 .filter(room -> room.getStatus() == ActivationStatus.ACTIVE)
                 .orElse(null);
         Room room;
-        if (atPayment) {
-            room = groupId.flatMap(group -> roomAtPayment(group, staffed)).orElse(chosen);
+        boolean hasAssignedTechnician = chosen != null && (detail.getAssignedTechnicianAccountId() != null
+                || techniciansAtOrderTime.containsKey(chosen.getId()));
+        if (atPayment && !hasAssignedTechnician) {
+            room = groupId.flatMap(group -> roomForOrder(group, techniciansAtOrderTime.keySet(), staffed)).orElse(chosen);
         } else {
             room = chosen;
             if (room == null) {
@@ -169,7 +177,7 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
                     log.warn("Chosen room {} of order line {} is not active; routing to the least busy room",
                             detail.getRoomId(), detail.getId());
                 }
-                room = groupId.flatMap(this::leastBusyRoom).orElse(null);
+                room = groupId.flatMap(group -> roomForOrder(group, techniciansAtOrderTime.keySet(), Set.of())).orElse(null);
             }
         }
 
@@ -178,6 +186,7 @@ public class PaymentCompletionServiceImpl implements PaymentCompletionService {
         } else {
             // chi chia phong, chua cap so thu tu; KTV xac nhan co mat thi moi cap
             detail.releaseTo(room.getId(), null, now);
+            detail.assignToOrderShift(techniciansAtOrderTime.get(room.getId()));
         }
         paraclinicalOrderDetailRepository.save(detail);
         return room != null;

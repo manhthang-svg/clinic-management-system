@@ -54,7 +54,7 @@ public record PrescriptionResponse(
      * One send to the national prescription system (UC-91).
      *
      * @param result      ACCEPTED, REJECTED or NO_RESPONSE
-     * @param errors      the error list of a rejection (MSG111)
+     * @param errors      the error list of a rejection (MSG134)
      * @param respondedAt null when the system did not answer
      * @param signedAt    time-stamp time of the digital signature of this send
      * @param signerName  the signing Doctor

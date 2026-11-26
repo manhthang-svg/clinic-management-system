@@ -8,10 +8,16 @@ public record TechnicianRoomResponse(
         String name,
         String location,
         String activeTech,
-        boolean isAssigned
+        boolean isAssigned,
+        boolean hasOwnWork
 ) {
     public TechnicianRoomResponse(UUID id, String code, String name, String location, String activeTech) {
         this(id, code, name, location, activeTech, false);
+    }
+
+    public TechnicianRoomResponse(UUID id, String code, String name, String location, String activeTech,
+                                  boolean isAssigned) {
+        this(id, code, name, location, activeTech, isAssigned, false);
     }
 }
 

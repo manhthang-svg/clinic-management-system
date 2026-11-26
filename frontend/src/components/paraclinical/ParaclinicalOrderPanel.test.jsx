@@ -285,7 +285,7 @@ describe('paraclinicalOrder helpers', () => {
             .toBe('Hồ sơ bệnh án đã đóng và không thể chỉnh sửa.');
         // BR-19: outside the Doctor's shift no new order is created (MSG48).
         expect(orderErrorMessage(failure('DOCTOR_OFF_DUTY')))
-            .toBe('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.');
+            .toBe('Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.');
     });
 
     it('identifies whether a service has an active room on duty (hasOnDutyRoom)', () => {

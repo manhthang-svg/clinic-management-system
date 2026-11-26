@@ -6,6 +6,9 @@ import {
     INITIAL_PATIENT_FORM,
     MSG,
     buildPatientPayload,
+    clearPatientFieldErrors,
+    countryCode,
+    countryOptions,
     createErrorMessage,
     formatFullName,
     ethnicityCode,
@@ -17,6 +20,7 @@ import {
     serverFieldErrors,
     toFormValues,
     validatePatientForm,
+    validateCreatePatientForm,
 } from './patientForm';
 
 const TODAY = '2026-11-03';
@@ -25,13 +29,58 @@ const adult = (overrides) => ({
     hoten: 'Nguyễn Văn An',
     ngaysinh: '1990-01-01',
     diachi: 'Hà Nội',
+    xaphuong: 'Phường Ba Đình',
+    tinhthanh: 'Thành phố Hà Nội',
+    nghenghiep: 'Công nhân',
+    nghenghiepMa: '04',
     sodienthoai: '0901234567',
     ...overrides,
 });
 
 describe('validatePatientForm (UC-37 steps 4–5)', () => {
+    it('requires either identification field from the 14th birthday', () => {
+        const form = adult({ ngaysinh: '2012-11-03', cccdSo: '', hochieuSo: '' });
+        expect(validateCreatePatientForm(form, TODAY).cccdSo).toBe(FIELD_MSG.IDENTIFICATION_REQUIRED);
+        expect(validateCreatePatientForm({ ...form, ngaysinh: '2012-11-04' }, TODAY).cccdSo).toBeUndefined();
+        expect(validateCreatePatientForm({ ...form, cccdSo: '012345678901' }, TODAY).cccdSo).toBeUndefined();
+        expect(validateCreatePatientForm({ ...form, hochieuSo: 'C7654323' }, TODAY).cccdSo).toBeUndefined();
+    });
+    it('clears obsolete required errors when the birth date crosses the adult age boundary', () => {
+        const minor = adult({ ngaysinh: '2008-11-04', sodienthoai: '', diachi: '' });
+        const grown = { ...minor, ngaysinh: '2008-11-03' };
+
+        expect(clearPatientFieldErrors(validatePatientForm(minor, TODAY), 'ngaysinh', grown, TODAY))
+            .toEqual({ diachi: FIELD_MSG.REQUIRED });
+        expect(clearPatientFieldErrors(validatePatientForm(grown, TODAY), 'ngaysinh', minor, TODAY))
+            .toEqual({ diachi: FIELD_MSG.REQUIRED });
+    });
+
+    it('flags invalid dates, gender and overlong administrative fields', () => {
+        expect(validatePatientForm(adult({ ngaysinh: '2026-02-30', gioitinh: '4', diachi: 'a'.repeat(1025), nguoithanQuanhe: 'a'.repeat(51) }), TODAY)).toEqual({
+            ngaysinh: FIELD_MSG.INVALID_FORMAT,
+            gioitinh: FIELD_MSG.INVALID_FORMAT,
+            diachi: FIELD_MSG.TOO_LONG,
+            nguoithanQuanhe: FIELD_MSG.TOO_LONG,
+        });
+        expect(validatePatientForm(adult({ ngaysinh: '1906-11-02' }), TODAY).ngaysinh).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ ngaysinh: '1906-11-03' }), TODAY).ngaysinh).toBeUndefined();
+    });
+
     it('accepts a valid adult', () => {
         expect(validatePatientForm(adult(), TODAY)).toEqual({});
+    });
+
+    it('requires the province, the ward and the occupation', () => {
+        expect(validatePatientForm(adult({ tinhthanh: ' ', xaphuong: '', nghenghiep: '', nghenghiepMa: '' }), TODAY))
+            .toEqual({ tinhthanh: FIELD_MSG.REQUIRED, xaphuong: FIELD_MSG.REQUIRED, nghenghiep: FIELD_MSG.REQUIRED });
+    });
+
+    it('does not require a Vietnamese province or ward for a foreigner', () => {
+        const foreigner = adult({
+            nghenghiep: 'Ngoại kiều', nghenghiepMa: '12', ngoaikieu: 'Nhật', ngoaikieuMa: '16', tinhthanh: '', xaphuong: '',
+        });
+        expect(validatePatientForm(foreigner, TODAY)).toEqual({});
+        expect(validatePatientForm({ ...foreigner, diachi: '' }, TODAY)).toEqual({ diachi: FIELD_MSG.REQUIRED });
     });
 
     it('requires the phone from 18 years old', () => {
@@ -86,6 +135,14 @@ describe('validatePatientForm (UC-37 steps 4–5)', () => {
     it('rejects a birth date in the future', () => {
         expect(validatePatientForm(adult({ ngaysinh: '2026-11-04' }), TODAY).ngaysinh).toBe(FIELD_MSG.INVALID_FORMAT);
     });
+
+    it('accepts an empty or valid email and rejects a wrong or too long one', () => {
+        expect(validatePatientForm(adult({ email: '' }), TODAY).email).toBeUndefined();
+        expect(validatePatientForm(adult({ email: ' an@example.com ' }), TODAY).email).toBeUndefined();
+        expect(validatePatientForm(adult({ email: 'an@example' }), TODAY).email).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ email: 'an example@x.vn' }), TODAY).email).toBe(FIELD_MSG.INVALID_FORMAT);
+        expect(validatePatientForm(adult({ email: `${'a'.repeat(92)}@mail.com` }), TODAY).email).toBe(FIELD_MSG.TOO_LONG);
+    });
 });
 
 describe('patientForm helpers', () => {
@@ -94,6 +151,8 @@ describe('patientForm helpers', () => {
         expect(payload.hoten).toBe('An');
         expect(payload.cccdSo).toBeNull();
         expect(payload.gioitinh).toBe(1);
+        expect(payload.email).toBeNull();
+        expect(buildPatientPayload(adult({ email: ' an@example.com ' })).email).toBe('an@example.com');
     });
 
     it('maps backend validation codes to field messages', () => {
@@ -178,5 +237,45 @@ describe('nghe nghiep: chi chon ten, ma tu dien', () => {
 
     it('reports a backend error on the occupation code under the occupation field', () => {
         expect(serverFieldErrors({ nghenghiepMa: 'TOO_LONG' })).toEqual({ nghenghiep: FIELD_MSG.TOO_LONG });
+    });
+});
+
+describe('ngoai kieu: chi chon nuoc khi nghe nghiep la Ngoai kieu, ma tu dien', () => {
+    const foreigner = (overrides) => adult({ nghenghiep: 'Ngoại kiều', nghenghiepMa: '12', ...overrides });
+
+    it('maps each country to its code', () => {
+        expect(countryCode('Anh')).toBe('01');
+        expect(countryCode('Nhật')).toBe('16');
+        expect(countryCode('Trung Quốc')).toBe('21');
+        expect(countryCode('Khác')).toBe('99');
+        expect(countryCode('Úc')).toBeNull();
+    });
+
+    it('starts with an empty choice and keeps an old free-text country', () => {
+        expect(countryOptions('')[0]).toEqual({ value: '', label: 'Chưa chọn' });
+        expect(countryOptions('')).toHaveLength(23);
+        expect(countryOptions('VN')[1]).toEqual({ value: 'VN', label: 'VN' });
+    });
+
+    it('fills the code from the country and clears both when the occupation is no longer foreigner', () => {
+        const chosen = withDerivedCodes(withDerivedCodes(adult(), 'nghenghiep', 'Ngoại kiều'), 'ngoaikieu', 'Pháp');
+        expect(chosen).toMatchObject({ nghenghiepMa: '12', ngoaikieu: 'Pháp', ngoaikieuMa: '17' });
+        expect(withDerivedCodes(chosen, 'ngoaikieu', '')).toMatchObject({ ngoaikieu: '', ngoaikieuMa: '' });
+        expect(withDerivedCodes(chosen, 'nghenghiep', 'Công nhân')).toMatchObject({ ngoaikieu: '', ngoaikieuMa: '' });
+    });
+
+    it('requires a listed country for a foreigner', () => {
+        expect(validatePatientForm(foreigner(), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.REQUIRED });
+        expect(validatePatientForm(foreigner({ ngoaikieu: 'Úc' }), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.INVALID_FORMAT });
+        expect(validatePatientForm(foreigner({ ngoaikieu: 'Nhật', ngoaikieuMa: '16' }), TODAY)).toEqual({});
+    });
+
+    it('rejects a country for someone who is not a foreigner', () => {
+        expect(validatePatientForm(adult({ ngoaikieu: 'Nhật' }), TODAY)).toEqual({ ngoaikieu: FIELD_MSG.INVALID_FORMAT });
+        expect(validatePatientForm(adult(), TODAY)).toEqual({});
+    });
+
+    it('reports a backend error on the country code under the country field', () => {
+        expect(serverFieldErrors({ ngoaikieuMa: 'TOO_LONG' })).toEqual({ ngoaikieu: FIELD_MSG.TOO_LONG });
     });
 });

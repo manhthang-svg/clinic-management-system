@@ -165,7 +165,7 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
         jdbcTemplate.update("""
                 insert into conclusions (id, medical_record_id, doctor_account_id, chandoan, maicd, tenicd,
                     huongdieutri, ketquadieutri, loidanbacsi, concluded_at, created_at, updated_at, version)
-                values (?, ?, ?, 'Viêm dạ dày', 'K29', 'Viêm dạ dày và tá tràng', 'Điều trị ngoại trú', 2,
+                values (?, ?, ?, 'Viêm dạ dày', 'K29', 'Viêm dạ dày và tá tràng', 'Điều trị ngoại trú', 'Đỡ đau',
                     'Tái khám sau 2 tuần', now(), now(), now(), 0)
                 """, conclusion, record, doctor);
         insertSecondaryDiagnosis(conclusion, "E11");
@@ -174,7 +174,12 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
         assertThat(storedExamination.getFindings()).extracting(ExaminationFinding::getCoquan)
                 .containsExactlyInAnyOrder("tieuhoa", "tuanhoan");
         Conclusion storedConclusion = entityManager.find(Conclusion.class, conclusion);
-        assertThat(storedConclusion.getKetquadieutri()).isEqualTo((short) 2);
+        // V63: optional free text.
+        assertThat(storedConclusion.getKetquadieutri()).isEqualTo("Đỡ đau");
+        assertThat(jdbcTemplate.queryForObject("""
+                select is_nullable || ':' || data_type from information_schema.columns
+                where table_name = 'conclusions' and column_name = 'ketquadieutri'
+                """, String.class)).isEqualTo("YES:text");
         assertThat(storedConclusion.getSecondaryDiagnoses()).singleElement()
                 .satisfies(diagnosis -> assertThat(diagnosis.getMaicd()).isEqualTo("E11"));
         assertThat(entityManager.find(MedicalRecord.class, record).getStatus()).isEqualTo(MedicalRecordStatus.OPEN);

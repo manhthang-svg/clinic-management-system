@@ -81,7 +81,7 @@ export function ParaclinicalResultListPage() {
           const validRooms = Array.isArray(roomList) ? roomList : [];
           setRooms(validRooms);
           if (validRooms.length > 0) {
-            const assignedRoom = validRooms.find((r) => r.isAssigned);
+            const assignedRoom = validRooms.find((r) => r.hasOwnWork) || validRooms.find((r) => r.isAssigned);
             const defaultRoom = assignedRoom || validRooms[0];
             setCurrentRoomId((prev) => {
               const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
@@ -216,8 +216,9 @@ export function ParaclinicalResultListPage() {
 
   // Điều hướng đến màn hình nhập kết quả UC-67 (mở thẳng form, chuyển dịch vụ bằng Tab trên form)
   const handleOpenResultForm = (order) => {
-    // Ưu tiên mở dịch vụ đang lưu nháp trước, nếu không có thì mở dịch vụ đầu tiên
-    const targetService = order.services?.find((s) => s.status === 'DRAFT') || order.services?.[0] || order;
+    const ownServices = order.services.filter((service) => service.isPerformer);
+    const services = ownServices.length ? ownServices : order.services;
+    const targetService = services.find((service) => service.status === 'DRAFT') || services[0];
     navigate(`/technician/results/${targetService.id}`, {
       state: {
         siblingServices: order.services || [targetService],
@@ -245,6 +246,7 @@ export function ParaclinicalResultListPage() {
 
   const stats = resultsData.stats || { total: 0, pending: 0, draft: 0, overdue: 0 };
   const items = useMemo(() => resultsData.items || [], [resultsData.items]);
+  const hasOwnResults = items.some((item) => item.isPerformer);
 
   // 5. Gom nhóm danh sách chờ kết quả: Mỗi bệnh nhân / đợt chỉ định chỉ hiển thị 1 dòng và 1 STT duy nhất
   const groupedResults = useMemo(() => {
@@ -393,7 +395,9 @@ export function ParaclinicalResultListPage() {
         <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
           <Eye className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
-            <strong>Chế độ chỉ xem:</strong> Bạn không được phân công quản lý phòng máy này trong ca trực. Bạn có thể tra cứu và theo dõi trạng thái các ca cận lâm sàng nhưng không thể nhập hoặc chỉnh sửa kết quả.
+            {hasOwnResults
+              ? 'Bạn có thể nhập và gửi kết quả cho các dịch vụ mình đã thực hiện.'
+              : 'Phòng hiện không có kết quả bạn cần nhập.'}
           </span>
         </div>
       )}
@@ -723,7 +727,7 @@ export function ParaclinicalResultListPage() {
                       {/* Cột 9 – Thao tác */}
                       <td className="py-2.5 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {!canManage ? (
+                          {!order.services.some((service) => service.isPerformer) ? (
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}
@@ -733,7 +737,7 @@ export function ParaclinicalResultListPage() {
                               <Eye className="w-3.5 h-3.5 shrink-0 text-slate-500" />
                               <span>Xem kết quả</span>
                             </button>
-                          ) : order.hasDraft ? (
+                          ) : order.services.some((service) => service.isPerformer && service.status === 'DRAFT') ? (
                             <button
                               type="button"
                               onClick={() => handleOpenResultForm(order)}

@@ -1,10 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 
 import ApiError from '../../apis/apiError';
 import { MOCK_RESULT_ORDERS } from '../paraclinicalResult/resultMockData';
 import { ParaclinicalOrderList } from './ParaclinicalOrderList';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function order(details) {
     return [{
@@ -69,6 +72,12 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         expect(codes).toEqual(['CD2-01', 'CD1-01']);
     });
 
+    it('shows MSG80 when the order list cannot be loaded (UC-54 EF-03)', async () => {
+        render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockRejectedValue(new Error('down')) }} />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.');
+    });
+
     it('shows MSG92 when the visit has no order slip (UC-54 AF-01)', async () => {
         render(<ParaclinicalOrderList visitId="v1" api={{ getParaclinicalOrders: vi.fn().mockResolvedValue([]) }} />);
 
@@ -103,8 +112,8 @@ describe('ParaclinicalOrderList (BR-25, BR-41)', () => {
         await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
 
         expect(api.cancelParaclinicalService).toHaveBeenCalledWith('d1', 'Bệnh nhân từ chối');
-        expect(await screen.findByText('Đã hủy dịch vụ Siêu âm ổ bụng. Khoản thu đã được tính lại.')).toBeInTheDocument();
         expect(await screen.findByText('Lý do: Bệnh nhân từ chối')).toBeInTheDocument();
+        expect(toast.success).toHaveBeenCalledWith('Đã hủy dịch vụ Siêu âm ổ bụng. Khoản thu đã được tính lại.');
         expect(onCancelled).toHaveBeenCalledWith(result);
     });
 

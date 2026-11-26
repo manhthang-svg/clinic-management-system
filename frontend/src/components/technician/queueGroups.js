@@ -28,12 +28,14 @@ export function groupStatusOf(services) {
 }
 
 // dich vu ma nut thao tac cua dong ap dung
-export function serviceForAction(group) {
+export function serviceForAction(group, canAct) {
   const services = group.roomServices ?? [group];
   const matches = group.status === 'SKIPPED'
     ? (s) => isSkippedService(s)
     : group.status === 'WAITING'
       ? (s) => s.status === 'WAITING' && !isSkippedService(s)
       : (s) => s.status === group.status;
-  return services.find(matches) ?? services[0];
+  return canAct
+    ? services.find((service) => matches(service) && canAct(service))
+    : services.find(matches) ?? services[0];
 }

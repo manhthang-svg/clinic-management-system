@@ -66,6 +66,15 @@ class Form15Bv1RendererTest {
     }
 
     @Test
+    void printsTheTreatmentResultAsFreeTextAndTheFormerCodesOfOlderArchivesAsLabels() {
+        // V63: free text, optional; packages archived before V63 still hold the codes 1-4.
+        assertThat(Form15Bv1Renderer.treatmentResult("Đỡ sốt, còn ho")).isEqualTo("Đỡ sốt, còn ho");
+        assertThat(Form15Bv1Renderer.treatmentResult("2")).isEqualTo("Đỡ");
+        assertThat(Form15Bv1Renderer.treatmentResult("")).isEmpty();
+        assertThat(Form15Bv1Renderer.treatmentResult(null)).isEmpty();
+    }
+
+    @Test
     void fillsTheFormFromThePackageAndEscapesValues() throws Exception {
         String html = renderer.html(fullArchive(), STAMP);
 

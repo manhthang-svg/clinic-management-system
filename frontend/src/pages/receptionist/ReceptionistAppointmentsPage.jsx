@@ -1,5 +1,6 @@
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import {
     CalendarDays,
     Search,
@@ -7,6 +8,8 @@ import {
     CheckCircle2,
     XCircle,
 } from 'lucide-react';
+import { AccountPageHeader } from '../../components/accounts/AccountFormParts';
+import { ROUTES } from '../../routes/routes';
 
 const initialAppointments = [
     {
@@ -63,6 +66,7 @@ const inputClass =
     'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100';
 
 export default function ReceptionistAppointmentsPage() {
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState(initialAppointments);
     const [keyword, setKeyword] = useState('');
     const [dateFilter, setDateFilter] = useState('');
@@ -122,17 +126,12 @@ export default function ReceptionistAppointmentsPage() {
     return (
         <div className="mx-auto w-full max-w-[1600px] space-y-6">
             <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                    <p className="mb-2 text-xs text-slate-400">
-                        Trang chủ / Lịch khám
-                    </p>
-                    <h1 className="text-2xl font-bold text-slate-800">
-                        Quản lý lịch khám
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Tra cứu và theo dõi lịch đăng ký khám của bệnh nhân.
-                    </p>
-                </div>
+                <AccountPageHeader
+                    title="Quản lý lịch khám"
+                    description="Tra cứu và theo dõi lịch đăng ký khám của bệnh nhân."
+                    crumbs={[{ label: 'Lịch khám' }]}
+                    onHome={() => navigate(ROUTES.RECEPTIONIST.OVERVIEW)}
+                />
             </header>
 
             {notice && (

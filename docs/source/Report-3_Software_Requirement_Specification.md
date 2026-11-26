@@ -3420,7 +3420,7 @@ This screen allows Admin to:
 | 45 | MSG45 | In line | The Admin acts on their own account | Bạn không thể {action} tài khoản của chính mình. |
 | 46 | MSG46 | In line | The action targets the seeded Admin account | Không thể thực hiện thao tác này đối với tài khoản Admin. |
 | 47 | MSG47 | In line | The staff member has work in progress | “{full\_name} còn {visits} lượt khám và {orders} chỉ định đang xử lý. Vui lòng hoàn tất các công việc này trước.”  |
-| 48 | MSG48 | Page notice | Doctor / Technician has no room or no shift now | Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân. |
+| 48 | MSG48 | Page notice | Doctor / Technician has no room or no shift now | Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới. |
 | 49 | MSG49 | Toast message | The printer fails | Không thể in. Vui lòng kiểm tra máy in và thử lại. |
 | 50 | MSG50 | In red, under the field | From date later than To date | Ngày bắt đầu không được sau ngày kết thúc. |
 | 51 | MSG51 | In red, under the field | Period longer than allowed | Vui lòng chọn khoảng thời gian không quá 12 tháng. |

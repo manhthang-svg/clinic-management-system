@@ -13,7 +13,7 @@ The conclusion (UC-57), the prescription (UC-60) and the follow-up slip (UC-62) 
 | P1 | When | After "Xác nhận kết luận" closes the record. Before that, the "Đơn thuốc" and "Hẹn tái khám" tabs have no print button. A print request on an open record is refused with MSG61. |
 | P2 | Where | Right after closing, a dialog offers the three slips and "Về danh sách chờ". Later, from the medical record detail (UC-52), which is AF-01 of the three use cases. |
 | P3 | Who | Only the Doctor of the visit (`visits.doctor_account_id`), with an active Doctor account. The room and shift checks of the open visit do not apply. Other Doctors can still view the record (BR-35) but do not see the print buttons and are refused (`ACCESS_DENIED`). |
-| P4 | "Bản sao" | The first print of each slip is the original. Every later print carries "BẢN SAO". The preview shows the mark that the next print will carry. |
+| P4 | "Bản sao" | Prescription and follow-up slip: the first print is the original, every later print carries "BẢN SAO", and the preview shows the mark that the next print will carry. Conclusion slip: no "BẢN SAO" mark, every print is the same (PO 26/11/2026, BR-57-03). |
 | P5 | Follow-up slip status | Still printed only while the appointment is `SCHEDULED` (MSG128). |
 
 Report 3 states the "after closure" precondition for UC-57 only. For UC-60 and UC-62, it is a project decision (see [Deviations](#deviations-from-the-sources)).
@@ -29,27 +29,27 @@ Report 3 states the "after closure" precondition for UC-57 only. For UC-60 and U
   - the treatment plan, the treatment outcome (1 Khỏi, 2 Đỡ, 3 Không thay đổi, 4 Nặng hơn, as on form 15/BV1) and the advice;
   - the Doctor's academic title and name, the print date, and space for the signature.
 - **BR-57-02 Form (ASSUMPTION).** No legal form is named for the slip. Its title is "Phiếu kết luận khám bệnh" and its layout follows the follow-up slip (BR-61-06). It uses no abbreviations (TT 32/2023 Điều 52 khoản 2 điểm c).
-- **BR-57-03 Copy.** The conclusion has no `printed_at` column. Whether it was printed before is read from the `PRINT` audit rows on `conclusions`, so no migration is needed.
-- **BR-57-04 Audit (BR-42).** Each print writes one `PRINT` row on entity `conclusions` with `visitCode` and `reprint`. The preview records nothing.
+- **BR-57-03 No copy mark (PO 26/11/2026).** The conclusion slip carries no "BẢN SAO" mark; every print is the same slip.
+- **BR-57-04 No audit (PO 26/11/2026).** Printing the conclusion writes no audit row and changes no data. The preview records nothing either. (Until 26/11/2026 each print wrote a `PRINT` row on `conclusions`, used to mark later prints "BẢN SAO"; those old rows are kept but no longer read.)
 
 ## Flow
 
 1. The Doctor clicks "In kết luận" in the dialog shown after closing, or in UC-52 (AF-01).
-2. The system checks P1 and P3 and shows the preview (BR-57-01), marked "BẢN SAO" if the slip was printed before.
-3. The Doctor clicks "In". The system writes the `PRINT` audit row and opens the browser print dialog (printer integration TBD).
+2. The system checks P1 and P3 and shows the preview (BR-57-01).
+3. The Doctor clicks "In". The system adds the print time and opens the browser print dialog (printer integration TBD). Nothing is recorded (BR-57-04).
 
-- **AF-02 (step 3).** The Doctor closes the preview. Nothing is printed or recorded.
+- **AF-02 (step 3).** The Doctor closes the preview. Nothing is printed.
 - **EF-01 (step 2).** The record is not closed: MSG61 "Vui lòng xác nhận kết luận trước khi in."
 - **EF-02 (step 3).** The printer fails: MSG49.
 
-UC-60 and UC-62 follow the same steps, with their own forms (BR-59-13, BR-61-06) and their existing checks: only an accepted prescription (MSG112), only a scheduled appointment (MSG128).
+UC-60 and UC-62 follow the same steps, with their own forms (BR-59-13, BR-61-06) and their existing checks: only an accepted prescription (MSG135), only a scheduled appointment (MSG128).
 
 ## API
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/v1/conclusions/visits/{visitId}/print` | The slip of BR-57-01 for the preview; records nothing. |
-| `POST` | `/api/v1/conclusions/visits/{visitId}/commands/prepare-print` | Writes the `PRINT` audit row and returns the slip with the print time and the printer. |
+| `POST` | `/api/v1/conclusions/visits/{visitId}/commands/prepare-print` | Returns the slip with the print time and the printer; records nothing (BR-57-04). |
 
 The prescription and follow-up print routes keep their paths. They now run the closed-record check of P1 and P3 instead of the open-visit check, and return `copy`. `POST /conclusions/visits/{visitId}/commands/confirm` (UC-58) also returns `prescriptionId` (the accepted prescription, or null) and `followUpAppointmentId` (the scheduled appointment, or null), which the dialog of P2 uses.
 

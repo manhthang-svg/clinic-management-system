@@ -72,11 +72,13 @@ describe('TechnicianDashboardPage', () => {
     expect(api.setActiveRoomId).toHaveBeenCalledWith('room-1');
   });
 
-  it('marks the page read-only outside the technician\'s shift in this room', async () => {
-    renderPage(technicianApi(vi.fn().mockResolvedValue(dashboard({ canManage: false }))));
+  it('shows that technicians can finish their own work outside the shift', async () => {
+    const data = dashboard({ canManage: false });
+    data.room.hasOwnWork = true;
+    renderPage(technicianApi(vi.fn().mockResolvedValue(data)));
 
-    expect(await screen.findByText('Ngoài ca trực (Chỉ xem)')).toBeInTheDocument();
-    expect(screen.getByText(/Thông báo ngoài ca trực/)).toBeInTheDocument();
+    expect(await screen.findByText('Ngoài ca trực · Còn chỉ định')).toBeInTheDocument();
+    expect(screen.getByText(/Bạn có thể tiếp nhận, thực hiện và gửi kết quả/)).toBeInTheDocument();
   });
 
   it('lists only the current technician\'s shifts for the next 4 days', async () => {

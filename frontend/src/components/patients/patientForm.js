@@ -3,8 +3,12 @@
 import { ageOn } from './patientOverview';
 
 export const ADULT_AGE = 18;
+const IDENTIFICATION_AGE = 14;
 export const MAX_AGE_YEARS = 120;
 export const MAX_NAME_LENGTH = 100;
+// Email khong bat buoc; dung de gui email nhac lich tai kham (UC-75). Backend kiem tra lai (@Email, toi da 100).
+export const MAX_EMAIL_LENGTH = 100;
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Ho va ten chi gom chu cai (Unicode), khoang trang, dau gach noi va dau nhay don (cho ten dong bao dan toc)
 export const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'-]+$/u;
 
@@ -77,12 +81,46 @@ export function occupationOptions(current) {
         : options;
 }
 
-// khi doi ten dan toc / nghe nghiep thi tu dien ma tuong ung
+// ma nghe nghiep "Ngoai kieu": chi khi do moi chon nuoc o o Ngoai kieu
+export const FOREIGNER_OCCUPATION_CODE = '12';
+
+// Bang ma mot so nuoc (QD 4069/2001/QD-BYT, Phu luc 7), ma cho ngoaikieu_ma (CV 365).
+// Giu ten khop COUNTRIES trong backend CountryCatalog.java.
+export const COUNTRIES = [
+    ['01', 'Anh'], ['02', 'Brunei'], ['03', 'Campuchia'], ['04', 'Canada'], ['05', 'Cuba'],
+    ['06', 'Đài Loan'], ['07', 'Đức'], ['08', 'Hà Lan'], ['09', 'Hàn Quốc'], ['10', 'Hoa Kỳ'],
+    ['11', 'Indonesia'], ['12', 'Lào'], ['13', 'Malaysia'], ['14', 'Myanmar'], ['15', 'Nga'],
+    ['16', 'Nhật'], ['17', 'Pháp'], ['18', 'Philippines'], ['19', 'Singapore'], ['20', 'Thái Lan'],
+    ['21', 'Trung Quốc'], ['99', 'Khác'],
+].map(([code, name]) => ({ code, name }));
+
+// ma nuoc theo ten, khong co trong danh muc thi tra null
+export function countryCode(name) {
+    return COUNTRIES.find((item) => item.name === name)?.code ?? null;
+}
+
+// o Ngoai kieu chi mo khi nghe nghiep la Ngoai kieu
+export function isForeigner(form) {
+    return form.nghenghiepMa === FOREIGNER_OCCUPATION_CODE;
+}
+
+// lua chon cho o Ngoai kieu; ten cu ngoai danh muc van hien de nguoi dung thay va chon lai
+export function countryOptions(current) {
+    const options = [{ value: '', label: 'Chưa chọn' },
+        ...COUNTRIES.map(({ name }) => ({ value: name, label: name }))];
+    return current && !countryCode(current) ? [options[0], { value: current, label: current }, ...options.slice(1)]
+        : options;
+}
+
+// khi doi ten dan toc / nghe nghiep / nuoc thi tu dien ma tuong ung
 export function withDerivedCodes(previous, name, value) {
     if (name === 'dantoc') return { ...previous, dantoc: value, dantocMa: ethnicityCode(value) ?? previous.dantocMa };
     if (name === 'nghenghiep') {
-        return { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+        const next = { ...previous, nghenghiep: value, nghenghiepMa: value ? occupationCode(value) ?? previous.nghenghiepMa : '' };
+        // bo chon Ngoai kieu thi xoa nuoc da chon
+        return isForeigner(next) ? next : { ...next, ngoaikieu: '', ngoaikieuMa: '' };
     }
+    if (name === 'ngoaikieu') return { ...previous, ngoaikieu: value, ngoaikieuMa: countryCode(value) ?? '' };
     return { ...previous, [name]: value };
 }
 
@@ -105,6 +143,7 @@ export const INITIAL_PATIENT_FORM = {
     tinhthanhMa: '',
     noilamviec: '',
     sodienthoai: '',
+    email: '',
     yeutorh: '',
     nhommau: '',
     hotennguoithan: '',
@@ -115,10 +154,28 @@ export const INITIAL_PATIENT_FORM = {
 
 // thong bao theo bang System Messages
 export const FIELD_MSG = {
+    IDENTIFICATION_REQUIRED: 'Vui lòng nhập CCCD hoặc số hộ chiếu.',
     REQUIRED: 'Trường này là bắt buộc.',
     INVALID_FORMAT: 'Định dạng không hợp lệ.',
     TOO_LONG: 'Vượt quá độ dài tối đa cho phép.',
 };
+
+export function clearPatientFieldErrors(errors, name, form, today, validate = validatePatientForm) {
+    const next = { ...errors };
+    delete next[name];
+    if (name === 'nghenghiep') delete next.ngoaikieu;
+    if (['nghenghiep', 'ngaysinh', 'cccdSo', 'hochieuSo'].includes(name)) {
+        const currentErrors = validate(form, today);
+        for (const field of Object.keys(next)) {
+            const message = next[field];
+            if ((message === FIELD_MSG.REQUIRED || message === FIELD_MSG.IDENTIFICATION_REQUIRED)
+                && currentErrors[field] !== message) {
+                delete next[field];
+            }
+        }
+    }
+    return next;
+}
 export const MSG = {
     CREATED: 'Tạo hồ sơ bệnh nhân thành công.',
     UPDATED: 'Cập nhật hồ sơ bệnh nhân thành công.',
@@ -142,8 +199,28 @@ export const msg19 = (field, code, name) =>
 
 // tinh tuoi tu ngay sinh tren form, sai ngay thi tra null
 export function formAge(form, today) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) ? ageOn(form.ngaysinh, today) : null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.ngaysinh) || form.ngaysinh > today) return null;
+    const birthDate = new Date(`${form.ngaysinh}T00:00:00Z`);
+    if (!Number.isFinite(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== form.ngaysinh) return null;
+
+    const [year, month] = today.split('-').map(Number);
+    const cutoff = new Date(`${today}T00:00:00Z`);
+    cutoff.setUTCFullYear(year - MAX_AGE_YEARS);
+    if (cutoff.getUTCMonth() !== month - 1) cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+    if (birthDate < cutoff) return null;
+    return ageOn(form.ngaysinh, today);
 }
+
+const TEXT_LENGTH_LIMITS = {
+    diachi: 1024,
+    xaphuong: 1024,
+    tinhthanh: 1024,
+    noilamviec: 1024,
+    diachinguoithan: 1024,
+    nghenghiep: 100,
+    dantoc: 50,
+    nguoithanQuanhe: 50,
+};
 
 // kiem tra form, tra ve { truong: loi } (rong la hop le)
 export function validatePatientForm(form, today) {
@@ -155,17 +232,39 @@ export function validatePatientForm(form, today) {
     if (text('hoten').length > MAX_NAME_LENGTH) errors.hoten = FIELD_MSG.TOO_LONG;
     else if (text('hoten') && !NAME_REGEX.test(text('hoten'))) errors.hoten = FIELD_MSG.INVALID_FORMAT;
     require('diachi');
+    require('gioitinh');
+    if (text('gioitinh') && !/^[123]$/.test(text('gioitinh'))) errors.gioitinh = FIELD_MSG.INVALID_FORMAT;
+    // noi cu tru va nghe nghiep: can cho bieu mau benh an va du lieu XML BHYT (ma tinh, ma xa, ma nghe nghiep).
+    // Ngoai kieu co the khong cu tru o Viet Nam: khong bat buoc tinh, xa (dia chi van bat buoc)
+    if (!isForeigner(form)) {
+        require('tinhthanh');
+        require('xaphuong');
+    }
+    require('nghenghiep');
     require('dantoc');
     // ma dan toc khong co o nhap rieng: thieu ma thi bao o Dan toc
     if (!errors.dantoc && !text('dantocMa')) errors.dantoc = FIELD_MSG.REQUIRED;
+    // Ngoai kieu: bat buoc chon nuoc trong danh muc; nguoi khong phai ngoai kieu thi de trong
+    if (isForeigner(form)) {
+        if (!text('ngoaikieu')) errors.ngoaikieu = FIELD_MSG.REQUIRED;
+        else if (!countryCode(text('ngoaikieu'))) errors.ngoaikieu = FIELD_MSG.INVALID_FORMAT;
+    } else if (text('ngoaikieu') || text('ngoaikieuMa')) {
+        errors.ngoaikieu = FIELD_MSG.INVALID_FORMAT;
+    }
 
     const age = formAge(form, today);
     if (!form.ngaysinh) errors.ngaysinh = FIELD_MSG.REQUIRED;
-    else if (age === null || form.ngaysinh > today || age > MAX_AGE_YEARS) errors.ngaysinh = FIELD_MSG.INVALID_FORMAT;
+    else if (age === null) errors.ngaysinh = FIELD_MSG.INVALID_FORMAT;
+
+    for (const [field, limit] of Object.entries(TEXT_LENGTH_LIMITS)) {
+        if (text(field).length > limit) errors[field] = FIELD_MSG.TOO_LONG;
+    }
 
     if (text('cccdSo') && !/^\d{12}$/.test(text('cccdSo'))) errors.cccdSo = FIELD_MSG.INVALID_FORMAT;
     if (text('hochieuSo') && !/^[A-Za-z0-9]{1,15}$/.test(text('hochieuSo'))) errors.hochieuSo = FIELD_MSG.INVALID_FORMAT;
     if (text('sodienthoai') && !/^\d{10}$/.test(text('sodienthoai'))) errors.sodienthoai = FIELD_MSG.INVALID_FORMAT;
+    if (text('email').length > MAX_EMAIL_LENGTH) errors.email = FIELD_MSG.TOO_LONG;
+    else if (text('email') && !EMAIL_REGEX.test(text('email'))) errors.email = FIELD_MSG.INVALID_FORMAT;
     if (text('sodienthoainguoithan') && !/^\d{10}$/.test(text('sodienthoainguoithan'))) {
         errors.sodienthoainguoithan = FIELD_MSG.INVALID_FORMAT;
     }
@@ -179,6 +278,15 @@ export function validatePatientForm(form, today) {
     if (text('hotennguoithan')) {
         if (text('hotennguoithan').length > 255) errors.hotennguoithan = FIELD_MSG.TOO_LONG;
         else if (!NAME_REGEX.test(text('hotennguoithan'))) errors.hotennguoithan = FIELD_MSG.INVALID_FORMAT;
+    }
+    return errors;
+}
+
+export function validateCreatePatientForm(form, today) {
+    const errors = validatePatientForm(form, today);
+    const age = formAge(form, today);
+    if (age !== null && age >= IDENTIFICATION_AGE && !form.cccdSo?.trim() && !form.hochieuSo?.trim()) {
+        errors.cccdSo = FIELD_MSG.IDENTIFICATION_REQUIRED;
     }
     return errors;
 }
@@ -206,7 +314,7 @@ export function toFormValues(patient) {
 }
 
 // o ma chi doc: loi cua ma hien o o ten tuong ung
-const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep' };
+const CODE_FIELD_OWNER = { dantocMa: 'dantoc', nghenghiepMa: 'nghenghiep', ngoaikieuMa: 'ngoaikieu' };
 
 // doi ma loi backend thanh loi tung truong
 export function serverFieldErrors(details) {

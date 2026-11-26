@@ -385,20 +385,25 @@ class ParaclinicalOrderServiceImplTest {
     }
 
     @Test
-    void storesTheRoomTheDoctorChoseOnTheOrderLine() {
+    void storesTheChosenRoomAndItsScheduledTechnicianOnTheOrderLine() {
         Visit visit = insuredVisit((short) 80);
         MedicalService ultrasound = service("SA-OB", "Siêu âm ổ bụng", MedicalServiceType.IMAGING, 200000);
         Room room = paraclinicalRoom(ultrasound.getServiceGroupId(), ActivationStatus.ACTIVE);
         stubOrder(visit, List.of(ultrasound));
         // lenient: the ordering room of the visit is looked up through the same repository
         lenient().when(roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
+        UUID technicianId = UUID.randomUUID();
+        when(roomDuty.techniciansAt(any())).thenReturn(java.util.Map.of(room.getId(), technicianId));
 
         var response = service.createOrder(DOCTOR_ID, requestWithRoom(ultrasound.getId(), room.getId()));
 
         assertThat(response.details()).singleElement()
                 .satisfies(detail -> assertThat(detail.roomId()).isEqualTo(room.getId()));
         // BR-26: an insurance order is released to its rooms at once; the queue number is taken at check-in.
-        verify(paymentCompletionService).releaseOrder(any());
+        ArgumentCaptor<ParaclinicalOrder> savedOrder = ArgumentCaptor.forClass(ParaclinicalOrder.class);
+        verify(paymentCompletionService).releaseOrder(savedOrder.capture());
+        assertThat(savedOrder.getValue().getDetails()).singleElement()
+                .satisfies(detail -> assertThat(detail.getAssignedTechnicianAccountId()).isEqualTo(technicianId));
     }
 
     @Test

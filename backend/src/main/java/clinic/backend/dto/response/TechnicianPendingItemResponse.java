@@ -25,6 +25,7 @@ public record TechnicianPendingItemResponse(
         String doctorRoom,
         String completedAtTime,
         long completedMinutesAgo,
-        String status
+        String status,
+        boolean isPerformer
 ) {}
 

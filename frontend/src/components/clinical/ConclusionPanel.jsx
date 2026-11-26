@@ -6,7 +6,7 @@ import defaultVisitApi from '../../apis/visitApi';
 import { ConfirmModal } from '../ui/confirm-modal';
 import { ConfirmConclusionSection } from './ConfirmConclusionSection';
 import {
-    EMPTY_CONCLUSION, MSG, TREATMENT_RESULTS, conclusionError, formFromResponse, sameConclusion, toPayload,
+    EMPTY_CONCLUSION, MSG, conclusionError, formFromResponse, sameConclusion, toPayload,
     validateConclusion,
 } from './conclusionForm';
 
@@ -150,7 +150,6 @@ function formatDateTime(value) {
  * it, "Xác nhận kết luận" closes the record.
  */
 export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClosed, onOpenPrescription }) {
-    const resultName = useId();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -218,7 +217,7 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
             toast.success(MSG.SAVED); // MSG03
             onSaved?.(saved);
         } catch (error) {
-            const result = conclusionError(error);
+            const result = conclusionError(error, form);
             if (result.discouragedCode) {
                 setDiscouragedCode(result.discouragedCode); // AF-01, MSG66
             } else {
@@ -271,7 +270,8 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
                 {pageError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800">{pageError}</p>}
                 {locked && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{MSG.DIAGNOSES_LOCKED}</p>}
 
-                <TextField label="Chẩn đoán" required value={form.diagnosis} onChange={set('diagnosis')} error={errors.diagnosis} placeholder="Chẩn đoán xác định..." />
+                {/* CV 365 III.13: the Doctor's own words; the ICD-10 codes are picked below (III.14 is built from them). */}
+                <TextField label="Chẩn đoán kết luận" required value={form.diagnosis} onChange={set('diagnosis')} error={errors.diagnosis} placeholder="VD: Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan" />
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     <IcdPicker
@@ -298,25 +298,15 @@ export function ConclusionPanel({ visitId, api = defaultVisitApi, onSaved, onClo
 
                 <TextField label="Hướng điều trị" required value={form.treatmentPlan} onChange={set('treatmentPlan')} rows={3} error={errors.treatmentPlan} />
 
-                <fieldset>
-                    <legend className="text-xs font-semibold text-slate-700">Kết quả điều trị<span className="ml-0.5 text-rose-500">*</span></legend>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {TREATMENT_RESULTS.map(([value, label]) => (
-                            <label key={value} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs ${form.treatmentResult === value ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
-                                <input
-                                    type="radio"
-                                    name={resultName}
-                                    value={value}
-                                    checked={form.treatmentResult === value}
-                                    onChange={() => set('treatmentResult')(value)}
-                                    className="accent-teal-700"
-                                />
-                                {label}
-                            </label>
-                        ))}
-                    </div>
-                    <FieldError>{errors.treatmentResult}</FieldError>
-                </fieldset>
+                {/* CV 365 III.31.1: optional free text, e.g. nothing to assess yet at a first visit. */}
+                <TextField
+                    label="Kết quả điều trị"
+                    value={form.treatmentResult}
+                    onChange={set('treatmentResult')}
+                    rows={2}
+                    error={errors.treatmentResult}
+                    placeholder="VD: Đỡ sốt, còn ho. Để trống nếu chưa đánh giá được."
+                />
 
                 <TextField label="Lời dặn" required value={form.advice} onChange={set('advice')} rows={3} error={errors.advice} />
                 <TextField label="Tóm tắt bệnh án" value={form.summary} onChange={set('summary')} rows={3} error={errors.summary} />

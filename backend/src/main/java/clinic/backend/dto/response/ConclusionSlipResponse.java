@@ -8,7 +8,6 @@ import java.util.UUID;
 /**
  * UC-57: the conclusion slip of a closed record (Report 3 UC-57 step 2; docs/uc-57-print-conclusion.md).
  *
- * @param copy               the conclusion was printed before, so this print carries "Bản sao" (PO 23/11/2026)
  * @param printedAt          the time of this print; null in the preview
  * @param printedBy          who printed it; null in the preview
  * @param diagnosis          "Chẩn đoán": the main diagnosis with its ICD-10 code
@@ -20,7 +19,6 @@ import java.util.UUID;
 public record ConclusionSlipResponse(
         UUID visitId,
         String visitCode,
-        boolean copy,
         Instant printedAt,
         String printedBy,
         Facility facility,

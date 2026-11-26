@@ -1,5 +1,5 @@
 import { useParams } from 'react-router';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ChevronRight, House, Save } from 'lucide-react';
 import { useUpdatePatient } from '../../hooks/useUpdatePatient';
 import { ADULT_AGE, MSG, formAge } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
@@ -21,6 +21,8 @@ export default function ReceptionistUpdatePatientPage({ patientApi }) {
         handleBlur,
         handleSubmit,
         goBack,
+        goToOverview,
+        goToPatients,
         openProfile,
         keepEditing,
         discard,
@@ -29,25 +31,27 @@ export default function ReceptionistUpdatePatientPage({ patientApi }) {
     const header = (
         <header className="flex flex-wrap items-center justify-between gap-4">
             <div>
-                <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Bệnh nhân</span>
-                    <span>/</span>
-                    <span className="text-teal-700">Cập nhật thông tin bệnh nhân</span>
-                </div>
+                <nav aria-label="Breadcrumb" className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    <button type="button" aria-label="Trang chủ" onClick={goToOverview} disabled={submitting} className="cursor-pointer hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        <House className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                    <button
+                        type="button"
+                        onClick={goToPatients}
+                        disabled={submitting}
+                        className="transition hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Quản lý bệnh nhân
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                    <span aria-current="page" className="font-medium text-slate-700">Cập nhật thông tin bệnh nhân</span>
+                </nav>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800">Cập nhật thông tin bệnh nhân</h1>
                 <p className="mt-1 text-sm text-slate-500">
                     Chỉ cập nhật thông tin hành chính. Tiền sử và dị ứng do bác sĩ cập nhật khi khám.
                 </p>
             </div>
-            <button
-                type="button"
-                onClick={goBack}
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-            >
-                <ArrowLeft size={16} />
-                Quay lại
-            </button>
         </header>
     );
 

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import ApiError from '../../apis/apiError';
 import { ConclusionPanel } from './ConclusionPanel';
-import { MSG, toPayload, validateConclusion, EMPTY_CONCLUSION } from './conclusionForm';
+import { MSG, conclusionError, toPayload, validateConclusion, EMPTY_CONCLUSION } from './conclusionForm';
 
 const emptyForm = {
     visitId: 'v1', medicalRecordId: 'r1', conclusionId: null, version: null,
@@ -16,7 +16,7 @@ const emptyForm = {
 const savedForm = {
     ...emptyForm, conclusionId: 'c1', version: 0, diagnosis: 'Viêm họng cấp do liên cầu',
     mainDiagnosis: { code: 'J02.0', name: 'Viêm họng do liên cầu' }, treatmentPlan: 'Kháng sinh 7 ngày',
-    treatmentResult: 2, advice: 'Uống nhiều nước', doctorName: 'BS An', concludedAt: '2026-11-12T03:00:00Z',
+    treatmentResult: 'Đỡ sốt', advice: 'Uống nhiều nước', doctorName: 'BS An', concludedAt: '2026-11-12T03:00:00Z',
 };
 
 function api(overrides = {}) {
@@ -33,7 +33,7 @@ async function fillRequired(user) {
     await user.type(screen.getByLabelText(/^Bệnh chính/), 'J02');
     await user.click(await screen.findByRole('option', { name: /J02\.0/ }));
     await user.type(screen.getByLabelText(/^Hướng điều trị/), 'Kháng sinh 7 ngày');
-    await user.click(screen.getByRole('radio', { name: 'Đỡ' }));
+    await user.type(screen.getByLabelText(/^Kết quả điều trị/), 'Đỡ sốt');
     await user.type(screen.getByLabelText(/^Lời dặn/), 'Uống nhiều nước');
 }
 
@@ -44,7 +44,25 @@ describe('ConclusionPanel (UC-56)', () => {
         expect(await screen.findByText('Viêm họng')).toBeInTheDocument();
         expect(screen.getByText('J02.9')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Lưu kết luận' })).toBeEnabled();
-        expect(screen.getAllByRole('radio')).toHaveLength(4);
+        // CV 365 III.31.1: "Kết quả điều trị" is optional free text (V63).
+        expect(screen.getByLabelText(/^Kết quả điều trị/)).toHaveValue('');
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
+
+    it('saves the conclusion without a treatment result (first visit)', async () => {
+        const user = userEvent.setup();
+        const client = api();
+        render(<ConclusionPanel visitId="v1" api={client} />);
+        await screen.findByText('Viêm họng');
+
+        await user.type(screen.getByLabelText(/^Chẩn đoán/), 'Viêm họng cấp do liên cầu');
+        await user.type(screen.getByLabelText(/^Bệnh chính/), 'J02');
+        await user.click(await screen.findByRole('option', { name: /J02\.0/ }));
+        await user.type(screen.getByLabelText(/^Hướng điều trị/), 'Kháng sinh 7 ngày');
+        await user.type(screen.getByLabelText(/^Lời dặn/), 'Uống nhiều nước');
+        await user.click(screen.getByRole('button', { name: 'Lưu kết luận' }));
+
+        expect(client.saveConclusion).toHaveBeenCalledWith('v1', expect.objectContaining({ treatmentResult: null }));
     });
 
     it('marks the empty required fields and does not save (EF-04, MSG02)', async () => {
@@ -56,7 +74,7 @@ describe('ConclusionPanel (UC-56)', () => {
         await user.click(screen.getByRole('button', { name: 'Lưu kết luận' }));
 
         expect(screen.getByRole('alert')).toHaveTextContent(MSG.CHECK_FIELDS);
-        expect(screen.getByText('Trường Chẩn đoán là bắt buộc.')).toBeInTheDocument();
+        expect(screen.getByText('Trường Chẩn đoán kết luận là bắt buộc.')).toBeInTheDocument();
         expect(screen.getByText(MSG.MAIN_REQUIRED)).toBeInTheDocument();
         expect(client.saveConclusion).not.toHaveBeenCalled();
     });
@@ -73,7 +91,7 @@ describe('ConclusionPanel (UC-56)', () => {
 
         expect(client.saveConclusion).toHaveBeenCalledWith('v1', expect.objectContaining({
             diagnosis: 'Viêm họng cấp do liên cầu', mainIcd10Code: 'J02.0', secondaryIcd10Codes: [],
-            treatmentPlan: 'Kháng sinh 7 ngày', treatmentResult: 2, advice: 'Uống nhiều nước',
+            treatmentPlan: 'Kháng sinh 7 ngày', treatmentResult: 'Đỡ sốt', advice: 'Uống nhiều nước',
             confirmDiscouragedMain: false, version: null,
         }));
         expect(await screen.findByText(/Đã lưu lúc/)).toHaveTextContent('BS An');
@@ -119,7 +137,7 @@ describe('ConclusionPanel (UC-56)', () => {
             })),
         })} />);
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(MSG.NOT_CONCLUDABLE);
+        expect(await screen.findByRole('alert')).toHaveTextContent(MSG.VISIT_CHANGED);
         expect(screen.queryByText('Visit is not concludable')).not.toBeInTheDocument();
     });
 });
@@ -127,10 +145,43 @@ describe('ConclusionPanel (UC-56)', () => {
 describe('conclusionForm', () => {
     it('refuses the main diagnosis repeated as a secondary one (MSG64)', () => {
         const form = {
-            ...EMPTY_CONCLUSION, diagnosis: 'A', treatmentPlan: 'B', advice: 'C', treatmentResult: 1,
+            ...EMPTY_CONCLUSION, diagnosis: 'A', treatmentPlan: 'B', advice: 'C', treatmentResult: 'Khỏi',
             main: { code: 'J02.0', name: 'x' }, secondary: [{ code: 'J02.0', name: 'x' }],
         };
         expect(validateConclusion(form)).toEqual({ secondary: MSG.MAIN_REQUIRED });
+    });
+
+    it('takes any diagnosis text but refuses one made only of spaces (MSG02)', () => {
+        const base = {
+            ...EMPTY_CONCLUSION, treatmentPlan: 'B', advice: 'C', main: { code: 'J02.0', name: 'x' },
+        };
+        expect(validateConclusion({ ...base, diagnosis: 'Viêm họng cấp mức độ nhẹ, theo dõi viêm amidan' })).toEqual({});
+        expect(validateConclusion({ ...base, diagnosis: '   ' })).toEqual({ diagnosis: MSG.required('Chẩn đoán kết luận') });
+    });
+
+    it('places an ICD-10 error under the picker holding the code (MSG40, MSG110, MSG111)', () => {
+        const form = {
+            ...EMPTY_CONCLUSION, main: { code: 'J02.0', name: 'x' }, secondary: [{ code: 'N76.0', name: 'y' }],
+        };
+        const failure = (code, icd10Code) => ({ errorResponse: { code, details: { icd10Code } } });
+
+        expect(conclusionError(failure('ICD10_NOT_DETAILED', 'J02.0'), form)).toEqual({
+            fields: { main: `J02.0: ${MSG.ICD10_NOT_DETAILED}` }, message: MSG.CHECK_FIELDS,
+        });
+        expect(conclusionError(failure('ICD10_SEX_MISMATCH', 'N76.0'), form)).toEqual({
+            fields: { secondary: `N76.0: ${MSG.ICD10_SEX_MISMATCH}` }, message: MSG.CHECK_FIELDS,
+        });
+        // A code not in the form (should not happen) stays at the top.
+        expect(conclusionError(failure('ICD10_INVALID', 'A00'), form)).toEqual({
+            fields: {}, message: `A00: ${MSG.ICD10_INVALID}`,
+        });
+    });
+
+    it('asks to reload when the visit changed meanwhile (EF-03, MSG75)', () => {
+        expect(conclusionError({ status: 409, errorResponse: { code: 'VISIT_NOT_IN_EXAMINATION' } }).message)
+            .toBe('Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.');
+        expect(conclusionError({ status: 409, errorResponse: { code: 'MEDICAL_RECORD_CLOSED' } }).message)
+            .toBe(MSG.RECORD_CLOSED);
     });
 
     it('sends empty optional texts as null', () => {

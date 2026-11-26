@@ -8,7 +8,7 @@ import { FOLLOW_UP_MSG } from './followUpForm';
 import { PRINT_MSG } from './prescriptionPrintFormat';
 
 const conclusionSlip = {
-    visitId: 'v1', visitCode: 'DK0000000123', copy: false, printedAt: null, printedBy: null,
+    visitId: 'v1', visitCode: 'DK0000000123', printedAt: null, printedBy: null,
     facility: { name: 'Phòng khám METPH', address: '1 Lê Lợi', phone: '0281234567' },
     patient: { patientCode: 'BN001', fullName: 'Nguyễn Văn An', birthDate: '1960-05-01', gender: 'Nam', address: '12 Lê Lợi, Hà Nội' },
     visitDate: '2026-11-03', roomName: 'Phòng khám Nội 1',
@@ -95,17 +95,6 @@ describe('In phiếu sau khi đóng hồ sơ (UC-57, UC-60, UC-62)', () => {
 
         expect(client.prepareConclusionPrint).toHaveBeenCalledWith('v1');
         expect(print).toHaveBeenCalledTimes(1);
-    });
-
-    it('marks a conclusion printed before as a copy (PO 23/11/2026)', async () => {
-        const user = userEvent.setup();
-        render(<ClosedRecordPrintActions visitId="v1" api={api({
-            getConclusionPrint: vi.fn().mockResolvedValue({ ...conclusionSlip, copy: true }),
-        })} />);
-
-        await user.click(screen.getByRole('button', { name: 'In kết luận' }));
-
-        expect(await screen.findByRole('article', { name: 'Phiếu kết luận khám bệnh' })).toHaveTextContent('BẢN SAO');
     });
 
     it('shows MSG61 while the record is still open', async () => {

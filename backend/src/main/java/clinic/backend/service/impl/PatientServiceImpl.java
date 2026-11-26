@@ -21,6 +21,7 @@ import clinic.backend.repository.PaymentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PatientService;
+import clinic.backend.utils.CountryCatalog;
 import clinic.backend.utils.EthnicityCatalog;
 import clinic.backend.utils.OccupationCatalog;
 import clinic.backend.utils.UuidV7Generator;
@@ -54,6 +55,9 @@ public class PatientServiceImpl implements PatientService {
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
+    private static final int IDENTIFICATION_AGE = 14;
+    // ma nghe nghiep "Ngoai kieu" (Phu luc 6)
+    private static final String FOREIGNER_OCCUPATION_CODE = "12";
     private static final int MAX_AGE_YEARS = 120;
     private static final int MAX_CODE_ATTEMPTS = 10;
     // UC-37: so ho so trung toi da hien len
@@ -92,6 +96,12 @@ public class PatientServiceImpl implements PatientService {
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
         checkAgeRules(request);
+        if (cccdSo == null && hochieuSo == null
+                && Period.between(request.ngaysinh(), LocalDate.now(clock)).getYears() >= IDENTIFICATION_AGE) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("cccdSo", "IDENTIFICATION_REQUIRED"));
+        }
+        checkResidence(occupationCode(request.nghenghiep(), request.nghenghiepMa(), null),
+                request.xaphuong(), request.tinhthanh());
         // CCCD / ho chieu da co ho so thi bao trung (BR-12, MSG19)
         if (cccdSo != null) {
             patientRepository.findByCccdSo(cccdSo).ifPresent(existing -> identificationExists("cccdSo", existing));
@@ -103,6 +113,8 @@ public class PatientServiceImpl implements PatientService {
 
         String mabenhnhan = uniquePatientCode();
         Instant now = clock.instant();
+        String nghenghiepMa = occupationCode(request.nghenghiep(), request.nghenghiepMa(), null);
+        String ngoaikieuMa = countryCode(nghenghiepMa, request.ngoaikieu(), request.ngoaikieuMa());
 
         // tao va luu ho so
         Patient patient = new Patient(
@@ -115,11 +127,11 @@ public class PatientServiceImpl implements PatientService {
                 request.ngaysinh(),
                 request.gioitinh(),
                 normalize(request.nghenghiep()),
-                occupationCode(request.nghenghiep(), request.nghenghiepMa(), null),
+                nghenghiepMa,
                 request.dantoc(),
                 ethnicityCode(request.dantoc(), request.dantocMa(), null),
                 normalize(request.ngoaikieu()),
-                normalize(request.ngoaikieuMa()),
+                ngoaikieuMa,
                 request.diachi(),
                 normalize(request.xaphuong()),
                 normalize(request.xaphuongMa()),
@@ -163,12 +175,29 @@ public class PatientServiceImpl implements PatientService {
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
     }
 
+    // noi cu tru (BR-89): tinh va xa bat buoc, tru nguoi co nghe nghiep Ngoai kieu (co the khong cu tru o Viet Nam)
+    private void checkResidence(String occupationCode, String ward, String province) {
+        if (FOREIGNER_OCCUPATION_CODE.equals(occupationCode)) {
+            return;
+        }
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (normalize(ward) == null) {
+            errors.put("xaphuong", "REQUIRED");
+        }
+        if (normalize(province) == null) {
+            errors.put("tinhthanh", "REQUIRED");
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, errors);
+        }
+    }
+
     // kiem tra theo tuoi: tu 18 tuoi bat buoc SDT, duoi 18 bat buoc nguoi than va SDT nguoi than
     private void checkAgeRules(LocalDate birthDate, String phone, String guardianName, String guardianRelation, String guardianPhone) {
         LocalDate today = LocalDate.now(clock);
         int age = Period.between(birthDate, today).getYears();
         Map<String, String> errors = new LinkedHashMap<>();
-        if (birthDate.isBefore(today.minusYears(MAX_AGE_YEARS))) {
+        if (birthDate.isAfter(today) || birthDate.isBefore(today.minusYears(MAX_AGE_YEARS))) {
             errors.put("ngaysinh", "INVALID_FORMAT");
         }
         if (age >= ADULT_AGE && normalize(phone) == null) {
@@ -219,6 +248,8 @@ public class PatientServiceImpl implements PatientService {
         }
         // kiem tra tuoi giong luc tao ho so
         checkAgeRules(request.ngaysinh(), request.sodienthoai(), request.hotennguoithan(), request.nguoithanQuanhe(), request.sodienthoainguoithan());
+        checkResidence(occupationCode(request.nghenghiep(), request.nghenghiepMa(), patient.getNghenghiepMa()),
+                request.xaphuong(), request.tinhthanh());
 
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
@@ -250,7 +281,8 @@ public class PatientServiceImpl implements PatientService {
                 request.dantoc().trim(),
                 ethnicityCode(request.dantoc(), request.dantocMa(), patient.getDantocMa()),
                 normalize(request.ngoaikieu()),
-                normalize(request.ngoaikieuMa()),
+                countryCode(occupationCode(request.nghenghiep(), request.nghenghiepMa(), patient.getNghenghiepMa()),
+                        request.ngoaikieu(), request.ngoaikieuMa()),
                 request.diachi().trim(),
                 normalize(request.xaphuong()),
                 normalize(request.xaphuongMa()),
@@ -290,6 +322,23 @@ public class PatientServiceImpl implements PatientService {
         }
         return OccupationCatalog.codeOf(nghenghiep)
                 .orElseGet(() -> Optional.ofNullable(normalize(requestedCode)).orElse(normalize(currentCode)));
+    }
+
+    // ma nuoc (Phu luc 7) lay theo ten nuoc, khong dung ma gui len.
+    // Nghe nghiep la Ngoai kieu thi bat buoc chon nuoc trong danh muc; nguoi khac thi khong duoc co nuoc.
+    private String countryCode(String occupationCode, String ngoaikieu, String requestedCode) {
+        String country = normalize(ngoaikieu);
+        if (!FOREIGNER_OCCUPATION_CODE.equals(occupationCode)) {
+            if (country != null || normalize(requestedCode) != null) {
+                throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("ngoaikieu", "INVALID_FORMAT"));
+            }
+            return null;
+        }
+        if (country == null) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("ngoaikieu", "REQUIRED"));
+        }
+        return CountryCatalog.codeOf(country).orElseThrow(() -> new AppException(
+                ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("ngoaikieu", "INVALID_FORMAT")));
     }
 
     // cac truong le tan duoc sua (khong gom tien su, di ung - BR-23)
@@ -346,7 +395,8 @@ public class PatientServiceImpl implements PatientService {
         values.put("dantoc", request.dantoc().trim());
         values.put("dantocMa", ethnicityCode(request.dantoc(), request.dantocMa(), currentDantocMa));
         values.put("ngoaikieu", normalize(request.ngoaikieu()));
-        values.put("ngoaikieuMa", normalize(request.ngoaikieuMa()));
+        values.put("ngoaikieuMa", countryCode((String) values.get("nghenghiepMa"), request.ngoaikieu(),
+                request.ngoaikieuMa()));
         values.put("yeutorh", normalize(request.yeutorh()));
         values.put("nhommau", normalize(request.nhommau()));
         values.put("hotennguoithan", normalize(request.hotennguoithan()));

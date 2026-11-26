@@ -82,7 +82,7 @@ class ArchivePackageBuilderTest {
                 "NGOAITRU", MedicalRecordStatus.LOCKED, ADMITTED, doctorId);
         Conclusion conclusion = new Conclusion(UUID.randomUUID(), ADMITTED, record.getId());
         conclusion.record(doctorId, "Viêm họng cấp", "J02.9", "Viêm họng cấp, không đặc hiệu", "Điều trị ngoại trú",
-                (short) 1, "Uống nhiều nước", null, null, CLOSED);
+                "Khỏi", "Uống nhiều nước", null, null, CLOSED);
         conclusion.discharge(LocalDate.of(2026, 11, 17), CLOSED);
         closing = new ArchivePackageBuilder.Closing(visit, patient, record, conclusion, doctor, "LT-DK0000000001",
                 CLOSED, RecordArchiveRetentionCategory.STANDARD, LocalDate.of(2036, 12, 31));

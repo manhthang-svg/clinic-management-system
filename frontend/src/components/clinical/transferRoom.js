@@ -10,13 +10,16 @@ export const TRANSFER_MESSAGES = {
     reasonRequired: 'Vui lòng nhập lý do.', // MSG31
     reasonLength: `Lý do phải có từ ${REASON_MIN} đến ${REASON_MAX} ký tự.`, // MSG95
     roomRequired: 'Vui lòng chọn phòng chuyển đến.',
-    outsideShift: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.', // MSG48
+    outsideShift: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.', // MSG48
     roomNotEligible: msg56, // MSG53
     recordOpened: 'Không thể chuyển bệnh nhân vì hồ sơ bệnh án của lượt khám này đã được mở.', // MSG56
     visitChanged: 'Lượt khám vừa được cập nhật. Vui lòng tải lại và thử lại.', // MSG75 ("Lượt khám")
     sessionExpired: MSG12,
     systemError: MSG80,
-    unsavedChanges: 'Bạn có thay đổi chưa lưu. Nếu rời khỏi trang, các thay đổi này sẽ bị mất.', // MSG38
+    // ASSUMPTION wording: the Doctor confirms the room before the transfer is sent (no catalogue message).
+    confirmTransfer: (patientName, roomLabel) =>
+        `Chuyển bệnh nhân ${patientName} sang ${roomLabel}? Lượt khám sẽ trở về "Chờ khám" ở phòng mới với số thứ tự mới.`,
+    unsavedChanges: 'Bạn có các thay đổi chưa được lưu. Bạn có muốn loại bỏ những thay đổi này không?', // MSG38
     noEligibleRoom: MSG102, // AF-03
     loadRoomsError: MSG80,
 };

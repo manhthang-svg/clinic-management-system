@@ -33,6 +33,7 @@ import clinic.backend.mapper.AccountMapper;
 import clinic.backend.repository.AuditLogRepository;
 import clinic.backend.repository.AuthSessionRepository;
 import clinic.backend.repository.DepartmentRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
@@ -71,6 +72,7 @@ class AccountAdministrationServiceImplTest {
 
     @Mock StaffAccountRepository accountRepository;
     @Mock StaffRoomAssignmentRepository assignmentRepository;
+    @Mock DutyScheduleRepository dutyScheduleRepository;
     @Mock RoomRepository roomRepository;
     @Mock DepartmentRepository departmentRepository;
     @Mock AuthSessionRepository sessionRepository;
@@ -91,7 +93,7 @@ class AccountAdministrationServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AccountAdministrationServiceImpl(
-                accountRepository, assignmentRepository, roomRepository, departmentRepository, sessionRepository,
+                accountRepository, assignmentRepository, dutyScheduleRepository, roomRepository, departmentRepository, sessionRepository,
                 securityAuditRepository, auditLogRepository, visitRepository, orderDetailRepository,
                 auditLogService, securityAuditService, accountMapper, passwordHasher, passwordGenerator, ids, clock);
     }
@@ -313,6 +315,35 @@ class AccountAdministrationServiceImplTest {
     }
 
     @Test
+    void staffWithADutyShiftTodayOrLaterCannotChangeRoom() {
+        StaffAccount target = account(Role.DOCTOR);
+        StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
+        UUID currentRoomId = UUID.randomUUID();
+        UUID newRoomId = UUID.randomUUID();
+        Room newRoom = new Room(newRoomId, NOW, UUID.randomUUID(), null, "P102", "Phòng 102", "Tầng 1",
+                RoomType.EXAMINATION, ActivationStatus.ACTIVE);
+        StaffRoomAssignment current = new StaffRoomAssignment(
+                UUID.randomUUID(), target.getId(), currentRoomId, NOW, admin.accountId(), null, null, null);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(roomRepository.findById(newRoomId)).thenReturn(Optional.of(newRoom));
+        when(assignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(target.getId()))
+                .thenReturn(Optional.of(current));
+        // 2026-10-23T00:00Z is 07:00 on 23/10 in clinic time.
+        when(clock.instant()).thenReturn(NOW);
+        when(dutyScheduleRepository.countByStaffAccountIdAndWorkDateGreaterThanEqual(
+                target.getId(), LocalDate.of(2026, 10, 23))).thenReturn(3L);
+
+        assertThatThrownBy(() -> service.assignRoom(admin, target.getId(), new AssignRoomRequest(newRoomId)))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.STAFF_HAS_DUTY_SCHEDULES);
+                            assertThat(exception.getDetails()).containsEntry("shiftCount", "3");
+                        });
+        assertThat(current.getRemovedAt()).isNull();
+        verify(assignmentRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
     void updateWritesOneHistoryEntryForEachChangedField() {
         StaffAccount target = account(Role.RECEPTIONIST);
         StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());
@@ -465,7 +496,9 @@ class AccountAdministrationServiceImplTest {
         StaffAccount receptionist = account(Role.RECEPTIONIST);
         AccountSummaryView doctorView = summaryView(doctor, "Phòng 101", "Khoa Nội");
         AccountSummaryView receptionistView = summaryView(receptionist, null, null);
-        when(accountRepository.searchSummaries(eq(""), isNull(), isNull(), isNull(), any()))
+        when(clock.instant()).thenReturn(NOW);
+        when(accountRepository.searchSummaries(eq(""), isNull(), isNull(), isNull(),
+                eq(LocalDate.of(2026, 10, 23)), any()))
                 .thenReturn(new PageImpl<>(List.of(doctorView, receptionistView)));
 
         PageResponse<AccountSummaryResponse> result = service.listAccounts(
@@ -473,7 +506,8 @@ class AccountAdministrationServiceImplTest {
 
         assertThat(result.content()).extracting(AccountSummaryResponse::roomName)
                 .containsExactly("Phòng 101", null);
-        verify(accountRepository).searchSummaries(eq(""), isNull(), isNull(), isNull(), any());
+        verify(accountRepository).searchSummaries(eq(""), isNull(), isNull(), isNull(),
+                eq(LocalDate.of(2026, 10, 23)), any());
         verifyNoInteractions(assignmentRepository);
     }
 

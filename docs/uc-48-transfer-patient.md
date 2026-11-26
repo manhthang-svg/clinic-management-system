@@ -98,7 +98,7 @@ Both require role Doctor without a pending password change.
 | MSG24 | Đã chuyển bệnh nhân đến {room_name}. Số thứ tự mới: {queue_number}. |
 | MSG31 | Vui lòng nhập lý do. |
 | MSG38 | Bạn có thay đổi chưa lưu. Nếu rời khỏi trang, các thay đổi này sẽ bị mất. |
-| MSG48 | Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân. |
+| MSG48 | Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới. |
 | MSG49 | Không thể in. Vui lòng kiểm tra máy in và thử lại. |
 | MSG53 | {room_name} đã ngừng hoạt động hoặc không có bác sĩ làm việc trong ngày nên không thể tiếp nhận bệnh nhân. |
 | MSG56 | Không thể chuyển bệnh nhân vì hồ sơ bệnh án của lượt khám này đã được mở. |

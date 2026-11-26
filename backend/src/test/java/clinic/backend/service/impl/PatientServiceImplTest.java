@@ -135,12 +135,27 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void rejectsMissingIdentificationOnTheFourteenthBirthday() {
+        var request = new CreatePatientRequest("Nguyễn Bé", LocalDate.of(2012, 11, 3), (short) 1,
+                " ", null, "Sinh viên, học sinh", null, "Kinh", "01", null, null,
+                "Hà Nội", "Phường Ba Đình", null, "Hà Nội", null, null, null, null,
+                null, null, "Nguyễn Văn An", "Bố", null, "0901234567");
+
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, request))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(error.getDetails()).containsEntry("cccdSo", "IDENTIFICATION_REQUIRED");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
     void drawsAnotherPatientCodeWhileTheCodeIsUsed() {
         when(ids.next()).thenReturn(PATIENT_ID);
         when(patientRepository.existsByMabenhnhan(any())).thenReturn(true, true, false);
         when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.createPatient(ACCOUNT_ID, createRequest("Nguyễn Văn A", null, null, "0901234567"));
+        service.createPatient(ACCOUNT_ID, createRequest("Nguyễn Văn A", "012345678901", null, "0901234567"));
 
         verify(patientRepository, org.mockito.Mockito.times(3)).existsByMabenhnhan(any());
     }
@@ -158,7 +173,7 @@ class PatientServiceImplTest {
     private CreatePatientRequest createRequest(String name, LocalDate birthDate, String citizenId, String passport,
                                                String phone, String guardianName, String guardianRelation) {
         return new CreatePatientRequest(name, birthDate, (short) 1, citizenId, passport, null, null, "Kinh", "01",
-                null, null, "Ha Noi", null, null, null, null, null, phone, null, null, null, guardianName,
+                null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, phone, null, null, null, guardianName,
                 guardianRelation, null, null);
     }
 
@@ -294,7 +309,7 @@ class PatientServiceImplTest {
 
         service.updatePatient(ACCOUNT_ID, PATIENT_ID, new UpdatePatientRequest("Nguyen Van A",
                 LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, null, null, "Kinh", null, null, null,
-                "Ha Noi", null, null, null, null, null, "0901234567", "patient@example.com", null, null, null,
+                "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567", "patient@example.com", null, null, null,
                 null, null, null, 0L));
 
         verify(patientRepository, never()).save(any(Patient.class));
@@ -327,15 +342,86 @@ class PatientServiceImplTest {
         assertThat(service.createPatient(ACCOUNT_ID, occupationRequest("Kỹ sư", "07")).nghenghiepMa()).isEqualTo("07");
     }
 
+    @Test
+    void derivesCountryCodeForAForeignerFromTheCountryName() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", "Nhật", "77"));
+
+        assertThat(response.ngoaikieu()).isEqualTo("Nhật");
+        assertThat(response.ngoaikieuMa()).isEqualTo("16");
+    }
+
+    @Test
+    void requiresACountryForAForeigner() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", null, null)))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "REQUIRED"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void rejectsACountryOutsideTheList() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Ngoại kiều", "Úc", "22")))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void rejectsACountryWhenTheOccupationIsNotForeigner() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest("Công nhân", "Nhật", null)))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, foreignerRequest(null, null, "16")))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("ngoaikieu", "INVALID_FORMAT"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void requiresTheWardAndProvinceUnlessTheOccupationIsForeigner() {
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, residenceRequest("Công nhân", null, null)))
+                .isInstanceOf(AppException.class)
+                .extracting("details").isEqualTo(Map.of("xaphuong", "REQUIRED", "tinhthanh", "REQUIRED"));
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
+    void createsAForeignerWithoutAVietnameseWardOrProvince() {
+        when(ids.next()).thenReturn(PATIENT_ID);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.createPatient(ACCOUNT_ID, residenceRequest("Ngoại kiều", null, null));
+
+        assertThat(response.nghenghiepMa()).isEqualTo("12");
+        assertThat(response.xaphuong()).isNull();
+        assertThat(response.tinhthanh()).isNull();
+    }
+
+    private CreatePatientRequest residenceRequest(String nghenghiep, String xaphuong, String tinhthanh) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, "C7654321",
+                nghenghiep, null, "Kinh", null, "Ngoại kiều".equals(nghenghiep) ? "Nhật" : null, null,
+                "Khách sạn Hà Nội Daewoo", xaphuong, null, tinhthanh, null, null, "0901234567", null, null, null, null,
+                null, null, null);
+    }
+
+    private CreatePatientRequest foreignerRequest(String nghenghiep, String ngoaikieu, String ngoaikieuMa) {
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, "C7654323", nghenghiep,
+                null, "Kinh", null, ngoaikieu, ngoaikieuMa, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567",
+                null, null, null, null, null, null, null);
+    }
+
     private CreatePatientRequest occupationRequest(String nghenghiep, String nghenghiepMa) {
-        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
-                nghenghiepMa, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null,
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, nghenghiep,
+                nghenghiepMa, "Kinh", null, null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567", null,
                 null, null, null, null, null, null);
     }
 
     private CreatePatientRequest ethnicityRequest(String dantoc, String dantocMa) {
-        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, null, null,
-                dantoc, dantocMa, null, null, "Ha Noi", null, null, null, null, null, "0901234567", null, null,
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, null, null,
+                dantoc, dantocMa, null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567", null, null,
                 null, null, null, null, null);
     }
 
@@ -424,7 +510,7 @@ class PatientServiceImplTest {
         UpdatePatientRequest request = updateRequest(0L);
         UpdatePatientRequest withoutPhone = new UpdatePatientRequest(request.hoten(), request.ngaysinh(),
                 request.gioitinh(), request.cccdSo(), null, null, null, "Kinh", "01", null, null, "Ha Noi",
-                null, null, null, null, null, null, null, null, null, null, null, null, null, 0L);
+                "Phường Ba Đình", null, "Hà Nội", null, null, null, null, null, null, null, null, null, null, 0L);
 
         assertThatThrownBy(() -> service.updatePatient(ACCOUNT_ID, PATIENT_ID, withoutPhone))
                 .isInstanceOfSatisfying(AppException.class, error ->
@@ -440,7 +526,7 @@ class PatientServiceImplTest {
     /** The same values as {@link #patient()}, so the update changes nothing. */
     private UpdatePatientRequest unchangedRequest() {
         return new UpdatePatientRequest("Nguyen Van A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null,
-                null, null, "Kinh", "01", null, null, "Ha Noi", null, null, null, null, null, "0901234567",
+                null, null, "Kinh", "01", null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567",
                 "patient@example.com", null, null, null, null, null, null, 0L);
     }
 
@@ -582,9 +668,9 @@ class PatientServiceImplTest {
                 null,
                 null,
                 "Ha Noi",
+                "Phường Ba Đình",
                 null,
-                null,
-                null,
+                "Hà Nội",
                 null,
                 null,
                 "0901234567",
@@ -616,9 +702,9 @@ class PatientServiceImplTest {
                 null,
                 null,
                 "Ha Noi",
+                "Phường Ba Đình",
                 null,
-                null,
-                null,
+                "Hà Nội",
                 null,
                 null,
                 phone,
@@ -645,9 +731,9 @@ class PatientServiceImplTest {
                 null,
                 null,
                 "Ha Noi",
+                "Phường Ba Đình",
                 null,
-                null,
-                null,
+                "Hà Nội",
                 null,
                 null,
                 "0901234567",

@@ -254,6 +254,7 @@ export function TechnicianDashboardPage({
   const room = dashboard?.room;
   const stats = dashboard?.stats;
   const canManage = Boolean(dashboard?.canManage);
+  const hasOwnWork = Boolean(room?.hasOwnWork);
   const resultsToEnter = (stats?.pendingResult ?? 0) + (stats?.draft ?? 0);
 
   // Gom nhom benh nhan sap toi luot: 1 benh nhan nhieu dich vu chi hien 1 dong duy nhat (tuong tu TechnicianQueuePage)
@@ -390,7 +391,7 @@ export function TechnicianDashboardPage({
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Ngoài ca trực (Chỉ xem)
+                    {hasOwnWork ? 'Ngoài ca trực · Còn chỉ định' : 'Ngoài ca trực · Chỉ xem'}
                   </span>
                 )}
               </div>
@@ -444,7 +445,9 @@ export function TechnicianDashboardPage({
             <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                <strong>Thông báo ngoài ca trực:</strong> Bạn không trực phòng này trong ca hiện tại nên chỉ xem được. Các thao tác tiếp nhận bệnh nhân hoặc gửi kết quả sẽ bị hạn chế.
+                {hasOwnWork
+                  ? 'Bạn có thể tiếp nhận, thực hiện và gửi kết quả cho các chỉ định thuộc ca của mình.'
+                  : 'Bạn có thể tra cứu chỉ định của phòng.'}
               </span>
             </div>
           )}

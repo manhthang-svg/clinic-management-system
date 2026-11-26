@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -7,6 +7,7 @@ import { departmentApi } from '../../apis/departmentApi';
 import { dutyScheduleApi } from '../../apis/dutyScheduleApi';
 import { getVietnamTodayStr } from '../../utils/vietnamTimeUtils';
 import { toast } from 'sonner';
+import { ApiError } from '../../apis/apiError';
 
 vi.mock('../../apis/departmentApi', () => ({
   departmentApi: {
@@ -277,11 +278,45 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
     });
   });
 
+  it('xếp khoa vào nhóm theo Phân loại đã lưu, không đoán theo tên khoa', async () => {
+    const rehabilitation = {
+      id: 'dept-9', unitType: 'DEPARTMENT', code: 'K64', name: 'Khoa Phục hồi chức năng',
+      type: 'CLINICAL', status: 'ACTIVE',
+    };
+    departmentApi.getItems.mockResolvedValue([dept1, rehabilitation, roomWithoutDoctor]);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={<DepartmentManagementPage currentAdmin={admin} onLogout={vi.fn()} onChangePassword={vi.fn()} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Ngoại 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Thêm phòng mới' }));
+
+    expect(screen.getByRole('option', { name: 'Khoa Phục hồi chức năng (K64) - Khoa lâm sàng' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Khoa Phục hồi chức năng (K64) - Khoa cận lâm sàng' })).not.toBeInTheDocument();
+  });
+
   it('phân bác sĩ vào phòng khám từ nút Phân phòng', async () => {
     const accountApi = {
       list: vi.fn().mockResolvedValue({
         content: [
           { id: 'doctor-1', username: 'doctor01', fullName: 'Nguyễn Văn B', role: 'DOCTOR', status: 'ACTIVE' },
+          {
+            id: 'doctor-2', username: 'doctor02', fullName: 'Trần Thị C', role: 'DOCTOR', status: 'ACTIVE',
+            roomId: 'room-2', roomCode: 'PK-NGOAI-01', roomName: 'Phòng khám Ngoại 1',
+          },
+          {
+            id: 'doctor-3', username: 'doctor03', fullName: 'Lê Văn D', role: 'DOCTOR', status: 'ACTIVE',
+            roomId: 'room-1', roomCode: 'PK-NOI-01', roomName: 'Phòng khám Nội 1',
+          },
         ],
         page: { totalPages: 1 },
       }),
@@ -313,15 +348,137 @@ describe('DepartmentManagementPage - Phòng có bác sĩ trực trong ngày', ()
     expect(accountApi.list).toHaveBeenCalledWith({
       role: 'DOCTOR', status: 'ACTIVE', page: 0, size: 50,
     });
-    await user.selectOptions(await screen.findByLabelText('Bác sĩ *'), 'doctor-1');
-    await user.click(screen.getByRole('button', { name: 'Phân phòng' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Phân phòng: Phòng khám Ngoại 1' });
+    // Staff already in this room are listed as assigned, not offered again.
+    expect(within(dialog).getByText('Nhân sự đang được phân công (1)')).toBeInTheDocument();
+    expect(within(dialog).getByText('Trần Thị C')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('checkbox', { name: /Trần Thị C/ })).not.toBeInTheDocument();
+    // The others are offered with their current room.
+    expect(within(dialog).getByText('PK-NOI-01 – Phòng khám Nội 1')).toBeInTheDocument();
+    expect(within(dialog).getByText('Chưa có phòng')).toBeInTheDocument();
+
+    // BR-110: no diacritics needed.
+    await user.type(within(dialog).getByLabelText('Tìm bác sĩ'), 'le van');
+    expect(within(dialog).getByRole('checkbox', { name: /Lê Văn D/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('checkbox', { name: /Nguyễn Văn B/ })).not.toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Tìm bác sĩ'));
+    await user.type(within(dialog).getByLabelText('Tìm bác sĩ'), 'khong co ai');
+    expect(within(dialog).getByText('Không tìm thấy kết quả.')).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Tìm bác sĩ'));
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Chọn Nguyễn Văn B (doctor01)' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Chọn Lê Văn D (doctor03)' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Phân phòng (2)' }));
 
     await waitFor(() => {
-      expect(accountApi.assignRoom).toHaveBeenCalledWith('doctor-1', { roomId: 'room-2' });
+      expect(toast.success).toHaveBeenCalledWith(
+        'Đã phân Nguyễn Văn B, Lê Văn D vào phòng "Phòng khám Ngoại 1"'
+      );
     });
-    expect(toast.success).toHaveBeenCalledWith(
-      'Đã phân Nguyễn Văn B vào phòng "Phòng khám Ngoại 1"'
+    expect(accountApi.assignRoom).toHaveBeenCalledTimes(2);
+    expect(accountApi.assignRoom).toHaveBeenCalledWith('doctor-1', { roomId: 'room-2' });
+    expect(accountApi.assignRoom).toHaveBeenCalledWith('doctor-3', { roomId: 'room-2' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('không cho đổi phòng nhân sự đã có lịch trực', async () => {
+    const lockedError = new ApiError('conflict', {
+      status: 409,
+      errorResponse: { code: 'STAFF_HAS_DUTY_SCHEDULES', message: 'conflict', details: { shiftCount: '2' } },
+    });
+    const accountApi = {
+      list: vi.fn().mockResolvedValue({
+        content: [
+          {
+            id: 'doctor-4', username: 'doctor04', fullName: 'Phạm Văn E', role: 'DOCTOR', status: 'ACTIVE',
+            roomId: 'room-1', roomCode: 'PK-NOI-01', roomName: 'Phòng khám Nội 1', hasUpcomingDutySchedule: true,
+          },
+          {
+            id: 'doctor-5', username: 'doctor05', fullName: 'Hồ Thị F', role: 'DOCTOR', status: 'ACTIVE',
+            roomId: 'room-1', roomCode: 'PK-NOI-01', roomName: 'Phòng khám Nội 1', hasUpcomingDutySchedule: false,
+          },
+        ],
+        page: { totalPages: 1 },
+      }),
+      // The backend still decides: a schedule added after the list loaded is rejected there.
+      assignRoom: vi.fn().mockRejectedValue(lockedError),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+                accountApi={accountApi}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
     );
+
+    expect(await screen.findByText('Phòng khám Ngoại 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Phân phòng Phòng khám Ngoại 1' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Phân phòng: Phòng khám Ngoại 1' });
+
+    expect(within(dialog).getByRole('checkbox', { name: 'Chọn Phạm Văn E (doctor04)' })).toBeDisabled();
+    expect(within(dialog).getByText('Còn ca làm việc từ hôm nay trở đi, chưa thể đổi phòng')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Chọn Hồ Thị F (doctor05)' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Phân phòng (1)' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Hồ Thị F còn 2 ca làm việc từ hôm nay trở đi nên chưa thể đổi hoặc rút khỏi phòng. Vui lòng xóa các ca của những ngày tới; ca của hôm nay chỉ có thể đổi từ ngày mai.'
+      );
+    });
+    // A failed person stays selected and the dialog stays open.
+    expect(within(dialog).getByRole('checkbox', { name: 'Chọn Hồ Thị F (doctor05)' })).toBeChecked();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('báo không có nhân sự phù hợp khi không có bác sĩ đang hoạt động', async () => {
+    const accountApi = {
+      list: vi.fn().mockResolvedValue({ content: [], page: { totalPages: 1 } }),
+      assignRoom: vi.fn(),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/admin/departments']}>
+        <Routes>
+          <Route
+            path="/admin/departments"
+            element={
+              <DepartmentManagementPage
+                currentAdmin={admin}
+                onLogout={vi.fn()}
+                onChangePassword={vi.fn()}
+                accountApi={accountApi}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phòng khám Ngoại 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Phân phòng Phòng khám Ngoại 1' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Phân phòng: Phòng khám Ngoại 1' });
+    expect(
+      await within(dialog).findByText('Không có nhân sự đang hoạt động phù hợp với loại phòng này.')
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(accountApi.assignRoom).not.toHaveBeenCalled();
   });
 
   it('không cho phép tạm ngưng phòng khi phòng có ca trực trong tương lai', async () => {

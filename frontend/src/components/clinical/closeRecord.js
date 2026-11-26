@@ -19,7 +19,7 @@ export const CLOSE_MSG = {
     INVALID_CATEGORY: 'Loại hồ sơ lưu trữ không đúng định dạng.', // MSG05
     SAVE_FIRST: 'Lưu các thay đổi của kết luận trước khi xác nhận.',
     NOT_CONCLUDABLE: 'Lượt khám chưa thể kết luận: bệnh nhân không còn đang khám hoặc chưa đủ kết quả cận lâm sàng.',
-    OUTSIDE_ROOM_OR_SHIFT: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân.', // MSG48
+    OUTSIDE_ROOM_OR_SHIFT: 'Bạn không có ca làm việc vào lúc này. Bạn chỉ xem được danh sách, không gọi được bệnh nhân mới.', // MSG48
     FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.', // MSG13
     SESSION_EXPIRED: 'Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.', // MSG12
     SYSTEM_ERROR: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc liên hệ quản trị viên.', // MSG80

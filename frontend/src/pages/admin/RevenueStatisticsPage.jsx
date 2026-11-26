@@ -144,7 +144,7 @@ export function RevenueStatisticsPage({
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Doanh thu' }]}
           />
           <div className="statistics-print-hide flex flex-wrap items-center gap-2">
-            <ReportActions report="REVENUE" period={period} groupBy={groupBy} disabled={Boolean(periodError) || !data} />
+            <ReportActions period={period} groupBy={groupBy} disabled={Boolean(periodError) || !data} />
             <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
           </div>
         </div>

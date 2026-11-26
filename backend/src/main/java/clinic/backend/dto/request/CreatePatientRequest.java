@@ -30,6 +30,7 @@ public record CreatePatientRequest(
         @Pattern(regexp = "^$|^[A-Za-z0-9]{1,15}$", message = "INVALID_FORMAT")
         String hochieuSo,
 
+        @NotBlank(message = "REQUIRED")
         @Size(max = 100, message = "TOO_LONG")
         String nghenghiep,
 
@@ -54,12 +55,14 @@ public record CreatePatientRequest(
         @Size(max = 1024, message = "TOO_LONG")
         String diachi,
 
+        // required unless the occupation is Ngoai kieu (checked by the service)
         @Size(max = 1024, message = "TOO_LONG")
         String xaphuong,
 
         @Size(max = 5, message = "TOO_LONG")
         String xaphuongMa,
 
+        // required unless the occupation is Ngoai kieu (checked by the service)
         @Size(max = 1024, message = "TOO_LONG")
         String tinhthanh,
 
@@ -73,7 +76,9 @@ public record CreatePatientRequest(
         @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT")
         String sodienthoai,
 
+        // ten mien phai co dau cham (giong FE EMAIL_REGEX); @Email chap nhan ca "a@b"
         @Email(message = "INVALID_FORMAT")
+        @Pattern(regexp = "^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", message = "INVALID_FORMAT")
         @Size(max = 100, message = "TOO_LONG")
         String email,
 
@@ -98,4 +103,34 @@ public record CreatePatientRequest(
         @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT")
         String sodienthoainguoithan
 
-) {}
+) {
+    public CreatePatientRequest {
+        hoten = stripToNull(hoten);
+        cccdSo = stripToNull(cccdSo);
+        hochieuSo = stripToNull(hochieuSo);
+        nghenghiep = stripToNull(nghenghiep);
+        nghenghiepMa = stripToNull(nghenghiepMa);
+        dantoc = stripToNull(dantoc);
+        dantocMa = stripToNull(dantocMa);
+        ngoaikieu = stripToNull(ngoaikieu);
+        ngoaikieuMa = stripToNull(ngoaikieuMa);
+        diachi = stripToNull(diachi);
+        xaphuong = stripToNull(xaphuong);
+        xaphuongMa = stripToNull(xaphuongMa);
+        tinhthanh = stripToNull(tinhthanh);
+        tinhthanhMa = stripToNull(tinhthanhMa);
+        noilamviec = stripToNull(noilamviec);
+        sodienthoai = stripToNull(sodienthoai);
+        email = stripToNull(email);
+        yeutorh = stripToNull(yeutorh);
+        nhommau = stripToNull(nhommau);
+        hotennguoithan = stripToNull(hotennguoithan);
+        nguoithanQuanhe = stripToNull(nguoithanQuanhe);
+        diachinguoithan = stripToNull(diachinguoithan);
+        sodienthoainguoithan = stripToNull(sodienthoainguoithan);
+    }
+
+    private static String stripToNull(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+}

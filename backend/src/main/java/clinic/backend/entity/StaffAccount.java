@@ -72,7 +72,7 @@ public class StaffAccount {
     @Column(name = "practice_license_no", length = 255)
     private String practiceLicenseNo;
 
-    /** Prescriber link code from the national prescription system; required to prescribe (BR-49, UC-93). */
+    /** Prescriber link code from the national prescription system; required to prescribe; the Admin enters it in UC-08 (BR-49, BR-65). */
     @Column(name = "ma_lienthong_bacsi", length = 50)
     private String maLienthongBacsi;
 

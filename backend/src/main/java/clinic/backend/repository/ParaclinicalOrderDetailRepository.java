@@ -93,4 +93,19 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
             order by d.queueNumber asc, d.ngaychidinh asc
             """)
     List<ParaclinicalOrderDetail> findPendingResultsByRoom(@Param("roomId") UUID roomId);
+
+    @Query("""
+            select d from ParaclinicalOrderDetail d
+            where d.roomId in :roomIds
+              and d.status in :statuses
+              and ((d.status in (clinic.backend.enums.ParaclinicalOrderDetailStatus.WAITING,
+                                clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_PAYMENT)
+                    and (d.assignedTechnicianAccountId is null or d.assignedTechnicianAccountId = :staffId))
+                   or (d.performerAccountId = :staffId and d.status in (
+                        clinic.backend.enums.ParaclinicalOrderDetailStatus.IN_PROGRESS,
+                        clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_RESULT)))
+            """)
+    List<ParaclinicalOrderDetail> findQueueWorkForTechnician(
+            @Param("roomIds") Collection<UUID> roomIds, @Param("staffId") UUID staffId,
+            @Param("statuses") Collection<ParaclinicalOrderDetailStatus> statuses);
 }
