@@ -40,8 +40,8 @@ function saveFile({ blob, fileName }) {
 }
 
 // UC-33: hop thoai chon bao cao va tai file Excel
-function ExportDialog({ api, period, report, groupBy, limit, onClose }) {
-  const [selected, setSelected] = useState(() => new Set(report ? [report] : REPORTS.map((r) => r.value)));
+function ExportDialog({ api, period, groupBy, limit, onClose }) {
+  const [selected, setSelected] = useState(() => new Set(REPORTS.map((r) => r.value)));
   const [bucket, setBucket] = useState(groupBy ?? 'DAY');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -162,7 +162,7 @@ function ExportDialog({ api, period, report, groupBy, limit, onClose }) {
 }
 
 // nut "Xuat Excel" va "In / Luu PDF" (in trang bang trinh duyet)
-export function ReportActions({ api = statisticsApi, period, report, groupBy, limit, disabled }) {
+export function ReportActions({ api = statisticsApi, period, groupBy, limit, disabled }) {
   const [open, setOpen] = useState(false);
   const button = 'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
   return (
@@ -179,7 +179,6 @@ export function ReportActions({ api = statisticsApi, period, report, groupBy, li
         <ExportDialog
           api={api}
           period={period}
-          report={report}
           groupBy={groupBy}
           limit={limit}
           onClose={() => setOpen(false)}
