@@ -271,7 +271,9 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         UUID oldRoomId = current == null ? null : current.getRoomId();
         if (current != null) {
             current.remove(principal.accountId(), now);
-            assignmentRepository.save(current);
+            // flush the removal first: Hibernate runs inserts before updates, and the new row would hit the
+            // one-active-room-per-staff unique index while the old one is still active
+            assignmentRepository.saveAndFlush(current);
         }
         assignmentRepository.save(new StaffRoomAssignment(
                 ids.next(), accountId, room.getId(), now, principal.accountId(), null, null, null));

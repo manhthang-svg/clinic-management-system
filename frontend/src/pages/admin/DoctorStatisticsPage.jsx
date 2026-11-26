@@ -99,7 +99,7 @@ export function DoctorStatisticsPage({
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Bác sĩ' }]}
           />
           <div className="statistics-print-hide flex flex-wrap items-center gap-2">
-            <ReportActions report="DOCTORS" period={period} disabled={Boolean(periodError) || !data} />
+            <ReportActions period={period} disabled={Boolean(periodError) || !data} />
             <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
           </div>
         </div>

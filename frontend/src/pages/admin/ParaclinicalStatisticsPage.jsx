@@ -107,7 +107,7 @@ export function ParaclinicalStatisticsPage({
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Cận lâm sàng' }]}
           />
           <div className="statistics-print-hide flex flex-wrap items-center gap-2">
-            <ReportActions report="PARACLINICAL" period={period} disabled={Boolean(periodError) || !data} />
+            <ReportActions period={period} disabled={Boolean(periodError) || !data} />
             <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
           </div>
         </div>

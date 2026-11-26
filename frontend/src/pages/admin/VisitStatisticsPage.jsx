@@ -111,7 +111,7 @@ export function VisitStatisticsPage({
             crumbs={[{ label: 'Báo cáo thống kê' }, { label: 'Lượt khám' }]}
           />
           <div className="statistics-print-hide flex flex-wrap items-center gap-2">
-            <ReportActions report="VISITS" period={period} groupBy={groupBy} disabled={Boolean(periodError) || !data} />
+            <ReportActions period={period} groupBy={groupBy} disabled={Boolean(periodError) || !data} />
             <RefreshButton loading={loading} disabled={Boolean(periodError)} onClick={reload} />
           </div>
         </div>

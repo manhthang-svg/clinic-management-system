@@ -76,7 +76,9 @@ public record CreatePatientRequest(
         @Pattern(regexp = "^$|^\\d{10}$", message = "INVALID_FORMAT")
         String sodienthoai,
 
+        // ten mien phai co dau cham (giong FE EMAIL_REGEX); @Email chap nhan ca "a@b"
         @Email(message = "INVALID_FORMAT")
+        @Pattern(regexp = "^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", message = "INVALID_FORMAT")
         @Size(max = 100, message = "TOO_LONG")
         String email,
 

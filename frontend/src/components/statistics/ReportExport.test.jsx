@@ -19,41 +19,47 @@ describe('ReportActions (UC-33)', () => {
 
   async function openDialog(api, props = {}) {
     const user = userEvent.setup();
-    render(<ReportActions api={api} period={period} report="REVENUE" groupBy="MONTH" {...props} />);
+    render(<ReportActions api={api} period={period} groupBy="MONTH" {...props} />);
     await user.click(screen.getByRole('button', { name: 'Xuất Excel' }));
     return { user, dialog: screen.getByRole('dialog', { name: 'Xuất báo cáo Excel' }) };
   }
 
-  it('downloads the current report of the page period as an Excel file', async () => {
+  it('ticks every report by default and downloads them for the page period', async () => {
     const api = { exportExcel: vi.fn().mockResolvedValue(file) };
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     const { user, dialog } = await openDialog(api);
 
     expect(dialog).toHaveTextContent('Từ 01/11/2026 đến 12/11/2026');
-    expect(within(dialog).getByLabelText('Doanh thu')).toBeChecked();
-    expect(within(dialog).getByLabelText('Lượt khám')).not.toBeChecked();
+    ['Lượt khám', 'Bác sĩ', 'Khoa / Phòng', 'Cận lâm sàng', 'Doanh thu', 'Bệnh thường gặp'].forEach((label) => {
+      expect(within(dialog).getByLabelText(label)).toBeChecked();
+    });
+    expect(within(dialog).getByRole('button', { name: 'Bỏ chọn tất cả' })).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Lượt khám và doanh thu')).toHaveValue('MONTH');
 
     await user.click(within(dialog).getByRole('button', { name: 'Tải Excel' }));
 
     await waitFor(() => expect(api.exportExcel).toHaveBeenCalledWith({
-      from: '2026-11-01', to: '2026-11-12', reports: ['REVENUE'], groupBy: 'MONTH', limit: undefined,
+      from: '2026-11-01', to: '2026-11-12',
+      reports: ['VISITS', 'DOCTORS', 'DEPARTMENTS', 'PARACLINICAL', 'REVENUE', 'DIAGNOSES'],
+      groupBy: 'MONTH', limit: undefined,
     }));
     expect(click).toHaveBeenCalled();
     expect(URL.createObjectURL).toHaveBeenCalledWith(file.blob);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('exports every report in the order of the tabs with "Chọn tất cả"', async () => {
+  it('exports only the reports left ticked, in the order of the tabs', async () => {
     const api = { exportExcel: vi.fn().mockResolvedValue(file) };
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     const { user, dialog } = await openDialog(api, { limit: 20 });
 
-    await user.click(within(dialog).getByRole('button', { name: 'Chọn tất cả' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Bỏ chọn tất cả' }));
+    await user.click(within(dialog).getByLabelText('Doanh thu'));
+    await user.click(within(dialog).getByLabelText('Lượt khám'));
     await user.click(within(dialog).getByRole('button', { name: 'Tải Excel' }));
 
     await waitFor(() => expect(api.exportExcel).toHaveBeenCalledWith(expect.objectContaining({
-      reports: ['VISITS', 'DOCTORS', 'DEPARTMENTS', 'PARACLINICAL', 'REVENUE', 'DIAGNOSES'], limit: 20,
+      reports: ['VISITS', 'REVENUE'], limit: 20,
     })));
   });
 
@@ -61,7 +67,7 @@ describe('ReportActions (UC-33)', () => {
     const api = { exportExcel: vi.fn() };
     const { user, dialog } = await openDialog(api);
 
-    await user.click(within(dialog).getByLabelText('Doanh thu'));
+    await user.click(within(dialog).getByRole('button', { name: 'Bỏ chọn tất cả' }));
 
     expect(within(dialog).getByRole('button', { name: 'Tải Excel' })).toBeDisabled();
     expect(within(dialog).getByText('Chọn ít nhất một báo cáo.')).toBeInTheDocument();
@@ -83,7 +89,7 @@ describe('ReportActions (UC-33)', () => {
   it('prints the page for "In / Lưu PDF"', async () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => {});
     const user = userEvent.setup();
-    render(<ReportActions api={{ exportExcel: vi.fn() }} period={period} report="VISITS" />);
+    render(<ReportActions api={{ exportExcel: vi.fn() }} period={period} />);
 
     await user.click(screen.getByRole('button', { name: 'In / Lưu PDF' }));
 

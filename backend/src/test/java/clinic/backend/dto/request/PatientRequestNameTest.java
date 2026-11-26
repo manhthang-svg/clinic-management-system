@@ -69,6 +69,41 @@ class PatientRequestNameTest {
         assertThat(invalid(create("Nguyễn Văn A", "Mẹ@1"), "hotennguoithan")).isTrue();
     }
 
+    private Set<ConstraintViolation<CreatePatientRequest>> createWithEmail(String email) {
+        return validator.validate(new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null,
+                null, "Công nhân", null, "Kinh", null, null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null,
+                null, "0901234567", email, null, null, null, null, null, null));
+    }
+
+    @Test
+    void rejectsAnEmailWhoseDomainHasNoDotLikeTheFrontend() {
+        assertThat(invalid(createWithEmail("an@localhost"), "email")).isTrue();
+        assertThat(invalid(createWithEmail("an @example.com"), "email")).isTrue();
+        assertThat(createWithEmail("an@example.com")).isEmpty();
+        assertThat(createWithEmail(" ")).isEmpty();
+
+        UpdatePatientRequest update = new UpdatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1,
+                null, null, "Công nhân", null, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null,
+                "0901234567", "an@localhost", null, null, null, null, null, null, 0L);
+        assertThat(invalid(validator.validate(update), "email")).isTrue();
+    }
+
+    @Test
+    void acceptsOnlyTenDigitPhoneNumbersForThePatientAndTheGuardian() {
+        Set<ConstraintViolation<CreatePatientRequest>> nine = validator.validate(new CreatePatientRequest(
+                "Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, "Công nhân", null, "Kinh", null, null,
+                null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "090123456", null, null, null, null,
+                null, null, "09012345ab"));
+        assertThat(invalid(nine, "sodienthoai")).isTrue();
+        assertThat(invalid(nine, "sodienthoainguoithan")).isTrue();
+
+        UpdatePatientRequest update = new UpdatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1,
+                null, null, "Công nhân", null, "Kinh", null, null, null, "Ha Noi", null, null, null, null, null,
+                "09012345678", null, null, null, null, null, null, "+84901234567", 0L);
+        assertThat(invalid(validator.validate(update), "sodienthoai")).isTrue();
+        assertThat(invalid(validator.validate(update), "sodienthoainguoithan")).isTrue();
+    }
+
     @Test
     void checksTheNameOnUpdateToo() {
         UpdatePatientRequest request = new UpdatePatientRequest("Lê Văn 9", LocalDate.of(1990, 1, 1), (short) 1, null,

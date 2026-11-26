@@ -59,19 +59,24 @@ class ParaclinicalResultLabValidationTest {
     @Mock LabResultRepository labResultRepository;
     @Mock ImagingResultRepository imagingResultRepository;
     @Mock ImagingResultImageRepository imageRepository;
+    @Mock clinic.backend.repository.ServiceLabParameterRepository serviceLabParameterRepository;
+    @Mock clinic.backend.repository.LabParameterRepository labParameterRepository;
+    @Mock clinic.backend.repository.LabReferenceRangeRepository labReferenceRangeRepository;
     @Mock Clock clock;
     @InjectMocks ParaclinicalResultServiceImpl service;
 
     private final UUID detailId = UUID.randomUUID();
+    private final UUID serviceId = UUID.randomUUID();
+    private ParaclinicalOrderDetail detail;
+    private MedicalService medicalService;
 
     @BeforeEach
     void labServicePerformedByTheTechnician() {
-        ParaclinicalOrderDetail detail = mock(ParaclinicalOrderDetail.class);
+        detail = mock(ParaclinicalOrderDetail.class);
         ParaclinicalOrder order = mock(ParaclinicalOrder.class);
-        MedicalService medicalService = mock(MedicalService.class);
+        medicalService = mock(MedicalService.class);
         MedicalRecord record = mock(MedicalRecord.class);
         Visit visit = mock(Visit.class);
-        UUID serviceId = UUID.randomUUID();
         UUID recordId = UUID.randomUUID();
         UUID visitId = UUID.randomUUID();
         when(orderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
@@ -109,5 +114,71 @@ class ParaclinicalResultLabValidationTest {
             assertThat(error.getDetails()).containsKey("receivedAt");
         });
         verify(labResultRepository, never()).save(any());
+    }
+
+    private clinic.backend.entity.LabParameter parameter(String code,
+            clinic.backend.enums.LabParameterValueType type, boolean required) {
+        UUID parameterId = UUID.randomUUID();
+        clinic.backend.entity.ServiceLabParameter link = mock(clinic.backend.entity.ServiceLabParameter.class);
+        lenient().when(link.isActive()).thenReturn(true);
+        lenient().when(link.getParameterId()).thenReturn(parameterId);
+        lenient().when(link.isRequired()).thenReturn(required);
+        clinic.backend.entity.LabParameter parameter = mock(clinic.backend.entity.LabParameter.class);
+        lenient().when(parameter.getId()).thenReturn(parameterId);
+        lenient().when(parameter.getCode()).thenReturn(code);
+        lenient().when(parameter.getValueType()).thenReturn(type);
+        links.add(link);
+        parameters.add(parameter);
+        return parameter;
+    }
+
+    private final List<clinic.backend.entity.ServiceLabParameter> links = new java.util.ArrayList<>();
+    private final List<clinic.backend.entity.LabParameter> parameters = new java.util.ArrayList<>();
+
+    private void labParameters() {
+        lenient().when(medicalService.getId()).thenReturn(serviceId);
+        lenient().when(detail.getNgaychidinh()).thenReturn(NOW);
+        lenient().when(serviceLabParameterRepository.findAllByServiceIdOrderByDisplayOrderAsc(serviceId))
+                .thenReturn(links);
+        lenient().when(labParameterRepository.findAllByIdInAndActiveTrue(any())).thenReturn(parameters);
+        lenient().when(labReferenceRangeRepository.findAllByParameterIdInAndActiveTrueOrderByEffectiveFromAsc(any()))
+                .thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("Gửi kết quả: chỉ số bắt buộc để trống và chỉ số dạng số nhập chữ đều bị báo lỗi")
+    void refusesAMissingRequiredValueAndANonNumericValue() {
+        parameter("GLU", clinic.backend.enums.LabParameterValueType.NUMERIC, true);
+        parameter("CHOL", clinic.backend.enums.LabParameterValueType.NUMERIC, true);
+        parameter("NOTE", clinic.backend.enums.LabParameterValueType.NUMERIC, false);
+        labParameters();
+        SaveParaclinicalResultRequest request = new SaveParaclinicalResultRequest(NOW.minusSeconds(60),
+                java.util.Map.of("GLU", "cao"), "Tăng đường huyết", null, null, null, null, null, null, null, null);
+
+        Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, request));
+
+        assertThat(thrown).isInstanceOfSatisfying(AppException.class, error -> {
+            assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+            assertThat(error.getDetails())
+                    .containsEntry("value:GLU", "Kết quả phải là số")
+                    .containsEntry("value:CHOL", "Vui lòng nhập kết quả")
+                    .doesNotContainKey("value:NOTE");
+        });
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Chỉ số dạng số nhận cả dấu phẩy và dấu chấm thập phân")
+    void acceptsCommaAndDotDecimalsForNumericValues() {
+        parameter("GLU", clinic.backend.enums.LabParameterValueType.NUMERIC, true);
+        parameter("CHOL", clinic.backend.enums.LabParameterValueType.NUMERIC, true);
+        labParameters();
+        SaveParaclinicalResultRequest request = new SaveParaclinicalResultRequest(NOW.minusSeconds(60),
+                java.util.Map.of("GLU", "6,2", "CHOL", "4.1"), "", null, null, null, null, null, null, null, null);
+
+        Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, request));
+
+        assertThat(thrown).isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getDetails())
+                .doesNotContainKey("value:GLU").doesNotContainKey("value:CHOL").containsKey("conclusion"));
     }
 }

@@ -41,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -358,7 +359,7 @@ class DepartmentServiceImplTest {
 
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
         when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
-        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roomRepository.saveAndFlush(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         DepartmentRoomItemResponse response = departmentService.toggleRoomStatus(roomId);
 
@@ -389,7 +390,7 @@ class DepartmentServiceImplTest {
                 RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
         when(paraclinicalOrderDetailRepository.existsByRoomIdAndStatusIn(any(), any())).thenReturn(false);
-        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roomRepository.saveAndFlush(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         departmentService.toggleRoomStatus(roomId);
 
@@ -684,7 +685,7 @@ class DepartmentServiceImplTest {
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(existingRoom));
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
         when(roomRepository.countByTypeAndStatus(RoomType.EXAMINATION, ActivationStatus.ACTIVE)).thenReturn(2L);
-        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roomRepository.saveAndFlush(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of());
 
         RoomRequest request = RoomRequest.builder()
@@ -763,7 +764,7 @@ class DepartmentServiceImplTest {
         // Test updateRoom() with multiple staff (không bị crash NonUniqueResultException)
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
-        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roomRepository.saveAndFlush(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(staffRoomAssignmentRepository.findAllByRoomIdAndRemovedAtIsNull(roomId)).thenReturn(List.of(assign1, assign2));
         when(staffAccountRepository.findAllById(any())).thenReturn(List.of(doctor, technician));
 
@@ -1059,7 +1060,7 @@ class DepartmentServiceImplTest {
         when(visitRepository.hasActiveVisitsToday(roomId, today, clinic.backend.repository.VisitRepository.FINISHED_STATUSES))
                 .thenReturn(false);
 
-        when(departmentRepository.save(any(Department.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(departmentRepository.saveAndFlush(any(Department.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         DepartmentRoomItemResponse response = departmentService.toggleDepartmentStatus(deptId);
 
@@ -1110,5 +1111,201 @@ class DepartmentServiceImplTest {
                     assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.LAST_ACTIVE_EXAMINATION_ROOM);
                     assertThat(e.getMessage()).contains("thao tác này sẽ ngừng hoạt động toàn bộ phòng khám lâm sàng còn lại trong cơ sở");
                 });
+    }
+
+    private RoomRequest roomRequest(UUID deptId, RoomType type, UUID groupId) {
+        return RoomRequest.builder()
+                .roomCode("PK-TEST-01")
+                .roomName("Phòng kiểm thử 1")
+                .departmentId(deptId)
+                .serviceGroupId(groupId)
+                .location("Tòa A - P.101")
+                .type(type)
+                .status(ActivationStatus.ACTIVE)
+                .build();
+    }
+
+    private static ErrorCode codeOf(Throwable e) {
+        return ((AppException) e).getErrorCode();
+    }
+
+    @Test
+    @DisplayName("Ném ROOM_DEPARTMENT_TYPE_MISMATCH khi phòng khám lâm sàng đặt vào Khoa cận lâm sàng")
+    void createRoom_ExaminationRoomInParaclinicalDepartment_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-XN", "Khoa Xét Nghiệm", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        assertThatThrownBy(() -> departmentService.createRoom(roomRequest(deptId, RoomType.EXAMINATION, null)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.ROOM_DEPARTMENT_TYPE_MISMATCH))
+                .hasMessageContaining("Phòng khám lâm sàng phải trực thuộc Khoa lâm sàng");
+        verify(roomRepository, never()).save(any(Room.class));
+    }
+
+    @Test
+    @DisplayName("Ném ROOM_DEPARTMENT_TYPE_MISMATCH khi phòng cận lâm sàng đặt vào Khoa lâm sàng")
+    void createRoom_ParaclinicalRoomInClinicalDepartment_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        assertThatThrownBy(() -> departmentService.createRoom(roomRequest(deptId, RoomType.PARACLINICAL, UUID.randomUUID())))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.ROOM_DEPARTMENT_TYPE_MISMATCH))
+                .hasMessageContaining("Phòng khám cận lâm sàng phải trực thuộc Khoa cận lâm sàng");
+        verify(roomRepository, never()).save(any(Room.class));
+    }
+
+    @Test
+    @DisplayName("Ném PARACLINICAL_ROOM_REQUIRES_SERVICE_GROUP khi phòng cận lâm sàng không chọn nhóm dịch vụ kỹ thuật")
+    void createRoom_ParaclinicalWithoutServiceGroup_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-XN", "Khoa Xét Nghiệm", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        assertThatThrownBy(() -> departmentService.createRoom(roomRequest(deptId, RoomType.PARACLINICAL, null)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.PARACLINICAL_ROOM_REQUIRES_SERVICE_GROUP));
+    }
+
+    @Test
+    @DisplayName("Ném SERVICE_GROUP_NOT_FOUND khi nhóm dịch vụ kỹ thuật không tồn tại")
+    void createRoom_UnknownServiceGroup_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-XN", "Khoa Xét Nghiệm", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+        when(serviceGroupRepository.findById(groupId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> departmentService.createRoom(roomRequest(deptId, RoomType.PARACLINICAL, groupId)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.SERVICE_GROUP_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("Ném DEPARTMENT_NOT_FOUND khi khoa trực thuộc không tồn tại")
+    void createRoom_UnknownDepartment_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> departmentService.createRoom(roomRequest(deptId, RoomType.EXAMINATION, null)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.DEPARTMENT_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("Ném REQUEST_VALIDATION_FAILED khi mã phòng, tên phòng hoặc vị trí buồng để trống")
+    void createRoom_BlankRequiredFields_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        RoomRequest blankCode = roomRequest(deptId, RoomType.EXAMINATION, null);
+        blankCode.setRoomCode("   ");
+        assertThatThrownBy(() -> departmentService.createRoom(blankCode))
+                .hasMessageContaining("Vui lòng nhập mã phòng khám");
+
+        RoomRequest blankName = roomRequest(deptId, RoomType.EXAMINATION, null);
+        blankName.setRoomName("   ");
+        assertThatThrownBy(() -> departmentService.createRoom(blankName))
+                .hasMessageContaining("Vui lòng nhập tên phòng khám");
+
+        RoomRequest blankLocation = roomRequest(deptId, RoomType.EXAMINATION, null);
+        blankLocation.setLocation("   ");
+        assertThatThrownBy(() -> departmentService.createRoom(blankLocation))
+                .hasMessageContaining("Vui lòng nhập vị trí buồng");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tên phòng trên 100 ký tự hoặc vị trí buồng trên 255 ký tự")
+    void createRoom_TooLongNameOrLocation_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        RoomRequest longName = roomRequest(deptId, RoomType.EXAMINATION, null);
+        longName.setRoomName("P".repeat(101));
+        assertThatThrownBy(() -> departmentService.createRoom(longName))
+                .hasMessageContaining("Tên phòng phải từ 2 đến 100 ký tự");
+
+        RoomRequest longLocation = roomRequest(deptId, RoomType.EXAMINATION, null);
+        longLocation.setLocation("L".repeat(256));
+        assertThatThrownBy(() -> departmentService.createRoom(longLocation))
+                .hasMessageContaining("Vị trí buồng phải từ 2 đến 255 ký tự");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tạo khoa mà mã khoa hoặc tên khoa để trống")
+    void createDepartment_BlankCodeOrName_ThrowsException() {
+        DepartmentRequest blankCode = DepartmentRequest.builder()
+                .departmentCode(" ").departmentName("Khoa Nội").type(DepartmentType.CLINICAL).build();
+        assertThatThrownBy(() -> departmentService.createDepartment(blankCode))
+                .hasMessageContaining("Vui lòng nhập mã chuyên khoa");
+
+        DepartmentRequest blankName = DepartmentRequest.builder()
+                .departmentCode("K-NOI").departmentName(" ").type(DepartmentType.CLINICAL).build();
+        assertThatThrownBy(() -> departmentService.createDepartment(blankName))
+                .hasMessageContaining("Vui lòng nhập tên chuyên khoa");
+    }
+
+    @Test
+    @DisplayName("Ném ngoại lệ khi tạo khoa mà mã khoa hoặc tên khoa đã tồn tại")
+    void createDepartment_DuplicateCodeOrName_ThrowsException() {
+        when(departmentRepository.existsByDepartmentCode("K-NOI")).thenReturn(true);
+        DepartmentRequest dupCode = DepartmentRequest.builder()
+                .departmentCode("k-noi").departmentName("Khoa Nội").type(DepartmentType.CLINICAL).build();
+        assertThatThrownBy(() -> departmentService.createDepartment(dupCode))
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.DEPARTMENT_CODE_ALREADY_EXISTS));
+
+        when(departmentRepository.existsByDepartmentCode("K-NGOAI")).thenReturn(false);
+        when(departmentRepository.existsByDepartmentNameIgnoreCase("Khoa Ngoại")).thenReturn(true);
+        DepartmentRequest dupName = DepartmentRequest.builder()
+                .departmentCode("K-NGOAI").departmentName("  Khoa Ngoại ").type(DepartmentType.CLINICAL).build();
+        assertThatThrownBy(() -> departmentService.createDepartment(dupName))
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.DEPARTMENT_NAME_ALREADY_EXISTS));
+    }
+
+    @Test
+    @DisplayName("updateDepartment: kiểm tra tên trống, độ dài tên, tên trùng và mô tả quá 500 ký tự")
+    void updateDepartment_InvalidFields_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-NOI", "Khoa Nội", DepartmentType.CLINICAL, "Mô tả", true, now);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId,
+                DepartmentRequest.builder().departmentName(" ").type(DepartmentType.CLINICAL).build()))
+                .hasMessageContaining("Vui lòng nhập tên chuyên khoa");
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId,
+                DepartmentRequest.builder().departmentName("A".repeat(101)).type(DepartmentType.CLINICAL).build()))
+                .hasMessageContaining("Tên khoa phải từ 2 đến 100 ký tự");
+
+        when(departmentRepository.existsByDepartmentNameIgnoreCase("Khoa Ngoại")).thenReturn(true);
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId,
+                DepartmentRequest.builder().departmentName("Khoa Ngoại").type(DepartmentType.CLINICAL).build()))
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.DEPARTMENT_NAME_ALREADY_EXISTS));
+
+        when(departmentRepository.existsByDepartmentNameIgnoreCase("Khoa Nội")).thenReturn(true);
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId,
+                DepartmentRequest.builder().departmentName("Khoa Nội").type(DepartmentType.CLINICAL)
+                        .description("X".repeat(501)).build()))
+                .hasMessageContaining("Mô tả chuyên khoa tối đa 500 ký tự");
+    }
+
+    @Test
+    @DisplayName("updateRoom: Ném ngoại lệ khi vị trí buồng để trống hoặc phòng CLS bỏ nhóm dịch vụ kỹ thuật")
+    void updateRoom_BlankLocationOrMissingServiceGroup_ThrowsException() {
+        UUID deptId = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        Department dept = new Department(deptId, "K-XN", "Khoa Xét Nghiệm", DepartmentType.PARACLINICAL, "Mô tả", true, now);
+        Room room = new Room(roomId, now, deptId, UUID.randomUUID(), "XN-01", "Phòng Xét nghiệm 1", "Tầng 1",
+                RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
+
+        RoomRequest blankLocation = roomRequest(deptId, RoomType.PARACLINICAL, room.getServiceGroupId());
+        blankLocation.setRoomName("Phòng Xét nghiệm 1");
+        blankLocation.setLocation(" ");
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, blankLocation))
+                .hasMessageContaining("Vui lòng nhập vị trí buồng");
+
+        RoomRequest noGroup = roomRequest(deptId, RoomType.PARACLINICAL, null);
+        noGroup.setRoomName("Phòng Xét nghiệm 1");
+        assertThatThrownBy(() -> departmentService.updateRoom(roomId, noGroup))
+                .satisfies(e -> assertThat(codeOf(e)).isEqualTo(ErrorCode.PARACLINICAL_ROOM_REQUIRES_SERVICE_GROUP));
     }
 }
