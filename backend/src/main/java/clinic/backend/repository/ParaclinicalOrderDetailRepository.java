@@ -26,10 +26,12 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
             select count(d) from ParaclinicalOrderDetail d
             where d.roomId = :roomId
               and d.status = clinic.backend.enums.ParaclinicalOrderDetailStatus.COMPLETED
+              and (d.performerAccountId = :staffId or exists (select 1 from StaffAccount staff
+                   where staff.id = :staffId and staff.role = clinic.backend.enums.Role.ADMIN))
               and (exists (select 1 from LabResult l where l.orderDetailId = d.id and l.submittedAt >= :since)
                    or exists (select 1 from ImagingResult i where i.orderDetailId = d.id and i.submittedAt >= :since))
             """)
-    long countCompletedSince(@Param("roomId") UUID roomId, @Param("since") Instant since);
+    long countCompletedSince(@Param("roomId") UUID roomId, @Param("since") Instant since, @Param("staffId") UUID staffId);
 
     // đếm số lượng dịch vụ cls theo id của ktv
     long countByPerformerAccountIdAndStatus(UUID performerAccountId, ParaclinicalOrderDetailStatus status);
@@ -98,8 +100,8 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
             select d from ParaclinicalOrderDetail d
             where d.roomId in :roomIds
               and d.status in :statuses
-              and ((d.status in (clinic.backend.enums.ParaclinicalOrderDetailStatus.WAITING,
-                                clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_PAYMENT)
+              and (d.status = clinic.backend.enums.ParaclinicalOrderDetailStatus.WAITING
+                   or (d.status = clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_PAYMENT
                     and (d.assignedTechnicianAccountId is null or d.assignedTechnicianAccountId = :staffId))
                    or (d.performerAccountId = :staffId and d.status in (
                         clinic.backend.enums.ParaclinicalOrderDetailStatus.IN_PROGRESS,

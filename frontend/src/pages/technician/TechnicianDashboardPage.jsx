@@ -446,8 +446,8 @@ export function TechnicianDashboardPage({
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
                 {hasOwnWork
-                  ? 'Bạn có thể tiếp nhận, thực hiện và gửi kết quả cho các chỉ định thuộc ca của mình.'
-                  : 'Bạn có thể tra cứu chỉ định của phòng.'}
+                  ? 'Bạn có thể hoàn tất và gửi kết quả cho các dịch vụ mình đã tiếp nhận.'
+                  : 'Bạn có thể tra cứu các dịch vụ mình đã xử lý.'}
               </span>
             </div>
           )}

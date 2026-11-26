@@ -65,7 +65,7 @@ class TechnicianDashboardServiceImplTest {
                 .mapToObj(i -> mock(TechnicianPendingItemResponse.class)).toList();
         when(queueService.getPendingResults(mine.id(), null, null, null, technicianId)).thenReturn(
                 new TechnicianPendingResultResponse(new TechnicianPendingStatsResponse(3, 2, 1, 1), pending, true));
-        when(detailRepository.countCompletedSince(mine.id(), START_OF_DAY)).thenReturn(9L);
+        when(detailRepository.countCompletedSince(mine.id(), START_OF_DAY, technicianId)).thenReturn(9L);
 
         TechnicianDashboardResponse dashboard = service.getDashboard(null, technicianId);
 
@@ -74,7 +74,7 @@ class TechnicianDashboardServiceImplTest {
         assertThat(dashboard.stats()).isEqualTo(new TechnicianDashboardResponse.Stats(7, 2, 3, 2, 1, 1, 9));
         assertThat(dashboard.nextQueue()).containsExactlyElementsOf(waiting.subList(0, 5));
         assertThat(dashboard.pendingResults()).containsExactlyElementsOf(pending);
-        verify(detailRepository).countCompletedSince(mine.id(), START_OF_DAY);
+        verify(detailRepository).countCompletedSince(mine.id(), START_OF_DAY, technicianId);
     }
 
     @Test

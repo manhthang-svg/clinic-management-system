@@ -529,7 +529,7 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // UC-66: bam Tiep nhan = tiep nhan + xac nhan da thuc hien luon, chuyen sang cho nhap ket qua
+  // UC-66: tiếp nhận trước, xác nhận đã thực hiện khi kỹ thuật hoàn tất
   const handleStartOrder = async (order, e) => {
     e?.stopPropagation();
     const targetService = manageableService(order);
@@ -537,25 +537,7 @@ export function TechnicianQueuePage() {
     try {
       setActionLoadingId(order.id);
       await technicianApi.acceptOrder(targetService.id);
-      try {
-        await technicianApi.completeOrder(targetService.id);
-      } catch (completeErr) {
-        toast.error(performErrorMessage(completeErr));
-        await loadQueue(currentRoomId, { silent: true });
-        return;
-      }
-
-      toast.success(
-        `Đã tiếp nhận & hoàn tất kỹ thuật cho ${order.patientName}!`,
-        {
-          description: `${order.roomServices?.[0]?.serviceName || order.serviceName} • Chuyển sang chờ nhập kết quả`,
-          action: {
-            label: 'Nhập KQ ngay',
-            onClick: () => openResult(targetService),
-          },
-          duration: 5000,
-        }
-      );
+      toast.success(`Đã tiếp nhận ${order.patientName}. Ca đang thực hiện.`);
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
@@ -842,8 +824,8 @@ export function TechnicianQueuePage() {
           <Eye className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
             {hasOwnWork
-              ? 'Bạn có thể tiếp nhận, thực hiện và gửi kết quả cho các chỉ định thuộc ca của mình.'
-              : 'Bạn có thể tra cứu chỉ định của phòng.'}
+              ? 'Bạn có thể hoàn tất và gửi kết quả cho các dịch vụ mình đã tiếp nhận.'
+              : 'Bạn có thể tra cứu các dịch vụ mình đã xử lý.'}
           </span>
         </div>
       )}
