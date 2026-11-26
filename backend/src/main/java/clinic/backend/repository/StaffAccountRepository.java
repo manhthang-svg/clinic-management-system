@@ -1,6 +1,7 @@
 package clinic.backend.repository;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,7 +35,11 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
                    department.departmentName as departmentName,
                    account.lastLoginAt as lastLoginAt,
                    account.passwordChangeRequired as passwordChangeRequired,
-                   account.version as version
+                   account.version as version,
+                   case when exists (
+                       select duty.id from DutySchedule duty
+                       where duty.staffAccountId = account.id and duty.workDate >= :today
+                   ) then true else false end as hasUpcomingDutySchedule
             from StaffAccount account
             left join StaffRoomAssignment assignment
                    on assignment.staffAccountId = account.id and assignment.removedAt is null
@@ -75,6 +80,7 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
             @Param("role") Role role,
             @Param("departmentId") UUID departmentId,
             @Param("status") AccountStatus status,
+            @Param("today") LocalDate today,
             Pageable pageable);
 
     Optional<StaffAccount> findByUsername(String username);
@@ -144,5 +150,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
         boolean getPasswordChangeRequired();
 
         Long getVersion();
+
+        /** The account has a duty shift today or later, so its room cannot be changed. */
+        boolean getHasUpcomingDutySchedule();
     }
 }

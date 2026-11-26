@@ -20,7 +20,8 @@ public record AccountSummaryResponse(
         String departmentName,
         Instant lastLoginAt,
         boolean passwordChangeRequired,
-        Long version) {
+        Long version,
+        boolean hasUpcomingDutySchedule) {
 
     public AccountSummaryResponse(
             UUID id,
@@ -35,6 +36,6 @@ public record AccountSummaryResponse(
             Instant lastLoginAt,
             boolean passwordChangeRequired,
             Long version) {
-        this(id, username, fullName, phoneNumber, email, role, status, null, null, roomName, departmentName, lastLoginAt, passwordChangeRequired, version);
+        this(id, username, fullName, phoneNumber, email, role, status, null, null, roomName, departmentName, lastLoginAt, passwordChangeRequired, version, false);
     }
 }

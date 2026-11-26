@@ -55,6 +55,7 @@ public class PatientServiceImpl implements PatientService {
 
     private static final String PATIENT_AUDIT_ENTITY = "patients";
     private static final int ADULT_AGE = 18;
+    private static final int IDENTIFICATION_AGE = 14;
     // ma nghe nghiep "Ngoai kieu" (Phu luc 6)
     private static final String FOREIGNER_OCCUPATION_CODE = "12";
     private static final int MAX_AGE_YEARS = 120;
@@ -95,6 +96,10 @@ public class PatientServiceImpl implements PatientService {
         String cccdSo = normalize(request.cccdSo());
         String hochieuSo = normalize(request.hochieuSo());
         checkAgeRules(request);
+        if (cccdSo == null && hochieuSo == null
+                && Period.between(request.ngaysinh(), LocalDate.now(clock)).getYears() >= IDENTIFICATION_AGE) {
+            throw new AppException(ErrorCode.REQUEST_VALIDATION_FAILED, Map.of("cccdSo", "IDENTIFICATION_REQUIRED"));
+        }
         checkResidence(occupationCode(request.nghenghiep(), request.nghenghiepMa(), null),
                 request.xaphuong(), request.tinhthanh());
         // CCCD / ho chieu da co ho so thi bao trung (BR-12, MSG19)

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, House, Save } from 'lucide-react';
+import { ChevronRight, House, Save } from 'lucide-react';
 import { useCreatePatient } from '../../hooks/useCreatePatient';
 import { ADULT_AGE, MSG, formAge, msg57 } from '../../components/patients/patientForm';
 import { Dialog, PatientFormSections } from '../../components/patients/PatientFormFields';
@@ -64,15 +64,6 @@ export default function ReceptionistCreatePatientPage({ patientApi }) {
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={goBack}
-                    disabled={submitting}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                    <ArrowLeft size={16} />
-                    Quay lại
-                </button>
             </header>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">

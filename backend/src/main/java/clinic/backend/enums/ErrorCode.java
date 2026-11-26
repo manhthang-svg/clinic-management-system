@@ -54,6 +54,8 @@ public enum ErrorCode {
     SERVICE_NOT_FOUND("SERVICE_NOT_FOUND", "The medical service does not exist.", HttpStatus.NOT_FOUND),
     ROOM_HAS_DOCTOR_ON_DUTY("ROOM_HAS_DOCTOR_ON_DUTY",
             "Cannot deactivate a room that has a doctor on duty today.", HttpStatus.CONFLICT),
+    STAFF_HAS_DUTY_SCHEDULES("STAFF_HAS_DUTY_SCHEDULES",
+            "The staff member already has duty shifts, so their room cannot be changed.", HttpStatus.CONFLICT),
     ROOM_HAS_FUTURE_SHIFTS("ROOM_HAS_FUTURE_SHIFTS",
             "Cannot deactivate a room that still has staff scheduled on future dates.", HttpStatus.CONFLICT),
     LAST_ACTIVE_EXAMINATION_ROOM("LAST_ACTIVE_EXAMINATION_ROOM",

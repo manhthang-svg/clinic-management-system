@@ -135,12 +135,27 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void rejectsMissingIdentificationOnTheFourteenthBirthday() {
+        var request = new CreatePatientRequest("Nguyễn Bé", LocalDate.of(2012, 11, 3), (short) 1,
+                " ", null, "Sinh viên, học sinh", null, "Kinh", "01", null, null,
+                "Hà Nội", "Phường Ba Đình", null, "Hà Nội", null, null, null, null,
+                null, null, "Nguyễn Văn An", "Bố", null, "0901234567");
+
+        assertThatThrownBy(() -> service.createPatient(ACCOUNT_ID, request))
+                .isInstanceOfSatisfying(AppException.class, error -> {
+                    assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REQUEST_VALIDATION_FAILED);
+                    assertThat(error.getDetails()).containsEntry("cccdSo", "IDENTIFICATION_REQUIRED");
+                });
+        verify(patientRepository, never()).save(any(Patient.class));
+    }
+
+    @Test
     void drawsAnotherPatientCodeWhileTheCodeIsUsed() {
         when(ids.next()).thenReturn(PATIENT_ID);
         when(patientRepository.existsByMabenhnhan(any())).thenReturn(true, true, false);
         when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.createPatient(ACCOUNT_ID, createRequest("Nguyễn Văn A", null, null, "0901234567"));
+        service.createPatient(ACCOUNT_ID, createRequest("Nguyễn Văn A", "012345678901", null, "0901234567"));
 
         verify(patientRepository, org.mockito.Mockito.times(3)).existsByMabenhnhan(any());
     }
@@ -393,19 +408,19 @@ class PatientServiceImplTest {
     }
 
     private CreatePatientRequest foreignerRequest(String nghenghiep, String ngoaikieu, String ngoaikieuMa) {
-        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, "C7654323", nghenghiep,
                 null, "Kinh", null, ngoaikieu, ngoaikieuMa, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567",
                 null, null, null, null, null, null, null);
     }
 
     private CreatePatientRequest occupationRequest(String nghenghiep, String nghenghiepMa) {
-        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, nghenghiep,
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, nghenghiep,
                 nghenghiepMa, "Kinh", null, null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567", null,
                 null, null, null, null, null, null);
     }
 
     private CreatePatientRequest ethnicityRequest(String dantoc, String dantocMa) {
-        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, null, null, null, null,
+        return new CreatePatientRequest("Nguyễn Văn A", LocalDate.of(1990, 1, 1), (short) 1, "012345678901", null, null, null,
                 dantoc, dantocMa, null, null, "Ha Noi", "Phường Ba Đình", null, "Hà Nội", null, null, "0901234567", null, null,
                 null, null, null, null, null);
     }

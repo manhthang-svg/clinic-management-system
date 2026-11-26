@@ -433,6 +433,7 @@ export function PatientFormSections({
                             form={form}
                             errors={fieldErrors}
                             readOnly
+                            disabled
                             title="Tự điền theo dân tộc đã chọn"
                             placeholder="Tự điền theo dân tộc"
                         />
@@ -500,7 +501,7 @@ export function PatientFormSections({
                         />
 
                         <SelectField
-                            label="Ngoại kiều"
+                            label="Quốc tịch"
                             name="ngoaikieu"
                             form={form}
                             errors={fieldErrors}
