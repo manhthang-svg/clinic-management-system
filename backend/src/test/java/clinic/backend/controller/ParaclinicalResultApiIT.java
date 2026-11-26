@@ -244,20 +244,17 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void anotherTechnicianSeesTheFormReadOnlyAndCannotSave() throws Exception {
+    void anotherTechnicianCannotViewSaveOrPrintTheResult() throws Exception {
         Fixture fixture = fixture("IMAGING", "Chụp X-quang ngực thẳng");
         String token = accessToken(account(Role.TECHNICIAN));
 
         mockMvc.perform(withToken(get(path(fixture)), token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.printForm").value("XRAY"))
-                .andExpect(jsonPath("$.data.isPerformer").value(false));
+                .andExpect(status().isForbidden());
         mockMvc.perform(withToken(put(path(fixture) + "/draft"), token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"conclusion\":\"x\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(withToken(post(path(fixture) + "/commands/record-print"), token))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("RESULT_NOT_SUBMITTED"));
+                .andExpect(status().isForbidden());
     }
 
     @Test

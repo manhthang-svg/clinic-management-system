@@ -60,7 +60,7 @@ public class ParaclinicalOrderController {
     }
 
     @GetMapping("/{orderId}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'TECHNICIAN', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'CASHIER')")
     @Operation(summary = "Xem chi tiết chỉ định cận lâm sàng")
     public ApiResponse<ParaclinicalOrderResponse> getOrderById(
             @PathVariable UUID orderId

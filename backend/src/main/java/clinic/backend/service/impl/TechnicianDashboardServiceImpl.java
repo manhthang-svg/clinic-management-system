@@ -52,7 +52,7 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
         TechnicianPendingResultResponse pending =
                 technicianQueueService.getPendingResults(room.id(), null, null, null, currentUserId);
         Instant startOfDay = LocalDate.now(clock.withZone(CLINIC_ZONE)).atStartOfDay(CLINIC_ZONE).toInstant();
-        long completedToday = paraclinicalOrderDetailRepository.countCompletedSince(room.id(), startOfDay);
+        long completedToday = paraclinicalOrderDetailRepository.countCompletedSince(room.id(), startOfDay, currentUserId);
 
         TechnicianQueueStatsResponse queueStats = queue.stats();
         TechnicianPendingStatsResponse pendingStats = pending.stats();

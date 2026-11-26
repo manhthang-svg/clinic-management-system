@@ -78,7 +78,7 @@ describe('TechnicianDashboardPage', () => {
     renderPage(technicianApi(vi.fn().mockResolvedValue(data)));
 
     expect(await screen.findByText('Ngoài ca trực · Còn chỉ định')).toBeInTheDocument();
-    expect(screen.getByText(/Bạn có thể tiếp nhận, thực hiện và gửi kết quả/)).toBeInTheDocument();
+    expect(screen.getByText(/Bạn có thể hoàn tất và gửi kết quả/)).toBeInTheDocument();
   });
 
   it('lists only the current technician\'s shifts for the next 4 days', async () => {

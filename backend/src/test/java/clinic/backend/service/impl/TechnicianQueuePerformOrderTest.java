@@ -103,6 +103,7 @@ class TechnicianQueuePerformOrderTest {
         service = serviceAt(afterHours);
         ParaclinicalOrderDetail waiting = acceptedDetail();
         waiting.returnToWaiting(PERFORMER_ID, NOW);
+        waiting.assignToOrderShift(PERFORMER_ID);
         when(paraclinicalOrderDetailRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
 
         assertThatThrownBy(() -> service.acceptOrder(waiting.getId(), PERFORMER_ID))
@@ -113,7 +114,9 @@ class TechnicianQueuePerformOrderTest {
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
 
         assertThat(service.getQueueDetail(detail.getId(), PERFORMER_ID).canComplete()).isTrue();
-        assertThat(service.getQueueDetail(detail.getId(), COLLEAGUE_ID).canComplete()).isFalse();
+        assertThatThrownBy(() -> service.getQueueDetail(detail.getId(), COLLEAGUE_ID))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
         assertThat(service.completeOrder(detail.getId(), PERFORMER_ID).canComplete()).isFalse();
         assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.PENDING_RESULT);
         assertThat(detail.getPerformedAt()).isEqualTo(afterHours);
@@ -121,7 +124,7 @@ class TechnicianQueuePerformOrderTest {
     }
 
     @Test
-    void originalShiftTechnicianCanCheckInAndAcceptWaitingWorkAfterHandover() {
+    void handsOverWaitingServicesAndKeepsAcceptedServicesWithTheirPerformer() {
         Instant afternoon = Instant.parse("2026-11-09T07:00:00Z");
         LocalDate date = LocalDate.parse("2026-11-09");
         service = serviceAt(afternoon);
@@ -132,33 +135,81 @@ class TechnicianQueuePerformOrderTest {
         when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(ROOM_ID, date, date))
                 .thenReturn(List.of(morningDuty, afternoonDuty));
         ParaclinicalOrderDetail waiting = waitingDetail(detail.getOrder(), ROOM_ID);
-        ParaclinicalOrderDetail sibling = waitingDetail(detail.getOrder(), ROOM_ID);
-        sibling.assignToOrderShift(COLLEAGUE_ID);
+        waiting.assignToOrderShift(PERFORMER_ID);
+        waiting.checkIn(8, PERFORMER_ID, NOW);
+        ParaclinicalOrderDetail sibling = waitingDetail(detail.getOrder(), UUID.randomUUID());
+        sibling.assignToOrderShift(PERFORMER_ID);
         when(paraclinicalOrderDetailRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
-        when(paraclinicalOrderDetailRepository.findByOrderId(detail.getOrder().getId())).thenReturn(List.of(waiting, sibling));
-        when(paraclinicalOrderDetailRepository.findQueueDetails(eq(ROOM_ID), any())).thenReturn(List.of(waiting, sibling));
+        when(paraclinicalOrderDetailRepository.findByOrderId(detail.getOrder().getId()))
+                .thenReturn(List.of(detail, waiting, sibling));
+        when(paraclinicalOrderDetailRepository.findByOrderIdIn(any())).thenReturn(List.of(detail, waiting, sibling));
+        when(paraclinicalOrderDetailRepository.findQueueDetails(eq(ROOM_ID), any())).thenReturn(List.of(detail, waiting));
 
         var queue = service.getQueue(ROOM_ID, null, null, null, PERFORMER_ID);
         assertThat(queue.canManage()).isFalse();
         assertThat(queue.hasOwnWork()).isTrue();
-        assertThat(queue.items()).filteredOn(item -> item.canManageOrder()).extracting(item -> item.id())
-                .containsExactly(waiting.getId());
-        assertThatThrownBy(() -> service.checkInOrder(waiting.getId(), COLLEAGUE_ID)).isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> service.acceptOrder(waiting.getId(), COLLEAGUE_ID)).isInstanceOf(AppException.class);
+        assertThat(queue.items()).extracting(item -> item.id()).containsExactly(detail.getId());
+        var nextQueue = service.getQueue(ROOM_ID, null, null, null, COLLEAGUE_ID);
+        assertThat(nextQueue.canManage()).isTrue();
+        assertThat(nextQueue.stats().total()).isEqualTo(1);
+        assertThat(nextQueue.items()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(waiting.getId());
+            assertThat(item.canManageOrder()).isTrue();
+            assertThat(item.allOrdersToday()).extracting(related -> related.id()).containsExactly(waiting.getId());
+        });
+        assertThatThrownBy(() -> service.acceptOrder(waiting.getId(), PERFORMER_ID)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.completeOrder(detail.getId(), COLLEAGUE_ID)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getQueueDetail(detail.getId(), COLLEAGUE_ID)).isInstanceOf(AppException.class);
 
-        service.checkInOrder(waiting.getId(), PERFORMER_ID);
-        service.acceptOrder(waiting.getId(), PERFORMER_ID);
-        service.completeOrder(waiting.getId(), PERFORMER_ID);
+        service.acceptOrder(waiting.getId(), COLLEAGUE_ID);
+        service.completeOrder(detail.getId(), PERFORMER_ID);
 
-        assertThat(waiting.getPerformerAccountId()).isEqualTo(PERFORMER_ID);
-        assertThat(waiting.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.PENDING_RESULT);
+        assertThat(waiting.getPerformerAccountId()).isEqualTo(COLLEAGUE_ID);
+        assertThat(waiting.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.IN_PROGRESS);
+        assertThat(waiting.getQueueNumber()).isEqualTo(8);
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.PENDING_RESULT);
         assertThat(sibling.isCheckedIn()).isFalse();
         assertThat(sibling.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
-        when(paraclinicalOrderDetailRepository.findQueueWorkForTechnician(eq(List.of(ROOM_ID)), eq(PERFORMER_ID), any()))
-                .thenReturn(List.of(waiting));
+        when(paraclinicalOrderDetailRepository.findPendingResultsByRoom(ROOM_ID)).thenReturn(List.of(detail));
+        assertThat(service.getPendingResults(ROOM_ID, null, null, null, PERFORMER_ID).items())
+                .extracting(item -> item.id()).containsExactly(detail.getId());
+        assertThat(service.getPendingResults(ROOM_ID, null, null, null, COLLEAGUE_ID).items()).isEmpty();
         assertThat(service.getQueue(ROOM_ID, "no matching patient", null, null, PERFORMER_ID).hasOwnWork()).isTrue();
-        waiting.completeWithResult(PERFORMER_ID, afternoon);
+        detail.completeWithResult(PERFORMER_ID, afternoon);
         assertThat(service.getQueue(ROOM_ID, null, null, null, PERFORMER_ID).hasOwnWork()).isFalse();
+    }
+
+    @Test
+    void handsOverOrdersCreatedDuringLunchBreakOrShiftEdgeToAfternoon() {
+        Instant afternoon = Instant.parse("2026-11-09T07:00:00Z"); // 14:00 UTC+7
+        LocalDate date = LocalDate.parse("2026-11-09");
+        service = serviceAt(afternoon);
+        DutySchedule afternoonDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.AFTERNOON,
+                COLLEAGUE_ID, ROOM_ID, null, UUID.randomUUID());
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(ROOM_ID, date, date))
+                .thenReturn(List.of(afternoonDuty));
+
+        // Chỉ định tạo lúc 11:45 (nghỉ trưa) hoặc sau khi ca sáng bị rút ngắn giờ
+        Instant lunchBreakOrder = Instant.parse("2026-11-09T04:45:00Z"); // 11:45 UTC+7
+        ParaclinicalOrderDetail lunchDetail = new ParaclinicalOrderDetail(
+                UUID.randomUUID(), lunchBreakOrder, detail.getOrder(), UUID.randomUUID(), "CD0000000009-02",
+                lunchBreakOrder, "Siêu âm tuyến giáp", null, null, BigDecimal.ONE, BigDecimal.valueOf(100000),
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(100000), ROOM_ID,
+                ParaclinicalOrderDetailStatus.WAITING);
+        lunchDetail.assignToOrderShift(PERFORMER_ID); // Gán ca sáng
+        lunchDetail.checkIn(9, PERFORMER_ID, lunchBreakOrder);
+        when(paraclinicalOrderDetailRepository.findById(lunchDetail.getId())).thenReturn(Optional.of(lunchDetail));
+        when(paraclinicalOrderDetailRepository.findQueueDetails(eq(ROOM_ID), any())).thenReturn(List.of(lunchDetail));
+        when(paraclinicalOrderDetailRepository.findByOrderId(detail.getOrder().getId())).thenReturn(List.of(lunchDetail));
+        when(paraclinicalOrderDetailRepository.findByOrderIdIn(any())).thenReturn(List.of(lunchDetail));
+
+        var queue = service.getQueue(ROOM_ID, null, null, null, COLLEAGUE_ID);
+        assertThat(queue.canManage()).isTrue();
+        assertThat(queue.items()).extracting(item -> item.id()).containsExactly(lunchDetail.getId());
+        assertThat(queue.items().getFirst().canManageOrder()).isTrue();
+
+        service.acceptOrder(lunchDetail.getId(), COLLEAGUE_ID);
+        assertThat(lunchDetail.getPerformerAccountId()).isEqualTo(COLLEAGUE_ID);
     }
 
     @Test

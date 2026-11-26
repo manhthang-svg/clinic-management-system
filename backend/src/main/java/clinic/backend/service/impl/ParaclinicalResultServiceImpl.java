@@ -129,7 +129,9 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     @Override
     @Transactional(readOnly = true)
     public ParaclinicalResultResponse get(UUID technicianAccountId, UUID orderDetailId) {
-        return toResponse(load(orderDetailId), technicianAccountId);
+        ParaclinicalOrderDetail detail = findDetail(orderDetailId);
+        requirePerformer(detail, technicianAccountId);
+        return toResponse(load(detail), technicianAccountId);
     }
 
     @Override
@@ -189,13 +191,11 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     @Transactional
     public ParaclinicalResultResponse recordPrint(UUID technicianAccountId, UUID orderDetailId) {
         Context context = load(orderDetailId);
+        requirePerformer(context.detail(), technicianAccountId);
         Instant now = clock.instant();
         // chi in ket qua da gui, chi KTV thuc hien duoc in, phai co thong tin co so de in tieu de
         if (!isSubmitted(context)) {
             throw new AppException(ErrorCode.RESULT_NOT_SUBMITTED);
-        }
-        if (!technicianAccountId.equals(context.detail().getPerformerAccountId())) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
         }
         if (clinicFacilityRepository.findCurrent().isEmpty()) {
             throw new AppException(ErrorCode.CLINIC_FACILITY_NOT_CONFIGURED);
@@ -385,8 +385,15 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     // tai Context tu id chi tiet chi dinh: dich vu, phieu chi dinh, luot kham, benh nhan (khong co -> loi 404)
     private Context load(UUID orderDetailId) {
-        ParaclinicalOrderDetail detail = orderDetailRepository.findById(orderDetailId)
+        return load(findDetail(orderDetailId));
+    }
+
+    private ParaclinicalOrderDetail findDetail(UUID orderDetailId) {
+        return orderDetailRepository.findById(orderDetailId)
                 .orElseThrow(() -> new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_FOUND));
+    }
+
+    private Context load(ParaclinicalOrderDetail detail) {
         MedicalService service = medicalServiceRepository.findById(detail.getServiceId())
                 .orElseThrow(() -> new AppException(ErrorCode.SERVICE_NOT_FOUND));
         ParaclinicalOrder order = detail.getOrder();
@@ -431,15 +438,19 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     // KIEM TRA QUYEN SUA (buoc 29-37): chua gui (BR-29), dung KTV thuc hien, dich vu dang cho ket qua
     private void requireEditableBy(Context context, UUID technicianAccountId) {
+        ParaclinicalOrderDetail detail = context.detail();
+        requirePerformer(detail, technicianAccountId);
         if (isSubmitted(context)) {
             throw new AppException(ErrorCode.RESULT_ALREADY_SUBMITTED);
         }
-        ParaclinicalOrderDetail detail = context.detail();
-        if (!technicianAccountId.equals(detail.getPerformerAccountId())) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
-        }
         if (!detail.awaitsResultFrom(technicianAccountId)) {
             throw new AppException(ErrorCode.RESULT_NOT_EDITABLE);
+        }
+    }
+
+    private static void requirePerformer(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
+        if (!technicianAccountId.equals(detail.getPerformerAccountId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
         }
     }
 
@@ -756,7 +767,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
         }
         boolean currentIsDraft = result != null && !"SUBMITTED".equals(result.status());
         List<ParaclinicalResultResponse.SiblingService> siblingServices = forEditing
-                ? siblingServices(detail, order, currentIsDraft)
+                ? siblingServices(detail, order, currentIsDraft, technicianAccountId)
                 : List.of();
         Map<UUID, String> staffNames = staffNames(order.getDoctorAccountId(), detail.getPerformerAccountId());
         return new ParaclinicalResultResponse(
@@ -870,9 +881,10 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
 
     // [UC-67 buoc 14-15] CAC TAB CUNG DOT: dich vu cung phieu, cung phong + trang thai tung tab (Ban nhap / Da gui)
     private List<ParaclinicalResultResponse.SiblingService> siblingServices(
-            ParaclinicalOrderDetail detail, ParaclinicalOrder order, boolean currentIsDraft) {
+            ParaclinicalOrderDetail detail, ParaclinicalOrder order, boolean currentIsDraft, UUID technicianAccountId) {
         List<ParaclinicalOrderDetail> siblings = orderDetailRepository.findByOrderId(order.getId()).stream()
                 .filter(sibling -> Objects.equals(detail.getRoomId(), sibling.getRoomId()))
+                .filter(sibling -> technicianAccountId.equals(sibling.getPerformerAccountId()))
                 .toList();
         Map<UUID, MedicalService> services = medicalServiceRepository
                 .findAllById(siblings.stream().map(ParaclinicalOrderDetail::getServiceId).collect(Collectors.toSet()))
