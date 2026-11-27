@@ -72,6 +72,19 @@ describe('ResultPrintView', () => {
     expect(slip).toHaveTextContent(slipOrder.patient.name);
   });
 
+  it('prints the ECG strip images between the result and the conclusion', () => {
+    const files = [
+      { id: 'e1', name: 'dt1.png', type: 'image/png', size: 1, url: 'blob:e1', caption: 'DII dài' },
+      { id: 'e2', name: 'dt2.png', type: 'image/png', size: 1, url: 'blob:e2', caption: '' },
+      { id: 'e3', name: 'dt3.png', type: 'image/png', size: 1, url: 'blob:e3', caption: '' },
+    ];
+    const { order: slipOrder, form } = descriptive('cls-007', { files });
+    render(<ResultPrintView order={slipOrder} form={form} />);
+    expect(screen.getByRole('img', { name: 'DII dài' })).toHaveAttribute('src', 'blob:e1');
+    expect(screen.getByRole('img', { name: 'dt2.png' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'dt3.png' })).not.toBeInTheDocument();
+  });
+
   it('marks a reprint as a copy and is signed by the performer, never a typed name', () => {
     const { order: slipOrder, form } = descriptive('cls-004', { readingDoctor: 'BS Nguyễn Thị Nhàn' });
     render(<ResultPrintView order={{ ...slipOrder, printCount: 1 }} form={form} />);

@@ -320,6 +320,17 @@ function DescriptiveSlip({ order, form, printForm }) {
         <div className="space-y-1">
           <div className="font-bold">1. Kết quả:</div>
           <p className="whitespace-pre-line">{form.description}</p>
+          {/* bang dien tim dai, in toi da 2 anh dau, moi anh het chieu ngang phieu */}
+          {pictures.length > 0 && (
+            <div className="space-y-2 py-1">
+              {pictures.slice(0, 2).map((file) => (
+                <figure key={file.id} className="m-0">
+                  <img src={file.url} alt={file.caption || file.name} className="w-full max-h-64 object-contain bg-white border border-black" />
+                  {file.caption && <figcaption className="text-[11px] text-center">{file.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          )}
           <div className="font-bold">2. Kết luận:</div>
           <p className="whitespace-pre-line font-semibold">{form.conclusion}</p>
         </div>
