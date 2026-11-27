@@ -43,6 +43,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** UC-67 Record Paraclinical Result (draft, images) and UC-68 Print Paraclinical Result: the guard rules. */
@@ -121,6 +122,16 @@ class ParaclinicalResultEditAndPrintTest {
     }
 
     // ---- UC-67: luu nhap / anh ----
+
+    @Test
+    void refusesToReadAnotherTechniciansResultBeforeLoadingTheForm() {
+        ParaclinicalOrderDetail assignedDetail = mock(ParaclinicalOrderDetail.class);
+        when(orderDetailRepository.findById(detailId)).thenReturn(Optional.of(assignedDetail));
+        when(assignedDetail.getPerformerAccountId()).thenReturn(UUID.randomUUID());
+
+        assertCode(catchThrowable(() -> service.get(TECHNICIAN_ID, detailId)), ErrorCode.ACCESS_DENIED);
+        verifyNoInteractions(medicalServiceRepository, patientRepository, labResultRepository, imagingResultRepository);
+    }
 
     @Test
     void refusesToEditAResultThatWasAlreadySubmitted() {

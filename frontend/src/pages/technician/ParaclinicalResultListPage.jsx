@@ -217,11 +217,11 @@ export function ParaclinicalResultListPage() {
   // Điều hướng đến màn hình nhập kết quả UC-67 (mở thẳng form, chuyển dịch vụ bằng Tab trên form)
   const handleOpenResultForm = (order) => {
     const ownServices = order.services.filter((service) => service.isPerformer);
-    const services = ownServices.length ? ownServices : order.services;
-    const targetService = services.find((service) => service.status === 'DRAFT') || services[0];
+    const targetService = ownServices.find((service) => service.status === 'DRAFT') || ownServices[0];
+    if (!targetService) return;
     navigate(`/technician/results/${targetService.id}`, {
       state: {
-        siblingServices: order.services || [targetService],
+        siblingServices: ownServices,
         patientId: order.patientId,
         baseOrderCode: order.baseOrderCode || order.orderCode,
       },
@@ -722,15 +722,7 @@ export function ParaclinicalResultListPage() {
                       <td className="py-2.5 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {!order.services.some((service) => service.isPerformer) ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-[0.98] inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
-                              title="Xem kết quả cận lâm sàng (chế độ chỉ xem)"
-                            >
-                              <Eye className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                              <span>Xem kết quả</span>
-                            </button>
+                            <span className="w-[110px] text-[10.5px] text-slate-500">Chỉ xem danh sách</span>
                           ) : order.services.some((service) => service.isPerformer && service.status === 'DRAFT') ? (
                             <button
                               type="button"
