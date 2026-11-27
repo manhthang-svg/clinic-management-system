@@ -244,7 +244,29 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                         .map(ParaclinicalOrderDetail::getRoomId)
                         .collect(Collectors.toSet())
                 : Set.of();
-        return rooms.stream()
+
+        List<Room> targetRooms = rooms;
+        if (!userIsAdmin && currentStaff != null && currentStaff.getRole() == Role.TECHNICIAN) {
+            Set<UUID> ownRoomIds = new HashSet<>(manageableRoomIds);
+            ownRoomIds.addAll(workRoomIds);
+            todaySchedules.stream()
+                    .filter(s -> currentUserId.equals(s.getStaffAccountId()) && s.getRoomId() != null)
+                    .map(DutySchedule::getRoomId)
+                    .forEach(ownRoomIds::add);
+            dutyScheduleRepository
+                    .findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(currentUserId, today)
+                    .stream().map(DutySchedule::getRoomId).filter(Objects::nonNull)
+                    .forEach(ownRoomIds::add);
+            staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(currentUserId)
+                    .map(StaffRoomAssignment::getRoomId)
+                    .ifPresent(ownRoomIds::add);
+
+            if (!ownRoomIds.isEmpty()) {
+                targetRooms = rooms.stream().filter(r -> ownRoomIds.contains(r.getId())).toList();
+            }
+        }
+
+        return targetRooms.stream()
                 .map(room -> {
                     boolean canManage = userIsAdmin || manageableRoomIds.contains(room.getId());
                     return new TechnicianRoomResponse(
@@ -278,16 +300,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         validateFilters(search, status, QUEUE_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
-            List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
-                    RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
-            if (rooms.isEmpty()) {
+            List<TechnicianRoomResponse> userRooms = getTechnicianRooms(currentUserId);
+            if (userRooms.isEmpty()) {
                 return new TechnicianQueueResponse(
                         new TechnicianQueueStatsResponse(0, 0, 0, 0),
                         Collections.emptyList(),
                         false
                 );
             }
-            targetRoomId = rooms.getFirst().getId();
+            targetRoomId = userRooms.getFirst().id();
         }
 
         QueueAccess access = queueAccess(currentUserId);
@@ -302,7 +323,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
         // lay chi dinh da thanh toan
         List<ParaclinicalOrderDetail> details = paraclinicalOrderDetailRepository.findQueueDetails(targetRoomId, startOfDay)
-                .stream().filter(dashboard ? access::canReceiveOnDashboard : access::canView).toList();
+                .stream().filter(dashboard ? access::canShowWaitingOnDashboard : access::canView).toList();
 
         if (details.isEmpty()) {
             return new TechnicianQueueResponse(
@@ -337,7 +358,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
 
         Map<UUID, List<ParaclinicalOrderDetail>> siblingOrdersMap = orderIds.isEmpty() ? Collections.emptyMap() :
                 paraclinicalOrderDetailRepository.findByOrderIdIn(orderIds).stream()
-                        .filter(dashboard ? access::canReceiveOnDashboard : access::canView)
+                        .filter(dashboard ? access::canShowWaitingOnDashboard : access::canView)
                         .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
 
         Set<UUID> neededRoomIds = new HashSet<>();
@@ -387,14 +408,39 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         }
 
         // Calculate stats on all room orders today
-        long total = allItems.size();
-        long waiting = allItems.stream().filter(i -> "WAITING".equals(i.status())).count();
-        long priority = allItems.stream()
-                .filter(i -> "PRIORITY".equals(i.priority()) && (dashboard
-                        ? "WAITING".equals(i.status()) && !i.isSkipped() : !"CANCELLED".equals(i.status())))
-                .count();
-        long skipped = allItems.stream().filter(TechnicianQueueItemResponse::isSkipped).count();
-        TechnicianQueueStatsResponse statsResponse = new TechnicianQueueStatsResponse(total, waiting, priority, skipped);
+        TechnicianQueueStatsResponse statsResponse;
+        if (dashboard) {
+            Map<String, List<TechnicianQueueItemResponse>> grouped = new LinkedHashMap<>();
+            for (TechnicianQueueItemResponse item : allItems) {
+                String key = groupKeyOf(item.patientId(), item.orderCode(), item.orderId() != null ? item.orderId() : item.id());
+                grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+            }
+            long total = grouped.size();
+            long waiting = 0;
+            long priority = 0;
+            long skipped = 0;
+            for (List<TechnicianQueueItemResponse> group : grouped.values()) {
+                boolean hasWaiting = group.stream().anyMatch(i -> "WAITING".equals(i.status()) && !i.isSkipped());
+                boolean hasSkippedOnly = !hasWaiting && group.stream().anyMatch(TechnicianQueueItemResponse::isSkipped);
+                if (hasWaiting) {
+                    waiting++;
+                    if (group.stream().anyMatch(i -> "PRIORITY".equals(i.priority()))) {
+                        priority++;
+                    }
+                } else if (hasSkippedOnly) {
+                    skipped++;
+                }
+            }
+            statsResponse = new TechnicianQueueStatsResponse(total, waiting, priority, skipped);
+        } else {
+            long total = allItems.size();
+            long waiting = allItems.stream().filter(i -> "WAITING".equals(i.status())).count();
+            long priority = allItems.stream()
+                    .filter(i -> "PRIORITY".equals(i.priority()) && !"CANCELLED".equals(i.status()))
+                    .count();
+            long skipped = allItems.stream().filter(TechnicianQueueItemResponse::isSkipped).count();
+            statsResponse = new TechnicianQueueStatsResponse(total, waiting, priority, skipped);
+        }
 
         // Apply filters
         List<TechnicianQueueItemResponse> filtered = allItems.stream()
@@ -485,16 +531,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         validateFilters(search, status, PENDING_RESULT_STATUSES);
         UUID targetRoomId = roomId;
         if (targetRoomId == null) {
-            List<Room> rooms = roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(
-                    RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
-            if (rooms.isEmpty()) {
+            List<TechnicianRoomResponse> userRooms = getTechnicianRooms(currentUserId);
+            if (userRooms.isEmpty()) {
                 return new TechnicianPendingResultResponse(
                         new TechnicianPendingStatsResponse(0, 0, 0, 0),
                         Collections.emptyList(),
                         false
                 );
             }
-            targetRoomId = rooms.getFirst().getId();
+            targetRoomId = userRooms.getFirst().id();
         }
 
         QueueAccess access = queueAccess(currentUserId);
@@ -503,7 +548,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         Instant now = clock.instant();
 
         List<ParaclinicalOrderDetail> details = paraclinicalOrderDetailRepository.findPendingResultsByRoom(targetRoomId)
-                .stream().filter(dashboard ? access::canEnterResultOnDashboard : access::canView).toList();
+                .stream().filter(dashboard ? access::canShowPendingResultOnDashboard : access::canView).toList();
 
         if (details.isEmpty()) {
             return new TechnicianPendingResultResponse(
@@ -620,11 +665,36 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         }
 
         // Stats calculation
-        long total = allItems.size();
-        long pending = allItems.stream().filter(i -> "PENDING".equals(i.status())).count();
-        long draft = allItems.stream().filter(i -> "DRAFT".equals(i.status())).count();
-        long overdue = allItems.stream().filter(i -> i.completedMinutesAgo() >= 30).count();
-        TechnicianPendingStatsResponse statsResponse = new TechnicianPendingStatsResponse(total, pending, draft, overdue);
+        TechnicianPendingStatsResponse statsResponse;
+        if (dashboard) {
+            Map<String, List<TechnicianPendingItemResponse>> grouped = new LinkedHashMap<>();
+            for (TechnicianPendingItemResponse item : allItems) {
+                String key = groupKeyOf(item.patientId(), item.orderCode(), item.id());
+                grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+            }
+            long total = grouped.size();
+            long pending = 0;
+            long draft = 0;
+            long overdue = 0;
+            for (List<TechnicianPendingItemResponse> group : grouped.values()) {
+                boolean allDraft = group.stream().allMatch(i -> "DRAFT".equals(i.status()));
+                if (allDraft) {
+                    draft++;
+                } else {
+                    pending++;
+                }
+                if (group.stream().anyMatch(i -> i.completedMinutesAgo() >= 30)) {
+                    overdue++;
+                }
+            }
+            statsResponse = new TechnicianPendingStatsResponse(total, pending, draft, overdue);
+        } else {
+            long total = allItems.size();
+            long pending = allItems.stream().filter(i -> "PENDING".equals(i.status())).count();
+            long draft = allItems.stream().filter(i -> "DRAFT".equals(i.status())).count();
+            long overdue = allItems.stream().filter(i -> i.completedMinutesAgo() >= 30).count();
+            statsResponse = new TechnicianPendingStatsResponse(total, pending, draft, overdue);
+        }
 
         // Apply filters
         List<TechnicianPendingItemResponse> filtered = allItems.stream()
@@ -1035,6 +1105,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         private final Map<UUID, Map<LocalDate, List<DutySchedule>>> schedules = new HashMap<>();
         private final Map<UUID, Boolean> roomPermissions = new HashMap<>();
         private final Map<UUID, List<StaffRoomAssignment>> assignments = new HashMap<>();
+        private Set<UUID> assignedRoomIds;
 
         private QueueAccess(UUID staffId, StaffAccount staff) {
             this.staffId = staffId;
@@ -1048,6 +1119,22 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         private boolean canManageRoom(UUID roomId) {
             return roomPermissions.computeIfAbsent(roomId,
                     room -> TechnicianQueueServiceImpl.this.canManageRoom(room, staffId, now));
+        }
+
+        private boolean canObserveRoom(UUID roomId) {
+            if (!isTechnician() || roomId == null || canManageRoom(roomId)) {
+                return false;
+            }
+            if (assignedRoomIds == null) {
+                LocalDate today = LocalDate.ofInstant(now, CLINIC_ZONE);
+                assignedRoomIds = dutyScheduleRepository
+                        .findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(staffId, today)
+                        .stream().map(DutySchedule::getRoomId).filter(Objects::nonNull)
+                        .collect(Collectors.toCollection(HashSet::new));
+                staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(staffId)
+                        .map(StaffRoomAssignment::getRoomId).ifPresent(assignedRoomIds::add);
+            }
+            return assignedRoomIds.contains(roomId);
         }
 
         private Optional<Boolean> orderShiftPermission(ParaclinicalOrderDetail detail) {
@@ -1125,22 +1212,30 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                     && detail.getPerformerAccountId() != null) {
                 return staffId.equals(detail.getPerformerAccountId());
             }
+            if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT
+                    && detail.awaitsResultFrom(staffId)) {
+                return true;
+            }
             if (detail.getAssignedTechnicianAccountId() != null
                     && !staffId.equals(detail.getAssignedTechnicianAccountId())
                     && !canReceive(detail)) {
-                return false;
+                return (detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                        || detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT)
+                        && canObserveRoom(detail.getRoomId());
             }
             // KTV ngoài ca trực hoặc xem phòng khác vẫn được xem danh sách chỉ định chờ hoặc chờ nhập kết quả (chế độ chỉ xem),
             // việc thao tác (tiếp nhận, check-in, bỏ qua, nhập kết quả...) được kiểm soát chặt chẽ qua canManageOrder, isPerformer & verify()
             return true;
         }
 
-        private boolean canReceiveOnDashboard(ParaclinicalOrderDetail detail) {
-            return detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING && canManage(detail);
+        private boolean canShowWaitingOnDashboard(ParaclinicalOrderDetail detail) {
+            return detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
+                    && (canManage(detail) || canObserveRoom(detail.getRoomId()));
         }
 
-        private boolean canEnterResultOnDashboard(ParaclinicalOrderDetail detail) {
-            return role == Role.ADMIN || (isTechnician() && detail.awaitsResultFrom(staffId));
+        private boolean canShowPendingResultOnDashboard(ParaclinicalOrderDetail detail) {
+            return role == Role.ADMIN
+                    || (isTechnician() && (detail.awaitsResultFrom(staffId) || canObserveRoom(detail.getRoomId())));
         }
 
         private boolean canManage(ParaclinicalOrderDetail detail) {
@@ -1391,6 +1486,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                 (detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
                         || detail.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS) && access.canManage(detail)
         );
+    }
+
+    // Gom nhóm theo bệnh nhân + mã phiếu gốc để thống kê đúng số lượt/bệnh nhân
+    private static String groupKeyOf(String patientId, String orderCode, UUID fallbackId) {
+        String baseOrderCode = orderCode == null ? "" : orderCode.replaceFirst("-\\d+$", "");
+        if (patientId != null && !patientId.isBlank() && !"—".equals(patientId)) {
+            return patientId + "_" + baseOrderCode;
+        }
+        return fallbackId != null ? fallbackId.toString() : baseOrderCode;
     }
 
     // Ghép học hàm/học vị với họ tên nhân viên để hiển thị chuẩn định dạng

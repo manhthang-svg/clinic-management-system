@@ -81,13 +81,10 @@ export function ParaclinicalResultListPage() {
           const validRooms = Array.isArray(roomList) ? roomList : [];
           setRooms(validRooms);
           if (validRooms.length > 0) {
-            const assignedRoom = validRooms.find((r) => r.hasOwnWork) || validRooms.find((r) => r.isAssigned);
+            const assignedRoom = validRooms.find((r) => r.isAssigned) || validRooms.find((r) => r.hasOwnWork);
             const defaultRoom = assignedRoom || validRooms[0];
-            setCurrentRoomId((prev) => {
-              const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
-              technicianApi.setActiveRoomId?.(selected);
-              return selected;
-            });
+            setCurrentRoomId(defaultRoom.id);
+            technicianApi.setActiveRoomId?.(defaultRoom.id);
           }
         }
       } catch (err) {
@@ -184,19 +181,6 @@ export function ParaclinicalResultListPage() {
     };
   }, [currentRoomId, loadResults]);
 
-  // Xử lý chuyển phòng thủ công
-  const handleRoomSelect = (roomId) => {
-    setCurrentRoomId(roomId);
-    technicianApi.setActiveRoomId?.(roomId);
-    const selectedRoom = rooms.find((r) => r.id === roomId);
-    setResultsData((prev) => ({
-      ...prev,
-      canManage: selectedRoom ? selectedRoom.isAssigned : null,
-    }));
-    if (selectedRoom) {
-      toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom.code} – ${selectedRoom.name}`);
-    }
-  };
 
   // Đặt lại bộ lọc về mặc định
   const handleResetFilters = () => {
@@ -367,33 +351,17 @@ export function ParaclinicalResultListPage() {
           </div>
         </div>
 
-        {/* Dropdown chuyển đổi phòng phụ trách */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right hidden sm:block">
-            <span className="block text-[11px] font-semibold text-slate-400">
-              Chuyển đổi phòng phụ trách:
-            </span>
-            <span className="block text-xs font-bold text-slate-700">
-              {currentRoom ? `${currentRoom.code} – ${currentRoom.name}` : '...'}
-            </span>
-          </div>
-
-          <div className="relative">
-            <select
-              value={currentRoomId || ''}
-              onChange={(e) => handleRoomSelect(e.target.value)}
-              disabled={roomsLoading || rooms.length === 0}
-              className="h-11 px-4 pr-10 bg-teal-50/70 border border-teal-200/90 rounded-xl text-xs font-bold text-[#0d9488] focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs hover:bg-teal-50 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.code} – {room.name} {room.isAssigned ? '(Đang phụ trách)' : ''}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-[#0d9488] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
+        {/* Nút làm mới dữ liệu danh sách kết quả */}
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+          aria-label="Làm mới danh sách kết quả"
+          className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+          title="Làm mới danh sách kết quả"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing || loading ? 'animate-spin text-[#0d9488]' : ''}`} />
+        </button>
       </div>
 
       {/* 3. KHUNG THẺ THỐNG KÊ NHANH (SUMMARY METRIC CARDS) */}
