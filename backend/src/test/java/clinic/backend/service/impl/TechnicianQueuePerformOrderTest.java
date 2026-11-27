@@ -150,6 +150,9 @@ class TechnicianQueuePerformOrderTest {
         assertThat(queue.hasOwnWork()).isTrue();
         assertThat(queue.items()).extracting(item -> item.id()).containsExactly(detail.getId(), waiting.getId());
         assertThat(queue.items().stream().filter(item -> item.id().equals(waiting.getId())).findFirst().get().canManageOrder()).isFalse();
+        assertThat(service.getDashboardQueue(ROOM_ID, PERFORMER_ID).stats().waiting()).isZero();
+        assertThat(service.getDashboardQueue(ROOM_ID, COLLEAGUE_ID).items())
+                .extracting(item -> item.id()).containsExactly(waiting.getId());
         var nextQueue = service.getQueue(ROOM_ID, null, null, null, COLLEAGUE_ID);
         assertThat(nextQueue.canManage()).isTrue();
         assertThat(nextQueue.stats().total()).isEqualTo(1);
@@ -174,7 +177,9 @@ class TechnicianQueuePerformOrderTest {
         when(paraclinicalOrderDetailRepository.findPendingResultsByRoom(ROOM_ID)).thenReturn(List.of(detail));
         assertThat(service.getPendingResults(ROOM_ID, null, null, null, PERFORMER_ID).items())
                 .extracting(item -> item.id()).containsExactly(detail.getId());
-        assertThat(service.getPendingResults(ROOM_ID, null, null, null, COLLEAGUE_ID).items()).isEmpty();
+        assertThat(service.getPendingResults(ROOM_ID, null, null, null, COLLEAGUE_ID).items())
+                .extracting(item -> item.id()).containsExactly(detail.getId());
+        assertThat(service.getPendingResults(ROOM_ID, null, null, null, COLLEAGUE_ID).items().getFirst().isPerformer()).isFalse();
         assertThat(service.getQueue(ROOM_ID, "no matching patient", null, null, PERFORMER_ID).hasOwnWork()).isTrue();
         detail.completeWithResult(PERFORMER_ID, afternoon);
         assertThat(service.getQueue(ROOM_ID, null, null, null, PERFORMER_ID).hasOwnWork()).isFalse();
@@ -244,6 +249,37 @@ class TechnicianQueuePerformOrderTest {
         assertThatThrownBy(() -> service.skipOrder(waiting.getId(), PERFORMER_ID))
                 .isInstanceOfSatisfying(AppException.class, ex ->
                         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM));
+    }
+
+    @Test
+    void technicianOutsideShiftCanViewPendingResultsInReadOnlyMode() {
+        LocalDate date = LocalDate.parse("2026-11-09");
+        DutySchedule morningDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.MORNING,
+                COLLEAGUE_ID, ROOM_ID, null, UUID.randomUUID());
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(ROOM_ID, date, date))
+                .thenReturn(List.of(morningDuty));
+
+        ParaclinicalOrderDetail pending = waitingDetail(detail.getOrder(), ROOM_ID);
+        pending.checkIn(1, COLLEAGUE_ID, NOW);
+        pending.accept(COLLEAGUE_ID, NOW);
+        pending.completePerformance(COLLEAGUE_ID, NOW);
+        when(paraclinicalOrderDetailRepository.findPendingResultsByRoom(ROOM_ID)).thenReturn(List.of(pending));
+
+        var pendingResults = service.getPendingResults(ROOM_ID, null, null, null, PERFORMER_ID);
+        assertThat(pendingResults.canManage()).isFalse();
+        assertThat(pendingResults.stats().total()).isEqualTo(1);
+        assertThat(pendingResults.items()).hasSize(1);
+        assertThat(pendingResults.items().getFirst().id()).isEqualTo(pending.getId());
+        assertThat(pendingResults.items().getFirst().isPerformer()).isFalse();
+
+        var colleagueResults = service.getPendingResults(ROOM_ID, null, null, null, COLLEAGUE_ID);
+        assertThat(colleagueResults.canManage()).isTrue();
+        assertThat(colleagueResults.items().getFirst().isPerformer()).isTrue();
+        var dashboardResults = service.getDashboardPendingResults(ROOM_ID, PERFORMER_ID);
+        assertThat(dashboardResults.items()).isEmpty();
+        assertThat(dashboardResults.stats().total()).isZero();
+        assertThat(service.getDashboardPendingResults(ROOM_ID, COLLEAGUE_ID).items())
+                .extracting(item -> item.id()).containsExactly(pending.getId());
     }
 
     @Test

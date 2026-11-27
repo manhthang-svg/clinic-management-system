@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.dto.request.DutyScheduleSaveRequest;
@@ -119,6 +120,28 @@ class DutyScheduleSaveServiceImplTest {
     }
 
     // UC-96 Create/Assign Duty Schedule
+
+    @Test
+    void personalScheduleUsesOnlyTheTechniciansShiftsAndEachWeeksHours() {
+        LocalDate nextWeek = TODAY.plusWeeks(1);
+        UUID accountId = technician.getId();
+        UUID roomId = paraclinicalRoom.getId();
+        var first = new DutySchedule(UUID.randomUUID(), NOW, TODAY, DutyShift.MORNING,
+                accountId, roomId, null, ADMIN_ID);
+        var second = new DutySchedule(UUID.randomUUID(), NOW, nextWeek, DutyShift.MORNING,
+                accountId, roomId, null, ADMIN_ID);
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(
+                accountId, TODAY, nextWeek)).thenReturn(List.of(first, second));
+        when(roomRepository.findAllById(Set.of(roomId))).thenReturn(List.of(paraclinicalRoom));
+        when(dutyShiftConfigService.getConfigForDate(nextWeek))
+                .thenReturn(new DutyShiftConfigResponse(nextWeek, "07:30", "11:30", "13:00", "17:30"));
+
+        var result = service.getPersonalSchedule(accountId, TODAY, nextWeek);
+
+        assertThat(result.items()).extracting(item -> item.staffAccountId()).containsExactly(accountId, accountId);
+        assertThat(result.items()).extracting(item -> item.startTime()).containsExactly("08:00", "07:30");
+        assertThat(result.items()).extracting(item -> item.roomCode()).containsExactly("XN01", "XN01");
+    }
 
     @Test
     void assignsDoctorToExaminationRoom() {

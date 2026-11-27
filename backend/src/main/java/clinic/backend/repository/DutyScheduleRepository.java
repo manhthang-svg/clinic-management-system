@@ -22,6 +22,12 @@ public interface DutyScheduleRepository extends JpaRepository<DutySchedule, UUID
     // lay lich cua nhan vien theo ngay
     List<DutySchedule> findByStaffAccountIdAndWorkDate(UUID staffAccountId, LocalDate workDate);
 
+    List<DutySchedule> findByStaffAccountIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(
+            UUID staffAccountId, LocalDate startDate, LocalDate endDate);
+
+    List<DutySchedule> findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+            UUID staffAccountId, LocalDate startDate);
+
     // kiem tra trung lich
     Optional<DutySchedule> findByWorkDateAndShiftAndStaffAccountId(LocalDate workDate, DutyShift shift, UUID staffAccountId);
 

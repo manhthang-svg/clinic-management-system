@@ -7,7 +7,11 @@ import { TechnicianDashboardPage } from './TechnicianDashboardPage';
 
 const ME = { id: 'tech-1', fullName: 'Nguyễn Văn Bảo', role: 'TECHNICIAN' };
 // 17/11/2026 14:00, inside the afternoon shift.
-const TODAY = new Date(2026, 10, 17, 14, 0);
+const TODAY = new Date('2026-11-17T14:00:00+07:00');
+const OWN_SHIFT = {
+  id: 's-1', workDate: '2026-11-17', shift: 'AFTERNOON', staffAccountId: ME.id,
+  roomId: 'room-1', roomCode: 'P.204', roomName: 'Sinh hóa', startTime: '13:00', endTime: '17:30',
+};
 
 function dashboard(overrides = {}) {
   return {
@@ -32,12 +36,9 @@ function technicianApi(getDashboard) {
   return { getDashboard, getActiveRoomId: vi.fn(() => ''), setActiveRoomId: vi.fn() };
 }
 
-function scheduleApi(items = []) {
+function scheduleApi(items = [OWN_SHIFT]) {
   return {
-    getWeeklySchedule: vi.fn().mockResolvedValue({
-      shiftConfig: { morningStartTime: '08:00', morningEndTime: '11:30', afternoonStartTime: '13:00', afternoonEndTime: '17:30' },
-      items,
-    }),
+    getPersonalSchedule: vi.fn().mockResolvedValue({ items }),
   };
 }
 
@@ -56,15 +57,16 @@ describe('TechnicianDashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Phòng Xét nghiệm Sinh hóa' })).toBeInTheDocument();
     expect(screen.getByText('Đang trong ca trực')).toBeInTheDocument();
-    expect(screen.getByText('Ca chiều (13:00 – 17:30)')).toBeInTheDocument();
+    expect(await screen.findByText('Ca chiều (13:00 – 17:30)')).toBeInTheDocument();
     expect(screen.getByText('Đã hoàn thành hôm nay').closest('button')).toHaveTextContent('9');
     expect(screen.getByText('Chờ nhập kết quả').closest('button')).toHaveTextContent('3');
-    expect(screen.getByText('2 ca ưu tiên')).toBeInTheDocument();
+    expect(screen.getByText('Đang chờ thực hiện').closest('button')).toHaveTextContent('7');
+    expect(screen.getByText('2 dịch vụ ưu tiên')).toBeInTheDocument();
 
     const queue = screen.getByRole('region', { name: 'Bệnh nhân sắp tới lượt' });
     expect(within(queue).getByText('Trần Thị Mai')).toBeInTheDocument();
     expect(within(queue).getByText('#01')).toBeInTheDocument();
-    expect(within(queue).getByText('Xem tất cả (1)')).toBeInTheDocument();
+    expect(within(queue).getByText('Xem tất cả (7)')).toBeInTheDocument();
 
     const results = screen.getByRole('region', { name: 'Kết quả đang chờ nhập / Bản nháp' });
     expect(within(results).getByText('Bản nháp')).toBeInTheDocument();
@@ -78,13 +80,12 @@ describe('TechnicianDashboardPage', () => {
     renderPage(technicianApi(vi.fn().mockResolvedValue(data)));
 
     expect(await screen.findByText('Ngoài ca trực · Còn chỉ định')).toBeInTheDocument();
-    expect(screen.getByText(/Bạn có thể hoàn tất và gửi kết quả/)).toBeInTheDocument();
   });
 
   it('lists only the current technician\'s shifts for the next 4 days', async () => {
     const schedules = scheduleApi([
-      { id: 's-1', workDate: '2026-11-17', shift: 'AFTERNOON', staffAccountId: 'tech-1', roomCode: 'P.204', roomName: 'Sinh hóa' },
-      { id: 's-2', workDate: '2026-11-18', shift: 'MORNING', staffAccountId: 'tech-1', roomCode: 'P.205', roomName: 'Huyết học' },
+      OWN_SHIFT,
+      { id: 's-2', workDate: '2026-11-18', shift: 'MORNING', staffAccountId: 'tech-1', roomCode: 'P.205', roomName: 'Huyết học', startTime: '07:30', endTime: '11:30' },
       { id: 's-3', workDate: '2026-11-18', shift: 'AFTERNOON', staffAccountId: 'someone-else', roomCode: 'P.105', roomName: 'Siêu âm' },
     ]);
     renderPage(technicianApi(vi.fn().mockResolvedValue(dashboard())), schedules);
@@ -93,22 +94,24 @@ describe('TechnicianDashboardPage', () => {
     expect(await within(shifts).findByText('Hôm nay, 17/11')).toBeInTheDocument();
     expect(within(shifts).getByText('Đang diễn ra')).toBeInTheDocument();
     expect(within(shifts).getByText('P.205 – Huyết học')).toBeInTheDocument();
+    expect(within(shifts).getByText('07:30 – 11:30')).toBeInTheDocument();
     expect(within(shifts).queryByText('P.105 – Siêu âm')).not.toBeInTheDocument();
     expect(within(shifts).getAllByText('Nghỉ ca')).toHaveLength(2);
-    expect(schedules.getWeeklySchedule).toHaveBeenCalledWith('2026-11-17', '2026-11-20', expect.anything());
+    expect(schedules.getPersonalSchedule).toHaveBeenCalledWith('2026-11-17', '2026-11-20', expect.anything());
   });
 
-  it('forgets a stored room that no longer exists and shows the default room', async () => {
-    const getDashboard = vi.fn()
-      .mockRejectedValueOnce(new ApiError('Not found', { status: 404, errorResponse: { code: 'ROOM_NOT_FOUND' } }))
-      .mockResolvedValue(dashboard());
+  it('lets the server choose the personal room and hides the other technician listed in the room metadata', async () => {
+    const data = dashboard({ canManage: false });
+    data.room.activeTech = 'Kỹ thuật viên ca khác';
+    const getDashboard = vi.fn().mockResolvedValue(data);
     const api = { getDashboard, getActiveRoomId: vi.fn(() => 'old-room'), setActiveRoomId: vi.fn() };
     renderPage(api);
 
     expect(await screen.findByRole('heading', { name: 'Phòng Xét nghiệm Sinh hóa' })).toBeInTheDocument();
-    expect(getDashboard).toHaveBeenNthCalledWith(1, { roomId: 'old-room' }, expect.anything());
-    expect(getDashboard).toHaveBeenNthCalledWith(2, {}, expect.anything());
-    expect(api.setActiveRoomId).toHaveBeenCalledWith('');
+    expect(getDashboard).toHaveBeenCalledWith({}, expect.anything());
+    expect(api.getActiveRoomId).not.toHaveBeenCalled();
+    expect(screen.queryByText('Kỹ thuật viên ca khác')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ca của bạn/)).not.toBeInTheDocument();
   });
 
   it('shows an error with a retry when the dashboard cannot be loaded', async () => {

@@ -4,9 +4,14 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import clinic.backend.entity.DutySchedule;
+import clinic.backend.entity.StaffRoomAssignment;
 import clinic.backend.dto.response.TechnicianDashboardResponse;
 import clinic.backend.dto.response.TechnicianDashboardResponse.Stats;
 import clinic.backend.dto.response.TechnicianPendingResultResponse;
@@ -17,6 +22,8 @@ import clinic.backend.dto.response.TechnicianRoomResponse;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
+import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.service.TechnicianDashboardService;
 import clinic.backend.service.TechnicianQueueService;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +39,10 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
     static final int LIST_LIMIT = 5;
 
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final String WAITING = "WAITING";
-
     private final TechnicianQueueService technicianQueueService;
     private final ParaclinicalOrderDetailRepository paraclinicalOrderDetailRepository;
+    private final DutyScheduleRepository dutyScheduleRepository;
+    private final StaffRoomAssignmentRepository staffRoomAssignmentRepository;
     private final Clock clock;
 
     // so lieu hom nay + 5 luot cho tiep theo + 5 ca cho nhap ket qua cua 1 phong
@@ -43,15 +50,16 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
     @Transactional(readOnly = true)
     public TechnicianDashboardResponse getDashboard(UUID roomId, UUID currentUserId) {
         List<TechnicianRoomResponse> rooms = technicianQueueService.getTechnicianRooms(currentUserId);
-        TechnicianRoomResponse room = chooseRoom(rooms, roomId);
+        LocalDate today = LocalDate.now(clock.withZone(CLINIC_ZONE));
+        TechnicianRoomResponse room = chooseRoom(rooms, roomId, currentUserId, today);
         if (room == null) {
             return new TechnicianDashboardResponse(null, false, Stats.empty(), List.of(), List.of());
         }
 
-        TechnicianQueueResponse queue = technicianQueueService.getQueue(room.id(), null, WAITING, null, currentUserId);
+        TechnicianQueueResponse queue = technicianQueueService.getDashboardQueue(room.id(), currentUserId);
         TechnicianPendingResultResponse pending =
-                technicianQueueService.getPendingResults(room.id(), null, null, null, currentUserId);
-        Instant startOfDay = LocalDate.now(clock.withZone(CLINIC_ZONE)).atStartOfDay(CLINIC_ZONE).toInstant();
+                technicianQueueService.getDashboardPendingResults(room.id(), currentUserId);
+        Instant startOfDay = today.atStartOfDay(CLINIC_ZONE).toInstant();
         long completedToday = paraclinicalOrderDetailRepository.countCompletedSince(room.id(), startOfDay, currentUserId);
 
         TechnicianQueueStatsResponse queueStats = queue.stats();
@@ -66,27 +74,48 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
                 completedToday);
 
         return new TechnicianDashboardResponse(
-                room,
+                new TechnicianRoomResponse(room.id(), room.code(), room.name(), room.location(), null,
+                        room.isAssigned(), room.hasOwnWork()),
                 queue.canManage(),
                 stats,
                 queue.items().stream().limit(LIST_LIMIT).toList(),
                 pending.items().stream().limit(LIST_LIMIT).toList());
     }
 
-    // chon phong: phong yeu cau > phong KTV dang truc > phong dau tien
-    private static TechnicianRoomResponse chooseRoom(List<TechnicianRoomResponse> rooms, UUID roomId) {
-        if (roomId != null) {
-            return rooms.stream()
-                    .filter(room -> room.id().equals(roomId))
-                    .findFirst()
-                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+    private TechnicianRoomResponse chooseRoom(List<TechnicianRoomResponse> rooms, UUID roomId,
+                                              UUID accountId, LocalDate today) {
+        Map<UUID, TechnicianRoomResponse> byId = new LinkedHashMap<>();
+        rooms.forEach(room -> byId.put(room.id(), room));
+        if (roomId != null && !byId.containsKey(roomId)) {
+            throw new AppException(ErrorCode.ROOM_NOT_FOUND);
         }
-        return rooms.stream()
-                .filter(TechnicianRoomResponse::hasOwnWork)
-                .findFirst()
-                .or(() -> rooms.stream()
-                        .filter(TechnicianRoomResponse::isAssigned)
-                        .findFirst())
-                .orElse(rooms.isEmpty() ? null : rooms.getFirst());
+        if (rooms.isEmpty() || accountId == null) {
+            return null;
+        }
+        var ownRooms = new LinkedHashSet<UUID>();
+        rooms.stream().filter(TechnicianRoomResponse::isAssigned).map(TechnicianRoomResponse::id).forEach(ownRooms::add);
+        rooms.stream().filter(TechnicianRoomResponse::hasOwnWork).map(TechnicianRoomResponse::id).forEach(ownRooms::add);
+        if (roomId == null && !ownRooms.isEmpty()) {
+            return byId.get(ownRooms.getFirst());
+        }
+        if (roomId != null && ownRooms.contains(roomId)) {
+            return byId.get(roomId);
+        }
+
+        List<DutySchedule> shifts = dutyScheduleRepository
+                .findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(accountId, today);
+        shifts.reversed().stream().filter(shift -> shift.getWorkDate().equals(today))
+                .map(DutySchedule::getRoomId).filter(byId::containsKey).forEach(ownRooms::add);
+        staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(accountId)
+                .map(StaffRoomAssignment::getRoomId).filter(byId::containsKey).ifPresent(ownRooms::add);
+        shifts.stream().map(DutySchedule::getRoomId).filter(byId::containsKey).forEach(ownRooms::add);
+
+        if (roomId != null) {
+            if (!ownRooms.contains(roomId)) {
+                throw new AppException(ErrorCode.ROOM_NOT_FOUND);
+            }
+            return byId.get(roomId);
+        }
+        return ownRooms.isEmpty() ? null : byId.get(ownRooms.getFirst());
     }
 }

@@ -217,11 +217,11 @@ export function ParaclinicalResultListPage() {
   // Điều hướng đến màn hình nhập kết quả UC-67 (mở thẳng form, chuyển dịch vụ bằng Tab trên form)
   const handleOpenResultForm = (order) => {
     const ownServices = order.services.filter((service) => service.isPerformer);
-    const services = ownServices.length ? ownServices : order.services;
-    const targetService = services.find((service) => service.status === 'DRAFT') || services[0];
+    const targetService = ownServices.find((service) => service.status === 'DRAFT') || ownServices[0];
+    if (!targetService) return;
     navigate(`/technician/results/${targetService.id}`, {
       state: {
-        siblingServices: order.services || [targetService],
+        siblingServices: ownServices,
         patientId: order.patientId,
         baseOrderCode: order.baseOrderCode || order.orderCode,
       },
@@ -342,6 +342,12 @@ export function ParaclinicalResultListPage() {
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/80">
               Phòng máy: {currentRoom ? currentRoom.code : '...'}
             </span>
+            {!canManage && !roomsLoading && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-full text-xs font-semibold">
+                <Eye className="w-3.5 h-3.5 text-amber-600" />
+                Chế độ chỉ xem
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium">
@@ -389,18 +395,6 @@ export function ParaclinicalResultListPage() {
           </div>
         </div>
       </div>
-
-      {/* Thông báo chế độ chỉ xem nếu không phụ trách phòng hiện tại */}
-      {!canManage && !roomsLoading && (
-        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
-          <Eye className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            {hasOwnResults
-              ? 'Bạn có thể nhập và gửi kết quả cho các dịch vụ mình đã thực hiện.'
-              : 'Phòng hiện không có kết quả bạn cần nhập.'}
-          </span>
-        </div>
-      )}
 
       {/* 3. KHUNG THẺ THỐNG KÊ NHANH (SUMMARY METRIC CARDS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -728,15 +722,7 @@ export function ParaclinicalResultListPage() {
                       <td className="py-2.5 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {!order.services.some((service) => service.isPerformer) ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenResultForm(order)}
-                              className="w-[110px] h-7 px-2 rounded-xl font-bold text-[10.5px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-[0.98] inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
-                              title="Xem kết quả cận lâm sàng (chế độ chỉ xem)"
-                            >
-                              <Eye className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                              <span>Xem kết quả</span>
-                            </button>
+                            <span className="w-[110px] text-[10.5px] text-slate-500">Chỉ xem danh sách</span>
                           ) : order.services.some((service) => service.isPerformer && service.status === 'DRAFT') ? (
                             <button
                               type="button"
