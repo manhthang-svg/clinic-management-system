@@ -111,19 +111,32 @@ describe('anh ket qua: xet nghiem khong co anh, chan doan hinh anh bat buoc co a
     expect(errors).not.toHaveProperty('imageLink');
   });
 
-  it('requires at least one image for ultrasound, X-ray and ECG', () => {
+  it('requires an image or a PACS link for ultrasound, X-ray, endoscopy and ECG', () => {
     expect(validateResult(order('cls-004'), filled('cls-004', { files: [] })))
-      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả.');
+      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem phim (PACS).');
     expect(validateResult(order('cls-008'), filled('cls-008', { files: [] }))).toHaveProperty('files');
     expect(validateResult(order('cls-007'), filled('cls-007', { files: [] }))).toHaveProperty('files');
     expect(validateResult(order('cls-004'), filled('cls-004', { files: [image] }))).not.toHaveProperty('files');
+    expect(validateResult(order('cls-008'), filled('cls-008', { files: [], imageLink: 'https://pacs/xq/1' }))).not.toHaveProperty('files');
+    expect(validateResult(order('cls-005'), filled('cls-005', { files: [], imageLink: 'https://pacs/ns/1' }))).not.toHaveProperty('files');
   });
 
-  it('requires an uploaded image for CT and MRI too (no PACS link)', () => {
-    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'Có tiêm', imageLink: 'https://x/1', files: [] })))
-      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả.');
-    expect(validateResult(order('cls-009'), filled('cls-009', { technique: 'T1, T2', files: [image] })))
-      .not.toHaveProperty('files');
+  it('accepts an uploaded image or a PACS link for CT and MRI, and refuses neither', () => {
+    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'Có tiêm', imageLink: '', files: [] })))
+      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem phim (PACS).');
+    const byUpload = validateResult(order('cls-009'), filled('cls-009', { technique: 'T1, T2', imageLink: '', files: [image] }));
+    expect(byUpload).not.toHaveProperty('files');
+    expect(byUpload).not.toHaveProperty('imageLink');
+    const byLink = validateResult(order('cls-009'), filled('cls-009', { technique: 'T1, T2', imageLink: 'https://pacs/1', files: [] }));
+    expect(byLink).not.toHaveProperty('files');
+    expect(byLink).not.toHaveProperty('imageLink');
+  });
+
+  it('checks the PACS link format like the backend', () => {
+    expect(validateResult(order('cls-004'), filled('cls-004', { imageLink: 'pacs/1', files: [] })))
+      .toHaveProperty('imageLink', 'Link xem phim không đúng định dạng.');
+    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'x', imageLink: `https://${'a'.repeat(1020)}`, files: [image] })))
+      .toHaveProperty('imageLink');
   });
 
   it('requires the technique for CT and MRI, like the backend', () => {

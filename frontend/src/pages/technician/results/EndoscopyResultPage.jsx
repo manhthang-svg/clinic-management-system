@@ -14,7 +14,7 @@ export function EndoscopyResultPage({ order, api }) {
             set={set}
             readOnly={readOnly}
             required
-            error={errors.files}
+            error={errors.files} errors={errors}
             title="Hình ảnh nội soi"
             description="Bốn ảnh đầu tiên được in thành một hàng trên phiếu. Ghi chú thích vị trí cho từng ảnh."
           />

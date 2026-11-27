@@ -27,7 +27,7 @@ export function XRayResultPage({ order, api }) {
             set={set}
             readOnly={readOnly}
             required
-            error={errors.files}
+            error={errors.files} errors={errors}
             description="Ảnh phim X-quang. Hai ảnh đầu tiên được in bên phải phần mô tả."
           />
           <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
