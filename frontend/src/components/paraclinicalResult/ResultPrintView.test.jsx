@@ -59,7 +59,7 @@ describe('ResultPrintView', () => {
   it.each([
     ['cls-004', 'PHIẾU SIÊU ÂM', 'Lời dặn của BS chuyên khoa'],
     ['cls-005', 'PHIẾU NỘI SOI', 'Hang vị'],
-    ['cls-006', 'PHIẾU CHỤP CẮT LỚP VI TÍNH', 'Quét mã QR truy cập hình ảnh'],
+    ['cls-006', 'PHIẾU CHỤP CẮT LỚP VI TÍNH', '* Mô tả:'],
     ['cls-009', 'PHIẾU CHỤP CỘNG HƯỞNG TỪ', 'dị vật kim loại'],
     ['cls-008', 'PHIẾU CHIẾU/CHỤP X-QUANG', 'Mô tả kết quả chiếu/chụp'],
     ['cls-007', 'PHIẾU ĐIỆN TIM', '2. Kết luận:'],

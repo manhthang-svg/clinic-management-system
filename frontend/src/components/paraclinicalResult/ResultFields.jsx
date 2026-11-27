@@ -102,22 +102,6 @@ export function SignerField({ order, label = 'Người ký phiếu' }) {
   );
 }
 
-export function ImageLinkField({ form, set, errors, readOnly, required = false }) {
-  return (
-    <Field id="result-imageLink" label="Link xem ảnh (PACS)" required={required} error={errors.imageLink} hint="In thành mã QR trên phiếu.">
-      <input
-        id="result-imageLink"
-        value={form.imageLink ?? ''}
-        onChange={(event) => set('imageLink', event.target.value)}
-        disabled={readOnly}
-        placeholder="https://"
-        className={INPUT_CLASS}
-        {...invalid('result-imageLink', errors.imageLink)}
-      />
-    </Field>
-  );
-}
-
 // chan doan hinh anh: bat buoc it nhat 1 anh (required); loi hien duoi khoi anh
 export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description, required = false, error }) {
   const { supportsFiles } = useContext(ResultApiContext);

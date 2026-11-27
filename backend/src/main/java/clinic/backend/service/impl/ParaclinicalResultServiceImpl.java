@@ -500,10 +500,10 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
             if (List.of(ResultForm.CT, ResultForm.MRI).contains(context.form()) && trim(request.technique()) == null) {
                 errors.put("technique", "Vui lòng nhập kỹ thuật");
             }
-            // chan doan hinh anh / tham do chuc nang phai co anh: it nhat 1 anh tai len hoac link xem anh (PACS, CT/MRI)
+            // chan doan hinh anh / tham do chuc nang (ke ca CT/MRI) phai co it nhat 1 anh tai len (Cloudinary, khong co PACS)
             // xet nghiem thi chi nhap chi so, khong co anh
-            if (trim(request.imageLink()) == null && !hasImages(context)) {
-                errors.put("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem ảnh");
+            if (!hasImages(context)) {
+                errors.put("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả");
             }
         }
         if (trim(request.conclusion()) == null) {

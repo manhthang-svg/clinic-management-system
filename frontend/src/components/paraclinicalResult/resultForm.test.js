@@ -119,11 +119,18 @@ describe('anh ket qua: xet nghiem khong co anh, chan doan hinh anh bat buoc co a
     expect(validateResult(order('cls-004'), filled('cls-004', { files: [image] }))).not.toHaveProperty('files');
   });
 
-  it('asks CT and MRI for the image link instead of an upload', () => {
-    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'Có tiêm', imageLink: '' })))
-      .toHaveProperty('imageLink', 'Vui lòng nhập link xem ảnh.');
-    expect(validateResult(order('cls-009'), filled('cls-009', { imageLink: 'https://pacs/1' })))
-      .not.toHaveProperty('imageLink');
+  it('requires an uploaded image for CT and MRI too (no PACS link)', () => {
+    expect(validateResult(order('cls-006'), filled('cls-006', { technique: 'Có tiêm', imageLink: 'https://x/1', files: [] })))
+      .toHaveProperty('files', 'Vui lòng tải lên ít nhất 1 ảnh kết quả.');
+    expect(validateResult(order('cls-009'), filled('cls-009', { technique: 'T1, T2', files: [image] })))
+      .not.toHaveProperty('files');
+  });
+
+  it('requires the technique for CT and MRI, like the backend', () => {
+    expect(validateResult(order('cls-009'), filled('cls-009', { technique: '', files: [image] })))
+      .toHaveProperty('technique', 'Vui lòng nhập kỹ thuật.');
+    expect(validateResult(order('cls-008'), filled('cls-008', { technique: '', files: [image] })))
+      .not.toHaveProperty('technique');
   });
 });
 
