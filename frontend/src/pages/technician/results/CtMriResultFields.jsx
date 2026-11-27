@@ -1,9 +1,9 @@
 import { ResultSection } from '../../../components/paraclinicalResult/ResultEditor';
 import {
-  ConclusionSection, ImageLinkField, SignerField, TextAreaField,
+  ConclusionSection, FilesSection, SignerField, TextAreaField,
 } from '../../../components/paraclinicalResult/ResultFields';
 
-// truong dung chung phieu CT va MRI: ky thuat, mo ta, ket luan, link
+// truong dung chung phieu CT va MRI: ky thuat, mo ta, anh (tai len Cloudinary), ket luan
 export function CtMriResultFields({ order, form, set, errors, readOnly, templateButton }) {
   return (
     <>
@@ -11,10 +11,12 @@ export function CtMriResultFields({ order, form, set, errors, readOnly, template
         <TextAreaField
           id="result-technique"
           label="Kỹ thuật"
+          required
           rows={2}
           value={form.technique}
           onChange={(value) => set('technique', value)}
           readOnly={readOnly}
+          error={errors.technique}
         />
         <TextAreaField
           id="result-description"
@@ -28,9 +30,9 @@ export function CtMriResultFields({ order, form, set, errors, readOnly, template
           error={errors.description}
         />
       </ResultSection>
+      <FilesSection form={form} set={set} readOnly={readOnly} required error={errors.files} />
       <ConclusionSection form={form} set={set} errors={errors} readOnly={readOnly}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} required />
           <SignerField order={order} form={form} set={set} readOnly={readOnly} />
         </div>
       </ConclusionSection>

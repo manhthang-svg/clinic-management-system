@@ -127,7 +127,7 @@ class ParaclinicalResultImageRequiredTest {
     void refusesAnImagingResultWithoutAnyResultYet() {
         Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, request("Bình thường")));
 
-        assertThat(details(thrown)).containsEntry("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem ảnh");
+        assertThat(details(thrown)).containsEntry("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả");
         verify(imagingResultRepository, never()).save(any());
     }
 
@@ -153,12 +153,15 @@ class ParaclinicalResultImageRequiredTest {
     }
 
     @Test
-    @DisplayName("Có link xem ảnh (PACS, CT/MRI) thì không cần tải ảnh lên")
-    void acceptsAnImageLinkInsteadOfUploadedImages() {
-        Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId,
-                request("", "https://pacs.example/xem/123")));
+    @DisplayName("Chỉ nhập link xem ảnh mà không tải ảnh lên thì vẫn báo thiếu ảnh (không dùng PACS)")
+    void refusesAnImageLinkInsteadOfUploadedImages() {
+        draftWithImages(0);
 
-        assertThat(details(thrown)).doesNotContainKey("images").containsKey("conclusion");
+        Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId,
+                request("Bình thường", "https://example.com/xem/123")));
+
+        assertThat(details(thrown)).containsKey("images");
+        verify(imagingResultRepository, never()).save(any());
     }
 
     @Test
@@ -166,12 +169,13 @@ class ParaclinicalResultImageRequiredTest {
     void requiresTheTechniqueOfACtOrMriScan() {
         when(medicalService.getTenchidinh()).thenReturn("Chụp CT sọ não không tiêm thuốc cản quang");
 
-        Throwable missing = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId,
-                request("Bình thường", "https://pacs.example/xem/123")));
+        draftWithImages(1);
+
+        Throwable missing = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, request("Bình thường")));
         assertThat(details(missing)).containsEntry("technique", "Vui lòng nhập kỹ thuật");
 
         SaveParaclinicalResultRequest withTechnique = new SaveParaclinicalResultRequest(null, null, "", "Chụp xoắn ốc",
-                "Nhu mô não bình thường", null, null, "https://pacs.example/xem/123", null, null, null);
+                "Nhu mô não bình thường", null, null, null, null, null, null);
         Throwable other = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, withTechnique));
         assertThat(details(other)).doesNotContainKey("technique").containsKey("conclusion");
     }

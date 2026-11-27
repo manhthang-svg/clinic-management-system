@@ -10,8 +10,7 @@ export const ACCEPTED_TYPES = ['image/jpeg', 'image/png'];
 // thong bao theo bang System Messages
 export const MSG = {
   required: (field) => `Vui lòng nhập ${field}.`, // MSG02
-  imageRequired: 'Vui lòng tải lên ít nhất 1 ảnh kết quả.',
-  format: (field) => `${field} không đúng định dạng.`, // MSG05
+  imageRequired: 'Vui lòng tải lên ít nhất 1 ảnh kết quả.',  format: (field) => `${field} không đúng định dạng.`, // MSG05
   confirmSubmit: 'Bạn có chắc muốn gửi kết quả? Sau khi gửi, kết quả bị khóa và không thể sửa.', // MSG06
   notPerformer: 'Bạn không có quyền thực hiện thao tác này. Chỉ người thực hiện dịch vụ mới được nhập kết quả.', // MSG13
   submitted: 'Kết quả đã được gửi nên không thể sửa nữa.', // MSG61
@@ -129,8 +128,8 @@ export function templateFor(order) {
 }
 
 // kiem tra truoc khi gui, tra ve loi theo tung truong
-// phieu CT/MRI: anh nam tren PACS, nhap link thay cho tai anh len
-export const LINK_IMAGE_FORMS = ['CT', 'MRI'];
+// phieu CT/MRI: bat buoc ky thuat chup, giong backend
+const TECHNIQUE_FORMS = ['CT', 'MRI'];
 
 export function validateResult(order, form) {
   const errors = {};
@@ -152,15 +151,14 @@ export function validateResult(order, form) {
   } else if (!form.description.trim()) {
     errors.description = MSG.required('mô tả kết quả');
   }
-  if (!isLab(order) && !(form.files ?? []).length && !form.imageLink?.trim()) {
-    // chan doan hinh anh / tham do chuc nang phai co anh; CT/MRI xem anh qua link PACS
-    if (LINK_IMAGE_FORMS.includes(order.printForm)) errors.imageLink = MSG.required('link xem ảnh');
-    else errors.files = MSG.imageRequired;
+  if (TECHNIQUE_FORMS.includes(order.printForm) && !form.technique?.trim()) {
+    errors.technique = MSG.required('kỹ thuật');
+  }
+  if (!isLab(order) && !(form.files ?? []).length) {
+    // chan doan hinh anh / tham do chuc nang (ke ca CT/MRI) phai co it nhat 1 anh tai len; khong co PACS
+    errors.files = MSG.imageRequired;
   }
   if (!form.conclusion.trim()) errors.conclusion = MSG.required('kết luận');
-  if (form.imageLink?.trim() && !/^https?:\/\/\S+$/i.test(form.imageLink.trim())) {
-    errors.imageLink = MSG.format('Link xem ảnh');
-  }
   return errors;
 }
 

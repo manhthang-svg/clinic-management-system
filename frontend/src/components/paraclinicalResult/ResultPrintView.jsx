@@ -302,6 +302,16 @@ function DescriptiveSlip({ order, form, printForm }) {
           {form.technique && <p><strong>* Kỹ thuật:</strong> <strong>{form.technique}</strong></p>}
           <div><strong>* Mô tả:</strong></div>
           <p className="whitespace-pre-line">{form.description}</p>
+          {pictures.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 py-1">
+              {pictures.slice(0, 2).map((file) => (
+                <figure key={file.id} className="m-0">
+                  <img src={file.url} alt={file.caption || file.name} className="w-full aspect-[4/3] object-cover bg-black" />
+                  {file.caption && <figcaption className="text-[11px] text-center">{file.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          )}
           <Conclusion form={form} label="Kết luận" />
         </div>
       )}
@@ -342,14 +352,6 @@ function DescriptiveSlip({ order, form, printForm }) {
       <PerformedBy order={order} />
       <div className="flex justify-between items-end pt-2">
         <div className="w-56 text-[12px]">
-          {layout === 'CT_MRI' && (
-            <div className="text-center">
-              {/* TBD: chua co thu vien QR nen in link */}
-              <div className="w-24 h-24 mx-auto border border-black flex items-center justify-center text-[10px]">QR</div>
-              <div className="italic">Quét mã QR truy cập hình ảnh</div>
-              {form.imageLink && <div className="break-all text-[10px]">{form.imageLink}</div>}
-            </div>
-          )}
           {(layout === 'ULTRASOUND' || layout === 'XRAY') && (
             <div>
               <div className="italic">Lời dặn của BS chuyên khoa</div>
