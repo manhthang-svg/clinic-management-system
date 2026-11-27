@@ -148,7 +148,8 @@ class TechnicianQueuePerformOrderTest {
         var queue = service.getQueue(ROOM_ID, null, null, null, PERFORMER_ID);
         assertThat(queue.canManage()).isFalse();
         assertThat(queue.hasOwnWork()).isTrue();
-        assertThat(queue.items()).extracting(item -> item.id()).containsExactly(detail.getId());
+        assertThat(queue.items()).extracting(item -> item.id()).containsExactly(detail.getId(), waiting.getId());
+        assertThat(queue.items().stream().filter(item -> item.id().equals(waiting.getId())).findFirst().get().canManageOrder()).isFalse();
         var nextQueue = service.getQueue(ROOM_ID, null, null, null, COLLEAGUE_ID);
         assertThat(nextQueue.canManage()).isTrue();
         assertThat(nextQueue.stats().total()).isEqualTo(1);
@@ -210,6 +211,39 @@ class TechnicianQueuePerformOrderTest {
 
         service.acceptOrder(lunchDetail.getId(), COLLEAGUE_ID);
         assertThat(lunchDetail.getPerformerAccountId()).isEqualTo(COLLEAGUE_ID);
+    }
+
+    @Test
+    void technicianOutsideShiftCanViewQueueInReadOnlyModeAndCannotOperate() {
+        LocalDate date = LocalDate.parse("2026-11-09");
+        DutySchedule afternoonDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.AFTERNOON,
+                COLLEAGUE_ID, ROOM_ID, null, UUID.randomUUID());
+        when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(ROOM_ID, date, date))
+                .thenReturn(List.of(afternoonDuty));
+
+        ParaclinicalOrderDetail waiting = waitingDetail(detail.getOrder(), ROOM_ID);
+        when(paraclinicalOrderDetailRepository.findQueueDetails(eq(ROOM_ID), any())).thenReturn(List.of(waiting));
+        when(paraclinicalOrderDetailRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+
+        var queue = service.getQueue(ROOM_ID, null, null, null, PERFORMER_ID);
+        assertThat(queue.canManage()).isFalse();
+        assertThat(queue.stats().total()).isEqualTo(1);
+        assertThat(queue.items()).hasSize(1);
+        assertThat(queue.items().getFirst().id()).isEqualTo(waiting.getId());
+        assertThat(queue.items().getFirst().canManageOrder()).isFalse();
+
+        var queueDetail = service.getQueueDetail(waiting.getId(), PERFORMER_ID);
+        assertThat(queueDetail.canManageOrder()).isFalse();
+
+        assertThatThrownBy(() -> service.acceptOrder(waiting.getId(), PERFORMER_ID))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM));
+        assertThatThrownBy(() -> service.checkInOrder(waiting.getId(), PERFORMER_ID))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM));
+        assertThatThrownBy(() -> service.skipOrder(waiting.getId(), PERFORMER_ID))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TECHNICIAN_NOT_ASSIGNED_TO_ROOM));
     }
 
     @Test
