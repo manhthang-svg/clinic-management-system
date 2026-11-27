@@ -1099,7 +1099,14 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             if (detail.getPerformerAccountId() != null) {
                 return staffId.equals(detail.getPerformerAccountId());
             }
-            return canManage(detail);
+            if (detail.getAssignedTechnicianAccountId() != null
+                    && !staffId.equals(detail.getAssignedTechnicianAccountId())
+                    && !canReceive(detail)) {
+                return false;
+            }
+            // KTV ngoài ca trực hoặc xem phòng khác vẫn được xem danh sách chỉ định chờ (chế độ chỉ xem),
+            // việc thao tác (tiếp nhận, check-in, bỏ qua...) được kiểm soát chặt chẽ qua canManageOrder & verify()
+            return true;
         }
 
         private boolean canManage(ParaclinicalOrderDetail detail) {
