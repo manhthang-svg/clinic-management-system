@@ -150,7 +150,7 @@ class TechnicianQueuePerformOrderTest {
         assertThat(queue.hasOwnWork()).isTrue();
         assertThat(queue.items()).extracting(item -> item.id()).containsExactly(detail.getId(), waiting.getId());
         assertThat(queue.items().stream().filter(item -> item.id().equals(waiting.getId())).findFirst().get().canManageOrder()).isFalse();
-        assertThat(service.getDashboardQueue(ROOM_ID, PERFORMER_ID).stats().waiting()).isZero();
+        assertThat(service.getDashboardQueue(ROOM_ID, PERFORMER_ID).stats().waiting()).isEqualTo(1);
         assertThat(service.getDashboardQueue(ROOM_ID, COLLEAGUE_ID).items())
                 .extracting(item -> item.id()).containsExactly(waiting.getId());
         var nextQueue = service.getQueue(ROOM_ID, null, null, null, COLLEAGUE_ID);
@@ -221,12 +221,19 @@ class TechnicianQueuePerformOrderTest {
     @Test
     void technicianOutsideShiftCanViewQueueInReadOnlyModeAndCannotOperate() {
         LocalDate date = LocalDate.parse("2026-11-09");
-        DutySchedule afternoonDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.AFTERNOON,
+        DutySchedule morningDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.MORNING,
                 COLLEAGUE_ID, ROOM_ID, null, UUID.randomUUID());
+        DutySchedule afternoonDuty = new DutySchedule(UUID.randomUUID(), ACCEPTED, date, DutyShift.AFTERNOON,
+                PERFORMER_ID, ROOM_ID, null, UUID.randomUUID());
         when(dutyScheduleRepository.findByRoomIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(ROOM_ID, date, date))
-                .thenReturn(List.of(afternoonDuty));
+                .thenReturn(List.of(morningDuty, afternoonDuty));
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+                PERFORMER_ID, date)).thenReturn(List.of(afternoonDuty));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(PERFORMER_ID))
+                .thenReturn(Optional.empty());
 
         ParaclinicalOrderDetail waiting = waitingDetail(detail.getOrder(), ROOM_ID);
+        waiting.assignToOrderShift(COLLEAGUE_ID);
         when(paraclinicalOrderDetailRepository.findQueueDetails(eq(ROOM_ID), any())).thenReturn(List.of(waiting));
         when(paraclinicalOrderDetailRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
 
@@ -236,6 +243,14 @@ class TechnicianQueuePerformOrderTest {
         assertThat(queue.items()).hasSize(1);
         assertThat(queue.items().getFirst().id()).isEqualTo(waiting.getId());
         assertThat(queue.items().getFirst().canManageOrder()).isFalse();
+
+        var dashboardQueue = service.getDashboardQueue(ROOM_ID, PERFORMER_ID);
+        assertThat(dashboardQueue.stats().waiting()).isEqualTo(1);
+        assertThat(dashboardQueue.items()).containsExactly(queue.items().getFirst());
+        assertThat(service.getDashboardQueue(ROOM_ID, COLLEAGUE_ID).items()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(waiting.getId());
+            assertThat(item.canManageOrder()).isTrue();
+        });
 
         var queueDetail = service.getQueueDetail(waiting.getId(), PERFORMER_ID);
         assertThat(queueDetail.canManageOrder()).isFalse();
@@ -260,6 +275,7 @@ class TechnicianQueuePerformOrderTest {
                 .thenReturn(List.of(morningDuty));
 
         ParaclinicalOrderDetail pending = waitingDetail(detail.getOrder(), ROOM_ID);
+        pending.assignToOrderShift(COLLEAGUE_ID);
         pending.checkIn(1, COLLEAGUE_ID, NOW);
         pending.accept(COLLEAGUE_ID, NOW);
         pending.completePerformance(COLLEAGUE_ID, NOW);
@@ -276,10 +292,25 @@ class TechnicianQueuePerformOrderTest {
         assertThat(colleagueResults.canManage()).isTrue();
         assertThat(colleagueResults.items().getFirst().isPerformer()).isTrue();
         var dashboardResults = service.getDashboardPendingResults(ROOM_ID, PERFORMER_ID);
-        assertThat(dashboardResults.items()).isEmpty();
-        assertThat(dashboardResults.stats().total()).isZero();
+        assertThat(dashboardResults.items()).containsExactly(pendingResults.items().getFirst());
+        assertThat(dashboardResults.stats().total()).isEqualTo(1);
         assertThat(service.getDashboardPendingResults(ROOM_ID, COLLEAGUE_ID).items())
                 .extracting(item -> item.id()).containsExactly(pending.getId());
+    }
+
+    @Test
+    void cannotViewAnotherShiftsAssignedOrderInAnUnassignedRoom() {
+        UUID otherRoomId = UUID.randomUUID();
+        ParaclinicalOrderDetail waiting = waitingDetail(detail.getOrder(), otherRoomId);
+        waiting.assignToOrderShift(COLLEAGUE_ID);
+        when(paraclinicalOrderDetailRepository.findQueueDetails(eq(otherRoomId), any())).thenReturn(List.of(waiting));
+        when(paraclinicalOrderDetailRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+
+        assertThat(service.getQueue(otherRoomId, null, null, null, PERFORMER_ID).items()).isEmpty();
+        assertThat(service.getDashboardQueue(otherRoomId, PERFORMER_ID).items()).isEmpty();
+        assertThatThrownBy(() -> service.getQueueDetail(waiting.getId(), PERFORMER_ID))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
     }
 
     @Test

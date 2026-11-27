@@ -116,43 +116,43 @@ export function CheckInTicketModal({
           </button>
         </div>
 
-        {/* Nội dung phiếu in - Tối ưu 2 cột ngang rộng rãi trên màn hình, khi in xếp dọc chuẩn phiếu 80mm */}
+        {/* Nội dung phiếu in - Tối ưu 2 cột ngang rộng rãi cả trên màn hình lẫn khi in */}
         <div className="p-5 overflow-y-auto print:p-0 print:m-0 print:overflow-visible print:block">
           <article
             ref={printRef}
             aria-label="Phiếu số thứ tự cận lâm sàng"
-            className="checkin-ticket-print bg-white rounded-xl border border-dashed border-slate-300 p-5 text-xs text-slate-800 space-y-3.5 shadow-2xs print:border-dashed print:border-slate-400 print:p-3 print:space-y-3 print:shadow-none print:text-black"
+            className="checkin-ticket-print bg-white rounded-xl border border-dashed border-slate-300 p-5 text-xs text-slate-800 space-y-3.5 shadow-2xs print:border-dashed print:border-slate-500 print:p-6 print:space-y-5 print:shadow-none print:text-black"
           >
             {/* Header phòng khám & tiêu đề */}
-            <header className="text-center border-b border-dashed border-slate-200 pb-2.5 print:border-slate-300">
-              <p className="text-xs font-black uppercase tracking-wider text-teal-800 print:text-black">
+            <header className="text-center border-b border-dashed border-slate-200 pb-2.5 print:pb-4 print:border-slate-300">
+              <p className="text-xs font-black uppercase tracking-wider text-teal-800 print:text-sm print:text-black">
                 PHÒNG KHÁM ĐA KHOA METPH
               </p>
-              <h2 className="text-sm font-extrabold uppercase text-slate-900 mt-0.5 print:text-black">
+              <h2 className="text-sm font-extrabold uppercase text-slate-900 mt-0.5 print:text-lg print:text-black">
                 PHIẾU SỐ THỨ TỰ CẬN LÂM SÀNG
               </h2>
-              <p className="text-[11px] text-slate-500 mt-0.5 print:text-black">
+              <p className="text-[11px] text-slate-500 mt-0.5 print:text-xs print:text-black">
                 Thời gian cấp: <span className="font-semibold text-slate-700 print:text-black">{timeString}</span>
               </p>
             </header>
 
-            {/* Thân phiếu: 2 Cột song song rộng rãi trên màn hình, xếp dọc liên tiếp khi in */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch print:block print:space-y-3">
+            {/* Thân phiếu: 2 Cột song song rộng rãi trên màn hình và khi in full khổ giấy */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch print:grid print:grid-cols-12 print:gap-5 print:items-stretch">
               {/* Cột trái: Khối STT to đúp & Địa điểm phòng */}
-              <section className="md:col-span-5 flex flex-col justify-center text-center p-3.5 bg-teal-50/70 rounded-xl border border-teal-100/90 print:p-2.5 print:bg-transparent print:border-dashed print:border-slate-400">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700 print:text-black">
+              <section className="md:col-span-5 print:col-span-5 flex flex-col justify-center text-center p-3.5 bg-teal-50/70 rounded-xl border border-teal-100/90 print:p-5 print:bg-transparent print:border-dashed print:border-slate-400">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700 print:text-xs print:text-black">
                   SỐ THỨ TỰ CỦA BẠN
                 </p>
-                <div className="text-6xl font-black text-[#0d9488] leading-none my-2 font-mono tracking-tight print:text-black">
+                <div className="text-6xl font-black text-[#0d9488] leading-none my-2 font-mono tracking-tight print:text-7xl print:my-3 print:text-black">
                   {formattedQueueNum}
                 </div>
-                <div className="pt-1 space-y-0.5">
-                  <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-slate-900 leading-snug print:text-black">
+                <div className="pt-1 space-y-0.5 print:space-y-1">
+                  <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-slate-900 leading-snug print:text-sm print:text-black">
                     <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0 print:hidden" />
                     <span>{roomFullName}</span>
                   </div>
                   {roomLocation && (
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 print:text-black">
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 print:text-xs print:text-black">
                       <MapPin className="w-3 h-3 text-slate-400 shrink-0 print:hidden" />
                       <span>{roomLocation}</span>
                     </div>
@@ -161,22 +161,22 @@ export function CheckInTicketModal({
               </section>
 
               {/* Cột phải: Thông tin định danh & Dịch vụ chỉ định */}
-              <div className="md:col-span-7 flex flex-col justify-between space-y-2.5 print:space-y-2.5">
+              <div className="md:col-span-7 print:col-span-7 flex flex-col justify-between space-y-2.5 print:space-y-3">
                 {/* 2. Thông tin định danh bệnh nhân */}
-                <section className="space-y-1.5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 print:bg-transparent print:border-dashed print:border-slate-300 print:p-2">
+                <section className="space-y-1.5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 print:bg-transparent print:border-dashed print:border-slate-300 print:p-3 print:space-y-2">
                   <div className="flex justify-between items-baseline gap-2">
-                    <span className="text-slate-500 shrink-0 print:text-black">Họ và tên:</span>
-                    <span className="font-extrabold text-sm text-slate-900 text-right print:text-black">{patientName}</span>
+                    <span className="text-slate-500 shrink-0 print:text-sm print:text-black">Họ và tên:</span>
+                    <span className="font-extrabold text-sm text-slate-900 text-right print:text-base print:text-black">{patientName}</span>
                   </div>
-                  <div className="flex justify-between items-center gap-2 text-xs">
+                  <div className="flex justify-between items-center gap-2 text-xs print:text-sm">
                     <span className="text-slate-500 print:text-black">Mã bệnh nhân:</span>
                     <span className="font-mono font-bold text-slate-800 print:text-black">{patientId}</span>
                   </div>
-                  <div className="flex justify-between items-center gap-2 text-xs">
+                  <div className="flex justify-between items-center gap-2 text-xs print:text-sm">
                     <span className="text-slate-500 print:text-black">Năm sinh / Giới tính:</span>
                     <span className="font-semibold text-slate-800 print:text-black">{ageGenderStr}</span>
                   </div>
-                  <div className="flex justify-between items-center gap-2 text-xs">
+                  <div className="flex justify-between items-center gap-2 text-xs print:text-sm">
                     <span className="text-slate-500 print:text-black">Đối tượng:</span>
                     <span className="font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200/80 print:bg-transparent print:text-black print:border-slate-400">
                       {insuranceType}
@@ -184,7 +184,7 @@ export function CheckInTicketModal({
                   </div>
                   {/* (Nếu có) Độ ưu tiên: chỉ hiện khi có ưu tiên */}
                   {isPriority && (
-                    <div className="flex justify-between items-center gap-2 text-xs pt-0.5">
+                    <div className="flex justify-between items-center gap-2 text-xs pt-0.5 print:text-sm">
                       <span className="text-rose-600 font-bold print:text-black">Độ ưu tiên:</span>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 print:bg-transparent print:text-black print:border-slate-400">
                         ƯU TIÊN (Xử lý trước)
@@ -194,14 +194,14 @@ export function CheckInTicketModal({
                 </section>
 
                 {/* 3. Thông tin dịch vụ & Chỉ định */}
-                <section className="space-y-1.5 pt-1.5 border-t border-dashed border-slate-200 print:pt-2 print:border-slate-300">
+                <section className="space-y-1.5 pt-1.5 border-t border-dashed border-slate-200 print:pt-3 print:space-y-2 print:border-slate-300">
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium mb-1 print:text-black">
+                    <span className="text-slate-500 block text-[11px] font-medium mb-1 print:text-xs print:text-black">
                       Dịch vụ cần thực hiện tại phòng:
                     </span>
                     <ul className="space-y-1 pl-1">
                       {services.map((svc, index) => (
-                        <li key={svc.id || index} className="flex items-start gap-1.5 text-xs text-slate-800 print:text-black">
+                        <li key={svc.id || index} className="flex items-start gap-1.5 text-xs text-slate-800 print:text-sm print:text-black">
                           <span className="text-teal-600 font-bold leading-tight print:text-black">•</span>
                           <span className="font-semibold">{svc.serviceName || svc.tenchidinh || 'Dịch vụ kỹ thuật'}</span>
                         </li>
@@ -209,12 +209,12 @@ export function CheckInTicketModal({
                     </ul>
                   </div>
 
-                  <div className="flex justify-between items-center gap-2 text-[11px] pt-0.5">
+                  <div className="flex justify-between items-center gap-2 text-[11px] pt-0.5 print:text-xs">
                     <span className="text-slate-500 print:text-black">Mã phiếu chỉ định:</span>
                     <span className="font-mono font-bold text-slate-700 print:text-black">{orderCode}</span>
                   </div>
 
-                  <div className="flex justify-between items-baseline gap-2 text-[11px]">
+                  <div className="flex justify-between items-baseline gap-2 text-[11px] print:text-xs">
                     <span className="text-slate-500 shrink-0 print:text-black">Bác sĩ & Phòng gửi:</span>
                     <span className="font-semibold text-slate-700 text-right print:text-black">{doctorAndRoom}</span>
                   </div>
@@ -223,11 +223,11 @@ export function CheckInTicketModal({
             </div>
 
             {/* Dòng ghi chú / Lời dặn (Footer) */}
-            <footer className="border-t border-dashed border-slate-200 pt-2.5 text-center space-y-0.5 print:border-slate-300">
-              <p className="text-[11px] font-semibold text-slate-700 leading-snug print:text-black">
+            <footer className="border-t border-dashed border-slate-200 pt-2.5 text-center space-y-0.5 print:pt-4 print:space-y-1 print:border-slate-300">
+              <p className="text-[11px] font-semibold text-slate-700 leading-snug print:text-xs print:text-black">
                 “Quý khách vui lòng chú ý lắng nghe loa và nhìn màn hình hiển thị để vào phòng khi đến lượt.”
               </p>
-              <p className="text-[10px] italic text-slate-400 print:text-slate-600">
+              <p className="text-[10px] italic text-slate-400 print:text-[11px] print:text-slate-600">
                 “Phiếu chỉ có giá trị trong ngày khám.”
               </p>
             </footer>

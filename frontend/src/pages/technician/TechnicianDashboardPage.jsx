@@ -408,10 +408,10 @@ export function TechnicianDashboardPage({
                 icon={Clock}
                 iconBg="bg-teal-50 text-[#0d9488]"
                 valueColor="text-teal-900"
-                subtitle="Dịch vụ chờ tiếp nhận"
+                subtitle="Bệnh nhân chờ tiếp nhận"
                 dotColor="bg-teal-500"
                 footerLabel="Mức ưu tiên"
-                footerValue={`${stats.priority} dịch vụ ưu tiên`}
+                footerValue={`${stats.priority} bệnh nhân ưu tiên`}
                 footerValueColor={stats.priority > 0 ? 'text-amber-700 font-bold' : 'text-slate-700'}
               />
             </button>
@@ -426,7 +426,7 @@ export function TechnicianDashboardPage({
                 subtitle="Vắng mặt khi gọi lượt"
                 dotColor="bg-amber-500"
                 footerLabel="Chờ gọi lại"
-                footerValue={`${stats.skipped} dịch vụ`}
+                footerValue={`${stats.skipped} bệnh nhân`}
                 footerValueColor="text-slate-700"
               />
             </button>
@@ -445,7 +445,7 @@ export function TechnicianDashboardPage({
                 }
                 dotColor="bg-sky-500"
                 footerLabel="Cần xử lý sớm"
-                footerValue={`${stats.overdue} dịch vụ >30 phút`}
+                footerValue={`${stats.overdue} bệnh nhân >30 phút`}
                 footerValueColor={stats.overdue > 0 ? 'text-rose-600 font-bold' : 'text-slate-700'}
               />
             </button>

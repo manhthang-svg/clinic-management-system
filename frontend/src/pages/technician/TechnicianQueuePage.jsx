@@ -121,13 +121,10 @@ export function TechnicianQueuePage() {
           const validRooms = Array.isArray(roomList) ? roomList : [];
           setRooms(validRooms);
           if (validRooms.length > 0) {
-            const assignedRoom = validRooms.find((r) => r.hasOwnWork) || validRooms.find((r) => r.isAssigned);
+            const assignedRoom = validRooms.find((r) => r.isAssigned) || validRooms.find((r) => r.hasOwnWork);
             const defaultRoom = assignedRoom || validRooms[0];
-            setCurrentRoomId((prev) => {
-              const selected = (prev && validRooms.some((r) => r.id === prev)) ? prev : defaultRoom.id;
-              technicianApi.setActiveRoomId?.(selected);
-              return selected;
-            });
+            setCurrentRoomId(defaultRoom.id);
+            technicianApi.setActiveRoomId?.(defaultRoom.id);
           }
         }
       } catch (err) {
@@ -255,19 +252,6 @@ export function TechnicianQueuePage() {
   const manageableService = (order) => serviceForAction(order, (service) => service.canManageOrder ?? canManage);
   const completableService = (order) => (order.roomServices ?? [order]).find((service) => service.canComplete);
 
-  // Xử lý đổi phòng thủ công
-  const handleRoomSelect = (roomId) => {
-    setCurrentRoomId(roomId);
-    technicianApi.setActiveRoomId?.(roomId);
-    const selectedRoom = rooms.find((r) => r.id === roomId);
-    // Cập nhật ngay canManage theo phòng vừa chọn để UI phản hồi tức thì
-    setQueueData((prev) => ({
-      ...prev,
-      canManage: selectedRoom ? selectedRoom.isAssigned : null,
-      hasOwnWork: Boolean(selectedRoom?.hasOwnWork),
-    }));
-    toast.info(`Đã chuyển phạm vi làm việc sang: ${selectedRoom?.code || ''} - ${selectedRoom?.name || ''}`);
-  };
 
   const isInitialLoading = !currentRoomId || queueData.stats === null;
   const stats = queueData.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
@@ -798,42 +782,17 @@ export function TechnicianQueuePage() {
           </div>
         </div>
 
-        {/* Bộ chọn/Chuyển đổi phòng (Room Selector Dropdown) */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right hidden sm:block">
-            <span className="block text-[11px] font-semibold text-slate-400">
-              Chuyển đổi phòng máy:
-            </span>
-            <span className="block text-xs font-bold text-slate-700">
-              {currentRoom?.code} - {currentRoom?.name}
-            </span>
-          </div>
-
-          <div className="relative">
-            <select
-              value={currentRoomId}
-              onChange={(e) => handleRoomSelect(e.target.value)}
-              className="h-11 px-4 pr-10 bg-teal-50/70 border border-teal-200/90 rounded-xl text-xs font-bold text-[#0d9488] focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs hover:bg-teal-50 transition-all appearance-none"
-            >
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.code} - {room.name} {room.isAssigned ? '✓ (Phụ trách)' : ''}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-[#0d9488] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={refreshing || queueLoading}
-            className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-            title="Làm mới hàng đợi"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing || queueLoading ? 'animate-spin text-[#0d9488]' : ''}`} />
-          </button>
-        </div>
+        {/* Nút làm mới dữ liệu hàng đợi */}
+        <button
+          type="button"
+          onClick={handleManualRefresh}
+          disabled={refreshing || queueLoading}
+          aria-label="Làm mới hàng đợi"
+          className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+          title="Làm mới hàng đợi"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing || queueLoading ? 'animate-spin text-[#0d9488]' : ''}`} />
+        </button>
       </div>
 
       {/* 2. 4 THẺ THỐNG KÊ THEO PHÒNG HIỆN TẠI (REUSING METRICCARD WITH ADMIN PALETTE) */}

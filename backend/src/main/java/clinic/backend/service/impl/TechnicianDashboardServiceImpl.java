@@ -4,10 +4,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import clinic.backend.entity.DutySchedule;
@@ -78,8 +80,42 @@ public class TechnicianDashboardServiceImpl implements TechnicianDashboardServic
                         room.isAssigned(), room.hasOwnWork()),
                 queue.canManage(),
                 stats,
-                queue.items().stream().limit(LIST_LIMIT).toList(),
-                pending.items().stream().limit(LIST_LIMIT).toList());
+                limitByPatientGroups(queue.items(),
+                        item -> groupKeyOf(item.patientId(), item.orderCode(), item.orderId() != null ? item.orderId() : item.id(), item),
+                        LIST_LIMIT),
+                limitByPatientGroups(pending.items(),
+                        item -> groupKeyOf(item.patientId(), item.orderCode(), item.id(), item),
+                        LIST_LIMIT));
+    }
+
+    private static <T> List<T> limitByPatientGroups(List<T> items,
+                                                      java.util.function.Function<T, String> keyExtractor,
+                                                      int maxGroups) {
+        if (items.size() <= maxGroups) {
+            return items;
+        }
+        Set<String> seenGroups = new LinkedHashSet<>();
+        List<T> result = new ArrayList<>();
+        for (T item : items) {
+            String key = keyExtractor.apply(item);
+            if (seenGroups.size() >= maxGroups && !seenGroups.contains(key)) {
+                break;
+            }
+            seenGroups.add(key);
+            result.add(item);
+        }
+        return result;
+    }
+
+    private static String groupKeyOf(String patientId, String orderCode, UUID fallbackId, Object fallbackIdentity) {
+        String baseOrderCode = orderCode == null ? "" : orderCode.replaceFirst("-\\d+$", "");
+        if (patientId != null && !patientId.isBlank() && !"—".equals(patientId)) {
+            return patientId + "_" + baseOrderCode;
+        }
+        if (fallbackId != null) {
+            return fallbackId.toString();
+        }
+        return !baseOrderCode.isEmpty() ? baseOrderCode : ("item_" + System.identityHashCode(fallbackIdentity));
     }
 
     private TechnicianRoomResponse chooseRoom(List<TechnicianRoomResponse> rooms, UUID roomId,

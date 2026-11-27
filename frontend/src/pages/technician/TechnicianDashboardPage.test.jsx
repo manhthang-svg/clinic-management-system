@@ -61,7 +61,7 @@ describe('TechnicianDashboardPage', () => {
     expect(screen.getByText('Đã hoàn thành hôm nay').closest('button')).toHaveTextContent('9');
     expect(screen.getByText('Chờ nhập kết quả').closest('button')).toHaveTextContent('3');
     expect(screen.getByText('Đang chờ thực hiện').closest('button')).toHaveTextContent('7');
-    expect(screen.getByText('2 dịch vụ ưu tiên')).toBeInTheDocument();
+    expect(screen.getByText('2 bệnh nhân ưu tiên')).toBeInTheDocument();
 
     const queue = screen.getByRole('region', { name: 'Bệnh nhân sắp tới lượt' });
     expect(within(queue).getByText('Trần Thị Mai')).toBeInTheDocument();
