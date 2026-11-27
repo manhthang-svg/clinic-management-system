@@ -127,7 +127,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     expect(screen.queryByRole('dialog', { name: 'Trả chỉ định về hàng chờ' })).not.toBeInTheDocument();
   });
 
-  it('lets the on-duty technician accept a handed-over service and confirm completion separately', async () => {
+  it('lets the on-duty technician accept a handed-over service and completes it immediately to pending result', async () => {
     const waiting = { ...inProgress, status: 'WAITING', canComplete: false, canManageOrder: true };
     const other = {
       ...waiting, id: 'other-detail', orderId: 'other-order', patientName: 'Trần Văn Nam', canManageOrder: false,
@@ -137,7 +137,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     technicianApi.acceptOrder.mockImplementation(async () => {
       technicianApi.getQueue.mockResolvedValue({
         ...response,
-        items: [{ ...waiting, status: 'IN_PROGRESS', canComplete: true }, other],
+        items: [{ ...waiting, status: 'PENDING_RESULT', canComplete: false }, other],
       });
     });
     const user = userEvent.setup();
@@ -147,8 +147,6 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     await user.click(within(await rowOf(waiting.patientName)).getByRole('button', { name: 'Tiếp nhận' }));
 
     expect(technicianApi.acceptOrder).toHaveBeenCalledWith(waiting.id);
-    expect(technicianApi.completeOrder).not.toHaveBeenCalled();
-    await user.click(await within(await rowOf(waiting.patientName)).findByRole('button', { name: 'Đã thực hiện' }));
     expect(technicianApi.completeOrder).toHaveBeenCalledWith(waiting.id);
   });
 
@@ -377,7 +375,7 @@ describe('TechnicianQueuePage – UC-66 Perform Paraclinical Order', () => {
     await user.click(within(row).getByRole('button', { name: /Tiếp nhận/ }));
 
     expect(technicianApi.acceptOrder).toHaveBeenCalledWith('detail-next');
-    expect(technicianApi.completeOrder).not.toHaveBeenCalled();
+    expect(technicianApi.completeOrder).toHaveBeenCalledWith('detail-next');
   });
 
   describe('Tab 3: Đã bỏ qua (Skipped Patients) & UC-46 Tiếp nhận lại', () => {

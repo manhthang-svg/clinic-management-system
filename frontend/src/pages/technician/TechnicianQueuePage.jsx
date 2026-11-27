@@ -529,7 +529,7 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // UC-66: tiếp nhận trước, xác nhận đã thực hiện khi kỹ thuật hoàn tất
+  // UC-66: bấm Tiếp nhận = tiếp nhận + xác nhận đã thực hiện luôn, chuyển sang chờ nhập kết quả
   const handleStartOrder = async (order, e) => {
     e?.stopPropagation();
     const targetService = manageableService(order);
@@ -537,7 +537,25 @@ export function TechnicianQueuePage() {
     try {
       setActionLoadingId(order.id);
       await technicianApi.acceptOrder(targetService.id);
-      toast.success(`Đã tiếp nhận ${order.patientName}. Ca đang thực hiện.`);
+      try {
+        await technicianApi.completeOrder(targetService.id);
+      } catch (completeErr) {
+        toast.error(performErrorMessage(completeErr));
+        await loadQueue(currentRoomId, { silent: true });
+        return;
+      }
+
+      toast.success(
+        `Đã tiếp nhận & hoàn tất kỹ thuật cho ${order.patientName}!`,
+        {
+          description: `${order.roomServices?.[0]?.serviceName || order.serviceName} • Chuyển sang chờ nhập kết quả`,
+          action: {
+            label: 'Nhập KQ ngay',
+            onClick: () => openResult(targetService),
+          },
+          duration: 5000,
+        }
+      );
       if (selectedOrder?.id === order.id) {
         setIsDrawerOpen(false);
         setSelectedOrder(null);
@@ -817,18 +835,6 @@ export function TechnicianQueuePage() {
           </button>
         </div>
       </div>
-
-      {/* Thông báo chế độ chỉ xem nếu không phụ trách phòng hiện tại */}
-      {!canManage && (
-        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
-          <Eye className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            {hasOwnWork
-              ? 'Bạn có thể hoàn tất và gửi kết quả cho các dịch vụ mình đã tiếp nhận.'
-              : 'Bạn có thể tra cứu các dịch vụ mình đã xử lý.'}
-          </span>
-        </div>
-      )}
 
       {/* 2. 4 THẺ THỐNG KÊ THEO PHÒNG HIỆN TẠI (REUSING METRICCARD WITH ADMIN PALETTE) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

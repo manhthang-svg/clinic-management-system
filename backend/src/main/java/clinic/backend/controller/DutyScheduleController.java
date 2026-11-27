@@ -8,6 +8,7 @@ import clinic.backend.dto.request.DutyShiftConfigRequest;
 import clinic.backend.dto.request.WeeklyBatchScheduleRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.DutyScheduleItemResponse;
+import clinic.backend.dto.response.PersonalDutyScheduleResponse;
 import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.security.user.StaffPrincipal;
@@ -70,6 +71,18 @@ public class DutyScheduleController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         return ApiResponse.success(dutyScheduleService.getWeeklySchedule(startDate, endDate));
+    }
+
+    @Operation(summary = "Lấy lịch trực cá nhân")
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('TECHNICIAN')")
+    public ApiResponse<PersonalDutyScheduleResponse> getPersonalSchedule(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        return ApiResponse.success(dutyScheduleService.getPersonalSchedule(
+                StaffPrincipal.from(jwt).accountId(), startDate, endDate));
     }
 
     @Operation(summary = "Lấy lịch trực theo phòng trong tuần")

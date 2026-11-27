@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import clinic.backend.dto.request.DutyScheduleSaveRequest;
 import clinic.backend.dto.request.WeeklyBatchScheduleRequest;
 import clinic.backend.dto.response.DutyScheduleItemResponse;
+import clinic.backend.dto.response.PersonalDutyScheduleResponse;
 import clinic.backend.dto.response.DutyShiftConfigResponse;
 import clinic.backend.dto.response.WeeklyScheduleResponse;
 import clinic.backend.entity.DutySchedule;
@@ -507,6 +508,28 @@ public class DutyScheduleServiceImpl implements DutyScheduleService {
                 .shiftConfig(dutyShiftConfigService.getConfigForDate(startDate))
                 .items(items)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PersonalDutyScheduleResponse getPersonalSchedule(UUID accountId, LocalDate startDate, LocalDate endDate) {
+        List<DutySchedule> schedules = dutyScheduleRepository
+                .findByStaffAccountIdAndWorkDateBetweenOrderByWorkDateAscShiftAsc(accountId, startDate, endDate);
+        Set<UUID> roomIds = schedules.stream().map(DutySchedule::getRoomId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, Room> rooms = roomRepository.findAllById(roomIds).stream()
+                .collect(Collectors.toMap(Room::getId, room -> room));
+        return new PersonalDutyScheduleResponse(schedules.stream().map(schedule -> {
+            Room room = rooms.get(schedule.getRoomId());
+            var config = dutyShiftConfigService.getConfigForDate(schedule.getWorkDate());
+            boolean morning = schedule.getShift() == DutyShift.MORNING;
+            return new PersonalDutyScheduleResponse.Shift(
+                    schedule.getId(), schedule.getStaffAccountId(), schedule.getWorkDate(), schedule.getShift(),
+                    schedule.getRoomId(), room == null ? null : room.getRoomCode(),
+                    room == null ? null : room.getRoomName(),
+                    morning ? config.getMorningStartTime() : config.getAfternoonStartTime(),
+                    morning ? config.getMorningEndTime() : config.getAfternoonEndTime());
+        }).toList());
     }
 
     /**

@@ -25,6 +25,10 @@ function toDutyPayload(item) {
 }
 
 export const dutyScheduleApi = {
+  async getPersonalSchedule(startDate, endDate, signal) {
+    return apiClient.request(`/duty-schedules/me?${buildRangeQuery(startDate, endDate)}`, { signal });
+  },
+
   async getWeeklySchedule(startDate, endDate, signal) {
     return apiClient.request(`/duty-schedules?${buildRangeQuery(startDate, endDate)}`, { signal });
   },

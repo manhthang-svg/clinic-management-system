@@ -342,6 +342,12 @@ export function ParaclinicalResultListPage() {
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-[#0d9488] border border-teal-200/80">
               Phòng máy: {currentRoom ? currentRoom.code : '...'}
             </span>
+            {!canManage && !roomsLoading && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-full text-xs font-semibold">
+                <Eye className="w-3.5 h-3.5 text-amber-600" />
+                Chế độ chỉ xem
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium">
@@ -389,18 +395,6 @@ export function ParaclinicalResultListPage() {
           </div>
         </div>
       </div>
-
-      {/* Thông báo chế độ chỉ xem nếu không phụ trách phòng hiện tại */}
-      {!canManage && !roomsLoading && (
-        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
-          <Eye className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            {hasOwnResults
-              ? 'Bạn có thể nhập và gửi kết quả cho các dịch vụ mình đã thực hiện.'
-              : 'Phòng hiện không có kết quả bạn cần nhập.'}
-          </span>
-        </div>
-      )}
 
       {/* 3. KHUNG THẺ THỐNG KÊ NHANH (SUMMARY METRIC CARDS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

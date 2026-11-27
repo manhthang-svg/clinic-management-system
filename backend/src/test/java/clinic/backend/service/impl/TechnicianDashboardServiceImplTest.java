@@ -2,6 +2,7 @@ package clinic.backend.service.impl;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -15,9 +16,13 @@ import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianQueueStatsResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
+import clinic.backend.entity.DutySchedule;
+import clinic.backend.enums.DutyShift;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ParaclinicalOrderDetailRepository;
+import clinic.backend.repository.DutyScheduleRepository;
+import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.service.TechnicianQueueService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,13 +48,16 @@ class TechnicianDashboardServiceImplTest {
 
     @Mock TechnicianQueueService queueService;
     @Mock ParaclinicalOrderDetailRepository detailRepository;
+    @Mock DutyScheduleRepository dutyScheduleRepository;
+    @Mock StaffRoomAssignmentRepository staffRoomAssignmentRepository;
 
     private TechnicianDashboardServiceImpl service;
     private final UUID technicianId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new TechnicianDashboardServiceImpl(queueService, detailRepository, Clock.fixed(NOW, CLINIC_ZONE));
+        service = new TechnicianDashboardServiceImpl(queueService, detailRepository, dutyScheduleRepository,
+                staffRoomAssignmentRepository, Clock.fixed(NOW, CLINIC_ZONE));
     }
 
     @Test
@@ -59,17 +67,18 @@ class TechnicianDashboardServiceImplTest {
         when(queueService.getTechnicianRooms(technicianId)).thenReturn(List.of(other, mine));
         List<TechnicianQueueItemResponse> waiting = IntStream.range(0, 7)
                 .mapToObj(i -> mock(TechnicianQueueItemResponse.class)).toList();
-        when(queueService.getQueue(mine.id(), null, "WAITING", null, technicianId)).thenReturn(
+        when(queueService.getDashboardQueue(mine.id(), technicianId)).thenReturn(
                 new TechnicianQueueResponse(new TechnicianQueueStatsResponse(12, 7, 2, 3), waiting, true));
         List<TechnicianPendingItemResponse> pending = IntStream.range(0, 3)
                 .mapToObj(i -> mock(TechnicianPendingItemResponse.class)).toList();
-        when(queueService.getPendingResults(mine.id(), null, null, null, technicianId)).thenReturn(
+        when(queueService.getDashboardPendingResults(mine.id(), technicianId)).thenReturn(
                 new TechnicianPendingResultResponse(new TechnicianPendingStatsResponse(3, 2, 1, 1), pending, true));
         when(detailRepository.countCompletedSince(mine.id(), START_OF_DAY, technicianId)).thenReturn(9L);
 
         TechnicianDashboardResponse dashboard = service.getDashboard(null, technicianId);
 
-        assertThat(dashboard.room()).isEqualTo(mine);
+        assertThat(dashboard.room().id()).isEqualTo(mine.id());
+        assertThat(dashboard.room().activeTech()).isNull();
         assertThat(dashboard.canManage()).isTrue();
         assertThat(dashboard.stats()).isEqualTo(new TechnicianDashboardResponse.Stats(7, 2, 3, 2, 1, 1, 9));
         assertThat(dashboard.nextQueue()).containsExactlyElementsOf(waiting.subList(0, 5));
@@ -78,32 +87,36 @@ class TechnicianDashboardServiceImplTest {
     }
 
     @Test
-    void showsTheRequestedRoom() {
+    void showsTheRequestedRoomWhenItBelongsToTheTechnician() {
         TechnicianRoomResponse first = room("P.201", true);
         TechnicianRoomResponse requested = room("P.205", false);
         when(queueService.getTechnicianRooms(technicianId)).thenReturn(List.of(first, requested));
-        when(queueService.getQueue(requested.id(), null, "WAITING", null, technicianId)).thenReturn(
+        LocalDate today = LocalDate.of(2026, 11, 17);
+        var scheduled = new DutySchedule(UUID.randomUUID(), NOW, today, DutyShift.MORNING, technicianId,
+                requested.id(), null, UUID.randomUUID());
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+                technicianId, today)).thenReturn(List.of(scheduled));
+        when(queueService.getDashboardQueue(requested.id(), technicianId)).thenReturn(
                 new TechnicianQueueResponse(new TechnicianQueueStatsResponse(0, 0, 0, 0), List.of(), false));
-        when(queueService.getPendingResults(requested.id(), null, null, null, technicianId)).thenReturn(
+        when(queueService.getDashboardPendingResults(requested.id(), technicianId)).thenReturn(
                 new TechnicianPendingResultResponse(new TechnicianPendingStatsResponse(0, 0, 0, 0), List.of(), false));
 
         TechnicianDashboardResponse dashboard = service.getDashboard(requested.id(), technicianId);
 
-        assertThat(dashboard.room()).isEqualTo(requested);
+        assertThat(dashboard.room().id()).isEqualTo(requested.id());
         assertThat(dashboard.canManage()).isFalse();
         assertThat(dashboard.stats()).isEqualTo(TechnicianDashboardResponse.Stats.empty());
     }
 
     @Test
-    void fallsBackToTheFirstRoomWhenTheTechnicianWorksInNoRoomNow() {
+    void showsNoRoomWhenTheTechnicianHasNoPersonalRoomAndRejectsAnUnrelatedRoom() {
         TechnicianRoomResponse first = room("P.201", false);
         when(queueService.getTechnicianRooms(technicianId)).thenReturn(List.of(first, room("P.202", false)));
-        when(queueService.getQueue(first.id(), null, "WAITING", null, technicianId)).thenReturn(
-                new TechnicianQueueResponse(new TechnicianQueueStatsResponse(0, 0, 0, 0), List.of(), false));
-        when(queueService.getPendingResults(first.id(), null, null, null, technicianId)).thenReturn(
-                new TechnicianPendingResultResponse(new TechnicianPendingStatsResponse(0, 0, 0, 0), List.of(), false));
-
-        assertThat(service.getDashboard(null, technicianId).room()).isEqualTo(first);
+        assertThat(service.getDashboard(null, technicianId).room()).isNull();
+        assertThatThrownBy(() -> service.getDashboard(first.id(), technicianId))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ROOM_NOT_FOUND));
+        verifyNoInteractions(detailRepository);
     }
 
     @Test

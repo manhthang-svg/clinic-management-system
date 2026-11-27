@@ -130,7 +130,7 @@ public class ParaclinicalResultServiceImpl implements ParaclinicalResultService 
     @Transactional(readOnly = true)
     public ParaclinicalResultResponse get(UUID technicianAccountId, UUID orderDetailId) {
         ParaclinicalOrderDetail detail = findDetail(orderDetailId);
-        requirePerformer(detail, technicianAccountId);
+        // KTV ngoài ca trực hoặc không phải người thực hiện vẫn có thể xem phiếu ở chế độ chỉ xem (isPerformer = false)
         return toResponse(load(detail), technicianAccountId);
     }
 

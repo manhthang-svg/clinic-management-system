@@ -20,6 +20,10 @@ public interface TechnicianQueueService {
 
     TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom, UUID currentUserId);
 
+    TechnicianQueueResponse getDashboardQueue(UUID roomId, UUID currentUserId);
+
+    TechnicianPendingResultResponse getDashboardPendingResults(UUID roomId, UUID currentUserId);
+
     default TechnicianQueueResponse getQueue(UUID roomId, String search, String status, String doctorRoom) {
         return getQueue(roomId, search, status, doctorRoom, null);
     }

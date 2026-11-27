@@ -6,7 +6,6 @@ import {
   ArrowRight,
   RefreshCw,
   MapPin,
-  AlertTriangle,
   Microscope,
   CheckCircle2,
   SkipForward,
@@ -32,7 +31,7 @@ const MSG = {
   session: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
   forbidden: 'Bạn không có quyền xem tổng quan kỹ thuật viên.',
   schedule: 'Không thể tải lịch trực.',
-  noRoom: 'Chưa có phòng cận lâm sàng nào đang hoạt động.',
+  noRoom: 'Bạn chưa có phòng cận lâm sàng được phân công.',
 };
 
 // doi loi tai thanh thong bao
@@ -42,73 +41,57 @@ function errorMessage(error) {
   return MSG.load;
 }
 
-function toIsoDate(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+const clinicClock = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hourCycle: 'h23',
+});
+
+function clinicDateTime(date) {
+  const parts = Object.fromEntries(clinicClock.formatToParts(date).map(({ type, value }) => [type, value]));
+  return {
+    iso: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}:${parts.second}.${parts.fractionalSecond}`,
+  };
 }
 
-function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+function addDays(iso, days) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date;
 }
 
-// gio "HH:mm" -> so phut tu 0h
-function minutesOf(time) {
-  if (!time) return null;
-  const [h, m] = time.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function hhmm(time) {
-  return time ? time.slice(0, 5) : '';
-}
-
-// khung gio cua ca, vd "13:00 - 17:30"
-function shiftTime(shift, config) {
-  if (!config) return '';
-  const start = shift === 'MORNING' ? config.morningStartTime : config.afternoonStartTime;
-  const end = shift === 'MORNING' ? config.morningEndTime : config.afternoonEndTime;
-  return start && end ? `${hhmm(start)} – ${hhmm(end)}` : '';
-}
-
-// ca dang dien ra luc nay, khong co thi null
-function shiftAt(now, config) {
-  if (!config) return null;
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  return SHIFT_ORDER.find((shift) => {
-    const start = minutesOf(shift === 'MORNING' ? config.morningStartTime : config.afternoonStartTime);
-    const end = minutesOf(shift === 'MORNING' ? config.morningEndTime : config.afternoonEndTime);
-    return start !== null && end !== null && minutes >= start && minutes < end;
-  }) ?? null;
+function shiftBoundary(time) {
+  if (time.length === 5) return `${time}:00.000`;
+  if (time.length === 8) return `${time}.000`;
+  return time.padEnd(12, '0');
 }
 
 // nhan ngay: Hom nay, Ngay mai, Thu ...
 function dayLabel(date, index) {
-  const dm = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const dm = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
   if (index === 0) return `Hôm nay, ${dm}`;
   if (index === 1) return `Ngày mai, ${dm}`;
-  return `${WEEKDAYS[date.getDay()]}, ${dm}`;
+  return `${WEEKDAYS[date.getUTCDay()]}, ${dm}`;
 }
 
 // tao the lich truc tung ngay cua KTV dang dang nhap
-function buildScheduleDays(schedule, accountId, now) {
+function buildScheduleDays(schedule, accountId, todayIso, nowTime) {
   const items = (schedule?.items ?? []).filter((item) => item.staffAccountId === accountId);
-  const current = shiftAt(now, schedule?.shiftConfig);
   return Array.from({ length: SCHEDULE_DAYS }, (_, index) => {
-    const date = addDays(now, index);
-    const iso = toIsoDate(date);
+    const date = addDays(todayIso, index);
+    const iso = date.toISOString().slice(0, 10);
     const shifts = items
       .filter((item) => item.workDate === iso)
       .sort((a, b) => SHIFT_ORDER.indexOf(a.shift) - SHIFT_ORDER.indexOf(b.shift))
       .map((item) => ({
         key: item.id ?? `${iso}-${item.shift}`,
         name: SHIFT_NAMES[item.shift] ?? item.shift,
-        time: shiftTime(item.shift, schedule?.shiftConfig),
+        time: item.startTime && item.endTime ? `${item.startTime.slice(0, 5)} – ${item.endTime.slice(0, 5)}` : '',
+        roomId: item.roomId,
         room: item.roomCode ? `${item.roomCode} – ${item.roomName ?? ''}` : 'Không phân công phòng',
-        isCurrent: index === 0 && item.shift === current,
+        isCurrent: index === 0 && Boolean(item.startTime && item.endTime
+          && nowTime >= shiftBoundary(item.startTime) && nowTime <= shiftBoundary(item.endTime)),
       }));
     const status = shifts.length === 0 ? 'OFF' : shifts.some((s) => s.isCurrent) ? 'CURRENT' : 'UPCOMING';
     const statusLabel = { OFF: 'Nghỉ ca', CURRENT: 'Đang diễn ra', UPCOMING: 'Có lịch trực' }[status];
@@ -182,17 +165,8 @@ export function TechnicianDashboardPage({
   const [scheduleError, setScheduleError] = useState('');
 
   const load = useCallback(async (signal) => {
-    const storedRoomId = api.getActiveRoomId?.() || undefined;
     try {
-      let result;
-      try {
-        result = await api.getDashboard({ roomId: storedRoomId }, signal);
-      } catch (failure) {
-        // phong da luu khong con thi bo, lay phong mac dinh
-        if (!storedRoomId || failure?.errorResponse?.code !== 'ROOM_NOT_FOUND') throw failure;
-        api.setActiveRoomId?.('');
-        result = await api.getDashboard({}, signal);
-      }
+      const result = await api.getDashboard({}, signal);
       if (signal?.aborted) return;
       if (result?.room?.id) api.setActiveRoomId?.(result.room.id);
       setDashboard(result);
@@ -222,19 +196,28 @@ export function TechnicianDashboardPage({
     };
   }, [load]);
 
-  const todayIso = toIsoDate(today);
+  const { iso: todayIso, time: nowTime } = clinicDateTime(today);
   useEffect(() => {
     const controller = new AbortController();
-    const start = new Date(`${todayIso}T00:00:00`);
-    scheduleApi.getWeeklySchedule(todayIso, toIsoDate(addDays(start, SCHEDULE_DAYS - 1)), controller.signal)
-      .then((result) => {
+    const endDate = addDays(todayIso, SCHEDULE_DAYS - 1).toISOString().slice(0, 10);
+    const loadSchedule = async () => {
+      try {
+        const result = await scheduleApi.getPersonalSchedule(todayIso, endDate, controller.signal);
+        if (controller.signal.aborted) return;
         setSchedule(result);
         setScheduleError('');
-      })
-      .catch((failure) => {
+      } catch (failure) {
         if (failure?.name !== 'AbortError' && !controller.signal.aborted) setScheduleError(MSG.schedule);
-      });
-    return () => controller.abort();
+      }
+    };
+    void loadSchedule();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadSchedule();
+    }, REFRESH_MS);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
   }, [scheduleApi, todayIso]);
 
   const handleManualRefresh = async () => {
@@ -244,16 +227,14 @@ export function TechnicianDashboardPage({
   };
 
   const scheduleDays = useMemo(
-    () => buildScheduleDays(schedule, currentUser?.id, today),
-    // chi tinh lai khi doi ngay
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [schedule, currentUser?.id, todayIso],
+    () => buildScheduleDays(schedule, currentUser?.id, todayIso, nowTime),
+    [schedule, currentUser?.id, todayIso, nowTime],
   );
-  const currentShift = shiftAt(today, schedule?.shiftConfig);
 
   const room = dashboard?.room;
   const stats = dashboard?.stats;
   const canManage = Boolean(dashboard?.canManage);
+  const currentShift = canManage && scheduleDays[0].shifts.find((shift) => shift.isCurrent && shift.roomId === room?.id);
   const hasOwnWork = Boolean(room?.hasOwnWork);
   const resultsToEnter = (stats?.pendingResult ?? 0) + (stats?.draft ?? 0);
 
@@ -348,15 +329,6 @@ export function TechnicianDashboardPage({
     });
   }, [dashboard?.pendingResults]);
 
-  // Thong ke dong bo theo so BENH NHAN (va tong so dich vu)
-  const waitingPatientCount = stats?.waiting === 0 ? 0 : (groupedNextQueue.length || stats?.waiting || 0);
-  const pendingPatientCount = resultsToEnter === 0 ? 0 : (groupedPendingResults.length || resultsToEnter);
-  const overduePatientCount = resultsToEnter === 0 ? 0 : (
-    groupedPendingResults.length > 0
-      ? groupedPendingResults.filter((p) => p.anyOverdue || (p.completedMinutesAgo >= 30)).length
-      : (stats?.overdue ?? 0)
-  );
-
   if (!dashboard && !error) {
     return <p className="text-sm text-slate-500">Đang tải dữ liệu tổng quan…</p>;
   }
@@ -400,31 +372,17 @@ export function TechnicianDashboardPage({
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{room.name}</h1>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
                   {room.location && (
-                    <>
-                      <span className="flex items-center gap-1 text-slate-700 font-semibold">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        {room.location}
-                      </span>
-                      <span>•</span>
-                    </>
+                    <span className="flex items-center gap-1 text-slate-700 font-semibold">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      {room.location}
+                    </span>
                   )}
-                  {schedule?.shiftConfig && (
-                    <>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Ca hiện tại:{' '}
-                        <strong className="text-slate-700">
-                          {currentShift
-                            ? `${SHIFT_NAMES[currentShift]} (${shiftTime(currentShift, schedule.shiftConfig)})`
-                            : 'Ngoài giờ ca trực'}
-                        </strong>
-                      </span>
-                      <span>•</span>
-                    </>
+                  {currentShift && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      Ca của bạn <strong className="text-slate-700">{currentShift.name} ({currentShift.time})</strong>
+                    </span>
                   )}
-                  <span>
-                    Phụ trách: <strong className="text-slate-700">{room.activeTech || 'Chưa có'}</strong>
-                  </span>
                 </div>
               </div>
             </div>
@@ -441,43 +399,26 @@ export function TechnicianDashboardPage({
             </button>
           </div>
 
-          {!canManage && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium shadow-2xs">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                {hasOwnWork
-                  ? 'Bạn có thể hoàn tất và gửi kết quả cho các dịch vụ mình đã tiếp nhận.'
-                  : 'Bạn có thể tra cứu các dịch vụ mình đã xử lý.'}
-              </span>
-            </div>
-          )}
-
           {/* 2. Bon the chi so trong ngay; bam vao the de mo man hinh tuong ung */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button type="button" onClick={() => navigate('/technician/queue')} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
                 title="Đang chờ thực hiện"
-                value={String(waitingPatientCount)}
+                value={String(stats.waiting)}
                 icon={Clock}
                 iconBg="bg-teal-50 text-[#0d9488]"
                 valueColor="text-teal-900"
-                subtitle={
-                  stats.waiting === 0
-                    ? 'Đã thanh toán, chờ gọi vào phòng'
-                    : waitingPatientCount !== stats.waiting
-                      ? `Gồm ${stats.waiting} dịch vụ chờ gọi`
-                      : 'Đã thanh toán, chờ gọi vào phòng'
-                }
+                subtitle="Dịch vụ chờ tiếp nhận"
                 dotColor="bg-teal-500"
                 footerLabel="Mức ưu tiên"
-                footerValue={`${stats.priority} ca ưu tiên`}
+                footerValue={`${stats.priority} dịch vụ ưu tiên`}
                 footerValueColor={stats.priority > 0 ? 'text-amber-700 font-bold' : 'text-slate-700'}
               />
             </button>
 
             <button type="button" onClick={() => navigate('/technician/queue', { state: { tab: 'skipped' } })} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
-                title="Đã bỏ qua hôm nay"
+                title="Đang bỏ qua"
                 value={String(stats.skipped)}
                 icon={SkipForward}
                 iconBg="bg-amber-50 text-amber-700"
@@ -485,7 +426,7 @@ export function TechnicianDashboardPage({
                 subtitle="Vắng mặt khi gọi lượt"
                 dotColor="bg-amber-500"
                 footerLabel="Chờ gọi lại"
-                footerValue={`${stats.skipped} bệnh nhân`}
+                footerValue={`${stats.skipped} dịch vụ`}
                 footerValueColor="text-slate-700"
               />
             </button>
@@ -493,21 +434,19 @@ export function TechnicianDashboardPage({
             <button type="button" onClick={() => navigate('/technician/results')} className="text-left cursor-pointer transition-transform hover:-translate-y-0.5 active:translate-y-0">
               <MetricCard
                 title="Chờ nhập kết quả"
-                value={String(pendingPatientCount)}
+                value={String(resultsToEnter)}
                 icon={Microscope}
                 iconBg="bg-sky-50 text-sky-700"
                 valueColor="text-sky-900"
                 subtitle={
                   resultsToEnter === 0
                     ? 'Chưa có kết quả chờ nhập'
-                    : groupedPendingResults.length > 0 && resultsToEnter > groupedPendingResults.length
-                      ? `Gồm ${resultsToEnter} dịch vụ (Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft})`
-                      : `Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft}`
+                    : `Chưa nhập ${stats.pendingResult} • Bản nháp ${stats.draft}`
                 }
                 dotColor="bg-sky-500"
                 footerLabel="Cần xử lý sớm"
-                footerValue={`${overduePatientCount} ca >30 phút`}
-                footerValueColor={overduePatientCount > 0 ? 'text-rose-600 font-bold' : 'text-slate-700'}
+                footerValue={`${stats.overdue} dịch vụ >30 phút`}
+                footerValueColor={stats.overdue > 0 ? 'text-rose-600 font-bold' : 'text-slate-700'}
               />
             </button>
 
@@ -535,11 +474,11 @@ export function TechnicianDashboardPage({
                     </div>
                     <div>
                       <h2 id="next-queue-title" className="text-sm font-extrabold text-slate-900">Bệnh nhân sắp tới lượt</h2>
-                      <p className="text-[11px] text-slate-500">5 bệnh nhân đứng đầu hàng đợi phòng {room.code}</p>
+                      <p className="text-[11px] text-slate-500">Đầu hàng đợi phòng {room.code}</p>
                     </div>
                   </div>
                   <button type="button" onClick={() => navigate('/technician/queue')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0d9488] hover:text-[#0f766e] transition-colors cursor-pointer group">
-                    <span>Xem tất cả ({waitingPatientCount})</span>
+                    <span>Xem tất cả ({stats.waiting})</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
@@ -624,7 +563,7 @@ export function TechnicianDashboardPage({
                     </div>
                   </div>
                   <button type="button" onClick={() => navigate('/technician/results')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0d9488] hover:text-[#0f766e] transition-colors cursor-pointer group">
-                    <span>Xem tất cả ({pendingPatientCount})</span>
+                    <span>Xem tất cả ({resultsToEnter})</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
