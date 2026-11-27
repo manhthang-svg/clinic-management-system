@@ -125,6 +125,7 @@ class ParaclinicalResultEditAndPrintTest {
     @Test
     void refusesToEditAResultThatWasAlreadySubmitted() {
         labService();
+        when(detail.getPerformerAccountId()).thenReturn(TECHNICIAN_ID);
         submittedLabResult();
 
         assertCode(catchThrowable(() -> service.saveDraft(TECHNICIAN_ID, detailId, null)),
@@ -230,6 +231,7 @@ class ParaclinicalResultEditAndPrintTest {
     @Test
     void refusesToPrintAResultThatIsNotSubmitted() {
         labService();
+        when(detail.getPerformerAccountId()).thenReturn(TECHNICIAN_ID);
 
         assertCode(catchThrowable(() -> service.recordPrint(TECHNICIAN_ID, detailId)), ErrorCode.RESULT_NOT_SUBMITTED);
     }
@@ -237,10 +239,10 @@ class ParaclinicalResultEditAndPrintTest {
     @Test
     void refusesToPrintForATechnicianWhoIsNotThePerformer() {
         labService();
-        submittedLabResult();
         when(detail.getPerformerAccountId()).thenReturn(UUID.randomUUID());
 
         assertCode(catchThrowable(() -> service.recordPrint(TECHNICIAN_ID, detailId)), ErrorCode.ACCESS_DENIED);
+        verify(labResultRepository, never()).findByOrderDetailId(detailId);
     }
 
     @Test
