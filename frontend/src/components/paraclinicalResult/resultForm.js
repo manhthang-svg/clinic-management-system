@@ -10,7 +10,7 @@ export const ACCEPTED_TYPES = ['image/jpeg', 'image/png'];
 // thong bao theo bang System Messages
 export const MSG = {
   required: (field) => `Vui lòng nhập ${field}.`, // MSG02
-  imageRequired: 'Vui lòng tải lên ít nhất 1 ảnh kết quả.',  format: (field) => `${field} không đúng định dạng.`, // MSG05
+  imageOrLinkRequired: 'Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem phim (PACS).',  format: (field) => `${field} không đúng định dạng.`, // MSG05
   confirmSubmit: 'Bạn có chắc muốn gửi kết quả? Sau khi gửi, kết quả bị khóa và không thể sửa.', // MSG06
   notPerformer: 'Bạn không có quyền thực hiện thao tác này. Chỉ người thực hiện dịch vụ mới được nhập kết quả.', // MSG13
   submitted: 'Kết quả đã được gửi nên không thể sửa nữa.', // MSG61
@@ -154,9 +154,13 @@ export function validateResult(order, form) {
   if (TECHNIQUE_FORMS.includes(order.printForm) && !form.technique?.trim()) {
     errors.technique = MSG.required('kỹ thuật');
   }
-  if (!isLab(order) && !(form.files ?? []).length) {
-    // chan doan hinh anh / tham do chuc nang (ke ca CT/MRI) phai co it nhat 1 anh tai len; khong co PACS
-    errors.files = MSG.imageRequired;
+  // xet nghiem: khong co anh, khong co link
+  // chan doan hinh anh / tham do chuc nang (ke ca CT/MRI): tai anh len HOAC link PACS, it nhat 1 trong 2 (giong backend)
+  if (!isLab(order)) {
+    const link = form.imageLink?.trim();
+    if (!(form.files ?? []).length && !link) errors.files = MSG.imageOrLinkRequired;
+    // co nhap link thi phai dung dinh dang, giong backend (@Pattern, @Size 1024)
+    if (link && (!/^https?:\/\/\S+$/i.test(link) || link.length > 1024)) errors.imageLink = MSG.format('Link xem phim');
   }
   if (!form.conclusion.trim()) errors.conclusion = MSG.required('kết luận');
   return errors;

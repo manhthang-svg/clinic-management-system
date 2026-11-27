@@ -35,8 +35,9 @@ public record SaveParaclinicalResultRequest(
         @Size(max = 1000, message = "Lời dặn không được vượt quá 1.000 ký tự")
         String recommendation,
 
-        @Size(max = 1024, message = "Link xem ảnh không được vượt quá 1.024 ký tự")
-        @Pattern(regexp = "^$|^https?://\\S+$", message = "Link xem ảnh không đúng định dạng")
+        // link xem phim (PACS): thay cho tai anh len (it nhat 1 trong 2)
+        @Size(max = 1024, message = "Link xem phim không được vượt quá 1.024 ký tự")
+        @Pattern(regexp = "^$|^https?://\\S+$", message = "Link xem phim không đúng định dạng")
         String imageLink,
 
         @Size(max = 255, message = "Tên bác sĩ đọc kết quả không được vượt quá 255 ký tự")

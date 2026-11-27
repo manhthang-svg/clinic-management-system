@@ -127,7 +127,8 @@ class ParaclinicalResultImageRequiredTest {
     void refusesAnImagingResultWithoutAnyResultYet() {
         Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId, request("Bình thường")));
 
-        assertThat(details(thrown)).containsEntry("images", "Vui lòng tải lên ít nhất 1 ảnh kết quả");
+        assertThat(details(thrown)).containsEntry("images",
+                "Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem phim (PACS)");
         verify(imagingResultRepository, never()).save(any());
     }
 
@@ -153,15 +154,12 @@ class ParaclinicalResultImageRequiredTest {
     }
 
     @Test
-    @DisplayName("Chỉ nhập link xem ảnh mà không tải ảnh lên thì vẫn báo thiếu ảnh (không dùng PACS)")
-    void refusesAnImageLinkInsteadOfUploadedImages() {
-        draftWithImages(0);
-
+    @DisplayName("Có link xem phim (PACS) thì không cần tải ảnh lên (ảnh hoặc link, ít nhất 1 trong 2)")
+    void acceptsAPacsLinkInsteadOfUploadedImages() {
         Throwable thrown = catchThrowable(() -> service.submit(TECHNICIAN_ID, detailId,
-                request("Bình thường", "https://example.com/xem/123")));
+                request("", "https://pacs.example/xem/123")));
 
-        assertThat(details(thrown)).containsKey("images");
-        verify(imagingResultRepository, never()).save(any());
+        assertThat(details(thrown)).doesNotContainKey("images").containsKey("conclusion");
     }
 
     @Test

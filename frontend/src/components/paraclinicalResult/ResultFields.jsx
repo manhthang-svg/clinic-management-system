@@ -102,13 +102,37 @@ export function SignerField({ order, label = 'Người ký phiếu' }) {
   );
 }
 
-// chan doan hinh anh: bat buoc it nhat 1 anh (required); loi hien duoi khoi anh
-export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description, required = false, error }) {
+// link xem phim (PACS): cach thu 2 thay cho tai anh len
+export function ImageLinkField({ form, set, errors = {}, readOnly }) {
+  return (
+    <Field
+      id="result-imageLink"
+      label="Link xem phim (PACS)"
+      error={errors.imageLink}
+      hint="Dán link PACS nếu không tải ảnh lên. Link phải bắt đầu bằng http:// hoặc https://."
+    >
+      <input
+        id="result-imageLink"
+        value={form.imageLink ?? ''}
+        onChange={(event) => set('imageLink', event.target.value)}
+        disabled={readOnly}
+        placeholder="https://"
+        className={INPUT_CLASS}
+        {...invalid('result-imageLink', errors.imageLink)}
+      />
+    </Field>
+  );
+}
+
+// chan doan hinh anh / tham do chuc nang: tai anh len (Cloudinary) HOAC dan link PACS, can it nhat 1 trong 2
+// loi thieu ca 2 hien duoi khoi anh
+export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', description, required = false, error, errors = {} }) {
   const { supportsFiles } = useContext(ResultApiContext);
+  const hint = 'Tải ảnh lên hoặc dán link xem phim (PACS) bên dưới, cần ít nhất 1 trong 2.';
   return (
     <ResultSection
       title={required ? <>{title}<span className="text-rose-500 ml-0.5">*</span></> : title}
-      description={description}
+      description={description ? `${description} ${hint}` : hint}
     >
       {supportsFiles ? (
         <ResultFiles files={form.files ?? []} readOnly={readOnly} onChange={(files) => set('files', files)} />
@@ -116,6 +140,9 @@ export function FilesSection({ form, set, readOnly, title = 'Hình ảnh', descr
         <p className="text-sm text-slate-500">Chức năng tải ảnh kết quả chưa được hỗ trợ.</p>
       )}
       {error && !readOnly && <FieldError id="result-files-error">{error}</FieldError>}
+      <div className="max-w-xl">
+        <ImageLinkField form={form} set={set} errors={errors} readOnly={readOnly} />
+      </div>
     </ResultSection>
   );
 }

@@ -142,6 +142,13 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     expect(await screen.findByRole('button', { name: 'Gửi kết quả' })).toBeInTheDocument();
     expect(screen.queryByText('File đính kèm')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Thêm ảnh' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Link xem phim \(PACS\)/)).not.toBeInTheDocument();
+  });
+
+  it('shows the PACS link field next to the images on an imaging result', async () => {
+    renderPage('cls-004');
+
+    expect(await screen.findByLabelText(/Link xem phim \(PACS\)/)).toBeInTheDocument();
   });
 
   it('does not submit an ultrasound result without an image', async () => {
@@ -153,7 +160,7 @@ describe('ParaclinicalResultPage (UC-67, UC-68)', () => {
     await user.click(screen.getByRole('button', { name: 'Gửi kết quả' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('Vui lòng tải lên ít nhất 1 ảnh kết quả.')).toBeInTheDocument();
+    expect(screen.getByText('Vui lòng tải lên ít nhất 1 ảnh kết quả hoặc nhập link xem phim (PACS).')).toBeInTheDocument();
     expect((await api.get('cls-004')).result?.status).not.toBe('SUBMITTED');
   });
 

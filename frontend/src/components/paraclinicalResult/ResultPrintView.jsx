@@ -360,6 +360,11 @@ function DescriptiveSlip({ order, form, printForm }) {
         </div>
       )}
 
+      {/* link xem phim (PACS), neu co, in cho moi loai phieu hinh anh */}
+      {form.imageLink && (
+        <p className="text-[12px] break-all"><strong>Link xem phim (PACS):</strong> {form.imageLink}</p>
+      )}
+
       <PerformedBy order={order} />
       <div className="flex justify-between items-end pt-2">
         <div className="w-56 text-[12px]">
