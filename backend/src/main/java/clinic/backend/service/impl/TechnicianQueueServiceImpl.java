@@ -260,9 +260,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
                     .map(StaffRoomAssignment::getRoomId)
                     .ifPresent(ownRoomIds::add);
 
-            if (!ownRoomIds.isEmpty()) {
-                targetRooms = rooms.stream().filter(r -> ownRoomIds.contains(r.getId())).toList();
-            }
+            targetRooms = rooms.stream().filter(r -> ownRoomIds.contains(r.getId())).toList();
         }
 
         return targetRooms.stream()
@@ -1222,24 +1220,15 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
             if (!isTechnician()) {
                 return false;
             }
-            if (detail.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS
-                    && detail.getPerformerAccountId() != null) {
-                return staffId.equals(detail.getPerformerAccountId());
+            if (detail.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS) {
+                return detail.getPerformerAccountId() != null
+                        ? staffId.equals(detail.getPerformerAccountId())
+                        : (canManageRoom(detail.getRoomId()) || canObserveRoom(detail.getRoomId()));
             }
-            if (detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT
-                    && detail.awaitsResultFrom(staffId)) {
+            if (detail.awaitsResultFrom(staffId)) {
                 return true;
             }
-            if (detail.getAssignedTechnicianAccountId() != null
-                    && !staffId.equals(detail.getAssignedTechnicianAccountId())
-                    && !canReceive(detail)) {
-                return (detail.getStatus() == ParaclinicalOrderDetailStatus.WAITING
-                        || detail.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT)
-                        && canObserveRoom(detail.getRoomId());
-            }
-            // KTV ngoài ca trực hoặc xem phòng khác vẫn được xem danh sách chỉ định chờ hoặc chờ nhập kết quả (chế độ chỉ xem),
-            // việc thao tác (tiếp nhận, check-in, bỏ qua, nhập kết quả...) được kiểm soát chặt chẽ qua canManageOrder, isPerformer & verify()
-            return true;
+            return canManageRoom(detail.getRoomId()) || canObserveRoom(detail.getRoomId());
         }
 
         private boolean canShowWaitingOnDashboard(ParaclinicalOrderDetail detail) {
