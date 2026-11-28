@@ -468,4 +468,93 @@ class TechnicianQueueServiceImplTest {
             TechnicianQueueServiceImpl.validateFilters(null, status, TechnicianQueueServiceImpl.PENDING_RESULT_STATUSES);
         }
     }
+
+    @Test
+    void getTechnicianRooms_whenTechnicianHasNoAssignmentOrWork_returnsEmptyList() {
+        UUID technicianId = UUID.randomUUID();
+        UUID otherRoomId = UUID.randomUUID();
+        Room otherRoom = new Room(otherRoomId, NOW, UUID.randomUUID(), UUID.randomUUID(),
+                "P.201", "Phòng X-Quang", "Khu A", RoomType.PARACLINICAL, ActivationStatus.ACTIVE);
+        when(roomRepository.findByTypeAndStatusOrderByRoomCodeAsc(RoomType.PARACLINICAL, ActivationStatus.ACTIVE))
+                .thenReturn(List.of(otherRoom));
+
+        StaffAccount technician = org.mockito.Mockito.mock(StaffAccount.class);
+        when(technician.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(technician));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId))
+                .thenReturn(Optional.empty());
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+                org.mockito.ArgumentMatchers.eq(technicianId), any()))
+                .thenReturn(List.of());
+        when(paraclinicalOrderDetailRepository.findQueueWorkForTechnician(any(), org.mockito.ArgumentMatchers.eq(technicianId), any()))
+                .thenReturn(List.of());
+
+        List<TechnicianRoomResponse> responses = service.getTechnicianRooms(technicianId);
+
+        assertThat(responses).isEmpty();
+    }
+
+    @Test
+    void getQueue_whenTechnicianRequestsOtherRoom_hidesUnassignedServices() {
+        UUID technicianId = UUID.randomUUID();
+        UUID otherRoomId = UUID.randomUUID();
+        StaffAccount technician = org.mockito.Mockito.mock(StaffAccount.class);
+        when(technician.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(technician));
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám Nội", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+        ParaclinicalOrderDetail unassignedInOtherRoom = new ParaclinicalOrderDetail(
+                UUID.randomUUID(), NOW, order, UUID.randomUUID(), "CD0000000001-01", NOW, "X-Quang phổi", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), otherRoomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+        when(paraclinicalOrderDetailRepository.findQueueDetails(org.mockito.ArgumentMatchers.eq(otherRoomId), any()))
+                .thenReturn(List.of(unassignedInOtherRoom));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId))
+                .thenReturn(Optional.empty());
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+                org.mockito.ArgumentMatchers.eq(technicianId), any()))
+                .thenReturn(List.of());
+
+        TechnicianQueueResponse response = service.getQueue(otherRoomId, null, "ALL", null, technicianId);
+
+        assertThat(response.items()).isEmpty();
+        assertThat(response.canManage()).isFalse();
+    }
+
+    @Test
+    void getQueueDetail_whenTechnicianRequestsOtherRoomOrder_throwsAccessDenied() {
+        UUID technicianId = UUID.randomUUID();
+        UUID otherRoomId = UUID.randomUUID();
+        UUID detailId = UUID.randomUUID();
+
+        StaffAccount technician = org.mockito.Mockito.mock(StaffAccount.class);
+        when(technician.getRole()).thenReturn(Role.TECHNICIAN);
+        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(technician));
+
+        ParaclinicalOrder order = new ParaclinicalOrder(
+                UUID.randomUUID(), NOW, "CD0000000002", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Chẩn đoán", (short) 1, "Thường", "Phòng khám Nội", BigDecimal.valueOf(100000),
+                ParaclinicalOrderStatus.RELEASED
+        );
+        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
+                detailId, NOW, order, UUID.randomUUID(), "CD0000000002-01", NOW, "X-Quang phổi", null, null,
+                BigDecimal.ONE, BigDecimal.valueOf(100000), BigDecimal.valueOf(100000), BigDecimal.ZERO,
+                BigDecimal.valueOf(100000), otherRoomId, ParaclinicalOrderDetailStatus.WAITING
+        );
+        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
+        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId))
+                .thenReturn(Optional.empty());
+        when(dutyScheduleRepository.findByStaffAccountIdAndWorkDateGreaterThanEqualOrderByWorkDateAscShiftAsc(
+                org.mockito.ArgumentMatchers.eq(technicianId), any()))
+                .thenReturn(List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getQueueDetail(detailId, technicianId))
+                .isInstanceOfSatisfying(clinic.backend.exceptions.AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(clinic.backend.enums.ErrorCode.ACCESS_DENIED));
+    }
 }

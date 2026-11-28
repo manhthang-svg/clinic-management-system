@@ -37,7 +37,12 @@ public class ParaclinicalProgressServiceImpl implements ParaclinicalProgressServ
         if (visit.getStatus() != VisitStatus.WAITING_PARACLINICAL) {
             return false;
         }
-        List<ParaclinicalOrderDetail> services = medicalRecordRepository.findByVisitId(visit.getId())
+        // Khóa dòng visits (PESSIMISTIC_WRITE) để tuần tự hóa kiểm tra khi nhiều kết quả cuối được gửi đồng thời
+        Visit lockedVisit = visitRepository.findByIdForUpdate(visit.getId()).orElse(visit);
+        if (lockedVisit.getStatus() != VisitStatus.WAITING_PARACLINICAL) {
+            return false;
+        }
+        List<ParaclinicalOrderDetail> services = medicalRecordRepository.findByVisitId(lockedVisit.getId())
                 .map(record -> paraclinicalOrderRepository.findAllByMedicalRecordId(record.getId()))
                 .orElse(List.of())
                 .stream()
@@ -51,15 +56,15 @@ public class ParaclinicalProgressServiceImpl implements ParaclinicalProgressServ
         }
 
         Instant now = clock.instant();
-        visit.markAsWaitingConclusion(now);
-        visitRepository.save(visit);
+        lockedVisit.markAsWaitingConclusion(now);
+        visitRepository.save(lockedVisit);
 
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("fromStatus", VisitStatus.WAITING_PARACLINICAL.name());
-        values.put("status", visit.getStatus().name());
+        values.put("status", lockedVisit.getStatus().name());
         values.put("rule", "S5");
         auditLogService.recordSystemChange(
-                AuditLogAction.UPDATE, "visits", visit.getId(), visit.getSovaovien(), values, now);
+                AuditLogAction.UPDATE, "visits", lockedVisit.getId(), lockedVisit.getSovaovien(), values, now);
         return true;
     }
 }
