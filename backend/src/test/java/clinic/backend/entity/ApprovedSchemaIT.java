@@ -22,7 +22,6 @@ import clinic.backend.enums.RecordSignatureSignerType;
 import clinic.backend.support.PostgresIntegrationTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,13 +56,14 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
     private UUID payment;
     private UUID order;
 
-    @BeforeEach
-    void removeSeededOutpatientTypeForIsolatedConstraintTests() {
-        jdbcTemplate.update("delete from medical_record_types where loaiba = 'NGOAITRU'");
-    }
-
     @Test
     void mapsMedicalRecordTypesAndAllowsOneDefault() {
+        newMedicalRecord();
+        // Move the default without deleting a type that existing records reference.
+        jdbcTemplate.update("""
+                update medical_record_types set is_default = false
+                where pham_vi = 'OUTPATIENT' and is_default
+                """);
         insertMedicalRecordType("15/BV1", true);
 
         MedicalRecordType type = entityManager.find(MedicalRecordType.class, "15/BV1");
@@ -505,12 +505,11 @@ class ApprovedSchemaIT extends PostgresIntegrationTest {
                 values (?, ?, ?, ?, ?, now(), 'DV', 'Đau bụng', current_date, 1, 'IN_EXAMINATION',
                     now(), now(), 0)
                 """, visit, "DK-" + suffix, patient, room, doctor);
-        insertMedicalRecordType("15/BV1", true);
         UUID record = UUID.randomUUID();
         jdbcTemplate.update("""
                 insert into medical_records (id, visit_id, soba, loaiba, status, opened_at, opened_by_account_id,
                     created_at, updated_at, version)
-                values (?, ?, ?, '15/BV1', 'OPEN', now(), ?, now(), now(), 0)
+                values (?, ?, ?, 'NGOAITRU', 'OPEN', now(), ?, now(), now(), 0)
                 """, record, visit, "BA-" + suffix, doctor);
         return record;
     }
