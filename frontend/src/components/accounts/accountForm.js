@@ -128,7 +128,7 @@ export function validateAccountForm(form, { accounts = [], exceptId, fields, tod
   check('maLienthongBacsi', !maLienthongBacsi || form.role !== 'DOCTOR' ? null
     : maLienthongBacsi.length > MA_LIENTHONG_BACSI_MAX ? msg08(MA_LIENTHONG_BACSI_MAX)
       : !MA_LIENTHONG_BACSI_PATTERN.test(maLienthongBacsi) ? msg05('Mã liên thông bác sĩ') : null);
-  // Optional and only for a Doctor; signing certificates are matched against it. The backend checks uniqueness.
+  // Optional and only for a Doctor; staff information (UC-08). The backend checks uniqueness.
   const citizenId = (form.citizenId || '').trim();
   check('citizenId', !citizenId || form.role !== 'DOCTOR' || CITIZEN_ID_PATTERN.test(citizenId) ? null
     : msg05('Số định danh cá nhân'));

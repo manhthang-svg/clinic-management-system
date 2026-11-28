@@ -3,17 +3,16 @@ package clinic.backend.controller;
 import java.util.List;
 import java.util.UUID;
 
-import clinic.backend.dto.request.RequestSignatureRequest;
 import clinic.backend.dto.request.SavePrescriptionRequest;
+import clinic.backend.dto.request.SubmitPrescriptionRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.PrescribableMedicineResponse;
 import clinic.backend.dto.response.PrescriptionPrintResponse;
 import clinic.backend.dto.response.PrescriptionResponse;
-import clinic.backend.dto.response.SigningRequestResponse;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.PrescriptionPrintService;
 import clinic.backend.service.PrescriptionService;
-import clinic.backend.service.PrescriptionSigningService;
+import clinic.backend.service.PrescriptionSubmissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Size;
@@ -22,7 +21,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,11 +37,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/prescriptions")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('DOCTOR') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
-@Tag(name = "Kê đơn thuốc", description = "UC-59 Kê đơn thuốc, UC-90 Ký số và gửi đơn thuốc điện tử, UC-91 Kết quả gửi đơn, UC-60 In đơn thuốc")
+@Tag(name = "Kê đơn thuốc", description = "UC-59 Kê đơn thuốc, UC-90 Gửi đơn thuốc điện tử, UC-91 Kết quả gửi đơn, UC-60 In đơn thuốc")
 public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
-    private final PrescriptionSigningService signingService;
+    private final PrescriptionSubmissionService submissionService;
     private final PrescriptionPrintService printService;
 
     @GetMapping("/visits/{visitId}")
@@ -76,7 +74,7 @@ public class PrescriptionController {
     }
 
     @GetMapping("/{prescriptionId}/submissions")
-    @Operation(summary = "UC-91: lịch sử gửi đơn thuốc, mới nhất trước, kèm chữ ký số và trạng thái chữ ký")
+    @Operation(summary = "UC-91: lịch sử gửi đơn thuốc, mới nhất trước")
     public ApiResponse<List<PrescriptionResponse.Submission>> submissions(
             @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
         return ApiResponse.success(prescriptionService.submissions(StaffPrincipal.from(jwt), prescriptionId));
@@ -96,35 +94,13 @@ public class PrescriptionController {
         return ApiResponse.success(printService.preparePrint(StaffPrincipal.from(jwt), prescriptionId));
     }
 
-    @PostMapping("/{prescriptionId}/commands/request-signature")
-    @Operation(summary = "UC-90: kiểm tra lại đơn, tiền kiểm chứng thư và gửi yêu cầu ký số tới CA")
-    public ResponseEntity<ApiResponse<SigningRequestResponse>> requestSignature(
+    @PostMapping("/{prescriptionId}/commands/submit")
+    @Operation(summary = "UC-90: kiểm tra lại đơn và gửi lên Hệ thống đơn thuốc quốc gia; "
+            + "mật khẩu liên thông của bác sĩ chỉ gửi khi máy chủ yêu cầu đăng nhập")
+    public ApiResponse<PrescriptionResponse> submit(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID prescriptionId,
-            @RequestBody RequestSignatureRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
-                signingService.requestSignature(StaffPrincipal.from(jwt), prescriptionId, request)));
-    }
-
-    @GetMapping("/{prescriptionId}/signing-requests/current")
-    @Operation(summary = "UC-90 AF-06: yêu cầu ký đang chờ của đơn thuốc (null nếu không có)")
-    public ApiResponse<SigningRequestResponse> currentSigningRequest(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId) {
-        return ApiResponse.success(signingService.currentRequest(StaffPrincipal.from(jwt), prescriptionId));
-    }
-
-    @PostMapping("/{prescriptionId}/signing-requests/{requestId}/commands/complete")
-    @Operation(summary = "UC-90: hỏi kết quả ký; khi đã ký thì kiểm tra chữ ký, lưu và gửi đơn")
-    public ApiResponse<SigningRequestResponse> completeSigning(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId, @PathVariable UUID requestId) {
-        return ApiResponse.success(signingService.complete(StaffPrincipal.from(jwt), prescriptionId, requestId));
-    }
-
-    @PostMapping("/{prescriptionId}/signing-requests/{requestId}/commands/cancel")
-    @Operation(summary = "UC-90 AF-03: hủy yêu cầu ký đang chờ")
-    public ResponseEntity<Void> cancelSigning(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID prescriptionId, @PathVariable UUID requestId) {
-        signingService.cancel(StaffPrincipal.from(jwt), prescriptionId, requestId);
-        return ResponseEntity.noContent().build();
+            @RequestBody SubmitPrescriptionRequest request) {
+        return ApiResponse.success(submissionService.submit(StaffPrincipal.from(jwt), prescriptionId, request));
     }
 }

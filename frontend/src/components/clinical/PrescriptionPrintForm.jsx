@@ -1,6 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
 
-import { SIGNING_MSG, signatureReason } from './prescriptionSigning';
 import { PRINT_MSG, dateTime, longDate, medicineLabel, quantityText, shortDate } from './prescriptionPrintFormat';
 
 function Row({ label, children }) {
@@ -15,26 +14,9 @@ function Box({ checked }) {
     );
 }
 
-/** BR-59-13 / BR-59-10 step 7: the digital signature of the accepted send, verified again (BR-59-16). */
-function SignatureBlock({ signature }) {
-    if (!signature?.signedAt) return null;
-    const valid = signature.signatureValid !== false;
-    return (
-        <div className="mt-1 rounded border border-black px-2 py-1 text-left text-[11px] leading-4">
-            <div className="font-bold">
-                {valid ? SIGNING_MSG.SIGNATURE_VALID : SIGNING_MSG.SIGNATURE_NOT_VALID(signatureReason(signature.signatureFailureReason))}
-            </div>
-            <div>Ký bởi: {signature.signerName}</div>
-            <div>Thời gian ký: {dateTime(signature.signedAt)}</div>
-            <div className="break-all">Số chứng thư: {signature.certificateSerial}</div>
-            <div className="break-all">Tổ chức cấp: {signature.certificateIssuer}</div>
-        </div>
-    );
-}
-
 /**
  * UC-60 Print Prescription: the form of TT 26/2025 Phụ lục I (BR-59-13) with the code and its QR code (ASSUMPTION:
- * QR content = the code), the data sent to the national system, the digital signature and the mark of a printout
+ * QR content = the code), the data sent to the national system and the mark of a printout
  * converted from the electronic prescription (Luật GDĐT Điều 12 khoản 2, ASSUMPTION wording).
  */
 export function PrescriptionPrintForm({ form }) {
@@ -113,9 +95,10 @@ export function PrescriptionPrintForm({ form }) {
                 <div className="w-72 text-center">
                     <div className="italic">{longDate(form.prescribedAt)}</div>
                     <div className="font-bold">Bác sỹ/Y sỹ khám bệnh</div>
-                    <div className="italic">(Đã ký số)</div>
+                    {/* TT 26/2025 Phụ lục I: signed by hand; the digital signature is out of scope (BR-47). */}
+                    <div className="italic">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-14" aria-hidden="true" />
                     <div className="font-bold">{form.doctorName}</div>
-                    <SignatureBlock signature={form.signature} />
                 </div>
             </div>
 

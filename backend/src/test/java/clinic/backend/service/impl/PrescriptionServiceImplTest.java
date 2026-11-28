@@ -23,8 +23,6 @@ import clinic.backend.entity.Patient;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
 import clinic.backend.entity.PrescriptionSubmission;
-import clinic.backend.entity.RecordSignature;
-import clinic.backend.entity.SigningRequest;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.Visit;
 import clinic.backend.entity.VitalSign;
@@ -35,9 +33,7 @@ import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.MedicalRecordStatus;
 import clinic.backend.enums.MedicineControlGroup;
 import clinic.backend.enums.PrescriptionSubmissionResult;
-import clinic.backend.enums.RecordSignatureDocumentType;
 import clinic.backend.enums.Role;
-import clinic.backend.enums.SigningRequestStatus;
 import clinic.backend.enums.VisitDoituongbnLoai;
 import clinic.backend.enums.VisitInsuranceVerifyStatus;
 import clinic.backend.enums.VisitStatus;
@@ -51,14 +47,10 @@ import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.PrescriptionSubmissionRepository;
-import clinic.backend.repository.RecordSignatureRepository;
-import clinic.backend.repository.SigningRequestRepository;
-import clinic.backend.repository.StaffSigningCertificateRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
-import clinic.backend.service.RemoteSigningGateway;
 import clinic.backend.utils.UuidV7Generator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,14 +91,9 @@ class PrescriptionServiceImplTest {
     @Mock private FollowUpAppointmentRepository followUpRepository;
     @Mock private AuditLogService auditLogService;
 
-    @Mock
-    private SigningRequestRepository signingRequestRepository;
-    @Mock
-    private RemoteSigningGateway signingGateway;
     @Mock private PrescriptionSubmissionRepository submissionRepository;
-    @Mock private RecordSignatureRepository recordSignatureRepository;
     @Mock private MedicalRecordRepository medicalRecordRepository;
-    @Mock private DigitalSignatureVerifier signatureVerifier;
+    @Mock private NationalPrescriptionSessions nationalSessions;
     private PrescriptionServiceImpl service;
     private ConcludingVisitGuard.Context context;
     private ClinicFacility facility;
@@ -118,9 +105,8 @@ class PrescriptionServiceImplTest {
         service = new PrescriptionServiceImpl(
                 guard, conclusionRepository, prescriptionRepository, medicineRepository, historyRepository,
                 longTermCodeRepository, clinicFacilityRepository, staffAccountRepository, vitalSignRepository,
-                followUpRepository, auditLogService, mock(StaffSigningCertificateRepository.class),
-                signingRequestRepository, submissionRepository, recordSignatureRepository, signingGateway,
-                medicalRecordRepository, signatureVerifier, new UuidV7Generator(clock, new SecureRandom()), clock);
+                followUpRepository, auditLogService, submissionRepository, medicalRecordRepository, nationalSessions,
+                new UuidV7Generator(clock, new SecureRandom()), clock);
         Patient patient = new Patient(
                 UUID.randomUUID(), NOW, "BN001", null, null, "Nguyễn Văn An", LocalDate.of(1990, 1, 1),
                 (short) 1, null, null, "Kinh", "01", "Việt Nam", "VN", "Hà Nội", null, null,
@@ -387,21 +373,6 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void cancelsThePendingSigningRequestOfADeletedPrescription() {
-        Prescription prescription = prescriptionById();
-        SigningRequest pending = mock(SigningRequest.class);
-        when(pending.getProviderTransactionId()).thenReturn("tx-1");
-        when(signingRequestRepository.findByDocumentTypeAndDocumentIdAndStatus(
-                RecordSignatureDocumentType.DON_THUOC, prescription.getId(), SigningRequestStatus.PENDING))
-                .thenReturn(Optional.of(pending));
-
-        service.delete(principal(), prescription.getId());
-
-        verify(signingGateway).cancel("tx-1");
-        verify(pending).markCancelled(NOW);
-    }
-
-    @Test
     void refusesToDeleteAPrescriptionThatWasSent() {
         Prescription prescription = prescriptionById();
         prescription.recordSubmission(PrescriptionSubmissionResult.REJECTED, NOW);
@@ -413,10 +384,9 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void refusesToDeleteAPendingPrescriptionThatHasASignature() {
+    void refusesToDeleteAPendingPrescriptionThatHasASubmission() {
         Prescription prescription = prescriptionById();
-        when(recordSignatureRepository.existsByDocumentTypeAndDocumentId(
-                RecordSignatureDocumentType.DON_THUOC, prescription.getId())).thenReturn(true);
+        when(submissionRepository.existsByPrescriptionId(prescription.getId())).thenReturn(true);
 
         assertThatThrownBy(() -> service.delete(principal(), prescription.getId()))
                 .isInstanceOfSatisfying(AppException.class, error ->
@@ -425,7 +395,7 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void listsEverySendNewestFirstWithItsOwnSignatureVerifiedAgain() {
+    void listsEverySendNewestFirstWithItsAnswerAndSender() {
         Prescription prescription = prescriptionById();
         Instant firstSent = NOW.minusSeconds(600);
         PrescriptionSubmission second = new PrescriptionSubmission(UUID.randomUUID(), NOW, prescription.getId(),
@@ -435,33 +405,15 @@ class PrescriptionServiceImplTest {
                 firstSent);
         when(submissionRepository.findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()))
                 .thenReturn(List.of(second, first));
-        RecordSignature firstSignature = signature(firstSent, "01");
-        RecordSignature secondSignature = signature(NOW, "02");
-        when(recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
-                RecordSignatureDocumentType.DON_THUOC, prescription.getId()))
-                .thenReturn(List.of(firstSignature, secondSignature));
         when(staffAccountRepository.findAllById(any())).thenReturn(List.of(context.doctor()));
-        when(signatureVerifier.reverify(any(), any(), eq("01"), any(), any())).thenReturn("CERTIFICATE_REVOKED");
-        when(signatureVerifier.reverify(any(), any(), eq("02"), any(), any())).thenReturn(null);
 
         var history = service.submissions(principal(), prescription.getId());
 
         assertThat(history).extracting(PrescriptionResponse.Submission::attemptNo).containsExactly((short) 2, (short) 1);
-        assertThat(history.get(0).certificateSerial()).isEqualTo("02");
-        assertThat(history.get(0).signatureValid()).isTrue();
+        assertThat(history.get(0).result()).isEqualTo("ACCEPTED");
         assertThat(history.get(0).submittedBy()).isEqualTo("Bác sĩ An");
-        assertThat(history.get(1).certificateSerial()).isEqualTo("01");
-        assertThat(history.get(1).signatureValid()).isFalse();
-        assertThat(history.get(1).signatureFailureReason()).isEqualTo("CERTIFICATE_REVOKED");
+        assertThat(history.get(1).result()).isEqualTo("REJECTED");
         assertThat(history.get(1).errors()).containsExactly("Sai mã bác sĩ");
-    }
-
-    private static RecordSignature signature(Instant createdAt, String serial) {
-        RecordSignature signature = mock(RecordSignature.class);
-        when(signature.getCreatedAt()).thenReturn(createdAt);
-        when(signature.getCertificateSerial()).thenReturn(serial);
-        lenient().when(signature.getSignedAt()).thenReturn(createdAt);
-        return signature;
     }
 
     private void stubConclusion() {

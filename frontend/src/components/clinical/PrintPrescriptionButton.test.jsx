@@ -27,10 +27,6 @@ const form = {
     ],
     notes: null, advice: 'Uống nhiều nước', followUpDate: '2026-11-19', prescribedAt: '2026-11-12T03:00:00Z',
     doctorName: 'ThS. BS An',
-    signature: {
-        attemptNo: 1, result: 'ACCEPTED', signedAt: '2026-11-12T03:05:00Z', signerName: 'BS An',
-        certificateSerial: 'abc123', certificateIssuer: 'CN=CA giả lập', signatureValid: true,
-    },
 };
 
 const printed = { ...form, printedAt: '2026-11-12T04:00:00Z', printedBy: 'ThS. BS An' };
@@ -79,7 +75,8 @@ describe('UC-60 In đơn thuốc', () => {
         expect(within(sheet).getByText(/Paracetamol \(Hapacol\) 500mg/)).toBeInTheDocument();
         expect(within(sheet).getByText('06')).toBeInTheDocument();
         expect(within(sheet).getByText(/J02\.9 – Viêm họng cấp/)).toBeInTheDocument();
-        expect(within(sheet).getByText('Chữ ký số hợp lệ')).toBeInTheDocument();
+        expect(within(sheet).getByText('(Ký, ghi rõ họ tên)')).toBeInTheDocument();
+        expect(within(sheet).queryByText(/ký số/i)).not.toBeInTheDocument();
         expect(within(sheet).getByTestId('print-mark'))
             .toHaveTextContent('Bản in từ đơn thuốc điện tử 79001abc1234-c lưu tại Phòng khám METPH.');
         expect(client.preparePrescriptionPrint).not.toHaveBeenCalled();

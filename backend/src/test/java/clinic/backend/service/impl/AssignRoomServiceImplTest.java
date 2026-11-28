@@ -24,6 +24,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.PasswordHasher;
@@ -61,6 +62,7 @@ class AssignRoomServiceImplTest {
 
     @Mock StaffAccountRepository accountRepository;
     @Mock StaffRoomAssignmentRepository assignmentRepository;
+    @Mock DutyScheduleRepository dutyScheduleRepository;
     @Mock RoomRepository roomRepository;
     @Mock DepartmentRepository departmentRepository;
     @Mock AuthSessionRepository sessionRepository;
@@ -81,7 +83,7 @@ class AssignRoomServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AccountAdministrationServiceImpl(
-                accountRepository, assignmentRepository, roomRepository, departmentRepository, sessionRepository,
+                accountRepository, assignmentRepository, dutyScheduleRepository, roomRepository, departmentRepository, sessionRepository,
                 securityAuditRepository, auditLogRepository, visitRepository, orderDetailRepository,
                 auditLogService, securityAuditService, accountMapper, passwordHasher, passwordGenerator, ids, clock);
         when(clock.instant()).thenReturn(NOW);

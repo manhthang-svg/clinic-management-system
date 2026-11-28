@@ -219,6 +219,57 @@ One-time setup:
 
 Without the secrets the workflow is skipped, so forks and branches without AWS access are unaffected.
 
+## Demo Server (Windows laptop + Cloudflare Tunnel)
+
+For demos and shared team testing, not for real patient data. `deploy/compose.yml` runs PostgreSQL, the backend,
+Caddy (serves the built frontend and forwards `/api/` to the backend, the same-origin topology of
+`docs/security.md`) and `cloudflared`. HTTPS ends at Cloudflare; no port of the laptop is opened to the internet.
+Because the database and the archive directory live on the same machine, every user can export closed records.
+
+1. **Laptop:** install Docker Desktop (WSL 2 backend) and enable "Start Docker Desktop when you sign in". In Windows
+   power settings set sleep to "Never" when plugged in and "Do nothing" when the lid is closed. Turn on BitLocker
+   (`docs/security.md`: storage encrypted at rest).
+2. **Tunnel:** in Cloudflare Zero Trust, Networks → Tunnels → Create a tunnel (Cloudflared). Copy its token. Add a
+   public hostname, for example `clinic.<your-domain>`, with service `HTTP` and URL `web:80`. The domain must be on
+   Cloudflare.
+3. **Configuration:** copy `deploy/.env.example` to `deploy/.env` (git-ignored) and fill it in. `APP_FRONTEND_ORIGIN`
+   must be exactly `https://` plus the public hostname, otherwise refresh and logout answer `403`. The backend does not
+   start without the three `PAYOS_*` values.
+4. **Start** from the repository root (Compose reads `deploy/.env` by itself):
+
+   ```shell
+   docker compose -f deploy/compose.yml up -d --build
+   docker compose -f deploy/compose.yml logs -f backend
+   ```
+
+   The containers restart with Docker Desktop. `http://127.0.0.1:8088` on the laptop itself is a local check only;
+   sign-in there fails because the origin differs from `APP_FRONTEND_ORIGIN`.
+5. **Reference lists** (once per database, in this order):
+
+   ```shell
+   docker compose -f deploy/compose.yml run --rm -e SPRING_PROFILES_ACTIVE=icd10-import backend
+   docker compose -f deploy/compose.yml run --rm -e SPRING_PROFILES_ACTIVE=long-term-disease-import backend
+   docker compose -f deploy/compose.yml run --rm -e SPRING_PROFILES_ACTIVE=medicine-import backend
+   ```
+
+   Admin recovery uses the same form with `SPRING_PROFILES_ACTIVE=admin-recovery`.
+6. **Update** after pulling new code: `docker compose -f deploy/compose.yml up -d --build`.
+7. **Backup** the database and the archive volume together (closed-record packages must have an off-site copy):
+
+   ```powershell
+   docker compose -f deploy/compose.yml exec postgres pg_dump -U clinic -Fc -f /tmp/clinic.dump clinic
+   docker compose -f deploy/compose.yml cp postgres:/tmp/clinic.dump .\clinic.dump
+   docker run --rm -v clinic-demo_backend_data:/data -v "${PWD}:/backup" alpine tar czf /backup/backend-data.tgz -C /data .
+   ```
+
+   Do not use `>` to save `pg_dump` output in Windows PowerShell 5.1: it re-encodes the bytes and corrupts the dump.
+
+To sign e-prescriptions in the demo, set the three UC-90 simulator values shown in `deploy/.env.example`; the
+simulated CA app is then public at `<APP_FRONTEND_ORIGIN>/dev/ca-sim/`. Keep it off when not needed.
+
+**TBD:** the backend sees the proxy's address, not the user's, so `ip_address` in audit logs is the Caddy container
+until a trusted-proxy boundary is decided (`SecurityAuditServiceImpl`).
+
 ## Testing
 
 - Backend: `./mvnw verify` in `backend/` (integration tests use PostgreSQL Testcontainers and are skipped when Docker is unavailable).

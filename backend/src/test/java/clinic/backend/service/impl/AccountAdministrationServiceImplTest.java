@@ -419,6 +419,22 @@ class AccountAdministrationServiceImplTest {
     }
 
     @Test
+    void prescriberLinkCodeCannotChangeWhileTheDoctorIsAddedToTheFacility() {
+        StaffAccount target = account(Role.DOCTOR);
+        target.updateMaLienthongBacsi("BS0001", NOW);
+        target.markAddedToNationalPrescriptionSystem(NOW);
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateAccount(
+                new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID()), target.getId(), new UpdateAccountRequest(
+                        "Test User", "Bác sĩ", "000123/HCM-CCHN", "BS0002", null, null, null,
+                        "0901234567", null, null, target.getVersion())))
+                .isInstanceOfSatisfying(AppException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.PRESCRIBER_LINK_CODE_LOCKED));
+        assertThat(target.getMaLienthongBacsi()).isEqualTo("BS0001");
+    }
+
+    @Test
     void doctorCitizenIdIsSavedAndTheAuditRowHidesTheNumber() {
         StaffAccount target = account(Role.DOCTOR);
         StaffPrincipal admin = new StaffPrincipal(UUID.randomUUID(), UUID.randomUUID());

@@ -2,6 +2,7 @@ package clinic.backend.repository;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -103,8 +104,8 @@ public interface StaffAccountRepository extends JpaRepository<StaffAccount, UUID
 
     boolean existsByCitizenIdAndIdNot(String citizenId, UUID id);
 
-    /** BR-59-16: the account whose personal identification number a signing certificate names. */
-    Optional<StaffAccount> findByCitizenId(String citizenId);
+    /** BR-59-17: the Doctors the facility has added to the national prescription system. */
+    List<StaffAccount> findAllByLienthongAddedAtIsNotNull();
 
     Optional<StaffAccount> findByCreationSubmissionId(UUID creationSubmissionId);
 

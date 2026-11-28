@@ -76,7 +76,14 @@ public class StaffAccount {
     @Column(name = "ma_lienthong_bacsi", length = 50)
     private String maLienthongBacsi;
 
-    /** BR-59-16: personal identification number (12 digits) of a Doctor, matched against signing certificates. */
+    /**
+     * QĐ 808/QĐ-BYT IV, V: when the facility added the Doctor to the national prescription system; null when not
+     * added or removed (UC-93, BR-59-17).
+     */
+    @Column(name = "lienthong_added_at")
+    private Instant lienthongAddedAt;
+
+    /** UC-08: personal identification number (12 digits) of a Doctor, kept as staff information. */
     @Column(name = "citizen_id", length = 12)
     private String citizenId;
 
@@ -387,13 +394,25 @@ public class StaffAccount {
         updatedAt = Objects.requireNonNull(now, "now");
     }
 
+    /** UC-93 (QĐ 808 IV): the facility added the Doctor to the national prescription system. */
+    public void markAddedToNationalPrescriptionSystem(Instant now) {
+        lienthongAddedAt = Objects.requireNonNull(now, "now");
+        updatedAt = now;
+    }
+
+    /** UC-93 (QĐ 808 V): the facility removed the Doctor from the national prescription system. */
+    public void markRemovedFromNationalPrescriptionSystem(Instant now) {
+        lienthongAddedAt = null;
+        updatedAt = Objects.requireNonNull(now, "now");
+    }
+
     /** BR-49, BR-65: sets or clears the prescriber link code issued by the national prescription system. */
     public void updateMaLienthongBacsi(String newMaLienthongBacsi, Instant now) {
         maLienthongBacsi = normalizeOptional(newMaLienthongBacsi);
         updatedAt = Objects.requireNonNull(now, "now");
     }
 
-    /** BR-59-16: sets or clears the Doctor's personal identification number (12 digits). */
+    /** UC-08: sets or clears the Doctor's personal identification number (12 digits). */
     public void updateCitizenId(String newCitizenId, Instant now) {
         citizenId = normalizeOptional(newCitizenId);
         updatedAt = Objects.requireNonNull(now, "now");

@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import clinic.backend.dto.response.PrescriptionResponse;
 import clinic.backend.entity.ClinicFacility;
 import clinic.backend.entity.MedicalRecord;
 import clinic.backend.entity.MedicineCatalog;
@@ -70,9 +69,6 @@ class PrescriptionPrintServiceImplTest {
     private PrescriptionPrintServiceImpl service;
     private ConcludingVisitGuard.Context context;
     private Prescription prescription;
-    private final PrescriptionResponse.Submission acceptedSend = new PrescriptionResponse.Submission(
-            (short) 2, "ACCEPTED", List.of(), NOW, NOW, NOW, "Bác sĩ An", "02", "CN=CA giả lập", "Bác sĩ An", true,
-            null);
 
     @BeforeEach
     void setUp() {
@@ -109,11 +105,10 @@ class PrescriptionPrintServiceImplTest {
         lenient().when(facility.getTenCskcb()).thenReturn("Phòng khám METPH");
         lenient().when(clinicFacilityRepository.findCurrent()).thenReturn(Optional.of(facility));
         lenient().when(staffAccountRepository.findById(DOCTOR_ID)).thenReturn(Optional.of(doctor));
-        lenient().when(prescriptions.lastSubmission(prescription)).thenReturn(acceptedSend);
     }
 
     @Test
-    void printsTheAcceptedPrescriptionWithTheSentDiagnosesAndTheVerifiedSignature() {
+    void printsTheAcceptedPrescriptionWithTheSentDiagnoses() {
         accept();
 
         var form = service.preparePrint(principal(), prescription.getId());
@@ -130,7 +125,6 @@ class PrescriptionPrintServiceImplTest {
             assertThat(line.name()).isEqualTo("Amoxicilin 500mg");
             assertThat(line.quantity()).isEqualByComparingTo("21");
         });
-        assertThat(form.signature()).isEqualTo(acceptedSend);
         assertThat(form.doctorName()).isEqualTo("Bác sĩ An");
         assertThat(form.printedAt()).isEqualTo(NOW);
         assertThat(form.printedBy()).isEqualTo("Bác sĩ An");

@@ -13,7 +13,6 @@ import java.util.UUID;
  * @param copy      the prescription was printed before, so this print carries "Bản sao" (PO 23/11/2026)
  * @param printedAt the time of this print; null in the preview
  * @param printedBy who printed it (Luật GDĐT Điều 12 khoản 2); null in the preview
- * @param signature BR-59-10 step 7: the digital signature of the accepted send, verified again (BR-59-16)
  */
 public record PrescriptionPrintResponse(
         UUID prescriptionId,
@@ -30,8 +29,7 @@ public record PrescriptionPrintResponse(
         String advice,
         LocalDate followUpDate,
         Instant prescribedAt,
-        String doctorName,
-        PrescriptionResponse.Submission signature
+        String doctorName
 ) {
 
     /** Facility header (UC-77). */

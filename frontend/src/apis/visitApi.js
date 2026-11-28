@@ -227,7 +227,7 @@ export const visitApi = {
         return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}`, { method: 'DELETE' });
     },
 
-    // UC-91: every send of the prescription, newest first, each with its signature status.
+    // UC-91: every send of the prescription, newest first.
     getPrescriptionSubmissions(prescriptionId, signal) {
         return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/submissions`, { signal });
     },
@@ -281,33 +281,14 @@ export const visitApi = {
         });
     },
 
-    // UC-90 step 3: re-check the prescription, pre-check the Doctor's certificate and ask the CA for a signature.
-    requestPrescriptionSignature(prescriptionId, version) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/commands/request-signature`, {
+    // UC-90: re-check and send the prescription. The Doctor's national prescription password goes only when the server
+    // asked for a sign-in (BR-59-17); it is never kept by the client.
+    submitPrescription(prescriptionId, version, password) {
+        const body = password === undefined ? { version } : { version, password };
+        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/commands/submit`, {
             method: 'POST',
-            body: { version },
+            body,
         });
-    },
-
-    // UC-90 AF-06: the pending signing request of the prescription, or null.
-    getCurrentPrescriptionSigning(prescriptionId, signal) {
-        return apiClient.request(`/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/current`, { signal });
-    },
-
-    // UC-90 steps 5-8: asked every few seconds; once signed, the server verifies, stores and sends.
-    completePrescriptionSigning(prescriptionId, requestId) {
-        return apiClient.request(
-            `/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/${encodeURIComponent(requestId)}/commands/complete`,
-            { method: 'POST' },
-        );
-    },
-
-    // UC-90 AF-03.
-    cancelPrescriptionSigning(prescriptionId, requestId) {
-        return apiClient.request(
-            `/prescriptions/${encodeURIComponent(prescriptionId)}/signing-requests/${encodeURIComponent(requestId)}/commands/cancel`,
-            { method: 'POST' },
-        );
     },
 
     // UC-59 BR-59-03: at most 20 active ordinary medicines by name, active ingredient, strength, internal code or

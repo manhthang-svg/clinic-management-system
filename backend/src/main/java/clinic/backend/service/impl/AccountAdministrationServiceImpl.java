@@ -208,6 +208,11 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         String practiceLicenseNo = normalizeOptional(request.practiceLicenseNo());
         String maLienthongBacsi = normalizeOptional(request.maLienthongBacsi());
         requireValidMaLienthongBacsi(account.getRole(), maLienthongBacsi);
+        // BR-59-17: the national system knows the Doctor by this code while the Doctor is added to the facility.
+        if (account.getLienthongAddedAt() != null
+                && !Objects.equals(normalizeOptional(account.getMaLienthongBacsi()), maLienthongBacsi)) {
+            throw new AppException(ErrorCode.PRESCRIBER_LINK_CODE_LOCKED);
+        }
         String citizenId = normalizeOptional(request.citizenId());
         requireValidCitizenId(account.getRole(), citizenId);
         checkUniqueForUpdate(account, request.phoneNumber(), email, practiceLicenseNo, maLienthongBacsi, citizenId);
@@ -319,6 +324,10 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
         Instant now = clock.instant();
         Role oldRole = account.getRole();
+        // BR-59-17: a Doctor still added to the facility on the national system is removed first.
+        if (account.getLienthongAddedAt() != null && request.newRole() != Role.DOCTOR) {
+            throw new AppException(ErrorCode.PRESCRIBER_LINK_CODE_LOCKED);
+        }
         Map<String, Object> oldValues = new LinkedHashMap<>();
         Map<String, Object> newValues = new LinkedHashMap<>();
         oldValues.put("role", oldRole);
@@ -633,7 +642,7 @@ public class AccountAdministrationServiceImpl implements AccountAdministrationSe
         }
     }
 
-    /** BR-59-16: only a Doctor signs prescriptions, so only a Doctor account holds the number; 12 digits. */
+    /** UC-08: the number is kept for Doctor accounts only (staff information); 12 digits. */
     private void requireValidCitizenId(Role role, String citizenId) {
         if (citizenId == null) return;
         if (role != Role.DOCTOR) {

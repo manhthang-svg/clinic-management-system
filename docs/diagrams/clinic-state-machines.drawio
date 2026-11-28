@@ -1,0 +1,650 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" type="device" compressed="false">
+  <diagram id="visit" name="01 Lượt khám">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Lượt khám" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="Visit.status · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="60" y="161" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="WAITING_FEE_PAYMENT" value="&lt;b&gt;Chờ thanh toán phí khám&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;WAITING_FEE_PAYMENT&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="240" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="WAITING" value="&lt;b&gt;Chờ khám&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;WAITING&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="535" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="IN_EXAMINATION" value="&lt;b&gt;Đang khám&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;IN_EXAMINATION&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="830" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="WAITING_PARACLINICAL" value="&lt;b&gt;Chờ cận lâm sàng&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;WAITING_PARACLINICAL&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="1125" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="WAITING_CONCLUSION" value="&lt;b&gt;Chờ kết luận&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;WAITING_CONCLUSION&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="1125" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="COMPLETED" value="&lt;b&gt;Hoàn thành&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;COMPLETED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="830" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="CANCELLED" value="&lt;b&gt;Đã hủy&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;CANCELLED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="240" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ABANDONED" value="&lt;b&gt;Bỏ khám&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;ABANDONED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="535" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Tiếp nhận&lt;br&gt;còn phí tự trả" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="WAITING_FEE_PAYMENT">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-2" value="Tiếp nhận · BHYT hoặc 0 đ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" parent="1" source="start" target="WAITING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="68" y="97" /><mxPoint x="635" y="97" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-3" value="Thanh toán&lt;br&gt;phí khám" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="WAITING_FEE_PAYMENT" target="WAITING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-4" value="Gọi vào khám" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="WAITING" target="IN_EXAMINATION">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-5" value="Chuyển phòng" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" parent="1" source="IN_EXAMINATION" target="WAITING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="930" y="112" /><mxPoint x="635" y="112" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-6" value="Chỉ định CLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="IN_EXAMINATION" target="WAITING_PARACLINICAL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-7" value="Chỉ định thêm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="WAITING_CONCLUSION" target="WAITING_PARACLINICAL">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1370" y="375" /><mxPoint x="1370" y="170" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-8" value="Đã xong CLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="WAITING_PARACLINICAL" target="WAITING_CONCLUSION">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-9" value="Xác nhận&lt;br&gt;kết luận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.63;exitY=1;entryX=0.63;entryY=0;" edge="1" parent="1" source="IN_EXAMINATION" target="COMPLETED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-10" value="Xác nhận&lt;br&gt;kết luận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="WAITING_CONCLUSION" target="COMPLETED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-11" value="Chốt cuối ngày&lt;br&gt;chưa trả phí" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="WAITING_FEE_PAYMENT" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-12" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="WAITING" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-13" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.175;exitY=1;entryX=0.7;entryY=0;" edge="1" parent="1" source="IN_EXAMINATION" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="865" y="248" /><mxPoint x="675" y="248" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-14" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.1;exitY=1;entryX=0.875;entryY=0;" edge="1" parent="1" source="WAITING_PARACLINICAL" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1145" y="218" /><mxPoint x="710" y="218" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-15" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="WAITING_CONCLUSION" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1225" y="442" /><mxPoint x="635" y="442" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="476" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Tiếp nhận" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="508" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Tiếp nhận. Lượt tự trả có phí phải thu bắt đầu ở WAITING_FEE_PAYMENT. Lượt BHYT hoặc phần người bệnh trả bằng 0 bắt đầu ở WAITING." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="508" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Trả phí và gọi khám" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="552" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Thanh toán phí khám và cấp số chờ → WAITING. Bác sĩ gọi vào khám, kể cả tiếp nhận lại lượt đã bỏ qua ở hàng chờ → IN_EXAMINATION." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="552" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Chuyển phòng và chỉ định" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="596" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Chuyển phòng khi đang khám → WAITING tại phòng mới. Chỉ định CLS từ đang khám hoặc chờ kết luận → WAITING_PARACLINICAL." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="596" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Xử lý CLS và kết luận" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="640" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="Mọi chi tiết CLS đã kết thúc và không có chi tiết ABANDONED → WAITING_CONCLUSION. Xác nhận kết luận và khóa hồ sơ khi lượt không bị bỏ qua → COMPLETED." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="640" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Chốt cuối ngày" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="684" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="Tác vụ cuối ngày hủy lượt chưa trả phí khám. Lượt chưa kết thúc ở một trong bốn trạng thái chờ khám, đang khám, chờ CLS hoặc chờ kết luận → ABANDONED." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="684" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-5" value="Cờ bỏ qua" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="728" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-5" value="Bỏ qua khi chờ khám hoặc chờ kết luận chỉ đổi isSkipped. Tiếp nhận lại ở chờ kết luận xóa cờ và giữ trạng thái. Gọi tiếp để kết luận cũng giữ trạng thái." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="728" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="Visit.java · VisitServiceImpl.java · VisitTransferServiceImpl.java · ParaclinicalProgressServiceImpl.java · MedicalRecordClosureServiceImpl.java · VisitEndOfDayServiceImpl.java" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="783" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="detail" name="02 Chi tiết chỉ định CLS">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Chi tiết chỉ định cận lâm sàng" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="ParaclinicalOrderDetail.status · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="60" y="161" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="PENDING_PAYMENT" value="&lt;b&gt;Chờ thanh toán&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;PENDING_PAYMENT&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="240" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="WAITING" value="&lt;b&gt;Chờ thực hiện&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;WAITING&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="535" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="IN_PROGRESS" value="&lt;b&gt;Đang thực hiện&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;IN_PROGRESS&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="830" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PENDING_RESULT" value="&lt;b&gt;Chờ kết quả&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;PENDING_RESULT&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="1125" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="COMPLETED" value="&lt;b&gt;Đã có kết quả&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;COMPLETED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="1125" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="CANCELLED" value="&lt;b&gt;Đã hủy&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;CANCELLED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="240" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ABANDONED" value="&lt;b&gt;Bỏ thực hiện&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;ABANDONED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="535" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Tạo chi tiết" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="PENDING_PAYMENT">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-2" value="Chuyển đến&lt;br&gt;phòng CLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="PENDING_PAYMENT" target="WAITING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-3" value="Tiếp nhận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="WAITING" target="IN_PROGRESS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-4" value="Trả về hàng chờ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" parent="1" source="IN_PROGRESS" target="WAITING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="930" y="103" /><mxPoint x="635" y="103" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-5" value="Thực hiện xong" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="IN_PROGRESS" target="PENDING_RESULT">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-6" value="Gửi kết quả" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="PENDING_RESULT" target="COMPLETED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-7" value="Gửi kết quả ngay" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.7;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="IN_PROGRESS" target="COMPLETED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="970" y="375" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-8" value="Hủy dịch vụ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.35;exitY=1;entryX=0.35;entryY=0;" edge="1" parent="1" source="PENDING_PAYMENT" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-9" value="Hủy dịch vụ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.15;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="WAITING" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="565" y="286" /><mxPoint x="390" y="286" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-10" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.88;exitY=1;entryX=0.225;entryY=0;" edge="1" parent="1" source="PENDING_PAYMENT" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="416" y="230" /><mxPoint x="580" y="230" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-11" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="WAITING" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-12" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.1;exitY=1;entryX=0.8;entryY=0;" edge="1" parent="1" source="IN_PROGRESS" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="850" y="262" /><mxPoint x="695" y="262" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-13" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.15;exitY=1;entryX=0.935;entryY=0;" edge="1" parent="1" source="PENDING_RESULT" target="ABANDONED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1155" y="220" /><mxPoint x="722" y="220" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="447" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Tạo và chuyển chi tiết" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="479" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Tạo chi tiết ở PENDING_PAYMENT. Chuyển ngay sang WAITING với lượt BHYT hoặc phiếu miễn phí. Với lượt tự trả còn phí, chuyển sau khi thanh toán. Phiếu còn lại 0 đ sau khi hủy một dòng cũng được chuyển." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="479" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Tiếp nhận và trả về" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="523" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Kỹ thuật viên tiếp nhận dịch vụ đã check-in → IN_PROGRESS. Kỹ thuật viên đã tiếp nhận có thể trả về WAITING khi chưa thể thực hiện, giữ số thứ tự." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="523" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Thực hiện và gửi kết quả" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="567" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Kỹ thuật viên đã tiếp nhận xác nhận thực hiện xong → PENDING_RESULT. Khi người thực hiện gửi kết quả, chi tiết → COMPLETED từ IN_PROGRESS hoặc PENDING_RESULT." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="567" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Hủy và chốt cuối ngày" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="611" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="Bác sĩ hủy trước khi kỹ thuật viên tiếp nhận, có lý do, hồ sơ mở, lượt đang chờ CLS và phiếu còn tính lại được. Khi chốt lượt cuối ngày, chi tiết chưa kết thúc → ABANDONED." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="611" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Phiếu chỉ định" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="655" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="Phiếu cha chuyển PENDING_PAYMENT → RELEASED khi chuyển dịch vụ. Phiếu có thể bị hủy khi mọi chi tiết bị hủy hoặc khi chốt lượt cuối ngày mà còn chi tiết chưa hoàn thành." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="655" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-5" value="Thông tin hàng chờ" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="699" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-5" value="Check-in, bỏ qua và bỏ cờ bỏ qua thay đổi thông tin hàng chờ, giữ nguyên status." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="699" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="ParaclinicalOrderDetail.java · ParaclinicalOrder.java · ParaclinicalOrderServiceImpl.java · TechnicianQueueServiceImpl.java · ParaclinicalResultServiceImpl.java" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="754" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="payment" name="03 Hóa đơn">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Hóa đơn" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="Payment.status · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="60" y="251" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="PENDING" value="&lt;b&gt;Chờ thanh toán&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;PENDING&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="345" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="FEE_EXEMPT" value="&lt;b&gt;Miễn phí&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;FEE_EXEMPT&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="345" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PAID" value="&lt;b&gt;Đã thanh toán&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;PAID&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="910" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="CANCELLED" value="&lt;b&gt;Đã hủy&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;CANCELLED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="910" y="345" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Lập phiếu · còn phí" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="PENDING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="148" y="259" /><mxPoint x="148" y="170" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-2" value="Lập phiếu · 0 đ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="FEE_EXEMPT">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="148" y="259" /><mxPoint x="148" y="375" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-3" value="Tính lại&lt;br&gt;còn 0 đ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.3;exitY=1;entryX=0.3;entryY=0;" edge="1" parent="1" source="PENDING" target="FEE_EXEMPT">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-4" value="Tính lại&lt;br&gt;phát sinh phí" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.7;exitY=0;entryX=0.7;entryY=1;" edge="1" parent="1" source="FEE_EXEMPT" target="PENDING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-5" value="Xác nhận thanh toán" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="PENDING" target="PAID">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-6" value="Hủy dòng cuối hoặc&lt;br&gt;chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.78;entryX=0;entryY=0.25;" edge="1" parent="1" source="PENDING" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="734" y="187" /><mxPoint x="734" y="360" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-7" value="Hủy dòng cuối" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.7;entryX=0;entryY=0.7;" edge="1" parent="1" source="FEE_EXEMPT" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="447" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Lập phiếu" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="479" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Khi lập phiếu, phần người bệnh phải trả lớn hơn 0 → PENDING, bằng 0 → FEE_EXEMPT." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="479" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Tính lại số tiền" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="523" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Tính lại quyền lợi BHYT hoặc hủy một dòng CLS. Nếu còn dòng hợp lệ, trạng thái phụ thuộc phần người bệnh phải trả sau khi tính lại. Chỉ tính lại với phiếu PENDING hoặc FEE_EXEMPT chưa gắn mã đơn PayOS." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="523" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Xác nhận thanh toán" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="567" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Thu ngân xác nhận thu tiền hoặc PayOS xác nhận thanh toán hợp lệ. Khoản phí của lượt BHYT được thu sau khi bác sĩ xác nhận kết luận." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="567" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Hủy phiếu" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="611" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="Hủy dòng CLS cuối cùng trên phiếu còn tính lại được sẽ hủy phiếu. Khi chốt lượt cuối ngày, hệ thống hủy phiếu vẫn PENDING." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="611" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Đồng bộ" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="655" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="Phí khám được thanh toán có thể đưa lượt vào hàng chờ. Thanh toán phiếu CLS có thể chuyển các dịch vụ đang PENDING_PAYMENT sang WAITING. Vòng đời giao dịch PayOS nằm ở PaymentTransaction." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="655" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="Payment.java · PaymentServiceImpl.java · PaymentCompletionServiceImpl.java · PayOSPaymentServiceImpl.java · InsuranceCoverageServiceImpl.java · VisitEndOfDayServiceImpl.java" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="710" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="record" name="04 Hồ sơ bệnh án">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Hồ sơ bệnh án theo lượt khám" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="MedicalRecord.status · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="100" y="216" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="OPEN" value="&lt;b&gt;Mở&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;OPEN&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="345" y="195" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="LOCKED" value="&lt;b&gt;Đã khóa&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;LOCKED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="910" y="195" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Tạo hồ sơ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="OPEN">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-2" value="Xác nhận kết luận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="OPEN" target="LOCKED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-3" value="Chốt cuối ngày" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="OPEN" target="LOCKED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="445" y="306" /><mxPoint x="1010" y="306" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="347" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Tạo hồ sơ" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="379" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Tạo hồ sơ khi ghi khám hoặc lập chỉ định CLS nếu chưa có hồ sơ cho lượt. Backend tạo hồ sơ ở OPEN." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="379" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Xác nhận kết luận" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="423" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Bác sĩ xác nhận kết luận theo UC-58. Lượt đủ điều kiện, hồ sơ đang mở, đã xử lý xong CLS và đơn thuốc nếu có đã được chấp nhận. Hồ sơ chuyển LOCKED và lượt chuyển COMPLETED." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="423" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Chốt cuối ngày" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="467" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Tác vụ cuối ngày khóa hồ sơ đang mở nếu có, khi lượt được chốt ở CANCELLED hoặc ABANDONED. Luồng này ghi thời điểm khóa." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="467" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Sau khi khóa" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="511" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="Các luồng xem, in và xuất tuân theo điều kiện của từng use case. Chúng giữ nguyên trạng thái hồ sơ." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="511" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Lưu trữ" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="555" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="Enum MedicalRecordStatus có ARCHIVED. Luồng đóng hồ sơ tạo bản ghi RecordArchive riêng và giữ MedicalRecord ở LOCKED. Backend hiện chưa có nhánh chuyển hồ sơ sang ARCHIVED." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="555" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="MedicalRecord.java · ClinicalExaminationServiceImpl.java · ParaclinicalOrderServiceImpl.java · MedicalRecordClosureServiceImpl.java · VisitEndOfDayServiceImpl.java · UC-58" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="610" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="appointment" name="05 Lịch tái khám">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Lịch tái khám" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="FollowUpAppointment.status · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="80" y="226" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="SCHEDULED" value="&lt;b&gt;Đã hẹn&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;SCHEDULED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="345" y="205" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ARRIVED" value="&lt;b&gt;Đã đến khám&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;ARRIVED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="910" y="105" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="MISSED" value="&lt;b&gt;Lỡ hẹn&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;MISSED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="910" y="205" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="CANCELLED" value="&lt;b&gt;Đã hủy&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;CANCELLED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#FFF2EF;strokeColor=#C96E59;strokeWidth=1.5;fontColor=#762A21;" vertex="1" parent="1">
+          <mxGeometry x="910" y="305" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Lưu lịch lần đầu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="SCHEDULED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-2" value="Đăng ký lượt tái khám" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.28;entryX=0;entryY=0.5;" edge="1" parent="1" source="SCHEDULED" target="ARRIVED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="720" y="222" /><mxPoint x="720" y="135" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-3" value="Quá hạn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="SCHEDULED" target="MISSED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-4" value="Lễ tân hủy lịch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#A65A4F;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.72;entryX=0;entryY=0.5;" edge="1" parent="1" source="SCHEDULED" target="CANCELLED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="720" y="248" /><mxPoint x="720" y="335" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="407" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Lưu lịch lần đầu" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="439" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Bác sĩ lưu lịch lần đầu khi hồ sơ mở, đã có kết luận và ngày hẹn hợp lệ. Mỗi hồ sơ có tối đa một lịch hẹn." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="439" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Đăng ký lượt tái khám" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="483" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Lễ tân đăng ký lượt khám mới từ lịch hợp lệ, còn hạn và thuộc đúng người bệnh. Lịch ghi nhận mã lượt khám mới." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="483" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Quá hạn" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="527" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Tác vụ kiểm tra quá hạn chuyển lịch đang SCHEDULED sang MISSED khi ngày hiện tại qua ngày cuối có hiệu lực." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="527" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Lễ tân hủy lịch" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="571" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="Lễ tân hủy lịch đang SCHEDULED và nhập lý do." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="571" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Giữ nguyên trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="615" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="Sửa lịch theo UC-61 khi hồ sơ mở và lịch còn SCHEDULED. In giấy hẹn khi hồ sơ đã khóa và lịch còn SCHEDULED. Gửi email nhắc hẹn chỉ ghi nhận thời điểm gửi." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="615" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="FollowUpAppointment.java · FollowUpScheduleServiceImpl.java · FollowUpAppointmentServiceImpl.java · VisitServiceImpl.java · UC-61/62 · UC-75" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="670" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="prescription" name="06 Liên thông đơn thuốc">
+    <mxGraphModel dx="1420" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="850" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Liên thông đơn thuốc" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=30;fontStyle=1;fontColor=#152B46;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="45" y="24" width="980" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="Prescription.lienthongStatus · Hành vi backend hiện tại" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontColor=#52647C;align=left;" vertex="1" parent="1">
+          <mxGeometry x="46" y="67" width="550" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="●  Khởi tạo     ·     Xanh lục: kết thúc thành công     ·     Đỏ nhạt: hủy hoặc bỏ" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=right;" vertex="1" parent="1">
+          <mxGeometry x="845" y="32" width="508" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;aspect=fixed;fillColor=#152B46;strokeColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="60" y="251" width="16" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="PENDING" value="&lt;b&gt;Đã lưu, chờ gửi&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;PENDING&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="240" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="SENT" value="&lt;b&gt;Đã gửi, chưa có phản hồi&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;SENT&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="540" y="132" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="REJECTED" value="&lt;b&gt;Bị từ chối&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;REJECTED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EFF6FF;strokeColor=#5282B8;strokeWidth=1.5;fontColor=#152B46;" vertex="1" parent="1">
+          <mxGeometry x="540" y="330" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ACCEPTED" value="&lt;b&gt;Được chấp nhận&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:12px&quot;&gt;ACCEPTED&lt;/span&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#EAF7EF;strokeColor=#329267;strokeWidth=1.5;fontColor=#144631;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="deleted" value="Đã xóa đơn chưa gửi" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;align=center;verticalAlign=middle;fillColor=#F3F4F6;strokeColor=#66758C;strokeWidth=1.5;fontColor=#35445A;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="425" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-1" value="Lưu đơn lần đầu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="start" target="PENDING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-2" value="Chưa có&lt;br&gt;phản hồi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.58;exitY=0;entryX=0;entryY=0.5;" edge="1" parent="1" source="PENDING" target="SENT">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="356" y="162" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-3" value="Bị từ chối" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.38;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="PENDING" target="REJECTED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="316" y="360" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-4" value="Được chấp nhận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="PENDING" target="ACCEPTED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-5" value="Bị từ chối" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.32;exitY=1;entryX=0.32;entryY=0;" edge="1" parent="1" source="SENT" target="REJECTED">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-6" value="Chưa có&lt;br&gt;phản hồi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.67;exitY=0;entryX=0.67;entryY=1;" edge="1" parent="1" source="REJECTED" target="SENT">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-7" value="Được chấp nhận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="SENT" target="ACCEPTED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1115" y="162" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-8" value="Được chấp nhận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="REJECTED" target="ACCEPTED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1115" y="360" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-9" value="Xóa đơn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;dashed=1;exitX=0.07;exitY=1;entryX=0.15;entryY=0;" edge="1" parent="1" source="PENDING" target="deleted">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="254" y="388" /><mxPoint x="270" y="388" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-10" value="Gửi lại · chưa phản hồi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.175;exitY=0;entryX=0.825;entryY=0;" edge="1" parent="1" source="SENT" target="SENT">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="575" y="97" /><mxPoint x="705" y="97" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-11" value="Gửi lại · bị từ chối" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#406288;fontFamily=Arial;fontSize=12;fontStyle=1;fontColor=#152B46;labelBackgroundColor=#FFFFFF;exitX=0.175;exitY=1;entryX=0.825;entryY=1;" edge="1" parent="1" source="REJECTED" target="REJECTED">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="575" y="431" /><mxPoint x="705" y="431" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rules-heading" value="Sự kiện và điều kiện chuyển trạng thái" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#1D3654;strokeColor=#1D3654;fontColor=#FFFFFF;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="521" width="1308" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-0" value="Lưu đơn lần đầu" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="553" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-0" value="Bác sĩ lưu đơn lần đầu, tạo đơn ở PENDING." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="553" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-1" value="Kết quả liên thông" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="597" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-1" value="Bác sĩ có thể ký và gửi từ PENDING, SENT hoặc REJECTED. Server liên thông không phản hồi → SENT, từ chối → REJECTED, chấp nhận → ACCEPTED. Cùng một kết quả khi gửi lại có thể giữ nguyên trạng thái." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="597" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-2" value="Xóa đơn" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="641" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-2" value="Chỉ đơn PENDING được xóa khi thao tác đáp ứng điều kiện của hồ sơ. Ô nét đứt biểu thị kết thúc do xóa bản ghi." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="641" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-3" value="Sửa, khóa và in" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="685" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-3" value="PENDING và REJECTED có thể được sửa khi hồ sơ cho phép. SENT có thể gửi lại. ACCEPTED khóa sửa đơn và là điều kiện để in đơn sau khi đã đóng hồ sơ." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#F3F7FB;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="685" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-key-4" value="Ký và gửi" style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#1D3654;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="45" y="729" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="rule-text-4" value="SigningRequest quản lý quá trình ký riêng. Các mũi tên giữa các trạng thái liên thông cho biết kết quả của mỗi lần gửi đơn đã ký." style="rounded=0;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fillColor=#FFFFFF;strokeColor=#D5E0EA;fontColor=#20334D;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="729" width="1128" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" value="Prescription.java · PrescriptionServiceImpl.java · PrescriptionSigningServiceImpl.java · UC-59/60/90/91/92" style="text;html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=14;fontSize=12;fontColor=#52647C;align=left;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="45" y="784" width="1308" height="25" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

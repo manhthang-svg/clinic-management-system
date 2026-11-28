@@ -18,6 +18,11 @@ export function createAccountApi(client) {
         lock: (id, body) => client.request(`/accounts/${id}/commands/lock`, { method: 'POST', body }),
         unlock: (id, body) => client.request(`/accounts/${id}/commands/unlock`, { method: 'POST', body }),
         resetPassword: (id, body) => client.request(`/accounts/${id}/commands/reset-password`, { method: 'POST', body }),
+        // UC-93 (BR-59-17): body { version, facilityPassword? }; the facility password only when the server asks.
+        addToNationalPrescriptionSystem: (id, body) =>
+            client.request(`/accounts/${id}/commands/add-to-national-prescription-system`, { method: 'POST', body }),
+        removeFromNationalPrescriptionSystem: (id, body) =>
+            client.request(`/accounts/${id}/commands/remove-from-national-prescription-system`, { method: 'POST', body }),
         activities: (id, limit = 10, signal) => client.request(`/accounts/${id}/activities?limit=${limit}`, { signal }),
         changeHistory: (id, page = 0, size = 10, signal) =>
             client.request(`/accounts/${id}/change-history?page=${page}&size=${size}`, { signal }),

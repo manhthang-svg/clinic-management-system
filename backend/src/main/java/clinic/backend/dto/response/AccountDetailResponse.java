@@ -19,6 +19,8 @@ public record AccountDetailResponse(
         String academicTitle,
         String practiceLicenseNo,
         String maLienthongBacsi,
+        /** UC-93: when the Doctor was added to the facility on the national prescription system; null if not. */
+        Instant lienthongAddedAt,
         String citizenId,
         LocalDate dateOfBirth,
         Gender gender,
