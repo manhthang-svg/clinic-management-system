@@ -25,6 +25,7 @@ import clinic.backend.repository.ParaclinicalOrderDetailRepository;
 import clinic.backend.repository.RoomRepository;
 import clinic.backend.repository.SecurityAuditEventRepository;
 import clinic.backend.repository.StaffAccountRepository;
+import clinic.backend.repository.DutyScheduleRepository;
 import clinic.backend.repository.StaffRoomAssignmentRepository;
 import clinic.backend.repository.VisitRepository;
 import clinic.backend.security.PasswordHasher;

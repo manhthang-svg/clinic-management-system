@@ -26,7 +26,7 @@ public record UpdateAccountRequest(
         @Size(max = 50, message = "TOO_LONG")
         @Pattern(regexp = "^[A-Za-z0-9]*$", message = "INVALID_FORMAT")
         String maLienthongBacsi,
-        // BR-59-16: personal identification number (12 digits) of a Doctor; optional.
+        // UC-08: personal identification number (12 digits) of a Doctor, staff information; optional.
         @Pattern(regexp = "^([0-9]{12})?$", message = "INVALID_FORMAT")
         String citizenId,
         @Past LocalDate dateOfBirth,

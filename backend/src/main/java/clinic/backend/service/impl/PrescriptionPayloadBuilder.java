@@ -1,17 +1,16 @@
 package clinic.backend.service.impl;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,9 +24,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The prescription as sent to the national prescription system (BR-59-11, QĐ 808/QĐ-BYT VII.3) and as signed
- * (BR-59-10 step 2). The signed bytes are this JSON without {@code signature}: UTF-8, keys in the fixed order below,
- * no insignificant whitespace, absent optional values left out (ASSUMPTION: QĐ 808 defines no canonical form).
+ * The prescription as sent to the national prescription system (BR-59-11, QĐ 808/QĐ-BYT VII.3): UTF-8 JSON, keys in
+ * the order of VII.3, absent optional values left out. It carries no {@code signature}: the digital signature is out
+ * of scope (BR-47) and VII.3 row 27 does not require it.
  */
 final class PrescriptionPayloadBuilder {
 
@@ -39,6 +38,10 @@ final class PrescriptionPayloadBuilder {
      * to outpatient (PO 12/11). The code value is ASSUMPTION until the list is added (Decisions needed 4).
      */
     static final int OUTPATIENT_TREATMENT = 1;
+    /** QĐ 808 VII.3 rows 10, 11, 18–20, 22: text fields of at most 500 characters. */
+    static final int TEXT_MAX = 500;
+    /** QĐ 808 VII.3 row 24: a string of at most 12 digits. */
+    private static final Pattern PHONE = Pattern.compile("[0-9]{1,12}");
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private PrescriptionPayloadBuilder() {
@@ -49,7 +52,7 @@ final class PrescriptionPayloadBuilder {
      * @param accompanyingPerson BR-59-07: for a child under 72 months, the relative's name, phone and address
      * @param followUpDate       the follow-up date copied onto the prescription, if any
      */
-    static byte[] canonicalPayload(
+    static byte[] payload(
             Prescription prescription, Visit visit, Patient patient, Conclusion conclusion, BigDecimal weightKg,
             String accompanyingPerson, LocalDate followUpDate) {
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -83,7 +86,7 @@ final class PrescriptionPayloadBuilder {
                 .map(PrescriptionPayloadBuilder::medicine)
                 .toList());
         putIfPresent(payload, "loi_dan", text(prescription.getLoiDan()));
-        putIfPresent(payload, "so_dien_thoai_nguoi_kham_benh", text(patient.getSodienthoai()));
+        putIfPresent(payload, "so_dien_thoai_nguoi_kham_benh", phone(patient.getSodienthoai()));
         LocalDate prescribedOn = LocalDate.ofInstant(prescription.getPrescribedAt(), CLINIC_ZONE);
         putIfPresent(payload, "ngay_tai_kham",
                 followUpDate == null ? null : ChronoUnit.DAYS.between(prescribedOn, followUpDate));
@@ -96,23 +99,31 @@ final class PrescriptionPayloadBuilder {
     }
 
     /**
-     * BR-59-11: the signed payload, byte for byte, with {@code signature} = the base64 CMS value appended as the
-     * last key, so the receiver can drop it and verify the rest.
+     * BR-59-11: cach_dung = "{route}: {dose} × {times}/ngày × {days} ngày, {usage}" — QĐ 808 VII.3 row 22 asks for the
+     * route, the dose and the duration (order ASSUMPTION). The sender checks the 500-character limit; it is never cut.
      */
-    static byte[] withSignature(byte[] canonicalPayload, byte[] signedData) {
-        String payload = new String(canonicalPayload, StandardCharsets.UTF_8);
-        if (!payload.endsWith("}")) {
-            throw new IllegalStateException("The prescription payload is not a JSON object");
-        }
-        String signature = ",\"signature\":\"" + Base64.getEncoder().encodeToString(signedData) + "\"}";
-        return (payload.substring(0, payload.length() - 1) + signature).getBytes(StandardCharsets.UTF_8);
+    static String usage(PrescriptionDetail detail) {
+        String dosing = "%s × %d/ngày × %d ngày, %s".formatted(
+                detail.getLieuMoiLan(), detail.getSoLanNgay(), detail.getSoNgayDung(), detail.getCachdung());
+        String route = text(detail.getDuongdung());
+        return route == null ? dosing : route + ": " + dosing;
     }
 
-    /** BR-59-11: cach_dung = "{dose} × {times}/ngày × {days} ngày, {usage}" (at most 500 characters). */
-    static String usage(PrescriptionDetail detail) {
-        String text = "%s × %d/ngày × %d ngày, %s".formatted(
-                detail.getLieuMoiLan(), detail.getSoLanNgay(), detail.getSoNgayDung(), detail.getCachdung());
-        return text.length() <= 500 ? text : text.substring(0, 500);
+    /**
+     * BR-59-11: ten_thuoc = the trade name followed by the strength unless the name already contains it (TT 26/2025
+     * Điều 6 khoản 5–6 require the strength; QĐ 808 has no field for it, ASSUMPTION).
+     */
+    static String medicineName(PrescriptionDetail detail) {
+        String name = detail.getTenthuocvattu().strip();
+        String strength = text(detail.getHamluong());
+        if (strength == null || squeezed(name).contains(squeezed(strength))) {
+            return name;
+        }
+        return name + " " + strength;
+    }
+
+    private static String squeezed(String value) {
+        return value.replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT);
     }
 
     /** BR-59-07: the relative's name, phone and address (QĐ 808 VII.3 row 10). */
@@ -129,7 +140,7 @@ final class PrescriptionPayloadBuilder {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("ma_thuoc", detail.getSoDangKy());
         item.put("biet_duoc", detail.getHoatchat());
-        item.put("ten_thuoc", detail.getTenthuocvattu());
+        item.put("ten_thuoc", medicineName(detail));
         item.put("don_vi_tinh", detail.getDonvitinh());
         // A whole number of the dispensing unit (BR-59-04).
         item.put("so_luong", detail.getSoluongthuocvattu().stripTrailingZeros().toBigIntegerExact());
@@ -151,14 +162,26 @@ final class PrescriptionPayloadBuilder {
         return text != null && text.matches("[0-9]{12}") ? text : null;
     }
 
-    /** BR-59-07: the patient's address, ward and province, at most 500 characters (also printed, BR-59-13). */
+    /**
+     * BR-59-07: the patient's address, ward and province (also printed, BR-59-13). Sending refuses one longer than
+     * {@link #TEXT_MAX}; it is never cut.
+     */
     static String address(Patient patient) {
         List<String> parts = Stream.of(patient.getDiachi(), patient.getXaphuong(), patient.getTinhthanh())
                 .map(PrescriptionPayloadBuilder::text)
                 .filter(Objects::nonNull)
                 .toList();
-        String joined = String.join(", ", parts);
-        return joined.length() <= 500 ? joined : joined.substring(0, 500);
+        return String.join(", ", parts);
+    }
+
+    /** QĐ 808 VII.3 row 24: sent only as digits, at most 12 (spaces, dots and dashes removed); otherwise left out. */
+    static String phone(String value) {
+        String text = text(value);
+        if (text == null) {
+            return null;
+        }
+        String digits = text.replaceAll("[\\s.\\-]", "");
+        return PHONE.matcher(digits).matches() ? digits : null;
     }
 
     private static void putIfPresent(Map<String, Object> target, String key, Object value) {

@@ -33,7 +33,6 @@ import clinic.backend.entity.MedicineCatalog;
 import clinic.backend.entity.Prescription;
 import clinic.backend.entity.PrescriptionDetail;
 import clinic.backend.entity.PrescriptionSubmission;
-import clinic.backend.entity.RecordSignature;
 import clinic.backend.entity.StaffAccount;
 import clinic.backend.entity.VitalSign;
 import clinic.backend.enums.ActivationStatus;
@@ -42,9 +41,6 @@ import clinic.backend.enums.ErrorCode;
 import clinic.backend.enums.FollowUpAppointmentStatus;
 import clinic.backend.enums.MedicalHistoryType;
 import clinic.backend.enums.MedicineControlGroup;
-import clinic.backend.enums.RecordSignatureDocumentType;
-import clinic.backend.enums.SigningCertificateStatus;
-import clinic.backend.enums.SigningRequestStatus;
 import clinic.backend.exceptions.AppException;
 import clinic.backend.repository.ClinicFacilityRepository;
 import clinic.backend.repository.ConclusionRepository;
@@ -55,15 +51,11 @@ import clinic.backend.repository.MedicalRecordRepository;
 import clinic.backend.repository.MedicineCatalogRepository;
 import clinic.backend.repository.PrescriptionRepository;
 import clinic.backend.repository.PrescriptionSubmissionRepository;
-import clinic.backend.repository.RecordSignatureRepository;
-import clinic.backend.repository.SigningRequestRepository;
-import clinic.backend.repository.StaffSigningCertificateRepository;
 import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.repository.VitalSignRepository;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AuditLogService;
 import clinic.backend.service.PrescriptionService;
-import clinic.backend.service.RemoteSigningGateway;
 import clinic.backend.service.impl.ConcludingVisitGuard.Context;
 import clinic.backend.utils.UuidV7Generator;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -80,7 +72,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * UC-59 Prescribe Medication: one ordinary prescription (type c, BR-52) per visit record, stored in
  * {@code prescriptions} and {@code prescription_details} with the limits of BR-107 and I1-D45. Sending it to the
- * national prescription system (UC-90) is a separate step; a sent prescription is not edited here (BR-47).
+ * national prescription system (UC-90, {@link PrescriptionSubmissionServiceImpl}) is a separate step; a sent
+ * prescription is not edited here (BR-47).
  */
 @Service
 @RequiredArgsConstructor
@@ -117,13 +110,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final VitalSignRepository vitalSignRepository;
     private final FollowUpAppointmentRepository followUpRepository;
     private final AuditLogService auditLogService;
-    private final StaffSigningCertificateRepository signingCertificateRepository;
-    private final SigningRequestRepository signingRequestRepository;
     private final PrescriptionSubmissionRepository submissionRepository;
-    private final RecordSignatureRepository recordSignatureRepository;
-    private final RemoteSigningGateway signingGateway;
     private final MedicalRecordRepository medicalRecordRepository;
-    private final DigitalSignatureVerifier signatureVerifier;
+    private final NationalPrescriptionSessions nationalSessions;
     private final UuidV7Generator ids;
     private final Clock clock;
 
@@ -179,9 +168,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
 
         Instant now = clock.instant();
-        if (prescription != null) {
-            cancelPendingSignature(prescription, now);
-        }
         Map<String, Object> oldValues = prescription == null ? Map.of() : auditValues(prescription);
         if (prescription == null) {
             prescription = new Prescription(
@@ -415,8 +401,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .filter(appointment -> appointment.getStatus() == FollowUpAppointmentStatus.SCHEDULED)
                 .map(FollowUpAppointment::getFollowUpDate)
                 .orElse(null);
-        boolean facilityLinkCodeMissing = clinicFacilityRepository.findCurrent()
-                .filter(PrescriptionServiceImpl::hasFacilityCodes).isEmpty();
+        ClinicFacility facility = clinicFacilityRepository.findCurrent()
+                .filter(PrescriptionServiceImpl::hasFacilityCodes).orElse(null);
+        String prescriberLinkCode = normalize(context.doctor().getMaLienthongBacsi());
+        // BR-59-17, cách B: sending asks for the Doctor's national password when no token is kept.
+        boolean nationalSignInRequired = facility == null || prescriberLinkCode == null
+                || !nationalSessions.hasPrescriberSession(facility.getMaLienthongDonthuoc().strip(), prescriberLinkCode);
         return new PrescriptionResponse(
                 context.visit().getId(),
                 prescription == null ? null : prescription.getId(),
@@ -434,13 +424,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescription != null && prescription.isSent(),
                 doctorName,
                 prescription == null ? null : prescription.getPrescribedAt(),
-                normalize(context.doctor().getMaLienthongBacsi()) == null,
-                facilityLinkCodeMissing,
+                prescriberLinkCode == null,
+                facility == null,
                 followUpDate,
                 childData(context, prescription),
                 prescription == null ? null : prescription.getLienthongStatus().name(),
-                signingCertificateRepository.findByStaffAccountIdAndStatus(
-                        context.doctor().getId(), SigningCertificateStatus.ACTIVE).isPresent(),
+                context.doctor().getLienthongAddedAt() == null,
+                nationalSignInRequired,
                 prescription == null ? null : lastSubmission(prescription));
     }
 
@@ -450,15 +440,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
         Context context = guard.require(principal, visitId(prescription));
-        // P03: never sent. A send always leaves a submission and a signature row, which are kept as evidence.
-        if (!prescription.isDeletable()
-                || submissionRepository.existsByPrescriptionId(prescription.getId())
-                || recordSignatureRepository.existsByDocumentTypeAndDocumentId(
-                        RecordSignatureDocumentType.DON_THUOC, prescription.getId())) {
+        // P03: never sent. A send always leaves a submission row, which is kept as evidence.
+        if (!prescription.isDeletable() || submissionRepository.existsByPrescriptionId(prescription.getId())) {
             throw new AppException(ErrorCode.PRESCRIPTION_ALREADY_SENT);
         }
         Instant now = clock.instant();
-        cancelPendingSignature(prescription, now);
         // BR-59-14: the removed values, so the prescription could be restored from the audit log.
         Map<String, Object> removed = new LinkedHashMap<>();
         removed.put("prescriptionCode", prescription.getMadonthuoc());
@@ -478,7 +464,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
         guard.require(principal, visitId(prescription));
-        return submissionViews(prescription, submissionRepository
+        return submissionViews(submissionRepository
                 .findAllByPrescriptionIdOrderByAttemptNoDesc(prescription.getId()));
     }
 
@@ -489,50 +475,28 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
     }
 
-    /** UC-91: the latest send, with the signature sent with it. */
+    /** UC-91: the latest send. */
     PrescriptionResponse.Submission lastSubmission(Prescription prescription) {
         return submissionRepository.findFirstByPrescriptionIdOrderByAttemptNoDesc(prescription.getId())
-                .map(submission -> submissionViews(prescription, List.of(submission)).getFirst())
+                .map(submission -> submissionViews(List.of(submission)).getFirst())
                 .orElse(null);
     }
 
-    /**
-     * UC-91 step 2: each send with the signature made for it. The signature row of a send is written just before its
-     * submission (UC-90 step 5), so a send carries the latest signature created no later than it was submitted.
-     */
-    private List<PrescriptionResponse.Submission> submissionViews(
-            Prescription prescription, List<PrescriptionSubmission> submissions) {
+    /** UC-91 step 2: each send with its answer and the Doctor who sent it. */
+    private List<PrescriptionResponse.Submission> submissionViews(List<PrescriptionSubmission> submissions) {
         if (submissions.isEmpty()) {
             return List.of();
         }
-        List<RecordSignature> signatures = recordSignatureRepository.findAllByDocumentTypeAndDocumentIdOrderByCreatedAtAsc(
-                RecordSignatureDocumentType.DON_THUOC, prescription.getId());
         Map<UUID, String> senders = staffAccountRepository.findAllById(submissions.stream()
                         .map(PrescriptionSubmission::getSubmittedByAccountId).collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(StaffAccount::getId, StaffAccount::getFullName));
-        return submissions.stream().map(submission -> {
-            RecordSignature signature = null;
-            for (RecordSignature candidate : signatures) {
-                if (!candidate.getCreatedAt().isAfter(submission.getSubmittedAt())) {
-                    signature = candidate;
-                }
-            }
-            // BR-59-16: the status is the stored signature verified again, not the result kept at signing time.
-            String failure = signature == null ? null : signatureVerifier.reverify(
-                    signature.getSignatureValue(), signature.getSignedPayload(), signature.getCertificateSerial(),
-                    signature.getCertificateIssuer(), signature.getVerificationEvidence());
-            return new PrescriptionResponse.Submission(
-                    submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
-                    submission.getSubmittedAt(), submission.getRespondedAt(),
-                    signature == null ? null : signature.getSignedAt(),
-                    signature == null ? null : signature.getSignerName(),
-                    signature == null ? null : signature.getCertificateSerial(),
-                    signature == null ? null : signature.getCertificateIssuer(),
-                    senders.get(submission.getSubmittedByAccountId()),
-                    signature == null ? null : failure == null,
-                    failure);
-        }).toList();
+        return submissions.stream()
+                .map(submission -> new PrescriptionResponse.Submission(
+                        submission.getAttemptNo(), submission.getResult().name(), errors(submission.getErrors()),
+                        submission.getSubmittedAt(), submission.getRespondedAt(),
+                        senders.get(submission.getSubmittedByAccountId())))
+                .toList();
     }
 
     private List<String> errors(String json) {
@@ -544,24 +508,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         } catch (JsonProcessingException exception) {
             return List.of(json);
         }
-    }
-
-    /**
-     * K06: a save creates a new version, so a pending signing request of the old version is cancelled. Withdrawing
-     * it at the CA is best effort; the local state is authoritative.
-     */
-    private void cancelPendingSignature(Prescription prescription, Instant now) {
-        signingRequestRepository.findByDocumentTypeAndDocumentIdAndStatus(
-                        RecordSignatureDocumentType.DON_THUOC, prescription.getId(), SigningRequestStatus.PENDING)
-                .ifPresent(pending -> {
-                    try {
-                        signingGateway.cancel(pending.getProviderTransactionId());
-                    } catch (AppException exception) {
-                        // The CA lets an unanswered request expire.
-                    }
-                    pending.markCancelled(now);
-                    signingRequestRepository.save(pending);
-                });
     }
 
     /**

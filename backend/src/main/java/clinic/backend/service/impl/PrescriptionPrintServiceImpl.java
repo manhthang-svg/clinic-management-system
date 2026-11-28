@@ -95,9 +95,8 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
     }
 
     /**
-     * BR-59-13: the data sent to the national system (diagnoses and follow-up date copied at send time, BR-59-08) and
-     * the signature of the accepted send, verified again (BR-59-16). An accepted prescription is never sent again, so
-     * its last send is the accepted one.
+     * BR-59-13: the data sent to the national system (diagnoses and follow-up date copied at send time, BR-59-08).
+     * The form has no digital signature (out of scope, BR-47); the Doctor signs the paper by hand (TT 26 Phụ lục I).
      */
     private PrescriptionPrintResponse form(
             Context context, Prescription prescription, boolean copy, Instant printedAt, String printedBy) {
@@ -118,8 +117,7 @@ public class PrescriptionPrintServiceImpl implements PrescriptionPrintService {
                 prescription.getPrescribedAt(),
                 staffAccountRepository.findById(prescription.getDoctorAccountId())
                         .map(PrescriptionPrintServiceImpl::displayName)
-                        .orElse(null),
-                prescriptions.lastSubmission(prescription));
+                        .orElse(null));
     }
 
     private PrescriptionPrintResponse.Facility facility() {

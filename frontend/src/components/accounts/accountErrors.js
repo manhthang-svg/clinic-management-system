@@ -58,6 +58,9 @@ const CODE_MESSAGE = {
     "Một số thông tin chưa hợp lệ. Vui lòng kiểm tra lại.",
   MALFORMED_REQUEST:
     "Yêu cầu không hợp lệ. Vui lòng tải lại trang rồi thử lại.",
+  // BR-59-17 (ASSUMPTION wording, MSG number TBD).
+  PRESCRIBER_LINK_CODE_LOCKED:
+    "Bác sĩ đang được thêm vào cơ sở trên Hệ thống đơn thuốc quốc gia. Vui lòng xóa bác sĩ khỏi cơ sở trước khi đổi mã liên thông hoặc vai trò.",
 };
 
 const FALLBACK_MESSAGE =

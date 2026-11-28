@@ -1,108 +1,200 @@
 package clinic.backend.service.impl;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 
 import clinic.backend.config.properties.NationalPrescriptionSimulatorProperties;
 import clinic.backend.config.properties.NationalPrescriptionSimulatorProperties.FailureMode;
+import clinic.backend.entity.ClinicFacility;
+import clinic.backend.entity.StaffAccount;
 import clinic.backend.enums.ErrorCode;
 import clinic.backend.exceptions.AppException;
+import clinic.backend.repository.ClinicFacilityRepository;
+import clinic.backend.repository.StaffAccountRepository;
 import clinic.backend.service.NationalPrescriptionSystem;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Simulated national prescription system (BR-59-11, BR-59-12). It issues a 7-day token per facility and Doctor
- * without checking a password (ASSUMPTION), accepts a resend of a code it already accepted (ASSUMPTION), and rejects
- * an unknown prescriber link code, a malformed prescription code or a missing required field of QĐ 808 VII.3, so the
- * team can demonstrate UC-92. These rules are configuration for demonstrations, not the real system's validation.
- * Payloads are never logged (docs/security.md).
+ * Simulated national prescription system (BR-59-12, BR-59-17), answering as QĐ 808/QĐ-BYT III–VII describe:
+ * <ul>
+ *   <li>III, VI: a sign-in with the configured password (any non-blank one when none is configured, ASSUMPTION)
+ *       returns a random bearer token valid for 7 days; VI refuses a Doctor the facility has not added, with the
+ *       message of VI.4.</li>
+ *   <li>IV, V: add or remove a Doctor with the facility's token; both are idempotent (ASSUMPTION). Removing a Doctor
+ *       ends the Doctor's tokens (ASSUMPTION).</li>
+ *   <li>VII: with a valid Doctor's token, every prescription is accepted (team decision 27/11/2026); the clinic's
+ *       own checks before sending (BR-59-07, BR-59-11) are the only validation. With failure mode {@code REJECT}
+ *       the first send of each prescription code is rejected with a sample error and a resend is accepted, so the
+ *       team can demonstrate UC-91 and UC-92 (ASSUMPTION).</li>
+ * </ul>
+ * The real system keeps the facility's Doctors; this one is in memory, so after a restart it reloads them from the
+ * clinic's own record of who was added ({@code staff_accounts.lienthong_added_at}), standing in for the remote side.
+ * These rules are configuration for demonstrations, not the real system's validation. Payloads, passwords and tokens
+ * are never logged (docs/security.md).
  */
 @Service
 @RequiredArgsConstructor
 public class SimulatedNationalPrescriptionSystemImpl implements NationalPrescriptionSystem {
 
     private static final Duration TOKEN_LIFETIME = Duration.ofDays(7);
-    /** QĐ 808 VII.3 row 2: facility code (5) + 7 letters or digits + "-" + type. */
-    private static final Pattern CODE = Pattern.compile("[0-9]{5}[0-9A-Za-z]{7}-[chny]");
-    private static final List<String> REQUIRED = List.of(
-            "loai_don_thuoc", "ma_don_thuoc", "ho_ten_benh_nhan", "ngay_sinh_benh_nhan", "gioi_tinh", "dia_chi",
-            "hinh_thuc_dieu_tri", "signature");
-    private static final List<String> REQUIRED_PER_MEDICINE = List.of(
-            "ma_thuoc", "biet_duoc", "ten_thuoc", "don_vi_tinh", "so_luong", "cach_dung");
+    private static final String NOT_ADDED = "Bác sĩ chưa được thêm vào cơ sở khám chữa bệnh.";
+    private static final String WRONG_CREDENTIALS = "Mã liên thông hoặc mật khẩu không đúng.";
+    /** {@code REJECT} mode only (ASSUMPTION wording); marked as simulated so it is not read as a real BYT rule. */
+    static final String SAMPLE_REJECTION = "Thuốc thứ 1: cách dùng chưa ghi rõ đường dùng, liều mỗi lần, số lần "
+            + "trong ngày và số ngày dùng. (Lỗi giả lập để minh họa sửa và gửi lại đơn thuốc.)";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final NationalPrescriptionSimulatorProperties properties;
+    private final StaffAccountRepository staffAccountRepository;
+    private final ClinicFacilityRepository clinicFacilityRepository;
     private final Clock clock;
     private final ObjectMapper json = new ObjectMapper();
-    private final Map<String, Instant> tokens = new ConcurrentHashMap<>();
-    private final Set<String> accepted = ConcurrentHashMap.newKeySet();
+    private final Map<String, Session> tokens = new ConcurrentHashMap<>();
+    /** {@code REJECT} mode: the codes already rejected once; in memory, so a restart starts over. */
+    private final Set<String> rejectedOnce = ConcurrentHashMap.newKeySet();
+    private volatile Set<String> addedPrescribers;
 
     @Override
-    public Answer submit(Credentials credentials, byte[] prescriptionJson) {
+    public SignIn signInFacility(String facilityLinkCode, char[] password) {
         waitForAnswer();
-        // QĐ 808 III, VI: sign in once per 7 days with the facility's and the Doctor's link codes.
-        List<String> loginErrors = new ArrayList<>();
-        if (!properties.registeredPrescriberCodes().isEmpty()
-                && !properties.registeredPrescriberCodes().contains(credentials.prescriberLinkCode())) {
-            loginErrors.add("Bác sĩ chưa được thêm vào cơ sở khám chữa bệnh.");
+        if (blank(facilityLinkCode) || !passwordMatches(password, properties.facilityPassword())) {
+            return new SignIn(null, List.of(WRONG_CREDENTIALS));
         }
-        if (!loginErrors.isEmpty()) {
-            return new Answer(false, "Đăng nhập liên thông không thành công", loginErrors);
-        }
-        String tokenKey = credentials.facilityLinkCode() + "|" + credentials.prescriberLinkCode();
-        Instant now = clock.instant();
-        tokens.compute(tokenKey, (key, expiry) -> expiry == null || !expiry.isAfter(now)
-                ? now.plus(TOKEN_LIFETIME) : expiry);
+        return new SignIn(issue(Kind.FACILITY, facilityLinkCode, null), List.of());
+    }
 
-        JsonNode prescription;
+    @Override
+    public Answer addPrescriber(String facilityToken, String prescriberLinkCode) {
+        waitForAnswer();
+        Session session = session(facilityToken, Kind.FACILITY);
+        if (session == null) {
+            return Answer.invalidToken();
+        }
+        if (blank(prescriberLinkCode)) {
+            return Answer.rejected("Dữ liệu không hợp lệ", List.of("Thiếu mã liên thông bác sĩ."));
+        }
+        added().add(key(session.facilityLinkCode(), prescriberLinkCode));
+        return Answer.accepted("Bạn đã thêm bác sĩ thành công");
+    }
+
+    @Override
+    public Answer removePrescriber(String facilityToken, String prescriberLinkCode) {
+        waitForAnswer();
+        Session session = session(facilityToken, Kind.FACILITY);
+        if (session == null) {
+            return Answer.invalidToken();
+        }
+        added().remove(key(session.facilityLinkCode(), prescriberLinkCode));
+        tokens.values().removeIf(other -> other.kind() == Kind.PRESCRIBER
+                && other.facilityLinkCode().equals(session.facilityLinkCode())
+                && prescriberLinkCode.equals(other.prescriberLinkCode()));
+        return Answer.accepted("Bạn đã xóa bác sĩ khỏi cơ sở khám chữa bệnh thành công");
+    }
+
+    @Override
+    public SignIn signInPrescriber(String prescriberLinkCode, String facilityLinkCode, char[] password) {
+        waitForAnswer();
+        if (blank(prescriberLinkCode) || blank(facilityLinkCode)
+                || !passwordMatches(password, properties.prescriberPassword())) {
+            return new SignIn(null, List.of(WRONG_CREDENTIALS));
+        }
+        if (!added().contains(key(facilityLinkCode, prescriberLinkCode))) {
+            return new SignIn(null, List.of(NOT_ADDED));
+        }
+        return new SignIn(issue(Kind.PRESCRIBER, facilityLinkCode, prescriberLinkCode), List.of());
+    }
+
+    @Override
+    public Answer submit(String prescriberToken, byte[] prescriptionJson) {
+        waitForAnswer();
+        Session session = session(prescriberToken, Kind.PRESCRIBER);
+        if (session == null) {
+            return Answer.invalidToken();
+        }
+        if (properties.failureMode() == FailureMode.REJECT && rejectedOnce.add(prescriptionCode(prescriptionJson))) {
+            return Answer.rejected("Đơn thuốc không hợp lệ", List.of(SAMPLE_REJECTION));
+        }
+        return Answer.accepted("Gửi đơn thuốc thành công");
+    }
+
+    /** The prescription code, or the whole payload's text when it cannot be read (still rejected once). */
+    private String prescriptionCode(byte[] prescriptionJson) {
         try {
-            prescription = json.readTree(prescriptionJson);
+            String code = json.readTree(prescriptionJson).path("ma_don_thuoc").asText("");
+            if (!code.isBlank()) {
+                return code;
+            }
         } catch (IOException exception) {
-            return new Answer(false, "Dữ liệu không hợp lệ", List.of("Dữ liệu đơn thuốc không đúng định dạng JSON."));
+            // not JSON: fall through
         }
-        String code = prescription.path("ma_don_thuoc").asText("");
-        if (accepted.contains(code)) {
-            return new Answer(true, "Gửi đơn thuốc thành công", List.of());
+        return new String(prescriptionJson, StandardCharsets.UTF_8);
+    }
+
+    private String issue(Kind kind, String facilityLinkCode, String prescriberLinkCode) {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        tokens.put(token, new Session(kind, facilityLinkCode, prescriberLinkCode, clock.instant().plus(TOKEN_LIFETIME)));
+        return token;
+    }
+
+    private Session session(String token, Kind kind) {
+        Session session = token == null ? null : tokens.get(token);
+        if (session == null || session.kind() != kind) {
+            return null;
         }
-        List<String> errors = new ArrayList<>();
-        REQUIRED.forEach(field -> requireField(prescription, field, errors));
-        if (!code.isEmpty() && !CODE.matcher(code).matches()) {
-            errors.add("Mã đơn thuốc không đúng định dạng.");
+        if (!clock.instant().isBefore(session.expiresAt())) {
+            tokens.remove(token);
+            return null;
         }
-        if (!code.isEmpty() && !code.startsWith(credentials.facilityCode())) {
-            errors.add("Mã đơn thuốc không bắt đầu bằng mã cơ sở khám chữa bệnh.");
-        }
-        if (!prescription.path("chan_doan").isArray() || prescription.path("chan_doan").isEmpty()) {
-            errors.add("Thiếu thông tin chan_doan.");
-        }
-        JsonNode medicines = prescription.path("thong_tin_don_thuoc");
-        if (!medicines.isArray() || medicines.isEmpty()) {
-            errors.add("Thiếu thông tin thong_tin_don_thuoc.");
-        } else {
-            for (int index = 0; index < medicines.size(); index++) {
-                JsonNode medicine = medicines.get(index);
-                for (String field : REQUIRED_PER_MEDICINE) {
-                    if (isMissing(medicine.path(field))) {
-                        errors.add("Thuốc thứ %d thiếu thông tin %s.".formatted(index + 1, field));
+        return session;
+    }
+
+    /** The Doctors added to each facility, loaded once from the clinic's record (see the class comment). */
+    private Set<String> added() {
+        Set<String> current = addedPrescribers;
+        if (current == null) {
+            synchronized (this) {
+                current = addedPrescribers;
+                if (current == null) {
+                    current = ConcurrentHashMap.newKeySet();
+                    String facilityLinkCode = clinicFacilityRepository.findCurrent()
+                            .map(ClinicFacility::getMaLienthongDonthuoc).map(String::strip).orElse(null);
+                    if (facilityLinkCode != null) {
+                        for (StaffAccount doctor : staffAccountRepository.findAllByLienthongAddedAtIsNotNull()) {
+                            if (doctor.getMaLienthongBacsi() != null) {
+                                current.add(key(facilityLinkCode, doctor.getMaLienthongBacsi().strip()));
+                            }
+                        }
                     }
+                    addedPrescribers = current;
                 }
             }
         }
-        if (!errors.isEmpty()) {
-            return new Answer(false, "Đơn thuốc không hợp lệ", errors);
+        return current;
+    }
+
+    private static boolean passwordMatches(char[] given, String expected) {
+        if (given == null || new String(given).isBlank()) {
+            return false;
         }
-        accepted.add(code);
-        return new Answer(true, "Gửi đơn thuốc thành công", List.of());
+        if (expected.isEmpty()) {
+            return true;
+        }
+        return MessageDigest.isEqual(new String(given).getBytes(StandardCharsets.UTF_8),
+                expected.getBytes(StandardCharsets.UTF_8));
     }
 
     private void waitForAnswer() {
@@ -127,13 +219,19 @@ public class SimulatedNationalPrescriptionSystemImpl implements NationalPrescrip
         return first.compareTo(second) <= 0 ? first : second;
     }
 
-    private static void requireField(JsonNode prescription, String field, List<String> errors) {
-        if (isMissing(prescription.path(field))) {
-            errors.add("Thiếu thông tin " + field + ".");
-        }
+    private static String key(String facilityLinkCode, String prescriberLinkCode) {
+        return facilityLinkCode + "|" + prescriberLinkCode;
     }
 
-    private static boolean isMissing(JsonNode node) {
-        return node.isMissingNode() || node.isNull() || (node.isTextual() && node.asText().isBlank());
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private enum Kind {
+        FACILITY,
+        PRESCRIBER
+    }
+
+    private record Session(Kind kind, String facilityLinkCode, String prescriberLinkCode, Instant expiresAt) {
     }
 }

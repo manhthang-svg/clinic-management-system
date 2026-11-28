@@ -23,7 +23,6 @@
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <springdoc.version>2.9.1</springdoc.version>
         <archunit.version>1.5.1</archunit.version>
-        <bouncycastle.version>1.83</bouncycastle.version>
         <maven.compiler.parameters>true</maven.compiler.parameters>
     </properties>
 
@@ -124,13 +123,6 @@
             <groupId>vn.payos</groupId>
             <artifactId>payos-java</artifactId>
             <version>2.0.1</version>
-        </dependency>
-
-        <!-- UC-90 digital signature (BR-59-10): CMS, certificates, RFC 3161 time stamps; the JDK has no CMS API. -->
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
-            <version>${bouncycastle.version}</version>
         </dependency>
 
         <!-- UC-33: statistics reports exported as Excel (.xlsx) workbooks -->

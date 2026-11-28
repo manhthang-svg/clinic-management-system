@@ -1,0 +1,63 @@
+# Demo server: PostgreSQL + backend + Caddy (SPA and /api/ proxy) + Cloudflare Tunnel.
+# Run from the repository root:  docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
+# Only cloudflared is reachable from outside; no port is published except web on 127.0.0.1 for local checks.
+name: clinic-demo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clinic}
+      POSTGRES_USER: ${POSTGRES_USER:-clinic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/clinic}
+      DB_USERNAME: ${DB_USERNAME:-clinic}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      APP_FRONTEND_ORIGIN: ${APP_FRONTEND_ORIGIN:?set APP_FRONTEND_ORIGIN (https://your-hostname) in deploy/.env}
+      REFRESH_COOKIE_SECURE: "true"
+      CLINIC_ARCHIVE_ROOT: /data/archive
+      SIGNING_SIMULATOR_KEYSTORE: /data/signing-simulator/simulator.p12
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - backend_data:/data
+
+  web:
+    build: ../frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:${WEB_LOCAL_PORT:-8088}:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - web
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in deploy/.env}
+
+volumes:
+  postgres_data:
+  # Archive packages of closed records (UC-58) and simulator keys. Back this up together with the database.
+  backend_data:

@@ -32,6 +32,7 @@ import {
   AccountStatCard,
 } from "../../components/accounts";
 import { percentOf } from "../../components/accounts/accountFormat";
+import { NationalPrescriberPanel } from "../../components/accounts/NationalPrescriberPanel";
 import {
   REASON_LENGTH_MESSAGE,
   accountErrorMessage,
@@ -677,6 +678,19 @@ export function AccountManagementPage({
           onToggleLock={() => toggleLock(selected)}
           onResetPassword={() => setResetPasswordFor(selected.id)}
         />
+        {selected.role === "DOCTOR" && !isSelf(selected) && (
+          <NationalPrescriberPanel
+            account={selected}
+            accountApi={accountApi}
+            onUpdated={(updated) => {
+              const account = fromApi(updated);
+              setDetails((prev) => ({ ...prev, [account.id]: account }));
+              toast.success(account.lienthongAddedAt
+                ? "Đã thêm bác sĩ vào cơ sở trên Hệ thống đơn thuốc quốc gia."
+                : "Đã xóa bác sĩ khỏi cơ sở trên Hệ thống đơn thuốc quốc gia.");
+            }}
+          />
+        )}
         {resetPasswordFor === selected.id && !isSelf(selected) && selected.status !== "LOCKED" && (
           <AccountResetPasswordModal
             account={selected}

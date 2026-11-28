@@ -46,9 +46,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                        // Simulated CA app (UC-90): an outside system with its own PIN sign-in; its controller
-                        // exists only when clinic.signing-simulator.console-enabled is true (dev profile).
-                        .requestMatchers("/dev/ca-sim", "/dev/ca-sim/**").permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/login",

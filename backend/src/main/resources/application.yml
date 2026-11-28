@@ -67,28 +67,15 @@ management:
 clinic:
   insurance-simulator:
     response-delay: ${INSURANCE_SIMULATOR_RESPONSE_DELAY:0ms}
-  # UC-90 digital signature (docs/uc-59-e-prescription.md BR-59-10, BR-59-16).
-  signing:
-    approval-timeout: 5m
-    service-timeout: 10s
-    # Comma-separated PEM files of the trusted CA certificates.
-    trusted-ca-files: ${SIGNING_TRUSTED_CA_FILES:}
-  # Simulated signing gateway, CA, status services and TSA; test keys only, no legal value.
-  signing-simulator:
-    keystore: ${SIGNING_SIMULATOR_KEYSTORE:.signing-simulator/simulator.p12}
-    keystore-password: ${SIGNING_SIMULATOR_KEYSTORE_PASSWORD:}
-    response-delay: ${SIGNING_SIMULATOR_RESPONSE_DELAY:0ms}
-    # NONE, UNAVAILABLE (EF-15) or BAD_SIGNATURE (EF-16).
-    failure-mode: ${SIGNING_SIMULATOR_FAILURE_MODE:NONE}
-    # The simulated CA app at /dev/ca-sim; enabled by the dev profile only.
-    console-enabled: false
   national-prescription-simulator:
     response-delay: ${NATIONAL_PRESCRIPTION_SIMULATOR_RESPONSE_DELAY:0ms}
     timeout: 10s
-    # NONE or NO_RESPONSE (UC-90 AF-02).
+    # NONE (every send accepted), NO_RESPONSE (UC-90 AF-02) or REJECT (first send of each code rejected, UC-91/92).
     failure-mode: ${NATIONAL_PRESCRIPTION_SIMULATOR_FAILURE_MODE:NONE}
-    # Comma-separated prescriber link codes the simulator knows; empty accepts every code.
-    registered-prescriber-codes: ${NATIONAL_PRESCRIPTION_SIMULATOR_PRESCRIBER_CODES:}
+    # Demonstration passwords of the national accounts (QĐ 808 III, VI); empty accepts any non-blank password.
+    # One value for the facility and one shared by every Doctor; the clinic never stores either (BR-59-17).
+    facility-password: ${NATIONAL_PRESCRIPTION_SIMULATOR_FACILITY_PASSWORD:}
+    prescriber-password: ${NATIONAL_PRESCRIPTION_SIMULATOR_PRESCRIBER_PASSWORD:}
   # UC-58 BR-58-06: write-once archive packages of closed medical records (git-ignored by default).
   archive:
     root: ${CLINIC_ARCHIVE_ROOT:.clinic-archive}

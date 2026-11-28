@@ -8,6 +8,7 @@ import java.util.UUID;
 import clinic.backend.dto.request.CreateAccountRequest;
 import clinic.backend.dto.request.AssignRoomRequest;
 import clinic.backend.dto.request.LockAccountRequest;
+import clinic.backend.dto.request.NationalPrescriberRequest;
 import clinic.backend.dto.request.ResetAccountPasswordRequest;
 import clinic.backend.dto.request.RoleChangeRequest;
 import clinic.backend.dto.request.UnlockAccountRequest;
@@ -27,6 +28,7 @@ import clinic.backend.enums.AccountStatus;
 import clinic.backend.enums.Role;
 import clinic.backend.security.user.StaffPrincipal;
 import clinic.backend.service.AccountAdministrationService;
+import clinic.backend.service.NationalPrescriberService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -59,6 +61,7 @@ import static clinic.backend.config.OpenApiConfig.BEARER_SECURITY_SCHEME;
 public class AccountAdministrationController {
 
     private final AccountAdministrationService service;
+    private final NationalPrescriberService nationalPrescriberService;
 
     @Operation(summary = "UC-05 List department options",
             description = "Returns departments used by the account filters and create/update forms.")
@@ -194,5 +197,28 @@ public class AccountAdministrationController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
         return ApiResponse.success(service.changeHistory(accountId, page, size));
+    }
+
+    @Operation(summary = "UC-93 Add the Doctor to the facility on the national prescription system",
+            description = "QĐ 808 IV. Signs the facility in (III) when no token is kept; the facility password is "
+                    + "sent only when the server asks for it and is never stored.")
+    @PostMapping("/{accountId}/commands/add-to-national-prescription-system")
+    public ApiResponse<AccountDetailResponse> addToNationalPrescriptionSystem(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID accountId,
+            @RequestBody NationalPrescriberRequest request) {
+        return ApiResponse.success(
+                nationalPrescriberService.addToFacility(StaffPrincipal.from(jwt), accountId, request));
+    }
+
+    @Operation(summary = "UC-93 Remove the Doctor from the facility on the national prescription system",
+            description = "QĐ 808 V. Signs the facility in (III) when no token is kept.")
+    @PostMapping("/{accountId}/commands/remove-from-national-prescription-system")
+    public ApiResponse<AccountDetailResponse> removeFromNationalPrescriptionSystem(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID accountId,
+            @RequestBody NationalPrescriberRequest request) {
+        return ApiResponse.success(
+                nationalPrescriberService.removeFromFacility(StaffPrincipal.from(jwt), accountId, request));
     }
 }
