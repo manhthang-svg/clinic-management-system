@@ -5,7 +5,7 @@ export const RETURN_REASON_MAX_LENGTH = 500;
 // ly do tra ve hang cho hay gap (KTV co the tu nhap)
 export const RETURN_REASONS = [
   'Bệnh nhân chưa chuẩn bị (chưa nhịn ăn, chưa uống nước, chưa nhịn tiểu…)',
-  'Máy/thiết bị gặp sự cố',
+  'Bệnh nhân không muốn thực hiện nữa',
   'Bệnh nhân cần chờ bác sĩ chuyên khoa',
 ];
 

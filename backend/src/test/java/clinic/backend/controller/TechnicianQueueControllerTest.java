@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.TechnicianDashboardResponse;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
@@ -122,23 +121,5 @@ class TechnicianQueueControllerTest {
 
         assertThat(response.getData()).isEqualTo(item);
         verify(technicianQueueService).acceptOrder(detailId, technicianId);
-    }
-
-    @Test
-    void rejectOrder_delegatesToServiceWithReason() {
-        UUID detailId = UUID.randomUUID();
-        UUID technicianId = UUID.randomUUID();
-        Jwt jwt = mock(Jwt.class);
-        when(jwt.getSubject()).thenReturn(technicianId.toString());
-        when(jwt.getClaimAsString("sid")).thenReturn(UUID.randomUUID().toString());
-
-        RejectParaclinicalOrderRequest request = new RejectParaclinicalOrderRequest("Chống chỉ định");
-        TechnicianQueueItemResponse item = mock(TechnicianQueueItemResponse.class);
-        when(technicianQueueService.rejectOrder(detailId, technicianId, request)).thenReturn(item);
-
-        ApiResponse<TechnicianQueueItemResponse> response = controller.rejectOrder(jwt, detailId, request);
-
-        assertThat(response.getData()).isEqualTo(item);
-        verify(technicianQueueService).rejectOrder(detailId, technicianId, request);
     }
 }

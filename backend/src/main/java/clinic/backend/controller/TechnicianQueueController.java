@@ -3,7 +3,6 @@ package clinic.backend.controller;
 import java.util.List;
 import java.util.UUID;
 
-import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.ApiResponse;
 import clinic.backend.dto.response.TechnicianDashboardResponse;
@@ -159,18 +158,6 @@ public class TechnicianQueueController {
     ) {
         UUID technicianId = StaffPrincipal.from(jwt).accountId();
         return ApiResponse.success(technicianQueueService.returnToWaiting(detailId, technicianId, request));
-    }
-
-    @PostMapping("/queue/{detailId}/reject")
-    @PreAuthorize("hasAnyRole('TECHNICIAN', 'ADMIN')")
-    @Operation(summary = "Từ chối thực hiện chỉ định cận lâm sàng kèm lý do")
-    public ApiResponse<TechnicianQueueItemResponse> rejectOrder(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID detailId,
-            @Valid @RequestBody RejectParaclinicalOrderRequest request
-    ) {
-        UUID technicianId = StaffPrincipal.from(jwt).accountId();
-        return ApiResponse.success(technicianQueueService.rejectOrder(detailId, technicianId, request));
     }
 }
 

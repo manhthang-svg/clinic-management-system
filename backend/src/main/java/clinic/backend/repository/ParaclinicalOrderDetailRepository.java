@@ -79,6 +79,7 @@ public interface ParaclinicalOrderDetailRepository extends JpaRepository<Paracli
             where d.roomId = :roomId
               and d.status != clinic.backend.enums.ParaclinicalOrderDetailStatus.PENDING_PAYMENT
               and d.status != clinic.backend.enums.ParaclinicalOrderDetailStatus.ABANDONED
+              and d.status != clinic.backend.enums.ParaclinicalOrderDetailStatus.CANCELLED
               and (d.status in (clinic.backend.enums.ParaclinicalOrderDetailStatus.WAITING, clinic.backend.enums.ParaclinicalOrderDetailStatus.IN_PROGRESS)
                    or d.ngaychidinh >= :startOfDay)
             order by d.queueNumber asc, d.ngaychidinh asc

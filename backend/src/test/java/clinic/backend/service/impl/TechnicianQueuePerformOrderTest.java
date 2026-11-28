@@ -363,6 +363,21 @@ class TechnicianQueuePerformOrderTest {
     }
 
     @Test
+    void returnsPendingResultServiceToWaitingAndClearsPerformedAt() {
+        detail.completePerformance(PERFORMER_ID, NOW);
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.PENDING_RESULT);
+
+        service.returnToWaiting(detail.getId(), PERFORMER_ID,
+                new ReturnParaclinicalOrderToWaitingRequest("Bệnh nhân ra ngoài"));
+
+        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.WAITING);
+        assertThat(detail.getQueueNumber()).isEqualTo(7);
+        assertThat(detail.getPerformerAccountId()).isNull();
+        assertThat(detail.getAcceptedAt()).isNull();
+        assertThat(detail.getPerformedAt()).isNull();
+    }
+
+    @Test
     void anotherTechnicianCannotReturnTheServiceToWaiting() {
         assertThatThrownBy(() -> service.returnToWaiting(detail.getId(), COLLEAGUE_ID,
                 new ReturnParaclinicalOrderToWaitingRequest("Máy hỏng")))
