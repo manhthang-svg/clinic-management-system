@@ -380,7 +380,6 @@ class ParaclinicalResultApiIT extends PostgresIntegrationTest {
                 values (?, ?, ?, ?, ?, now(), 'DV', 'Đau bụng', current_date, 1, 'WAITING_PARACLINICAL',
                     now(), now(), 0)
                 """, visit, "DK-" + suffix, patient, room, doctor.getId());
-        // An own record type: ApprovedSchemaIT deletes the seeded NGOAITRU type, so no record may point at it.
         String recordType = "CLS-" + suffix;
         jdbc.update("""
                 insert into medical_record_types (loaiba, ten, pham_vi, van_ban, is_default, created_at, updated_at,
