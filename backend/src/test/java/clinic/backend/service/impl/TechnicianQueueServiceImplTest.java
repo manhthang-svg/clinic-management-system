@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.response.TechnicianQueueItemResponse;
 import clinic.backend.dto.response.TechnicianQueueResponse;
 import clinic.backend.dto.response.TechnicianRoomResponse;
@@ -232,45 +231,6 @@ class TechnicianQueueServiceImplTest {
         verify(auditLogService).recordBusinessChange(
                 eq(technicianId), eq(AuditLogAction.UPDATE), eq("paraclinical_order_details"),
                 eq(detailId), eq("CD0000000002-01"), any(), eq(NOW)
-        );
-    }
-
-    @Test
-    void rejectOrder_cancelsOrderWithReason() {
-        UUID detailId = UUID.randomUUID();
-        UUID technicianId = UUID.randomUUID();
-
-        ParaclinicalOrder order = new ParaclinicalOrder(
-                UUID.randomUUID(), NOW, "CD0000000003", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "Chẩn đoán", (short) 2, "Thường", "Phòng khám", BigDecimal.valueOf(80000),
-                ParaclinicalOrderStatus.RELEASED
-        );
-
-        ParaclinicalOrderDetail detail = new ParaclinicalOrderDetail(
-                detailId, NOW, order, UUID.randomUUID(), "CD0000000003-01", NOW, "Nội soi", null, null,
-                BigDecimal.ONE, BigDecimal.valueOf(80000), BigDecimal.valueOf(80000), BigDecimal.ZERO,
-                BigDecimal.valueOf(80000), UUID.randomUUID(), ParaclinicalOrderDetailStatus.WAITING
-        );
-
-        when(paraclinicalOrderDetailRepository.findById(detailId)).thenReturn(Optional.of(detail));
-        StaffAccount tech = org.mockito.Mockito.mock(StaffAccount.class);
-        when(tech.getRole()).thenReturn(Role.TECHNICIAN);
-        when(staffAccountRepository.findById(technicianId)).thenReturn(Optional.of(tech));
-        StaffRoomAssignment assignment = new StaffRoomAssignment(UUID.randomUUID(), technicianId, detail.getRoomId(), NOW, null, null, null, 0L);
-        when(staffRoomAssignmentRepository.findByStaffAccountIdAndRemovedAtIsNull(technicianId)).thenReturn(Optional.of(assignment));
-
-        RejectParaclinicalOrderRequest request = new RejectParaclinicalOrderRequest("Bệnh nhân chống chỉ định với thuốc thử");
-        TechnicianQueueItemResponse response = service.rejectOrder(detailId, technicianId, request);
-
-        assertThat(detail.getStatus()).isEqualTo(ParaclinicalOrderDetailStatus.CANCELLED);
-        assertThat(detail.getCancelReason()).isEqualTo("Bệnh nhân chống chỉ định với thuốc thử");
-        assertThat(detail.getCancelledByAccountId()).isEqualTo(technicianId);
-        assertThat(detail.getCancelledAt()).isEqualTo(NOW);
-
-        verify(paraclinicalOrderDetailRepository).save(detail);
-        verify(auditLogService).recordBusinessChange(
-                eq(technicianId), eq(AuditLogAction.CANCEL), eq("paraclinical_order_details"),
-                eq(detailId), eq("CD0000000003-01"), any(), eq(NOW)
         );
     }
 

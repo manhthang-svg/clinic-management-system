@@ -23,7 +23,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import clinic.backend.dto.request.RejectParaclinicalOrderRequest;
 import clinic.backend.dto.request.ReturnParaclinicalOrderToWaitingRequest;
 import clinic.backend.dto.response.TechnicianPendingItemResponse;
 import clinic.backend.dto.response.TechnicianPendingResultResponse;
@@ -1027,7 +1026,7 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return queueDetail(detail, queueAccess(technicianAccountId));
     }
 
-    // UC-66: tra dich vu dang lam ve hang cho (giu so thu tu) kem ly do
+    // UC-66: tra dich vu dang lam (hoac cho nhap KQ chua gui) ve hang cho (giu so thu tu) kem ly do
     @Override
     @Transactional
     public TechnicianQueueItemResponse returnToWaiting(
@@ -1036,11 +1035,33 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
 
-        requireInProgressBy(detail, technicianAccountId);
+        requireReturnableBy(detail, technicianAccountId);
 
         // ve lai hang cho dung vi tri cu, ly do ghi vao audit
         detail.returnToWaiting(technicianAccountId, now);
         paraclinicalOrderDetailRepository.save(detail);
+
+        List<ParaclinicalOrderDetail> siblings = paraclinicalOrderDetailRepository
+                .findByOrderId(detail.getOrder().getId());
+        for (ParaclinicalOrderDetail sib : siblings) {
+            if (!sib.getId().equals(detail.getId())
+                    && Objects.equals(sib.getRoomId(), detail.getRoomId())
+                    && (sib.getStatus() == ParaclinicalOrderDetailStatus.IN_PROGRESS
+                        || sib.getStatus() == ParaclinicalOrderDetailStatus.PENDING_RESULT)
+                    && Objects.equals(sib.getPerformerAccountId(), technicianAccountId)
+                    && !hasSubmittedResult(sib.getId())) {
+                sib.returnToWaiting(technicianAccountId, now);
+                paraclinicalOrderDetailRepository.save(sib);
+
+                Map<String, Object> sibAudit = new LinkedHashMap<>();
+                sibAudit.put("action", "RETURN_TO_WAITING");
+                sibAudit.put("status", sib.getStatus().name());
+                sibAudit.put("reason", request.reason().strip());
+                auditLogService.recordBusinessChange(
+                        technicianAccountId, AuditLogAction.UPDATE, AUDIT_ENTITY, sib.getId(),
+                        sib.getMachidinh(), sibAudit, now);
+            }
+        }
 
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("action", "RETURN_TO_WAITING");
@@ -1053,6 +1074,24 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         return queueDetail(detail, queueAccess(technicianAccountId));
     }
 
+    private void requireReturnableBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
+        if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS
+                && detail.getStatus() != ParaclinicalOrderDetailStatus.PENDING_RESULT) {
+            throw new AppException(ErrorCode.PARACLINICAL_SERVICE_NOT_IN_PROGRESS);
+        }
+        if (!detail.awaitsResultFrom(technicianAccountId)) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        if (hasSubmittedResult(detail.getId())) {
+            throw new AppException(ErrorCode.RESULT_ALREADY_SUBMITTED);
+        }
+    }
+
+    private boolean hasSubmittedResult(UUID detailId) {
+        return labResultRepository.findByOrderDetailId(detailId).map(LabResult::isSubmitted).orElse(false)
+                || imagingResultRepository.findByOrderDetailId(detailId).map(ImagingResult::isSubmitted).orElse(false);
+    }
+
     // dich vu phai dang thuc hien va do chinh KTV nay tiep nhan
     private static void requireInProgressBy(ParaclinicalOrderDetail detail, UUID technicianAccountId) {
         if (detail.getStatus() != ParaclinicalOrderDetailStatus.IN_PROGRESS) {
@@ -1061,31 +1100,6 @@ public class TechnicianQueueServiceImpl implements TechnicianQueueService {
         if (!detail.isPerformedBy(technicianAccountId)) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
-    }
-
-    // Từ chối thực hiện y lệnh do chống chỉ định y khoa hoặc bệnh nhân không hợp tác
-    @Override
-    @Transactional
-    public TechnicianQueueItemResponse rejectOrder(UUID detailId, UUID technicianAccountId, RejectParaclinicalOrderRequest request) {
-        Instant now = clock.instant();
-        ParaclinicalOrderDetail detail = paraclinicalOrderDetailRepository.findById(detailId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
-
-        QueueAccess access = queueAccess(technicianAccountId);
-        access.verify(detail);
-
-        detail.cancel(request.reason(), technicianAccountId, now);
-        paraclinicalOrderDetailRepository.save(detail);
-
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("action", "REJECT");
-        audit.put("status", detail.getStatus().name());
-        audit.put("cancelReason", request.reason());
-        auditLogService.recordBusinessChange(
-                technicianAccountId, AuditLogAction.CANCEL, AUDIT_ENTITY, detail.getId(),
-                detail.getMachidinh(), audit, now);
-
-        return queueDetail(detail, access);
     }
 
     private static void requireWaiting(ParaclinicalOrderDetail detail) {

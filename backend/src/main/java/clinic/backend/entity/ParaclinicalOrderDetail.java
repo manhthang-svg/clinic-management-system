@@ -310,10 +310,13 @@ public class ParaclinicalOrderDetail extends VersionedEntity {
      * queue number is kept, so the order is not moved to the end of the list; the reason is kept in the audit log.
      */
     public void returnToWaiting(UUID technicianAccountId, Instant when) {
-        requirePerformedBy(technicianAccountId);
+        if (!awaitsResultFrom(technicianAccountId)) {
+            throw new IllegalStateException("Paraclinical service is not awaiting result from this technician");
+        }
         this.status = ParaclinicalOrderDetailStatus.WAITING;
         this.performerAccountId = null;
         this.acceptedAt = null;
+        this.performedAt = null;
         touch(when);
     }
 

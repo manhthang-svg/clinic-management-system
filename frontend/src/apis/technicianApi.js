@@ -124,13 +124,6 @@ export const technicianApi = {
       body: { reason },
     });
   },
-
-  async rejectOrder(detailId, reason) {
-    return apiClient.request(`/technician/queue/${detailId}/reject`, {
-      method: 'POST',
-      body: { reason },
-    });
-  },
 };
 
 export default technicianApi;

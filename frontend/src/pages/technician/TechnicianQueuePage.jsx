@@ -31,7 +31,6 @@ import {
   CheckInTicketModal,
   PatientClinicalDrawer,
   ReacceptSkippedModal,
-  RejectOrderModal,
   ReturnToWaitingDialog,
 } from '../../components/technician';
 import { PERFORM_MESSAGES, performErrorMessage } from '../../components/technician/performOrder';
@@ -91,8 +90,6 @@ export function TechnicianQueuePage() {
   // 4. Drawer & Modal states
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [orderToReject, setOrderToReject] = useState(null);
   const [orderToReturn, setOrderToReturn] = useState(null);
   const [ticketModalData, setTicketModalData] = useState(null);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -255,9 +252,11 @@ export function TechnicianQueuePage() {
 
   const isInitialLoading = !currentRoomId || queueData.stats === null;
   const stats = queueData.stats || { total: 0, waiting: 0, priority: 0, skipped: 0 };
-  // Chỉ hiển thị những ca đã thanh toán (loại bỏ PENDING_PAYMENT)
+  // Chỉ hiển thị những ca đã thanh toán và chưa bị hủy (loại bỏ PENDING_PAYMENT, CANCELLED)
   const orders = useMemo(() => {
-    return (queueData.items || []).filter((item) => item.status !== 'PENDING_PAYMENT');
+    return (queueData.items || []).filter(
+      (item) => item.status !== 'PENDING_PAYMENT' && item.status !== 'CANCELLED'
+    );
   }, [queueData.items]);
 
   // Gom nhóm danh sách chờ: Mỗi bệnh nhân / lượt khám hiển thị 1 dòng duy nhất trong danh sách chờ của phòng
@@ -685,32 +684,6 @@ export function TechnicianQueuePage() {
     }
   };
 
-  // Mở modal nhập lý do từ chối thực hiện y lệnh cận lâm sàng
-  const handleOpenRejectModal = (order) => {
-    const targetService = manageableService(order);
-    if (!targetService) return;
-    setOrderToReject(targetService);
-    setRejectModalOpen(true);
-  };
-
-  // Xác nhận từ chối thực hiện y lệnh do chống chỉ định và gửi phản hồi về bác sĩ
-  const handleConfirmReject = async (orderId, reason) => {
-    try {
-      setActionLoadingId(orderId);
-      await technicianApi.rejectOrder(orderId, reason);
-      toast.error(`Đã từ chối y lệnh và hoàn trả về phòng khám bác sĩ.`);
-      if (selectedOrder?.id === orderId) {
-        setIsDrawerOpen(false);
-        setSelectedOrder(null);
-      }
-      await loadQueue(currentRoomId, { silent: true });
-    } catch (err) {
-      toast.error(err?.message || 'Không thể gửi lý do từ chối.');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   if (isInitialLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-3">
@@ -989,7 +962,6 @@ export function TechnicianQueuePage() {
                 >
                   <option value="ALL">Tất cả trạng thái</option>
                   <option value="WAITING">Đang chờ gọi</option>
-                  <option value="CANCELLED">Đã từ chối</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -1563,7 +1535,6 @@ export function TechnicianQueuePage() {
         onStartOrder={(order) => handleStartOrder(order)}
         onSkipOrder={(order) => handleSkipOrder(order)}
         onCompleteOrder={(order) => handleCompleteOrder(order)}
-        onOpenRejectModal={(order) => handleOpenRejectModal(order)}
       />
 
       {/* UC-66 AF-02: TRẢ VỀ HÀNG CHỜ */}
@@ -1572,14 +1543,6 @@ export function TechnicianQueuePage() {
         order={orderToReturn}
         onClose={() => setOrderToReturn(null)}
         onConfirm={handleConfirmReturn}
-      />
-
-      {/* 6. MODAL TỪ CHỐI / HỦY Y LỆNH */}
-      <RejectOrderModal
-        isOpen={rejectModalOpen}
-        onClose={() => setRejectModalOpen(false)}
-        order={orderToReject}
-        onConfirmReject={handleConfirmReject}
       />
 
       {/* 7. POP-UP PHIẾU SỐ THỨ TỰ SAU KHI XÁC NHẬN CÓ MẶT */}

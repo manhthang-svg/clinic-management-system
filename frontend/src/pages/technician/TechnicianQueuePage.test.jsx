@@ -21,7 +21,6 @@ vi.mock('../../apis/technicianApi', () => ({
     unskipOrder: vi.fn(),
     completeOrder: vi.fn(),
     returnToWaiting: vi.fn(),
-    rejectOrder: vi.fn(),
   },
 }));
 

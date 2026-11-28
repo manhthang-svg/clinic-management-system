@@ -9,12 +9,9 @@ import {
   Clock,
   FileEdit,
   AlertTriangle,
-  Printer,
   Plus,
   MapPin,
   FileText,
-  PrinterCheck,
-  X,
   Eye,
   RefreshCw,
   Loader2,
@@ -22,6 +19,8 @@ import {
 import { toast } from 'sonner';
 
 import { MetricCard } from '../../components/shared/MetricCard';
+import { ReturnToWaitingDialog } from '../../components/technician';
+import { performErrorMessage } from '../../components/technician/performOrder';
 import { technicianApi } from '../../apis/technicianApi';
 
 /**
@@ -57,8 +56,8 @@ export function ParaclinicalResultListPage() {
   const [doctorRoomFilter, setDoctorRoomFilter] = useState('ALL');
   const [doctorRoomsList, setDoctorRoomsList] = useState([]);
 
-  // 4. Modal in phiếu chỉ định nhanh
-  const [printModalOrder, setPrintModalOrder] = useState(null);
+  // 4. Modal trả chỉ định về hàng chờ (UC-66 AF-02)
+  const [orderToReturn, setOrderToReturn] = useState(null);
 
   // Debounce ô tìm kiếm 300ms
   useEffect(() => {
@@ -212,19 +211,30 @@ export function ParaclinicalResultListPage() {
     });
   };
 
-  // Thao tác in phiếu chỉ định
-  const handlePrintOrder = (order, e) => {
+  // Thao tác mở hộp thoại trả bệnh nhân về hàng chờ (giữ nguyên STT)
+  const handleReturnToWaiting = (order, e) => {
     e?.stopPropagation();
-    setPrintModalOrder(order);
+    const ownServices = order.services.filter((service) => service.isPerformer);
+    const targetService = ownServices[0];
+    if (!targetService) return;
+    setOrderToReturn({
+      ...order,
+      id: targetService.id,
+      serviceName:
+        ownServices.length > 1
+          ? `${ownServices[0].serviceName} (+${ownServices.length - 1} dịch vụ)`
+          : ownServices[0].serviceName,
+    });
   };
 
-  const handleConfirmPrint = () => {
-    if (printModalOrder) {
-      toast.success(
-        `Đã gửi lệnh in phiếu chỉ định ${printModalOrder.orderCode} cho BN ${printModalOrder.patientName}!`,
-        { duration: 3500 }
-      );
-      setPrintModalOrder(null);
+  const handleConfirmReturn = async (order, reason) => {
+    try {
+      await technicianApi.returnToWaiting(order.id, reason);
+      toast.success(`Đã trả bệnh nhân ${order.patientName} về hàng chờ (giữ nguyên STT).`);
+      setOrderToReturn(null);
+      await loadResults(currentRoomId, { silent: true });
+    } catch (err) {
+      toast.error(performErrorMessage(err));
     }
   };
 
@@ -713,16 +723,18 @@ export function ParaclinicalResultListPage() {
                             </button>
                           )}
 
-                          {/* Nút phụ – In phiếu */}
-                          <button
-                            type="button"
-                            onClick={(e) => handlePrintOrder(order, e)}
-                            className="w-[74px] h-7 px-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-semibold text-[10.5px] inline-flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0"
-                            title="In lại phiếu chỉ định cận lâm sàng"
-                          >
-                            <Printer className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                            <span>In phiếu</span>
-                          </button>
+                          {/* Nút phụ – Trả về hàng chờ (UC-66 AF-02) */}
+                          {order.services.some((service) => service.isPerformer) && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleReturnToWaiting(order, e)}
+                              className="w-[82px] h-7 px-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 active:scale-[0.98] text-amber-800 font-semibold text-[10.5px] inline-flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0"
+                              title="Trả bệnh nhân về hàng chờ (giữ nguyên STT)"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span>Trả về</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -745,75 +757,13 @@ export function ParaclinicalResultListPage() {
         </div>
       </div>
 
-      {/* MODAL XÁC NHẬN IN PHIẾU CHỈ ĐỊNH */}
-      {printModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-                <PrinterCheck className="w-5 h-5 text-[#0d9488]" />
-                <span>In phiếu chỉ định cận lâm sàng</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrintModalOrder(null)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-xs text-slate-600 border border-slate-200/70">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Mã phiếu:</span>
-                <span className="font-mono font-bold text-slate-800">{printModalOrder.baseOrderCode || printModalOrder.orderCode}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Bệnh nhân:</span>
-                <span className="font-bold text-slate-800">
-                  {printModalOrder.patientName} ({printModalOrder.patientId})
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Dịch vụ ({printModalOrder.services?.length || 1}):</span>
-                <span className="font-medium text-slate-800 text-right max-w-[240px]">
-                  {printModalOrder.services?.map((s) => s.serviceName).join(', ') || printModalOrder.serviceName}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Phòng khám gửi:</span>
-                <span className="font-medium text-slate-800">{printModalOrder.doctorRoom}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Thời gian xong:</span>
-                <span className="font-medium text-slate-800">{printModalOrder.completedAtTime}</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Bạn có muốn in phiếu chỉ định này qua máy in nhiệt/A4 đã kết nối không?
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setPrintModalOrder(null)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmPrint}
-                className="px-4 py-2 bg-[#0d9488] hover:bg-[#0f766e] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Xác nhận in phiếu</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* UC-66 AF-02: TRẢ BỆNH NHÂN VỀ HÀNG CHỜ */}
+      <ReturnToWaitingDialog
+        key={orderToReturn?.id ?? 'none'}
+        order={orderToReturn}
+        onClose={() => setOrderToReturn(null)}
+        onConfirm={handleConfirmReturn}
+      />
     </div>
   );
 }
